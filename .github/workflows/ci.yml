@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php-tests:
+    name: PHP test suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, curl, json, mbstring
+          coverage: none
+
+      - name: Verify PHP extensions
+        run: php -m | grep -E 'pdo_mysql|curl' && php -v
+
+      # The suite needs config/config.php (git-ignored). CI generates it from
+      # the sample, pointed at the MySQL service container. The scratch test
+      # DB (bluewrite_test) is created by the tests themselves.
+      - name: Generate config
+        working-directory: bluewrite
+        run: |
+          cp config/config.sample.php config/config.php
+          sed -i "s/'host' => '127.0.0.1'/'host' => '127.0.0.1'/" config/config.php
+          sed -i "s/'user' => 'bluewrite'/'user' => 'root'/" config/config.php
+          sed -i "s/'pass' => 'CHANGE_ME'/'pass' => 'root'/" config/config.php
+
+      - name: Download PHPUnit
+        working-directory: bluewrite
+        run: curl -sSL --retry 3 -o phpunit.phar https://phar.phpunit.de/phpunit-11.phar
+
+      - name: Start test API server
+        working-directory: bluewrite
+        env:
+          BLUEWRITE_DB_NAME: bluewrite_test
+        run: |
+          php -S 127.0.0.1:8098 -t public public/api.php > test-server.log 2>&1 &
+          echo $! > test-server.pid
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8098/api/v1/me || true)
+            if [ "$code" != "000" ]; then echo "server up (HTTP $code)"; exit 0; fi
+            sleep 1
+          done
+          echo "test server failed to start"; cat test-server.log; exit 1
+
+      - name: Run PHP test suite
+        working-directory: bluewrite
+        run: php tests/run-tests.php
+
+      - name: Stop test server
+        if: always()
+        working-directory: bluewrite
+        run: |
+          if [ -f test-server.pid ]; then kill "$(cat test-server.pid)" 2>/dev/null || true; fi
+          tail -20 test-server.log 2>/dev/null || true
+
+  node-tests:
+    name: Node rule tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: bluewrite
+        run: npm ci
+
+      - name: Run node test suite
+        working-directory: bluewrite
+        run: npm test
+
+      - name: Build frontend
+        working-directory: bluewrite
+        run: npm run build
