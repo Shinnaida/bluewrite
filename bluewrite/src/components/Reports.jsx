@@ -181,6 +181,9 @@ export function ReportWelcome({ user, onNew, onOpenReport, reports, loading }) {
         <div className="welcome-logo" aria-hidden="true">
           <Logo variant="lockup" size={56} animated={false} title="" />
         </div>
+        <div className="welcome-hero" aria-hidden="true">
+          BLUE<em>WRITE</em>
+        </div>
         <div className="welcome-rule" aria-hidden="true" />
         <p className="welcome-kicker">Incident documentation workspace</p>
         <h1>What are you documenting today?</h1>

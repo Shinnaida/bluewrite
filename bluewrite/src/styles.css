@@ -447,16 +447,18 @@ button.brand.brand-home:focus-visible {
   margin-bottom: 1rem;
   filter: drop-shadow(0 0 18px rgba(0, 240, 255, 0.25));
 }
-.welcome-mark {
-  font-family: var(--font-hud);
-  font-size: clamp(1rem, 1.8vw, 1.25rem);
-  font-weight: 700;
-  letter-spacing: 0.3em;
+/* Hero wordmark under the shield — same treatment as the login hero
+   (.la-hero): big, 800 weight, soft white glow. WRITE keeps the cyan split. */
+.welcome-hero {
+  font-size: clamp(28px, 4vw, 56px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
   color: var(--paper);
-  margin-bottom: 1.15rem;
-  text-shadow: 0 0 18px rgba(255, 255, 255, 0.2);
+  margin-bottom: 1.1rem;
+  text-shadow: 0 0 28px rgba(255, 255, 255, 0.35);
 }
-.welcome-mark em { font-style: normal; color: var(--cyan); }
+.welcome-hero em { font-style: normal; color: var(--cyan); }
 .welcome-rule {
   width: 7rem;
   height: 1px;
