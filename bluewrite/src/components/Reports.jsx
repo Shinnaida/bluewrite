@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
 import ReportPrint from './ReportPrint.jsx';
 import Logo from './Logo.jsx';
+import HeroGlitchText from './HeroGlitchText.jsx';
 import ConnectionNotice from './ConnectionNotice.jsx';
 import {
   INCIDENT_TYPES,
@@ -182,7 +183,9 @@ export function ReportWelcome({ user, onNew, onOpenReport, reports, loading }) {
           <Logo variant="mark-only" size={72} animated={false} title="" />
         </div>
         <div className="welcome-hero" aria-hidden="true">
-          BLUE<em>WRITE</em>
+          <HeroGlitchText text="BLUEWRITE">
+            BLUE<em>WRITE</em>
+          </HeroGlitchText>
         </div>
         <div className="welcome-rule" aria-hidden="true" />
         <p className="welcome-kicker">Incident documentation workspace</p>

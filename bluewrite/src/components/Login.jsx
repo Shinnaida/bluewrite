@@ -8,6 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
 import LetterGlitch from './LetterGlitch.jsx';
 import Logo from './Logo.jsx';
+import HeroGlitchText from './HeroGlitchText.jsx';
 import ConnectionNotice from './ConnectionNotice.jsx';
 
 
@@ -72,83 +73,6 @@ function GlitchDigits({ text }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// GlitchText — ghost layers over the base text; fires a brief RGB-split burst
-// on a randomized 4–6s idle loop. During each burst the hero letters also
-// scramble through GLITCH_GLYPHS (same treatment as the PHT clock). Paused
-// while the user engages the form.
-function GlitchText({ text, paused = false, children }) {
-  const [burst, setBurst] = useState(false);
-  const [scrambleTick, setScrambleTick] = useState(0);
-  const pausedRef = useRef(paused);
-  pausedRef.current = paused;
-
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
-
-    let timer;
-    let resetTimer;
-    const loop = () => {
-      timer = window.setTimeout(() => {
-        if (!pausedRef.current) {
-          setBurst(true);
-          resetTimer = window.setTimeout(() => setBurst(false), 280);
-        }
-        loop();
-      }, 4000 + Math.random() * 2000);
-    };
-    loop();
-    return () => {
-      window.clearTimeout(timer);
-      if (resetTimer) window.clearTimeout(resetTimer);
-    };
-  }, []);
-
-  const showBurst = burst && !paused;
-
-  // Flicker the scrambled glyphs at ~20fps for the duration of the burst.
-  useEffect(() => {
-    if (!showBurst) return undefined;
-    const id = window.setInterval(() => setScrambleTick((t) => t + 1), 50);
-    return () => window.clearInterval(id);
-  }, [showBurst]);
-
-  return (
-    <span className="relative" style={{ position: 'relative', display: 'inline-block' }}>
-      <span style={{ position: 'relative', zIndex: 10 }}>
-        {showBurst ? (
-          <span aria-hidden="true" style={{ display: 'inline-flex' }}>
-            {text.split('').map((char, index) => (
-              <span key={`hero-g-${index}`} className="hud-glitch hud-glitch-char">
-                {char === ' '
-                  ? char
-                  : GLITCH_GLYPHS[(index * 7 + scrambleTick * 3) % GLITCH_GLYPHS.length]}
-              </span>
-            ))}
-          </span>
-        ) : (
-          children
-        )}
-      </span>
-      <span
-        aria-hidden="true"
-        className={`hud-glitch-ghost hud-glitch-ghost-a ${showBurst ? 'hud-glitch-active' : ''}`}
-        style={{ top: 0, left: 0, right: 0, bottom: 0 }}
-      >
-        {text}
-      </span>
-      <span
-        aria-hidden="true"
-        className={`hud-glitch-ghost hud-glitch-ghost-b ${showBurst ? 'hud-glitch-active' : ''}`}
-        style={{ top: 0, left: 0, right: 0, bottom: 0 }}
-      >
-        {text}
-      </span>
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // TopStatusBar — mini two-tone wordmark, glowing cyan PHT clock, readouts.
 // SYS_STATUS probes /me: OPTIMAL (green) when the API answers, DOWN (amber)
 // when it can't be reached — so an officer sees the problem before typing
@@ -291,9 +215,9 @@ export default function Login({ onLogin }) {
                 </div>
 
                 <h1 className="la-hero">
-                  <GlitchText text="BLUEWRITE" paused={glitchPaused}>
+                  <HeroGlitchText text="BLUEWRITE" paused={glitchPaused}>
                     BLUEWRITE
-                  </GlitchText>
+                  </HeroGlitchText>
                 </h1>
                 <div className="la-tagline">
                   <span className="pulse" aria-hidden="true" />
