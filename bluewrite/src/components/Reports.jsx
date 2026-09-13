@@ -179,7 +179,7 @@ export function ReportWelcome({ user, onNew, onOpenReport, reports, loading }) {
     <div className="welcome">
       <div className="welcome-intro">
         <div className="welcome-logo" aria-hidden="true">
-          <Logo variant="lockup" size={56} animated={false} title="" />
+          <Logo variant="mark-only" size={72} animated={false} title="" />
         </div>
         <div className="welcome-hero" aria-hidden="true">
           BLUE<em>WRITE</em>

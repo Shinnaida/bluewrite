@@ -21,12 +21,17 @@ export default function Logo({
   title = 'BlueWrite',
 }) {
   const px = typeof size === 'number' ? `${size}px` : size;
+  // Decorative usages pass title="" — those must be fully hidden from the
+  // accessibility tree (role="img" with an empty label leaks an unnamed
+  // node into assistive tech and preview inspectors).
+  const a11y = title
+    ? { role: 'img', 'aria-label': title }
+    : { 'aria-hidden': true };
   const common = {
     width: px,
     height: px,
     className: className || undefined,
-    role: 'img',
-    'aria-label': title,
+    ...a11y,
   };
 
   if (variant === 'mark-only') {
