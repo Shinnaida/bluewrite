@@ -1,4 +1,10 @@
 <p align="center">
+  <a href="https://github.com/Shinnaida/bluewrite/actions/workflows/ci.yml">
+    <img src="https://github.com/Shinnaida/bluewrite/actions/workflows/ci.yml/badge.svg" alt="CI status" />
+  </a>
+</p>
+
+<p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/logo-lockup.svg" />
     <img src="docs/logo-lockup-light.svg" alt="BlueWrite — Police Incident Reporting" width="420" />
