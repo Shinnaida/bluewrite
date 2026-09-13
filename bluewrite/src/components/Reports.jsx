@@ -922,7 +922,7 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
 // ReportsTable — the full blotter with search/filters/sort/pagination.
 // Officers see their own reports; admins see everything.
 // ===========================================================================
-export function ReportsTable({ user, notify, onMutated, onConnError }) {
+export function ReportsTable({ user, notify, onMutated, onConnError, initialStatus }) {
   const [reports, setReports] = useState(null);
   const [error, setError] = useState(null);
   const [conn, setConn] = useState(null);
@@ -934,7 +934,7 @@ export function ReportsTable({ user, notify, onMutated, onConnError }) {
   const [printingId, setPrintingId] = useState(null);
   // A report opened for editing from the table (opens in the same panel).
   const [openId, setOpenId] = useState(null);
-  const [query, setQuery] = useState({ q: '', type: '', status: '', date_from: '', date_to: '', sort: 'incident_datetime', dir: 'desc', page: 1 });
+  const [query, setQuery] = useState({ q: '', type: '', status: initialStatus ?? '', date_from: '', date_to: '', sort: 'incident_datetime', dir: 'desc', page: 1 });
   const [pagination, setPagination] = useState(null);
   const [search, setSearch] = useState('');
   const [flashId, setFlashId] = useState(null);
@@ -1071,6 +1071,23 @@ export function ReportsTable({ user, notify, onMutated, onConnError }) {
             {showArchived ? 'Show Active' : 'Show Archived'}
           </button>
         )}
+        <a
+          className="button-link"
+          href={(() => {
+            // Export honors the CURRENT filters (server reuses the same
+            // query pipeline) — what you see is what you get.
+            const params = new URLSearchParams();
+            for (const [k, v] of Object.entries(showArchived ? { archived: '1' } : query)) {
+              if (v !== '' && !(k === 'page' && v === 1)) params.set(k, String(v));
+            }
+            if (showArchived) params.set('archived', '1');
+            const qs = params.toString();
+            return `/api/v1/reports/export${qs ? `?${qs}` : ''}`;
+          })()}
+          download="bluewrite-reports.csv"
+        >
+          Export CSV
+        </a>
       </div>
       {reports && reports.length === 0 && !showArchived && !conn ? (
         <div className="empty">
@@ -1122,7 +1139,9 @@ export function ReportsTable({ user, notify, onMutated, onConnError }) {
               >
                 <option value="">All statuses</option>
                 <option value="draft">Draft</option>
+                <option value="submitted">Submitted</option>
                 <option value="finalized">Finalized</option>
+                {user.role === 'Admin' && <option value="attention">Needs attention (draft + submitted)</option>}
               </select>
               <input
                 type="date"

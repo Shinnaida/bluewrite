@@ -35,9 +35,10 @@ final class DashboardTest extends BaseApiTestCase
         foreach (['kpis', 'seriesOverTime', 'categoryBreakdown', 'statusBreakdown', 'recentActivity', 'meta'] as $key) {
             $this->assertArrayHasKey($key, $b);
         }
-        $this->assertSame(['total', 'pending', 'finalized', 'periodDeltaPct'], array_keys($b['kpis']));
+        $this->assertSame(['total', 'pending', 'submitted', 'finalized', 'periodDeltaPct'], array_keys($b['kpis']));
         $this->assertSame(1, $b['kpis']['total']);
         $this->assertSame(1, $b['kpis']['pending']);
+        $this->assertSame(0, $b['kpis']['submitted']);
         $this->assertSame(0, $b['kpis']['finalized']);
         $this->assertSame('all', $b['meta']['scope']);
         // Default window is 30 days → 30 zero-filled buckets.
@@ -60,7 +61,7 @@ final class DashboardTest extends BaseApiTestCase
         $this->assertSame(3, $res['body']['kpis']['total']);
         $this->assertSame(2, $res['body']['kpis']['pending']);
         $this->assertSame(1, $res['body']['kpis']['finalized']);
-        $this->assertSame(['draft' => 2, 'final' => 1], $res['body']['statusBreakdown']);
+        $this->assertSame(['draft' => 2, 'submitted' => 0, 'final' => 1], $res['body']['statusBreakdown']);
 
         // Finalized reports must still appear in the totals (deleted_at is the
         // only thing excluded — archived reports never pollute the dashboard).

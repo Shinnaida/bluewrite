@@ -115,7 +115,111 @@ final class ReportsController
             Auth::requireRole('Admin');
         }
 
-        // ---- Phase 2 (UC-013/014): server-side search, filter, sort ----
+        [$where, $params, $orderBy] = $this->listQueryFilters($user, $showArchived);
+
+        // Pagination (UC-012).
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $perPage = min(100, max(5, (int) ($_GET['per_page'] ?? 25)));
+        $offset = ($page - 1) * $perPage;
+
+        $whereSql = implode(' AND ', $where);
+
+        // Total count for pagination metadata (mirrors the same filters).
+        $countStmt = $pdo->prepare(
+            "SELECT COUNT(*) FROM reports r JOIN users u ON u.id = r.created_by WHERE {$whereSql}"
+        );
+        $countStmt->execute($params);
+        $total = (int) $countStmt->fetchColumn();
+
+        $sql = "SELECT r.id, r.incident_type, r.incident_datetime, r.location, r.status,
+                    r.created_by, u.full_name AS created_by_name, r.deleted_at
+             FROM reports r JOIN users u ON u.id = r.created_by
+             WHERE {$whereSql}
+             ORDER BY {$orderBy}, r.id DESC
+             LIMIT {$perPage} OFFSET {$offset}";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+
+        Response::json(200, [
+            'reports' => $stmt->fetchAll(),
+            'pagination' => [
+                'page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'total_pages' => (int) max(1, ceil($total / $perPage)),
+            ],
+        ]);
+    }
+
+    /**
+     * CSV export of the report list (UC-013 companion). Reuses the exact
+     * same filter/sort pipeline as index() — what you see is what you
+     * export, including the Officer/Staff own-reports scoping. No pagination:
+     * an export that silently stops at page boundaries would mislead records
+     * custodians. Streams in chunks so a large blotter can't exhaust memory.
+     */
+    public function exportCsv(): void
+    {
+        $user = Auth::requireUser();
+        $pdo = Database::pdo();
+
+        $showArchived = ($_GET['archived'] ?? null) === '1';
+        if ($showArchived) {
+            Auth::requireRole('Admin');
+        }
+
+        [$where, $params, $orderBy] = $this->listQueryFilters($user, $showArchived);
+        $whereSql = implode(' AND ', $where);
+
+        $stmt = $pdo->prepare(
+            "SELECT r.id, r.incident_type, r.incident_datetime, r.location, r.status,
+                    u.full_name AS created_by_name, r.complainant, r.respondent, r.deleted_at
+             FROM reports r JOIN users u ON u.id = r.created_by
+             WHERE {$whereSql}
+             ORDER BY {$orderBy}, r.id DESC
+             LIMIT 20000"
+        );
+        $stmt->execute($params);
+
+        if (ob_get_level() !== 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="bluewrite-reports-' . date('Ymd-His') . '.csv"');
+        header('Cache-Control: no-store');
+
+        $out = fopen('php://output', 'w');
+        // UTF-8 BOM so Excel opens Filipino text (ñ, é) correctly.
+        fwrite($out, "\xEF\xBB\xBF");
+        fputcsv($out, ['Report No.', 'Incident Type', 'Incident Datetime', 'Location', 'Status', 'Recorded By', 'Complainant', 'Respondent', 'Archived']);
+
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            fputcsv($out, [
+                'BW-' . str_pad((string) $row['id'], 4, '0', STR_PAD_LEFT),
+                $row['incident_type'],
+                $row['incident_datetime'],
+                $row['location'],
+                $row['status'],
+                $row['created_by_name'],
+                $row['complainant'],
+                $row['respondent'],
+                $row['deleted_at'] !== null ? 'yes' : 'no',
+            ]);
+        }
+        fclose($out);
+
+        Audit::log((int) $user['id'], 'report.export', 'report', null, 'csv export, ' . $stmt->rowCount() . ' rows');
+        exit;
+    }
+
+    /**
+     * Shared WHERE/params/ORDER builder for index() and exportCsv(). Lives
+     * in one place so the export can never drift from the visible list.
+     * @return array{0: string[], 1: array<string, mixed>, 2: string}
+     */
+    private function listQueryFilters(array $user, bool $showArchived): array
+    {
         $params = [];
         $where = ['r.deleted_at ' . ($showArchived ? 'IS NOT NULL' : 'IS NULL')];
 
@@ -152,14 +256,19 @@ final class ReportsController
             $params[':type'] = $type;
         }
 
-        // Status filter.
+        // Status filter. `submitted` sits between draft and finalized in
+        // the workflow; `attention` is the dashboard's working set (anything
+        // not yet finalized). Admin filters the review queue with these.
         $status = trim((string) ($_GET['status'] ?? ''));
         if ($status !== '') {
-            if (!in_array($status, ['draft', 'finalized'], true)) {
+            if ($status === 'attention') {
+                $where[] = "r.status != 'finalized'";
+            } elseif (in_array($status, ['draft', 'submitted', 'finalized'], true)) {
+                $where[] = 'r.status = :status';
+                $params[':status'] = $status;
+            } else {
                 Response::json(422, ['error' => 'Unknown status filter.']);
             }
-            $where[] = 'r.status = :status';
-            $params[':status'] = $status;
         }
 
         // Date range (inclusive, on incident_datetime).
@@ -194,39 +303,7 @@ final class ReportsController
         }
         $dir = strtolower((string) ($_GET['dir'] ?? 'desc')) === 'asc' ? 'ASC' : 'DESC';
 
-        // Pagination (UC-012).
-        $page = max(1, (int) ($_GET['page'] ?? 1));
-        $perPage = min(100, max(5, (int) ($_GET['per_page'] ?? 25)));
-        $offset = ($page - 1) * $perPage;
-
-        $whereSql = implode(' AND ', $where);
-
-        // Total count for pagination metadata (mirrors the same filters).
-        $countStmt = $pdo->prepare(
-            "SELECT COUNT(*) FROM reports r JOIN users u ON u.id = r.created_by WHERE {$whereSql}"
-        );
-        $countStmt->execute($params);
-        $total = (int) $countStmt->fetchColumn();
-
-        $sql = "SELECT r.id, r.incident_type, r.incident_datetime, r.location, r.status,
-                    r.created_by, u.full_name AS created_by_name, r.deleted_at
-             FROM reports r JOIN users u ON u.id = r.created_by
-             WHERE {$whereSql}
-             ORDER BY {$sortMap[$sortKey]} {$dir}, r.id DESC
-             LIMIT {$perPage} OFFSET {$offset}";
-
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-
-        Response::json(200, [
-            'reports' => $stmt->fetchAll(),
-            'pagination' => [
-                'page' => $page,
-                'per_page' => $perPage,
-                'total' => $total,
-                'total_pages' => (int) max(1, ceil($total / $perPage)),
-            ],
-        ]);
+        return [$where, $params, "{$sortMap[$sortKey]} {$dir}"];
     }
 
     public function store(): void

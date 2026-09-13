@@ -30,7 +30,9 @@ require __DIR__ . '/../app/controllers/AuthController.php';
 require __DIR__ . '/../app/controllers/UsersController.php';
 require __DIR__ . '/../app/controllers/ReportsController.php';
 require __DIR__ . '/../app/controllers/DashboardController.php';
+require __DIR__ . '/../app/controllers/AuditsController.php';
 
+use App\Controllers\AuditsController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\NarrativeController;
@@ -108,10 +110,18 @@ try {
         (new DashboardController())->stats();
     }
 
+    // Audit trail browser (Admin-only, read-only).
+    if ($seg0 === 'audits' && $seg1 === null && $method === 'GET') {
+        (new AuditsController())->index();
+    }
+
     if ($seg0 === 'reports') {
         $c = new ReportsController();
         if ($seg1 === null && $method === 'GET') {
             $c->index();
+        }
+        if ($seg1 === 'export' && $method === 'GET') {
+            $c->exportCsv();
         }
         if ($seg1 === null && $method === 'POST') {
             $c->store();

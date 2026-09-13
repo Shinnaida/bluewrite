@@ -15,6 +15,10 @@ export default function Users({ notify }) {
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState(null);
   const [confirm, setConfirm] = useState(null); // { title, message, action, confirmLabel }
+  // Password reset dialog state (Admin action on an existing account).
+  const [resetFor, setResetFor] = useState(null); // user row being reset
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetError, setResetError] = useState('');
 
   async function load() {
     try {
@@ -60,6 +64,27 @@ export default function Users({ notify }) {
       doneMessage: `Account for ${u.full_name} reactivated.`,
       action: () => api(`/users/${u.id}`, { method: 'PATCH', body: { status: 'active' } }),
     });
+  }
+
+  function askResetPassword(u) {
+    setResetFor(u);
+    setResetPassword('');
+    setResetError('');
+  }
+
+  async function runResetPassword(e) {
+    e.preventDefault();
+    if (resetPassword.length < 10) {
+      setResetError('Password must be at least 10 characters.');
+      return;
+    }
+    try {
+      await api(`/users/${resetFor.id}`, { method: 'PATCH', body: { password: resetPassword } });
+      notify(`Password reset for ${resetFor.full_name}.`);
+      setResetFor(null);
+    } catch (err) {
+      setResetError(err.message);
+    }
   }
 
   function startEdit(u) {
@@ -218,6 +243,7 @@ export default function Users({ notify }) {
                       <td>{u.last_login_at ? u.last_login_at.replace('T', ' ') : 'Never'}</td>
                       <td>
                         <button onClick={() => startEdit(u)}>Edit</button>{' '}
+                        <button onClick={() => askResetPassword(u)}>Reset password</button>{' '}
                         {u.status === 'active' ? (
                           <button className="danger" onClick={() => askDeactivate(u)}>
                             Deactivate Account
@@ -233,6 +259,47 @@ export default function Users({ notify }) {
             </div>
           )}
         </>
+      )}
+
+      {resetFor && (
+        <div className="dialog-overlay" onClick={() => setResetFor(null)}>
+          <div
+            className="dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-pass-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="reset-pass-title">Reset password — {resetFor.full_name}</h2>
+            <p>
+              Set a new password for <strong>{resetFor.username}</strong>. They will use it on
+              their next sign-in. This action is recorded in the audit trail.
+            </p>
+            <form onSubmit={runResetPassword}>
+              <div className="field">
+                <label htmlFor="reset-pass-input">New password</label>
+                <input
+                  id="reset-pass-input"
+                  type="password"
+                  autoComplete="new-password"
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  minLength={10}
+                  required
+                  autoFocus
+                />
+                <p className="field-hint">Minimum 10 characters, same rule as account creation.</p>
+              </div>
+              {resetError && (
+                <div className="alert error" role="alert">{resetError}</div>
+              )}
+              <div className="actions">
+                <button type="button" onClick={() => setResetFor(null)}>Cancel</button>
+                <button type="submit" className="primary">Reset Password</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {confirm && (

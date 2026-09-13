@@ -116,7 +116,7 @@ function EmptyNote({ children }) {
   return <p className="dash-empty">{children}</p>;
 }
 
-export default function Dashboard({ user, notify, onConnError }) {
+export default function Dashboard({ user, notify, onConnError, onOpenReports }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [preset, setPreset] = useState(30);
@@ -311,13 +311,21 @@ export default function Dashboard({ user, notify, onConnError }) {
                   : ''}
               </span>
             </div>
-            <div className="dash-kpi" style={{ '--accent': 'var(--amber)' }}>
+            {/* Clickable: the number is an action — jump into the blotter
+                pre-filtered to everything awaiting work. */}
+            <button
+              type="button"
+              className="dash-kpi dash-kpi--link"
+              style={{ '--accent': 'var(--amber)' }}
+              onClick={() => onOpenReports?.('attention')}
+              title="Open the needs-attention queue in All Reports"
+            >
               <span className="dash-kpi__label">Needs attention</span>
               <span className="dash-kpi__value">{k ? fmt.format(needsAttention) : '—'}</span>
               <span className="dash-kpi__delta">
                 {k ? `${fmt.format(k.pending)} draft · ${fmt.format(k.submitted)} awaiting finalization` : ''}
               </span>
-            </div>
+            </button>
             <div className="dash-kpi" style={{ '--accent': 'var(--green-ok)' }}>
               <span className="dash-kpi__label">Finalized</span>
               <span className="dash-kpi__value">{k ? fmt.format(k.finalized) : '—'}</span>

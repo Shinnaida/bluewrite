@@ -135,6 +135,11 @@ final class UsersController
             $params[':status'] = $body['status'];
         }
         if (!empty($body['password'])) {
+            // Same 10-char minimum as account creation — a reset must never
+            // be a weaker backdoor into the account.
+            if (strlen((string) $body['password']) < 10) {
+                Response::json(422, ['error' => 'Password must be at least 10 characters.']);
+            }
             $sets[] = 'password_hash = :hash';
             $params[':hash'] = password_hash((string) $body['password'], PASSWORD_BCRYPT);
         }
@@ -159,6 +164,11 @@ final class UsersController
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
 
+        // Password changes get their own audit action so the trail can
+        // answer "when was this account's credential last reset" directly.
+        if (isset($params[':hash'])) {
+            Audit::log((int) $admin['id'], 'user.password_reset', 'user', (string) $userId, "username: {$existing['username']}");
+        }
         Audit::log((int) $admin['id'], 'user.update', 'user', (string) $userId, implode('; ', array_keys($body)));
         Response::json(200, ['ok' => true]);
     }

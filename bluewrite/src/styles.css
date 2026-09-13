@@ -1488,6 +1488,97 @@ body.ai-panel-open .main {
   margin-top: 1.25rem;
 }
 
+/* ---- Audit trail browser (admin) ---- */
+.audits-page { max-width: 76rem; }
+.audits-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.audits-table th {
+  text-align: left;
+  font-family: var(--font-hud);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--line-bright);
+}
+.audits-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.audits-table tbody tr:hover { background: rgba(0, 240, 255, 0.04); }
+.audit-when { font-family: var(--font-hud); font-size: 0.78rem; white-space: nowrap; color: var(--paper); }
+.audit-system { color: var(--cyan-dim); font-style: italic; }
+.audit-entity { font-family: var(--font-hud); font-size: 0.78rem; }
+.audit-detail { max-width: 26rem; color: var(--paper); word-break: break-word; }
+.audit-ip { font-family: var(--font-hud); font-size: 0.75rem; color: var(--cyan-dim); }
+.audit-action {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--steel);
+  white-space: nowrap;
+}
+.audit-action.red { color: var(--red-text); border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.08); }
+.audit-action.amber { color: var(--amber); border-color: rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.08); }
+.audit-action.green { color: var(--green-ok); border-color: rgba(62, 213, 152, 0.5); background: rgba(62, 213, 152, 0.08); }
+.audits-skeleton .skeleton-row {
+  height: 2.4rem;
+  margin-bottom: 0.4rem;
+  border: 1px solid var(--line);
+  background: linear-gradient(90deg, var(--panel) 25%, var(--panel-raised) 50%, var(--panel) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s infinite linear;
+}
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+.pager-status { font-family: var(--font-hud); font-size: 0.75rem; color: var(--cyan-dim); }
+.pager button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Clickable dashboard KPI (needs-attention deep-link) */
+button.dash-kpi--link {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 80ms ease, border-color 120ms ease;
+}
+button.dash-kpi--link:hover { border-color: var(--amber); }
+button.dash-kpi--link:active { transform: translateY(1px); }
+button.dash-kpi--link:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* Export CSV link styled as a button (sits beside Show Archived) */
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--line-bright);
+  background: var(--panel-raised);
+  color: var(--paper);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.button-link:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* Password-reset dialog */
+.field-hint { margin: 0.3rem 0 0; font-size: 0.78rem; color: var(--cyan-dim); }
+
 /* ---- Reports toolbar (Phase 2: search/filter/sort) ----
    Two rows: search on its own line, filters below — no wrapping scramble. */
 .reports-toolbar {

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api, classifyError, isUnreachable } from '../lib/api.js';
 import Users from './Users.jsx';
+import Audits from './Audits.jsx';
 import Dashboard from './Dashboard.jsx';
 import LetterGlitch from './LetterGlitch.jsx';
 import ReportContextMenu from './ReportContextMenu.jsx';
@@ -25,6 +26,8 @@ const COLLAPSE_BELOW = 170;
 export default function Shell({ user, onLogout, notify }) {
   // View model: { kind: 'welcome' } | { kind: 'report', id } |
   // { kind: 'new' } | { kind: 'table' } | { kind: 'users' } | { kind: 'dashboard' }
+  // | { kind: 'audits', status? } — status pre-fills the reports filter when
+  // arriving from a dashboard KPI click.
   // Admins land on the Dashboard after login (their home base);
   // Officer/Staff start on the report welcome screen as before.
   const [view, setView] = useState(
@@ -211,6 +214,14 @@ export default function Shell({ user, onLogout, notify }) {
   }
   function openUsers() {
     setView({ kind: 'users' });
+  }
+  function openAudits() {
+    setView({ kind: 'audits' });
+  }
+  // Dashboard KPIs deep-link into the blotter pre-filtered (e.g. the
+  // Needs-attention card opens draft+submitted work).
+  function openTableFiltered(status) {
+    setView({ kind: 'table', status });
   }
 
   // Shared by every role (Admin, Officer, Staff): ask before signing out,
@@ -446,6 +457,19 @@ export default function Shell({ user, onLogout, notify }) {
                 User Management
               </button>
             )}
+            {isAdmin && (
+              <button
+                type="button"
+                className={`side-link ${view.kind === 'audits' ? 'active' : ''}`}
+                onClick={openAudits}
+              >
+                <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 8v4l2.5 2.5" />
+                  <path d="M3.05 11a9 9 0 1 1 .5 4M3 4v5h5" />
+                </svg>
+                Audit Trail
+              </button>
+            )}
           </nav>
         )}
 
@@ -492,6 +516,20 @@ export default function Shell({ user, onLogout, notify }) {
                 <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="9" cy="8" r="3.5" />
                   <path d="M2.5 20v-1a6.5 6.5 0 0 1 13 0v1M16 4.6a3.5 3.5 0 0 1 0 6.8M21.5 20v-1a6.5 6.5 0 0 0-4.5-6.2" />
+                </svg>
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                type="button"
+                className={`side-link icon-only ${view.kind === 'audits' ? 'active' : ''}`}
+                onClick={openAudits}
+                title="Audit Trail"
+                aria-label="Audit Trail"
+              >
+                <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 8v4l2.5 2.5" />
+                  <path d="M3.05 11a9 9 0 1 1 .5 4M3 4v5h5" />
                 </svg>
               </button>
             )}
@@ -629,10 +667,20 @@ export default function Shell({ user, onLogout, notify }) {
           />
         )}
         {view.kind === 'dashboard' && isAdmin && (
-          <Dashboard user={user} notify={notify} onConnError={reportConn} />
+          <Dashboard user={user} notify={notify} onConnError={reportConn} onOpenReports={openTableFiltered} />
         )}
         {view.kind === 'table' && (
-          <ReportsTable user={user} notify={notify} onMutated={onReportMutated} onConnError={reportConn} />
+          <ReportsTable
+            key={view.status ?? 'all'}
+            user={user}
+            notify={notify}
+            onMutated={onReportMutated}
+            onConnError={reportConn}
+            initialStatus={view.status}
+          />
+        )}
+        {view.kind === 'audits' && isAdmin && (
+          <Audits notify={notify} onConnError={reportConn} />
         )}
         {view.kind === 'users' && isAdmin && <Users notify={notify} onConnError={reportConn} />}
       </main>
