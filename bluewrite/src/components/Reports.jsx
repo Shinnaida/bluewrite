@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
 import ReportPrint from './ReportPrint.jsx';
-import Logo from './Logo.jsx';
 import HeroGlitchText from './HeroGlitchText.jsx';
 import ConnectionNotice from './ConnectionNotice.jsx';
 import {
@@ -185,9 +184,6 @@ export function ReportWelcome({ user, onNew, onOpenReport, reports, loading }) {
   return (
     <div className="welcome">
       <div className="welcome-intro">
-        <div className="welcome-logo" aria-hidden="true">
-          <Logo variant="mark-only" size={72} animated={false} title="" />
-        </div>
         <div className="welcome-hero" aria-hidden="true">
           <HeroGlitchText text="BLUEWRITE">
             BLUE<em>WRITE</em>
