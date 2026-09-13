@@ -1,0 +1,172 @@
+<?php
+
+declare(strict_types=1);
+
+namespace BlueWrite\Tests;
+
+use PDO;
+
+/**
+ * Base test case for BlueWrite API tests.
+ *
+ * Strategy: talk to the REAL API over HTTP (PHP built-in server must be
+ * running — see tests/README.md) against a scratch database (bluewrite_test).
+ * The DB is wiped and re-seeded before every test, so tests are isolated and
+ * never touch the dev database (bluewrite) or any real data.
+ *
+ * Run:
+ *   php tests/run-tests.php            (starts a dedicated server on port 8098)
+ * Or directly:
+ *   php phpunit.phar --bootstrap tests/bootstrap.php tests
+ */
+abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
+{
+    protected const BASE = 'http://127.0.0.1:8098/api/v1';
+
+    private static ?PDO $pdo = null;
+
+    /** Full DB reset before each test: drop, recreate schema, seed known users. */
+    protected function setUp(): void
+    {
+        $pdo = $this->rootPdo();
+        $pdo->exec('DROP DATABASE IF EXISTS bluewrite_test');
+        $pdo->exec('CREATE DATABASE bluewrite_test CHARACTER SET utf8mb4');
+        $pdo->exec('USE bluewrite_test');
+        $this->runSqlFile(__DIR__ . '/../migrations/001_schema.sql');
+
+        // Phase 3 migrations — the scratch DB must replay the FULL schema,
+        // not just the Phase 1 baseline: 002 adds reports.type_specific
+        // (report creation 500s without it) and 003 adds the ai_requests /
+        // ai_cache tables the narrative service writes to.
+        $this->runSqlFile(__DIR__ . '/../migrations/002_type_specific_fields.sql');
+        $this->runSqlFile(__DIR__ . '/../migrations/003_ai_assist.sql');
+
+        // Fresh seed users (same shape as database/seed.php but test-scoped).
+        $hash = password_hash('Passw0rd!23', PASSWORD_BCRYPT);
+        $ins = $this->rootPdo()->prepare(
+            'INSERT INTO users (role_id, full_name, badge_number, username, password_hash, status)
+             VALUES (:r, :n, :b, :u, :h, :s)'
+        );
+        $ins->execute([':r' => 1, ':n' => 'Test Admin', ':b' => 'T-ADM-1', ':u' => 't.admin', ':h' => $hash, ':s' => 'active']);
+        $ins->execute([':r' => 2, ':n' => 'Test Officer', ':b' => 'T-OFF-1', ':u' => 't.officer', ':h' => $hash, ':s' => 'active']);
+        $ins->execute([':r' => 3, ':n' => 'Test Staff', ':b' => 'T-STF-1', ':u' => 't.staff', ':h' => $hash, ':s' => 'active']);
+        $ins->execute([':r' => 2, ':n' => 'Inactive Officer', ':b' => 'T-OFF-2', ':u' => 't.inactive', ':h' => $hash, ':s' => 'inactive']);
+    }
+
+    /**
+     * Connection WITHOUT a database selected — safe to DROP/CREATE the
+     * scratch DB between tests (a connection pinned to a dropped DB breaks).
+     * Queries in tests use fully-qualified `bluewrite_test.*` table names.
+     */
+    protected function rootPdo(): PDO
+    {
+        if (self::$pdo === null) {
+            $cfg = require __DIR__ . '/../config/config.php';
+            $dsn = sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $cfg['db']['host'], $cfg['db']['port']);
+            self::$pdo = new PDO($dsn, $cfg['db']['user'], $cfg['db']['pass'], [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            ]);
+        }
+        return self::$pdo;
+    }
+
+    /** Alias used by test classes for scratch-DB assertions. */
+    protected function db(): PDO
+    {
+        return $this->rootPdo();
+    }
+
+    private function runSqlFile(string $path): void
+    {
+        // Strip full-line `--` comments first: migration headers contain
+        // semicolons inside prose (e.g. "NULL for legacy rows;"), which a
+        // naive split-on-';' would cut mid-comment.
+        $lines = file($path, FILE_IGNORE_NEW_LINES) ?: [];
+        $lines = array_values(array_filter(
+            $lines,
+            static fn (string $l): bool => !str_starts_with(ltrim($l), '--')
+        ));
+        $sql = implode("\n", $lines);
+        // Split on ';' at line ends — the schema files are simple enough for this.
+        foreach (array_filter(array_map('trim', explode(';', $sql))) as $stmt) {
+            if ($stmt !== '') {
+                $this->rootPdo()->exec($stmt);
+            }
+        }
+    }
+
+    /** @return array{status:int, body:array, headers:array} */
+    protected function request(string $method, string $path, ?array $body = null, ?string $cookie = null, ?string $csrf = null): array
+    {
+        $ch = curl_init(self::BASE . $path);
+        $headers = ['Content-Type: application/json'];
+        if ($csrf !== null) {
+            $headers[] = "X-CSRF-Token: $csrf";
+        }
+        curl_setopt_array($ch, [
+            CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_COOKIE => $cookie ?? '',
+            CURLOPT_TIMEOUT => 10,
+        ]);
+        if ($body !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+        }
+        $raw = curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        curl_close($ch);
+
+        $setCookies = [];
+        foreach (explode("\r\n", substr((string) $raw, 0, $headerSize)) as $line) {
+            if (stripos($line, 'Set-Cookie:') === 0) {
+                $setCookies[] = trim(substr($line, 11));
+            }
+        }
+        $bodyRaw = substr((string) $raw, $headerSize);
+        $decoded = json_decode($bodyRaw, true);
+
+        return [
+            'status' => $status,
+            'body' => is_array($decoded) ? $decoded : [],
+            'setCookies' => $setCookies,
+        ];
+    }
+
+    /** Log in and return [cookie header string, csrf token, user array]. */
+    protected function login(string $username, string $password = 'Passw0rd!23'): array
+    {
+        $res = $this->request('POST', '/login', ['username' => $username, 'password' => $password]);
+        $this->assertSame(200, $res['status'], "login as {$username} failed: " . json_encode($res['body']));
+
+        $cookie = '';
+        foreach ($res['setCookies'] as $c) {
+            $pair = explode(';', $c)[0];
+            $cookie = $cookie === '' ? $pair : $cookie . '; ' . $pair;
+        }
+        return [$cookie, (string) $res['body']['csrf_token'], $res['body']['user']];
+    }
+
+    protected function createReport(string $cookie, string $csrf, array $overrides = []): array
+    {
+        $payload = array_merge([
+            'incident_type' => 'Theft',
+            'incident_datetime' => '2026-09-01T08:30',
+            'location' => 'Test Location',
+            'complainant' => 'Test Complainant',
+            'respondent' => 'Test Respondent',
+            'narrative' => 'Test narrative for the report.',
+            'status' => 'draft',
+        ], $overrides);
+        $res = $this->request('POST', '/reports', $payload, $cookie, $csrf);
+        $this->assertSame(201, $res['status'], 'create report failed: ' . json_encode($res['body']));
+        return $res['body']['report'];
+    }
+
+    protected function patchReport(string $cookie, string $csrf, int $id, array $body): array
+    {
+        return $this->request('PATCH', "/reports/{$id}", $body, $cookie, $csrf);
+    }
+}

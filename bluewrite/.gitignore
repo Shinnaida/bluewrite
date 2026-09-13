@@ -1,0 +1,17 @@
+# Secrets
+config/config.php
+app/config/ai.php
+
+# Machine-local Gemini cache state (CachedInstructionStore)
+resources/ai/.cache_state.json
+
+# Dependencies & build
+node_modules/
+public/assets/
+phpunit.phar
+.phpunit.result.cache
+
+# Misc
+.DS_Store
+Thumbs.db
+*.log

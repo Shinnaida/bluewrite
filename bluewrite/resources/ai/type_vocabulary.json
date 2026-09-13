@@ -1,0 +1,65 @@
+{
+  "_comment": "DERIVED FILE — do not edit here first. Per-type vocabulary from bluewrite-police-terminology-glossary.md §9. Update the glossary first, then propagate into this file. Keys match INCIDENT_TYPES in src/lib/incidentTypes.js exactly. GeminiNarrativeProvider::buildSystemInstruction() appends only the entry matching the report's incident type to the base system instruction (see app/ai/GeminiNarrativeProvider.php). The 'sensitivity' text here is the AI-side instruction; it deliberately differs in wording from the officer-facing UI reminder in SENSITIVE_TYPES (incidentTypes.js) and the architecture v2 §5.2 note — one is for the model, the other for the officer.",
+
+  "Theft": {
+    "vocabulary": ["unlawfully taken", "forcible taking", "estimated value in the amount of ₱[X]"],
+    "legalBasis": "Article 308 of the Revised Penal Code",
+    "sensitivity": null
+  },
+  "Robbery": {
+    "vocabulary": ["unlawfully taken", "forcible taking", "asportation", "estimated value in the amount of ₱[X]", "hot-pursuit operation", "direction of escape"],
+    "legalBasis": "Article 294 of the Revised Penal Code",
+    "sensitivity": null
+  },
+  "Assault / Physical Injury": {
+    "vocabulary": ["physical injuries", "medico-legal findings", "hematoma", "contusion", "lacerated wound", "body-part specificity"],
+    "sensitivity": null
+  },
+  "Traffic Accident": {
+    "vocabulary": ["vehicular collision", "hit-and-run", "sideswiped", "figured in a vehicular accident", "damage sustained before/after"],
+    "sensitivity": null
+  },
+  "Rape / Sexual Assault": {
+    "vocabulary": ["violation of RA 8353", "medico-legal findings"],
+    "legalBasis": "Republic Act No. 8353",
+    "sensitivity": "Handle with heightened care (sensitive type). Use clinical, formal, non-graphic language and avoid detail beyond what is evidentially necessary — summarize at the level of what was reported, where and when, not a descriptive account. Cite the law by number. Never speculate on credibility, motive, or fault."
+  },
+  "Domestic Violence": {
+    "vocabulary": ["violation of RA 9262", "protection order"],
+    "legalBasis": "Republic Act No. 9262",
+    "sensitivity": "Handle with heightened care (sensitive type, RA 9262). Use clinical, formal, non-graphic language and avoid detail beyond what is evidentially necessary. Cite the law by number. Use 'Respondent', never 'Suspect', to match the civil/protective-order framing. Never speculate on credibility, motive, or fault."
+  },
+  "Missing Person": {
+    "vocabulary": ["last seen wearing", "circumstances of disappearance", "search and follow-up operation"],
+    "sensitivity": null
+  },
+  "Lost Property": {
+    "vocabulary": ["misplaced/lost property", "identifying marks", "estimated value in the amount of ₱[X]"],
+    "sensitivity": null
+  },
+  "Fraud / Estafa": {
+    "vocabulary": ["estafa", "misrepresentation", "in the amount of ₱[X]", "sworn statement", "transaction records"],
+    "sensitivity": null
+  },
+  "Property Damage / Malicious Mischief": {
+    "vocabulary": ["malicious mischief", "damaged and cut apart", "estimated cost of damage in the amount of ₱[X]"],
+    "sensitivity": null
+  },
+  "Fire Incident": {
+    "vocabulary": ["fire incident", "origin of fire", "extent of damage", "estimated property loss in the amount of ₱[X]"],
+    "sensitivity": null
+  },
+  "Drug-Related Incident": {
+    "vocabulary": ["buy-bust operation", "poseur-buyer", "marked money", "chain of custody", "violation of RA 9165", "inventory and photograph of seized items"],
+    "legalBasis": "Republic Act No. 9165",
+    "sensitivity": null
+  },
+  "Burglary / Break-In": {
+    "vocabulary": ["forced entry", "point of entry", "unlawfully taken", "estimated value in the amount of ₱[X]", "tools used"],
+    "sensitivity": null
+  },
+  "Other Incident": {
+    "vocabulary": [],
+    "sensitivity": null
+  }
+}

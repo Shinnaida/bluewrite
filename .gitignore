@@ -1,0 +1,16 @@
+# Huge local Laragon installer — GitHub rejects files over 100 MB
+laragon-wamp.exe
+
+# Working backups incl. a SQL dump of real reports — NEVER publish
+.design-backup/
+
+# Source requirement documents (kept local, not part of the code repo)
+BLUEWRITE.docx
+bluewrite_extracted.txt
+
+# Machine-local tool state
+.freebuff/
+
+# OS junk
+Thumbs.db
+.DS_Store

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- BlueWrite favicon: same monogram as the collapsed sidebar brand
+       (white B, cyan W) on the app's panel color with a hairline border
+       so it stays visible on light browser chrome. -->
+  <rect width="32" height="32" rx="6" fill="#0A1120"/>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="5.5" fill="none" stroke="#374151"/>
+  <text x="16" y="22" text-anchor="middle" font-family="ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Consolas, monospace" font-size="15" font-weight="700" letter-spacing="-1"><tspan fill="#FFFFFF">B</tspan><tspan fill="#00F0FF">W</tspan></text>
+</svg>

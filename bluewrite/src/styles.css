@@ -1,0 +1,2053 @@
+/* ============================================================
+   BLUEWRITE app theme — cyan HUD (matches the login mockup)
+   Palette: void #030712 · panel #0A1120 · panel-raised #0F1C33
+   line #1E293B · line-bright #374151 · cyan #00F0FF · cyan-dim #6B7A8C
+   green-ok #3ED598 · amber #F59E0B · red #EF4444/#F87171 · paper #FFF · steel #9CA3AF
+   ============================================================ */
+
+:root {
+  --void: #030712;
+  --panel: #0A1120;
+  --panel-raised: #0F1C33;
+  --line: #1E293B;
+  --line-bright: #374151;
+  --cyan: #00F0FF;
+  --cyan-dim: #6B7A8C;
+  --green-ok: #3ED598;
+  --amber: #F59E0B;
+  --red: #EF4444;
+  --red-text: #F87171;
+  --red-bg: rgba(69, 10, 10, 0.4);
+  --paper: #FFFFFF;
+  --steel: #9CA3AF;
+  --input-bg: rgba(0, 0, 0, 0.62);
+
+  --font-hud: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Menlo, monospace;
+  --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+/* ---- Scrollbars: transparent track, subtle gray thumb ----
+   Standard-property version for Chrome/Edge 121+, plus the -webkit
+   fallback for older Chromium. The track stays fully transparent so the
+   panel background shows through; only the thumb is visible. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-bright) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--line-bright);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cyan-dim);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner { background: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--void);
+  color: var(--steel);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { font-weight: 700; margin: 0 0 0.5rem; color: var(--paper); }
+h1 { font-size: 1.4rem; letter-spacing: 0.02em; }
+h2 { font-size: 1.05rem; }
+h3 { font-size: 0.95rem; }
+
+a { color: var(--cyan); }
+
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--line-bright);
+  background: var(--panel-raised);
+  color: var(--paper);
+  padding: 0.45rem 1rem;
+  border-radius: 3px;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+button:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: var(--panel-raised);
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+button.primary {
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: #000;
+  font-weight: 700;
+}
+button.primary:hover {
+  background: #fff;
+  border-color: #fff;
+  color: #000;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.25);
+}
+
+button.danger {
+  border-color: rgba(239, 68, 68, 0.6);
+  color: var(--red-text);
+  background: transparent;
+}
+button.danger:hover {
+  border-color: var(--red);
+  color: var(--red);
+  background: var(--red-bg);
+}
+
+label {
+  display: block;
+  font-family: var(--font-hud);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-dim, #9CA3AF);
+  margin-bottom: 0.35rem;
+}
+
+input, select, textarea {
+  font: inherit;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  background: var(--input-bg);
+  color: var(--paper);
+  caret-color: var(--cyan);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+input::placeholder, textarea::placeholder { color: rgba(148, 163, 184, 0.85); }
+input:disabled, select:disabled, textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: rgba(0, 0, 0, 0.25);
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+}
+input[aria-invalid='true'], textarea[aria-invalid='true'] {
+  border-color: var(--red);
+}
+textarea { resize: vertical; min-height: 8rem; }
+
+select option {
+  background: var(--panel);
+  color: var(--paper);
+}
+
+.field { margin-bottom: 1rem; }
+.field .error {
+  color: var(--red-text);
+  font-size: 0.82rem;
+  margin-top: 0.25rem;
+  font-family: var(--font-hud);
+}
+
+/* ---- App shell ---- */
+/* Full-viewport shell: the sidebar stays fixed (never scrolls with the
+   page); the main column scrolls internally instead. */
+.shell {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  position: relative;
+  isolation: isolate;
+}
+
+/* ---- Shared cyber workspace atmosphere ---- */
+.workspace-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: #030712;
+}
+.workspace-backdrop > :not(.workspace-grid) {
+  position: absolute;
+  inset: 0;
+}
+.workspace-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, #1e293b 1px, transparent 1px),
+    linear-gradient(to bottom, #1e293b 1px, transparent 1px);
+  background-size: 3rem 3rem;
+  opacity: 0.2;
+  -webkit-mask-image: radial-gradient(ellipse 80% 50% at 50% 50%, #000 70%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 50% at 50% 50%, #000 70%, transparent 100%);
+}
+.workspace-glitch {
+  opacity: 0.18;
+}
+
+/* Report editor views: hide the animated glitch/grid/scanline layers so the
+   form is easy to read; keep the plain dark base color from the backdrop. */
+.workspace-backdrop.is-plain > :not(.workspace-grid) {
+  display: none;
+}
+.workspace-backdrop.is-plain .workspace-grid {
+  display: none;
+}
+.workspace-glitch canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.workspace-scanlines {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%);
+  background-size: 100% 4px;
+  opacity: 0.85;
+}
+
+.sidebar {
+  /* Narrower on small laptops, full 220px once there's room. The user can
+     drag the edge handle to override this between 200–360px. */
+  width: clamp(180px, 16vw, 220px);
+  flex-shrink: 0;
+  position: relative;
+  background: rgba(10, 17, 32, 0.68);
+  color: var(--steel);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Smooth hover-expand: animate width, min-width, shadow and border
+     together so the rail glides open instead of snapping. */
+  transition:
+    width 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    min-width 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 260ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sidebar.is-resizing { transition: none; }
+
+/* ---- Edge resize handle ---- */
+.side-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 25;
+}
+.side-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 3px;
+  width: 2px;
+  height: 100%;
+  background: transparent;
+  transition: background 120ms ease;
+}
+.side-resizer:hover::after,
+.side-resizer:focus-visible::after {
+  background: var(--cyan);
+}
+.side-resizer:focus-visible {
+  outline: none;
+}
+.sidebar .brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+.sidebar .brand {
+  font-family: var(--font-hud);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.22em;
+  color: var(--paper);
+}
+/* Brand-as-Home button: strip button chrome, keep the wordmark look. */
+button.brand.brand-home {
+  background: none;
+  border: none;
+  padding: 0.15rem 0.3rem;
+  margin: -0.15rem -0.3rem;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  border-radius: 3px;
+}
+button.brand.brand-home:hover { color: var(--cyan); }
+button.brand.brand-home:hover em { color: var(--paper); }
+button.brand.brand-home:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+.sidebar.collapsed:not(.hover-open) .brand-row {
+  flex-direction: column;
+  padding: 1rem 0.4rem;
+  gap: 0.5rem;
+}
+.sidebar .brand em {
+  font-style: normal;
+  color: var(--cyan);
+}
+.sidebar nav { padding: 0.5rem 0; }
+
+/* ---- + New Report: the primary action under the brand ---- */
+.side-new {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.85rem 1rem 0.5rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  background: var(--panel-raised);
+  color: var(--paper);
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+.side-new:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+.side-new-icon { margin: 0.85rem auto 0.5rem; padding: 0.5rem; }
+
+/* ---- Section labels: quiet, mono, not shouting ---- */
+.side-section-label {
+  padding: 0.9rem 1.25rem 0.35rem;
+  font-family: var(--font-hud);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--cyan-dim);
+}
+
+/* ---- Reports list: scrollable, Claude-chat-list style ---- */
+.side-reports {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 0.5rem;
+}
+.side-report-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: calc(100% - 1rem);
+  margin: 0 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--steel);
+  text-align: left;
+  font-size: 0.82rem;
+}
+.side-report-item:hover { background: var(--panel-raised); color: var(--paper); }
+.side-report-item.active { background: var(--panel-raised); color: var(--cyan); }
+.side-report-item.is-loading,
+.side-report-item.is-empty { color: var(--cyan-dim); font-style: italic; pointer-events: none; }
+.side-report-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+.side-report-no {
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: inherit;
+}
+.side-report-type {
+  font-size: 0.76rem;
+  color: var(--steel);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.side-report-item.active .side-report-type { color: var(--cyan-dim); }
+.dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--amber); /* draft */
+}
+.dot.finalized { background: var(--green-ok); }
+
+/* ---- Workspace links (All Reports, User Management) ---- */
+.side-nav { flex-shrink: 0; border-top: 1px solid var(--line); }
+.side-link {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.55rem 1.25rem;
+  border: none;
+  background: transparent;
+  color: var(--steel);
+  font-size: 0.85rem;
+  text-align: left;
+}
+.side-link:hover { background: var(--panel-raised); color: var(--paper); }
+.side-link.active { background: var(--panel-raised); color: var(--cyan); }
+.side-link.icon-only { padding: 0.55rem 0; justify-content: center; }
+
+/* ---- Welcome state of the main panel ---- */
+.welcome {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 70vh;
+  text-align: center;
+  padding: clamp(2rem, 6vw, 5rem) clamp(1rem, 4vw, 3rem);
+}
+.welcome-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 42rem);
+}
+.welcome-mark {
+  font-family: var(--font-hud);
+  font-size: clamp(1rem, 1.8vw, 1.25rem);
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--paper);
+  margin-bottom: 1.15rem;
+  text-shadow: 0 0 18px rgba(255, 255, 255, 0.2);
+}
+.welcome-mark em { font-style: normal; color: var(--cyan); }
+.welcome-rule {
+  width: 7rem;
+  height: 1px;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.35);
+}
+.welcome-kicker {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-hud);
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+}
+.welcome h1 {
+  max-width: 38rem;
+  font-size: clamp(1.55rem, 3vw, 2.35rem);
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--paper);
+  margin: 0 0 0.7rem;
+}
+.welcome-sub {
+  max-width: 38rem;
+  color: var(--steel);
+  margin: 0 0 1.75rem;
+}
+.welcome-cta {
+  min-width: 11.5rem;
+  padding: 0.7rem 1.4rem;
+  font-size: 0.9rem;
+  box-shadow: 0 0 22px rgba(0, 240, 255, 0.12);
+}
+.welcome-recent {
+  width: 100%;
+  max-width: 30rem;
+  margin-top: clamp(2.5rem, 6vw, 4rem);
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(55, 65, 81, 0.75);
+  text-align: left;
+}
+.welcome-recent .side-section-label { padding-left: 0; color: var(--cyan-dim); }
+.welcome-recent .side-report-item {
+  width: 100%;
+  margin: 0;
+  border: 1px solid var(--line);
+  background: rgba(10, 17, 32, 0.42);
+}
+.welcome-recent .side-report-item + .side-report-item { border-top: none; }
+
+
+.sidebar .session {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.9rem 1.25rem;
+  border: none;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  font-size: 0.85rem;
+  color: var(--steel);
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar .session:hover,
+.sidebar .session.is-open { background: var(--panel-raised); }
+.sidebar .session .user { color: var(--paper); font-weight: 600; }
+.sidebar .session .meta { font-family: var(--font-hud); font-size: 0.75rem; }
+
+/* Anchors the user-menu popover; without this the absolute-positioned
+   menu resolves against .sidebar and gets clipped above the top edge. */
+.session-wrap {
+  position: relative;
+  /* Pin the profile to the sidebar's bottom edge. When the Reports list is
+     shown it takes flex:1 and this margin collapses to 0 — the margin only
+     matters for Admins, whose sidebar has no Reports list to fill the gap. */
+  margin-top: auto;
+}
+
+/* Transparent click-away layer under the open menu. */
+.menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+/* ---- Popover: opens upward from the session block ---- */
+.user-menu {
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: calc(100% + 0.4rem);
+  z-index: 40;
+  padding: 0.4rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 4px;
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+.user-menu-head {
+  padding: 0.5rem 0.6rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0.35rem;
+}
+.user-menu-name { color: var(--paper); font-weight: 600; font-size: 0.88rem; }
+.user-menu-mail {
+  margin-top: 0.1rem;
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  color: var(--steel);
+}
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: none;
+  background: transparent;
+  color: var(--steel);
+  font-size: 0.84rem;
+  text-align: left;
+}
+.user-menu-item:hover { background: var(--panel-raised); color: var(--paper); }
+.user-menu-item svg { flex-shrink: 0; }
+.user-menu-kbd {
+  margin-left: auto;
+  font-family: var(--font-hud);
+  font-size: 0.68rem;
+  color: var(--cyan-dim);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.05rem 0.35rem;
+}
+.user-menu-sep {
+  height: 1px;
+  margin: 0.35rem 0;
+  background: var(--line);
+}
+
+/* ---- Right-click context menu (sidebar report items) ---- */
+.ctx-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+.ctx-menu {
+  position: fixed;
+  z-index: 70;
+  min-width: 11rem;
+  padding: 0.3rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 4px;
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--steel);
+  font-size: 0.83rem;
+  text-align: left;
+}
+.ctx-item:hover { background: var(--panel-raised); color: var(--paper); }
+.ctx-item.ctx-danger { color: var(--red-text); }
+.ctx-item.ctx-danger:hover { background: var(--red-bg); color: var(--red-text); }
+.ctx-item.is-disabled {
+  color: var(--cyan-dim);
+  font-style: italic;
+  cursor: not-allowed;
+}
+.ctx-item.is-disabled:hover { background: transparent; color: var(--cyan-dim); }
+.ctx-sep {
+  height: 1px;
+  margin: 0.3rem 0.2rem;
+  background: var(--line);
+}
+
+/* Collapsed rail: the avatar-only session button. Applies only when truly
+   collapsed — NOT during hover-expand, where the full name must render
+   normally (the avatar rule stuffing "Juan Dela Cruz" into a circle was the
+   hover-open bug). */
+.sidebar.collapsed:not(.hover-open) .session {
+  align-items: center;
+  padding: 0.9rem 0.5rem;
+}
+.sidebar.collapsed:not(.hover-open) .session .user {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--panel-raised);
+  border: 1px solid var(--line-bright);
+  font-family: var(--font-hud);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--cyan);
+}
+.user-menu { left: 0.5rem; right: auto; width: 13rem; }
+
+/* ---- Collapsible sidebar: hover to expand (button removed) ---- */
+
+.sidebar.collapsed {
+  width: 64px;
+}
+/* Hover-to-expand: the collapsed rail floats over the content at its full
+   (or user-saved) width; the main panel does NOT reflow. */
+.sidebar.collapsed.hover-open {
+  width: var(--hover-w, 220px);
+  min-width: 220px;
+  z-index: 35;
+  box-shadow: 12px 0 28px rgba(0, 0, 0, 0.45);
+  border-right-color: var(--line-bright);
+}
+.sidebar.collapsed.hover-open .side-reports { max-height: none; }
+.sidebar.collapsed:not(.hover-open) .brand {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+.sidebar.collapsed nav a {
+  padding: 0.55rem 0;
+  text-align: center;
+  font-size: 0.7rem;
+}
+.sidebar.collapsed:not(.hover-open) .session .user { font-size: 0.7rem; }
+
+.main {
+  flex: 1;
+  /* Paint above the shared workspace backdrop: without an explicit
+     stacking position, the absolutely-positioned backdrop (z-index 0)
+     renders on top of this in-flow element and buries the editor. */
+  position: relative;
+  z-index: 1;
+  /* Fluid padding + width: the content area adapts from phone to wide
+     desktop instead of jumping at a single breakpoint. */
+  padding: clamp(1rem, 2.5vw, 2rem) clamp(1rem, 3vw, 2rem);
+  background: linear-gradient(135deg, rgba(3, 7, 18, 0.32), rgba(3, 7, 18, 0.08) 55%, rgba(10, 17, 32, 0.2));
+  /* Full-bleed: tables and toolbars use every pixel the window offers,
+     so the scrollbar hugs the edge and no dead gap opens on the right
+     at zoomed-out or ultra-wide sizes. */
+  max-width: none;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto; /* the page scroll happens here, not on the sidebar */
+}
+
+.page-head { margin-bottom: clamp(1rem, 2vw, 1.5rem); }
+.page-head h1 { font-size: clamp(1.15rem, 1rem + 1.2vw, 1.4rem); }
+.page-head p { color: var(--steel); margin: 0.15rem 0 0; }
+
+/* ---- Status badges: color + text, never color alone ---- */
+.badge {
+  display: inline-block;
+  font-family: var(--font-hud);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.14rem 0.5rem;
+  border-radius: 2px;
+  border: 1px solid;
+}
+.badge.draft { background: rgba(245, 158, 11, 0.12); color: var(--amber); border-color: rgba(245, 158, 11, 0.5); }
+.badge.submitted { background: var(--panel-raised); color: var(--steel); border-color: var(--line-bright); }
+.badge.finalized { background: rgba(62, 213, 152, 0.1); color: var(--green-ok); border-color: rgba(62, 213, 152, 0.5); transition: background 300ms ease, color 300ms ease; }
+.badge.active { background: rgba(62, 213, 152, 0.1); color: var(--green-ok); border-color: rgba(62, 213, 152, 0.5); }
+.badge.inactive { background: var(--red-bg); color: var(--red-text); border-color: rgba(239, 68, 68, 0.5); }
+
+/* ---- Tables: ruled HUD style ---- */
+/* Wide tables scroll inside their own container on narrow screens instead
+   of stretching the whole page sideways. */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; min-width: 46rem; border-collapse: collapse; }
+th, td {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+/* Data cells never wrap: dates and report numbers stay on one line. */
+td.num, th.num { white-space: nowrap; }
+table th:nth-child(3), table td:nth-child(3) { white-space: nowrap; }
+th {
+  font-family: var(--font-hud);
+  font-weight: 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+  border-bottom: 1px solid var(--line-bright);
+}
+/* Blotter hover: a left-edge signal, not a full-row wash. */
+tbody tr { border-left: 2px solid transparent; }
+tbody tr:hover { background: var(--panel-raised); border-left-color: var(--cyan); }
+td { color: var(--steel); }
+td:first-child { color: var(--paper); font-weight: 600; }
+td.num, th.num { font-variant-numeric: tabular-nums; }
+td.num { text-align: left; letter-spacing: 0.02em; }
+
+/* Compact row actions: small ghost buttons that stay on one line. */
+.row-actions { display: flex; gap: 0.35rem; white-space: nowrap; }
+.row-actions button {
+  padding: 0.28rem 0.65rem;
+  font-size: 0.78rem;
+  background: transparent;
+  border-color: var(--line);
+  color: var(--ink-dim, var(--steel));
+}
+.row-actions button:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(0, 240, 255, 0.06);
+}
+.row-actions button.danger:hover {
+  border-color: var(--red);
+  color: var(--red-text);
+  background: rgba(239, 68, 68, 0.08);
+}
+.row-actions .locked-note {
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  color: var(--steel);
+  align-self: center;
+  padding: 0 0.35rem;
+}
+
+/* ---- Forms & sections ---- */
+/* Sections are quiet panels: a raised surface groups each step of the
+   report so a long form reads in chunks instead of one wall of fields. */
+.section {
+  background: rgba(13, 22, 40, 0.55);
+  border: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1rem 1.25rem 1.1rem;
+  margin: 1.25rem 0;
+}
+.section > h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  margin-bottom: 0.2rem;
+}
+.section-hint {
+  margin: 0 0 0.9rem;
+  font-size: 0.82rem;
+  color: var(--steel);
+}
+/* The narrative is the heart of a report — give it room and weight.
+   Sized to match the AI draft panel so the text reads the same before and
+   after the officer accepts it. */
+.section .field-narrative textarea {
+  min-height: 12rem;
+  font-size: 1.08rem;
+  line-height: 1.85;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.form-grid {
+  display: grid;
+  /* Columns collapse to one automatically below ~560px of form width —
+     no breakpoint needed; the grid itself decides. */
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+  gap: 0 1.25rem;
+}
+.form-grid .span-2 { grid-column: 1 / -1; }
+
+/* Date/time fields: the whole field is the click target for the picker
+   (showPicker() on click/focus) — style the corner indicator bigger and
+   brighter so the field reads as clickable. */
+.picker-field { cursor: pointer; }
+
+/* ---- Phase 3: AI narrative — slide-in side panel ---- */
+.ai-panel { margin-bottom: 0.25rem; margin-top: 0.9rem; position: relative; }
+.ai-generate-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.ai-notes { flex: 1; min-width: 16rem; }
+.ai-manual-banner { border-color: var(--amber); background: rgba(245, 158, 11, 0.08); color: var(--steel); }
+
+/* Loading state while the AI drafts: spinner + pulsing dots + progress bar. */
+.ai-loading {
+  border: 1px solid var(--line);
+  background: var(--panel-raised);
+  padding: 1.2rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  text-align: center;
+}
+.ai-spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid var(--line-bright);
+  border-top-color: var(--cyan);
+  animation: ai-spin 0.8s linear infinite;
+}
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+.ai-loading-text {
+  margin: 0;
+  color: var(--paper);
+  font-family: var(--font-hud);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+.ai-dots span {
+  display: inline-block;
+  color: var(--cyan);
+  animation: ai-dot-pulse 1.2s ease-in-out infinite;
+}
+.ai-dots span:nth-child(2) { animation-delay: 0.2s; }
+.ai-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes ai-dot-pulse {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+.ai-loading-sub {
+  margin: 0;
+  color: var(--cyan-dim);
+  font-size: 0.78rem;
+}
+/* Indeterminate progress bar: a cyan sweep loops across the track so the
+   panel keeps looking alive during the long (up to 20s) request. */
+.ai-loading-bar {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.ai-loading-bar-fill {
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  animation: ai-bar-sweep 1.4s ease-in-out infinite;
+}
+@keyframes ai-bar-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(350%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-spinner { animation-duration: 2.4s; }
+  .ai-dots span, .ai-loading-bar-fill { animation: none; }
+  .ai-dots span { opacity: 0.8; }
+}
+
+/* Docked AI panel (Claude-sidebar style): while the panel is open in full
+   mode, the component sets body.ai-panel-open + --ai-panel-w, and .main
+   reserves that width via margin-right so the report form compresses and
+   reflows instead of being overlaid. The collapsed rail stays an overlay. */
+body.ai-panel-open .main {
+  margin-right: min(var(--ai-panel-w, 420px), 92vw);
+}
+.main {
+  transition: margin-right 0.22s ease-out;
+}
+
+/* Backdrop no longer used — the panel is docked, not a modal overlay. */
+
+/* The side panel itself: fixed to the right edge, full height, slides in.
+   Resize/collapse behaviour mirrors the left sidebar: drag the edge handle,
+   collapse into a slim rail, hover the rail to float it open. */
+.ai-side-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(34rem, 92vw);
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel, #0b1226);
+  border-left: 1px solid var(--line-bright, #24355e);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45);
+  transition: width 0.15s ease-out;
+}
+.ai-side-panel.is-resizing { transition: none; }
+.ai-side-panel.open { animation: ai-slide-in 0.22s ease-out; }
+@keyframes ai-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* Collapsed rail: slim strip at the right edge (mirrors .sidebar.collapsed). */
+.ai-side-panel.rail {
+  width: 44px;
+  box-shadow: none;
+  opacity: 0.92;
+}
+.ai-side-panel.rail.hover-open {
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45);
+  opacity: 1;
+}
+.ai-rail-expand {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding-top: 1rem;
+  background: none;
+  border: none;
+  color: var(--steel, #8fa3c8);
+  cursor: pointer;
+}
+.ai-rail-expand:hover { color: var(--ink, #e7eefc); background: rgba(255, 255, 255, 0.04); }
+.ai-rail-label {
+  writing-mode: vertical-rl;
+  font-family: var(--font-hud, monospace);
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+}
+.ai-rail-chevron { font-size: 1rem; }
+/* Rail mode hides the header text; the vertical label is the affordance. */
+.ai-side-panel.rail:not(.hover-open) .ai-side-head { border-bottom: none; padding: 0.4rem 0; justify-content: center; }
+.ai-side-panel.rail:not(.hover-open) .ai-side-head h3 { display: none; }
+
+/* Left-edge resize handle (mirrors .side-resizer). */
+.ai-resizer {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  z-index: 2;
+}
+.ai-resizer:hover, .ai-resizer:focus-visible { background: rgba(97, 220, 163, 0.25); outline: none; }
+
+/* Collapse chevron in the panel header. */
+.ai-side-toggle {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--steel, #8fa3c8);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.1rem 0.45rem;
+}
+.ai-side-toggle:hover { border-color: var(--line-bright, #24355e); color: var(--ink, #e7eefc); }
+
+/* Pushpin control: filled = pinned (docked), outline = floating rail.
+   Pinned state glows cyan so the docked mode is visible at a glance. */
+.ai-side-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--steel, #8fa3c8);
+  cursor: pointer;
+  padding: 0.25rem 0.35rem;
+  line-height: 0;
+}
+.ai-side-pin:hover {
+  border-color: var(--line-bright, #24355e);
+  color: var(--ink, #e7eefc);
+  background: rgba(0, 240, 255, 0.06);
+}
+.ai-side-pin.pinned {
+  color: var(--cyan, #00f0ff);
+  transform: rotate(45deg); /* pin 'pressed in' while docked */
+}
+.ai-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--line-bright, #24355e);
+}
+.ai-side-head h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-family: var(--font-hud, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--steel, #8fa3c8);
+}
+.ai-side-close {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--steel, #8fa3c8);
+  font-size: 0.95rem;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+}
+.ai-side-close:hover { border-color: var(--line-bright, #24355e); color: var(--ink, #e7eefc); }
+.ai-side-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+.ai-side-note {
+  margin: 0 0 0.7rem;
+  font-size: 0.8rem;
+  color: var(--steel, #8fa3c8);
+}
+.ai-draft {
+  /* Large, easy-to-read reading experience for the officer reviewing the
+     draft — brighter text, generous leading, comfortable size. */
+  white-space: pre-wrap;
+  font-size: 1.08rem;
+  line-height: 1.85;
+  color: var(--paper, #fff);
+  letter-spacing: 0.01em;
+  border: 1px dashed var(--line-bright, #24355e);
+  border-radius: 3px;
+  padding: 0.75rem 0.9rem;
+  background: rgba(0, 0, 0, 0.3);
+  /* Claude-style: the draft grows to its full height and the whole panel
+     body scrolls as one — no nested scrollbar inside the draft box. */
+  max-height: none;
+  overflow: visible;
+  position: relative;
+}
+/* (Typing-reveal overlay styles removed — the reveal is now the
+   self-contained NarrativeReveal/TextType component.) */
+.ai-advice-fade { animation: ai-fade-in 0.35s ease-out; }
+
+/* ---- "Thinking" status (addendum) ----
+   Cross-fade between rotating phrases: each phrase gets its own key so
+   React remounts the <p> and this animation replays — that's the whole
+   transition. */
+.ai-status-swap { animation: ai-status-in 0.45s ease-out; }
+@keyframes ai-status-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* Screen-reader-only text (addendum §5): announces once at generation
+   start without being visually rendered. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.ai-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.7rem; }
+.ai-feedback { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.ai-feedback input { flex: 1; }
+.ai-advice { margin-top: 1rem; }
+.ai-advice h4 {
+  margin: 0.8rem 0 0.4rem;
+  font-size: 0.78rem;
+  font-family: var(--font-hud, monospace);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--steel, #8fa3c8);
+}
+.ai-advice ul { margin: 0; padding-left: 1.1rem; font-size: 0.84rem; }
+.ai-advice li { margin-bottom: 0.4rem; }
+.gap-warning { color: var(--amber, #f59e0b); }
+.gap-info { color: var(--steel, #8fa3c8); }
+@media (max-width: 640px) {
+  /* On phones the docked panel would crush the form; fall back to the
+     overlay behaviour (panel covers, form keeps full width). */
+  body.ai-panel-open .main { margin-right: 0; }
+}
+.picker-field::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 1;
+  filter: invert(70%) sepia(40%) saturate(500%) hue-rotate(140deg);
+}
+.picker-field::-webkit-calendar-picker-indicator:hover { opacity: 0.8; }
+
+/* ---- Custom time picker (TimePicker.jsx) ---- */
+.timepicker { position: relative; }
+.timepicker-input { cursor: pointer; caret-color: var(--cyan); }
+.timepicker-input.is-invalid { border-color: var(--red); }
+.timepicker-pop {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 50;
+  width: 15rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 4px;
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+.timepicker-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--line);
+}
+.timepicker-now {
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  background: var(--panel-raised);
+  color: var(--cyan);
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+}
+.timepicker-now:hover { border-color: var(--cyan); }
+.timepicker-raw {
+  font-family: var(--font-hud);
+  font-size: 0.7rem;
+  color: var(--steel);
+}
+.timepicker-list {
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+}
+.timepicker-group {
+  padding: 0.4rem 0.45rem 0.2rem;
+  font-family: var(--font-hud);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--steel);
+  opacity: 0.85;
+}
+.timepicker-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--paper);
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.timepicker-opt:hover { background: var(--panel-raised); }
+.timepicker-opt.is-selected {
+  background: rgba(0, 240, 255, 0.12);
+  color: var(--cyan);
+  font-weight: 600;
+}
+.timepicker-12 { font-family: var(--font-hud); font-size: 0.7rem; color: var(--steel); }
+.timepicker-opt.is-selected .timepicker-12 { color: var(--cyan); }
+
+/* Required-field marker + helper text. The asterisk is quiet; the legend in
+   the page header explains it once. */
+.req {
+  color: var(--cyan);
+  margin-left: 0.2rem;
+}
+.field-hint {
+  margin-top: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--steel);
+}
+
+/* ---- Repeatable groups (v3 addendum): party/vehicle cards ---- */
+.rep-group { margin-bottom: 1.25rem; }
+.rep-group-head {
+  margin-bottom: 0.5rem;
+}
+.rep-group-head > label { margin: 0; font-weight: 600; }
+.rep-item {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.75rem 1rem 0.9rem;
+  margin: 0 0 0.9rem;
+}
+.rep-item legend {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 0.4rem;
+  font-family: var(--font-hud);
+  font-size: 0.78rem;
+  color: var(--steel);
+}
+.rep-remove {
+  border: none;
+  background: transparent;
+  color: var(--red-text);
+  font: inherit;
+  cursor: pointer;
+  padding: 0.05rem 0.4rem;
+}
+.rep-remove:hover { text-decoration: underline; }
+.rep-remove:disabled { color: var(--steel); opacity: 0.5; cursor: not-allowed; text-decoration: none; }
+.rep-add {
+  border: 1px dashed var(--line-bright);
+  background: transparent;
+  color: var(--steel);
+  padding: 0.45rem 0.9rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.rep-add:hover { border-color: var(--cyan); color: var(--cyan); }
+.rep-softwarn { margin-top: 0.6rem; }
+
+/* Action row at the very END of the form (static, in flow — the user asked
+   for it not to float). Full-bleed negative margins align it with the
+   content edge; the top border separates it from the last section. */
+.editor-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 1.5rem 0 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line-bright);
+}
+
+/* Type-specific field grid (Phase 3) — same auto-collapse behavior. */
+.type-specific-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+  gap: 0 1.25rem;
+}
+.type-specific-grid .field { margin-bottom: 1rem; }
+.type-specific-grid .span-2 { grid-column: 1 / -1; }
+
+/* ---- Alerts ---- */
+.alert {
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid;
+  margin-bottom: 1rem;
+  font-size: 0.88rem;
+}
+
+/* Error summary on failed finalize: links jump to and focus the bad field. */
+.error-summary ul { margin: 0.4rem 0 0; padding-left: 1.1rem; }
+.error-summary li { margin-bottom: 0.25rem; }
+.error-summary a {
+  color: var(--red-text);
+  text-decoration: underline;
+}
+.error-summary a:hover { color: var(--paper); }
+.alert.error {
+  border-color: var(--red);
+  background: var(--red-bg);
+  color: var(--red-text);
+  font-family: var(--font-hud);
+  font-size: 0.8rem;
+}
+.alert.info {
+  border-color: var(--cyan);
+  background: rgba(0, 240, 255, 0.06);
+  color: var(--steel);
+}
+
+/* ---- Connection states (offline / DB down) ----
+   Shared by the login error slot and the workspace banner so an
+   unreachable server always reads the same way: what happened, what it
+   means, what to do. Amber, not red — red stays for validation and
+   destructive actions. */
+.conn-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  margin-bottom: 1.2rem;
+  padding: 0.8rem 0.9rem;
+  border-left: 4px solid var(--amber);
+  background: rgba(245, 158, 11, 0.08);
+}
+.conn-notice-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--amber);
+  display: flex;
+}
+.conn-notice-title {
+  margin: 0;
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+.conn-notice-text {
+  margin: 0.25rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--paper);
+}
+.conn-notice-detail {
+  margin: 0.3rem 0 0;
+  font-size: 0.78rem;
+  color: var(--steel);
+}
+.conn-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  padding: 0.35rem 0.8rem;
+  font-family: var(--font-hud);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--paper);
+  background: transparent;
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.conn-retry:hover { background: rgba(245, 158, 11, 0.14); }
+.conn-retry:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* Slim banner for an already-loaded workspace that loses the server. */
+.conn-banner {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-left-width: 4px;
+  background: rgba(245, 158, 11, 0.08);
+  font-size: 0.85rem;
+  color: var(--paper);
+}
+.conn-banner-dot {
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: conn-pulse 1.6s ease-in-out infinite;
+}
+.conn-banner button {
+  padding: 0;
+  font: inherit;
+  color: var(--amber);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.conn-banner button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+@keyframes conn-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .conn-banner-dot { animation: none; }
+}
+
+/* Small in-view note when the workspace banner already explains the
+   outage but this particular list may be stale. */
+.stale-note {
+  margin: 0 0 0.75rem;
+  padding: 0.4rem 0.7rem;
+  border-left: 3px solid rgba(245, 158, 11, 0.5);
+  font-size: 0.8rem;
+  color: var(--steel);
+}
+
+/* ---- Toast ---- */
+.toast {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  background: var(--panel-raised);
+  border: 1px solid var(--line-bright);
+  border-left: 3px solid var(--cyan);
+  color: var(--paper);
+  padding: 0.6rem 1rem;
+  font-family: var(--font-hud);
+  font-size: 0.8rem;
+  z-index: 50;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* ---- Dialog confirm ---- */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 7, 18, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  padding: 1rem;
+}
+.dialog {
+  background: var(--panel);
+  border: 1px solid var(--line-bright);
+  border-top: 3px solid var(--red);
+  max-width: min(440px, 100%);
+  width: 100%;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6);
+}
+.dialog h2 { margin-bottom: 0.5rem; }
+.dialog p { color: var(--steel); }
+.dialog .actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+}
+
+/* ---- Reports toolbar (Phase 2: search/filter/sort) ----
+   Two rows: search on its own line, filters below — no wrapping scramble. */
+.reports-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+.reports-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.reports-toolbar input,
+.reports-toolbar select {
+  width: auto;
+  min-width: 0;
+}
+.reports-search {
+  display: flex;
+  flex: 1 1 18rem;
+  gap: 0.4rem;
+}
+.reports-search input { flex: 1; min-width: 8rem; }
+.reports-toolbar select { max-width: 100%; }
+.reports-toolbar input[type='date'] { flex: 0 1 9.5rem; min-width: 8rem; }
+
+/* ---- Print-ready report view (Phase 2, UC-015/016) ----
+   PNP certification-letter format, matching the station's official
+   POLICE REPORT template: centered org header with seals, office code +
+   date row, certification paragraph, quoted incident type, labeled facts,
+   FACTS OF THE CASE narrative, Noted-by signature block. */
+.print-sheet {
+  background: #ffffff;
+  color: #111;
+  width: 100%;
+  max-width: 8.5in; /* US Letter, the station's paper */
+  padding: clamp(0.75in, 4vw, 1in);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
+  border-radius: 2px;
+  /* The real station sheets are Verdana-style sans, not Times (see the
+     scanned reference report). */
+  font-family: Verdana, 'DejaVu Sans', 'Segoe UI', Tahoma, sans-serif;
+  font-size: 11.5pt;
+  line-height: 1.55;
+}
+
+/* Header: seals left/right flanking the centered org block, as on the
+   real scanned sheet. */
+.pr-head {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  text-align: center;
+}
+.pr-seal {
+  height: 0.95in;
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.pr-org {
+  flex: 1;
+  font-size: 10.5pt;
+  line-height: 1.45;
+}
+.pr-org strong { letter-spacing: 0.02em; }
+
+.pr-code-date {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 1.25rem;
+  font-size: inherit;
+  font-weight: 700;
+}
+.pr-date { text-align: center; display: inline-block; padding-right: 0.25in; }
+.pr-date-label { display: block; font-size: 10pt; font-weight: 400; }
+
+/* Headings inside the sheet must be dark: the app-wide h1/h2/h3 rule
+   sets white, which would make the title invisible on paper. */
+.print-sheet h1,
+.print-sheet h2,
+.print-sheet h3 {
+  color: #111;
+}
+
+.pr-title {
+  text-align: center;
+  font-size: 14pt;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  margin: 1.25rem 0 1rem;
+  color: #111;
+}
+
+.pr-draft-note {
+  text-align: center;
+  font-size: 9.5pt;
+  font-style: italic;
+  color: #92400e;
+  border: 1px solid #92400e;
+  padding: 0.2rem 0.6rem;
+  margin: 0 0 1rem;
+}
+
+.pr-salutation { margin: 0 0 0.5rem; }
+
+.pr-certify {
+  text-indent: 0.4in;
+  margin: 0 0 1rem;
+}
+
+.pr-incident-type {
+  text-align: center;
+  font-weight: 700;
+  font-size: 12.5pt;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 1.25rem 0;
+}
+
+.pr-facts { margin: 0 0 1rem; }
+/* Facts hang: wrapped value lines align under the FIRST value character
+   (see "Degollacion" on the scanned sheet), so label + value are flex
+   siblings and multi-values live in one wrapping value span. */
+.pr-fact {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.2rem;
+}
+.pr-fact-label { font-weight: 700; white-space: nowrap; }
+.pr-fact-value { flex: 1; min-width: 0; }
+
+/* ---- Stolen/Damaged Items block (deep indent, regular-weight TOTAL,
+   matching the scan: "TOTAL, - - - 460,120.00") ---- */
+.pr-items { margin: 0.2rem 0 0.3rem; }
+.pr-item { margin: 0 0 0.1rem 0.75in; }
+.pr-item-total { margin: 0.15rem 0 0.1rem 1.05in; font-weight: 400; }
+
+/* ---- NOTABLE FINDINGS / ACTION TAKEN sections ---- */
+.pr-section { margin: 1rem 0; }
+.pr-entry { margin: 0.15rem 0 0.15rem 0.25in; }
+
+/* IOC line: a signature space, same convention as the blank Noted-by line. */
+.pr-sign-blank {
+  display: inline-block;
+  min-width: 14rem;
+  border-bottom: 1px solid #111;
+}
+
+.pr-narrative {
+  text-align: justify;
+  text-indent: 0;
+  margin: 1.25rem 0 1.5rem;
+}
+
+.pr-footer-block { margin-top: 2rem; }
+.pr-recorded { margin: 0 0 1.5rem; }
+.pr-noted {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.25rem;
+  margin-top: 2.5rem;
+}
+.pr-noted-label { font-weight: 700; }
+.pr-noted-name {
+  border-top: 1px solid #111;
+  padding-top: 0.3rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  min-width: 14rem;
+  text-align: center;
+}
+.pr-noted-blank { border-top-color: #111; }
+
+.pr-foot {
+  margin-top: 2.5rem;
+  border-top: 1px solid #999;
+  padding-top: 0.4rem;
+  font-size: 8pt;
+  color: #555;
+  font-family: var(--font-hud);
+}
+
+/* ---- Print-ready report view (Phase 2, UC-015/016) ----
+   Legacy rules kept for the error/loading states. */
+.print-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 7, 18, 0.85);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 60;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+.print-actions { margin-top: 1.25rem; display: flex; gap: 0.6rem; justify-content: flex-end; }
+.print-actions button { border-color: #444; color: #111; background: #f3f4f6; }
+.print-actions button.primary { background: #111; color: #fff; border-color: #111; }
+
+@media print {
+  /* The sheet is portaled to document.body (body.print-sheet-open is set
+     while it's mounted), so the ENTIRE app can be hidden wholesale and the
+     sheet printed alone. Previously the sheet lived inside the editor
+     tree and only sidebar/chrome were hidden — the editor FORM itself was
+     never hidden, so the browser printed the form pages first, then the
+     sheet (the multi-page form dump bug). */
+  body.print-sheet-open .shell,
+  body.print-sheet-open .toast,
+  body.print-sheet-open .dialog-overlay,
+  body.print-sheet-open .ai-side-panel,
+  body.print-sheet-open .ai-panel { display: none !important; }
+  .sidebar, .toast, .dialog-overlay { display: none !important; }
+  .main {
+    height: auto !important;
+    max-width: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    display: none !important; /* redundant with the shell rule; belt-and-braces */
+  }
+  body { background: #fff; }
+  .print-overlay {
+    position: static;
+    background: none;
+    padding: 0;
+    overflow: visible;
+  }
+  .print-sheet {
+    box-shadow: none;
+    max-width: none;
+    padding: 0;
+  }
+  .no-print { display: none !important; }
+}
+
+/* Screen: the portaled sheet sits above everything, including the AI panel */
+body.print-sheet-open .print-overlay { z-index: 200; }
+
+/* ---- Empty states ---- */
+.empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--cyan-dim);
+  font-family: var(--font-hud);
+  font-size: 0.85rem;
+}
+.empty strong { color: var(--steel); }
+
+/* ---- Mid sizes: compact tables before the mobile stack kicks in ---- */
+@media (max-width: 1024px) {
+  table { min-width: 40rem; }
+  th, td { padding: 0.55rem 0.6rem; }
+}
+
+/* ---- Login page + small screens ---- */
+@media (max-width: 720px) {
+  .shell { flex-direction: column; height: auto; overflow: visible; }
+  .main { overflow-y: visible; max-width: none; }
+  /* Hover-to-expand and the resize handle are desktop affordances; mobile
+     always shows the full stacked sidebar. */
+  .sidebar .side-resizer { display: none; }
+  .sidebar { width: 100% !important; }
+  .sidebar.collapsed, .sidebar.collapsed.hover-open { width: 100% !important; min-width: 0; box-shadow: none; }
+  /* Stack the sidebar vertically: brand, New Report, reports list,
+     workspace links, session — readable on a phone. */
+  .sidebar { width: 100%; flex-direction: column; overflow-y: visible; }
+  .side-reports { max-height: 32vh; }
+  .side-nav { display: flex; border-top: 1px solid var(--line); }
+  .side-link { width: auto; flex: 1; justify-content: center; padding: 0.6rem 0.75rem; }
+  .side-link.icon-only { flex: 0 0 auto; padding: 0.6rem 1rem; }
+  .session { border-top: 1px solid var(--line); }
+  .main { padding: 1rem; }
+  table { min-width: 34rem; }
+  .reports-toolbar input[type='date'] { flex: 1 1 8rem; }
+}
+
+/* ---- Phones: everything single-column, tighter chrome ---- */
+/* Also: the resizer is a desktop affordance — remove on touch layouts. */
+@media (max-width: 720px) {
+  .side-resizer { display: none; }
+}
+@media (max-width: 480px) {
+  body { font-size: 14px; }
+  .sidebar .brand-row { padding: 0.8rem 1rem; }
+  .sidebar nav a { padding: 0.55rem 0.9rem; font-size: 0.75rem; }
+  .main { padding: 0.75rem; }
+  table { min-width: 30rem; }
+  th, td { padding: 0.5rem 0.5rem; }
+  .row-actions button { padding: 0.3rem 0.5rem; font-size: 0.72rem; }
+  .toast { left: 0.75rem; right: 0.75rem; bottom: 0.75rem; }
+  .print-overlay { padding: 0.5rem; }
+  .pr-org { font-size: 9pt; }
+  .pr-title { letter-spacing: 0.2em; }
+  .pr-noted-name { min-width: 10rem; }
+}
+
+/* ============================================================
+   PHASE 4 — DASHBOARD (UC-017)
+   Same HUD theme; charts are hand-drawn SVG/DOM (no chart
+   library — station clients are LAN-only, CDNs would fail).
+   ============================================================ */
+
+.dash {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px 28px 48px;
+}
+
+.dash-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.dash-topbar h1 { margin: 0; font-size: 22px; font-weight: 700; color: var(--paper); }
+.dash-sub { margin: 4px 0 0; color: var(--steel); font-size: 13.5px; }
+.dash-updated { color: var(--cyan-dim); font-variant-numeric: tabular-nums; }
+
+.dash-filters { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.dash-scope,
+.dash-presets {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.dash-scope button,
+.dash-presets button {
+  border: none;
+  background: transparent;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--steel);
+  border-right: 1px solid var(--line);
+  font-family: var(--font-body);
+}
+.dash-scope button:last-child,
+.dash-presets button:last-child { border-right: none; }
+.dash-scope button.is-active,
+.dash-presets button.is-active { background: var(--panel-raised); color: var(--cyan); }
+.dash-scope button:hover,
+.dash-presets button:hover { color: var(--paper); }
+
+.dash-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--steel); text-transform: uppercase; letter-spacing: 0.06em; }
+.dash-field input,
+.dash-field select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--paper);
+  background: var(--input-bg);
+}
+.dash-field input:focus,
+.dash-field select:focus { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.dash-field input::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+
+.dash-alert {
+  background: var(--red-bg);
+  color: var(--red-text);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13.5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.dash-alert__retry {
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: var(--red-text);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+.dash-alert__retry:hover { background: rgba(239, 68, 68, 0.12); }
+
+/* KPIs */
+.dash-kpis {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1.2fr;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.dash-kpi {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent, var(--line-bright));
+  border-radius: 10px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.dash-kpi--hero { background: var(--panel-raised); border-left: none; border-color: var(--line-bright); }
+.dash-kpi__label { font-size: 11px; color: var(--steel); text-transform: uppercase; letter-spacing: 0.07em; }
+.dash-kpi__value { font-size: 28px; font-weight: 700; line-height: 1.1; color: var(--paper); font-variant-numeric: tabular-nums; }
+.dash-kpi--hero .dash-kpi__value { font-size: 36px; color: var(--cyan); }
+.dash-kpi__value--time { font-size: 26px; }
+.dash-kpi__delta { font-size: 12px; color: var(--steel); min-height: 1em; }
+.dash-kpi__delta.is-up { color: var(--green-ok); }
+.dash-kpi__delta.is-down { color: var(--red-text); }
+
+/* Panels & grids */
+.dash-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+.dash-panel__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.dash-panel h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--steel); text-transform: uppercase; letter-spacing: 0.05em; }
+.dash-panel__aside { font-size: 12px; }
+
+.dash-grid-main { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+.dash-flag {
+  color: var(--amber);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* Line chart + hover tooltip */
+.dash-line-wrap { position: relative; }
+.dash-line { width: 100%; height: 220px; overflow: visible; display: block; }
+.dash-tip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--panel-raised);
+  border: 1px solid var(--line-bright);
+  border-radius: 6px;
+  padding: 6px 9px;
+  font-size: 12px;
+  color: var(--paper);
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  box-shadow: 0 4px 16px rgba(3, 7, 18, 0.55);
+}
+.dash-tip strong { color: var(--cyan); font-variant-numeric: tabular-nums; }
+.dash-tip span { color: var(--steel); font-size: 11px; }
+
+/* Bar rows (categories + officers) */
+.dash-bars { display: flex; flex-direction: column; gap: 10px; }
+.dash-bar-row { display: grid; grid-template-columns: minmax(90px, 180px) 1fr 64px; align-items: center; gap: 10px; font-size: 13px; }
+.dash-bar-row__label { color: var(--steel); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-bar-row__track { background: var(--panel-raised); border-radius: 6px; height: 10px; overflow: hidden; }
+.dash-bar-row__fill { background: var(--cyan); height: 100%; border-radius: 6px; }
+.dash-bar-row__fill--officer { background: var(--green-ok); }
+.dash-bar-row__count { text-align: right; color: var(--paper); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dash-delta { font-style: normal; font-size: 11px; margin-left: 6px; color: var(--steel); }
+
+/* Status donut */
+.dash-donut-wrap { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.dash-donut { position: relative; width: 140px; height: 140px; flex-shrink: 0; }
+.dash-donut svg { width: 100%; height: 100%; }
+.dash-donut__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.dash-donut__center strong { font-size: 22px; color: var(--paper); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.dash-donut__center small { font-size: 10.5px; color: var(--steel); text-transform: uppercase; letter-spacing: 0.06em; }
+.dash-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; color: var(--paper); }
+.dash-legend .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+.dash-legend__pct { font-style: normal; color: var(--steel); }
+
+/* Hour-of-day histogram */
+.dash-hours {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  align-items: end;
+  gap: 3px;
+  height: 120px;
+}
+.dash-hour { display: flex; align-items: flex-end; height: 100%; }
+.dash-hour__bar {
+  width: 100%;
+  background: var(--cyan);
+  opacity: 0.75;
+  border-radius: 2px 2px 0 0;
+}
+.dash-hour:hover .dash-hour__bar { opacity: 1; }
+.dash-hours__axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--cyan-dim);
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.dash-hours__note { margin: 10px 0 0; font-size: 12.5px; color: var(--steel); }
+.dash-hours__note strong { color: var(--paper); }
+
+.dash-activity { list-style: none; margin: 0; padding: 0; }
+.dash-activity li {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+  color: var(--paper);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dash-activity li:last-child { border-bottom: none; }
+.dash-activity__actor { color: var(--steel); }
+.dash-activity__time { color: var(--steel); white-space: nowrap; font-size: 12.5px; }
+
+.dash-empty { color: var(--steel); font-size: 13.5px; margin: 8px 0; }
+
+/* Skeleton loading state */
+.sk {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(55, 65, 81, 0.25) 25%, rgba(55, 65, 81, 0.45) 37%, rgba(55, 65, 81, 0.25) 63%);
+  background-size: 400% 100%;
+  animation: sk-shimmer 1.4s ease infinite;
+}
+.sk--text { height: 11px; width: 70%; }
+.sk--big { height: 30px; width: 45%; margin: 4px 0; }
+.sk--block { height: 180px; width: 100%; }
+.sk--chart-tall { height: 200px; }
+@keyframes sk-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dash-kpi, .dash-panel { animation: dash-settle 0.25s ease-out; }
+}
+@keyframes dash-settle { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .dash-kpi, .dash-panel { animation: none; }
+  .sk { animation: none; }
+}
+
+@media (max-width: 980px) {
+  .dash-kpis { grid-template-columns: 1fr 1fr; }
+  .dash-grid-main { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .dash { padding: 16px 14px 40px; }
+  .dash-kpis { grid-template-columns: 1fr; }
+  .dash-bar-row { grid-template-columns: minmax(80px, 120px) 1fr 56px; }
+}

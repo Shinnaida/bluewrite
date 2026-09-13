@@ -1,0 +1,145 @@
+<?php
+/**
+ * BlueWrite API front controller.
+ * Apache .htaccess routes /api/v1/* here. All responses are JSON.
+ */
+
+declare(strict_types=1);
+
+require __DIR__ . '/../app/core/Config.php';
+require __DIR__ . '/../app/core/Database.php';
+require __DIR__ . '/../app/core/Response.php';
+require __DIR__ . '/../app/core/Session.php';
+require __DIR__ . '/../app/core/Csrf.php';
+require __DIR__ . '/../app/core/Audit.php';
+require __DIR__ . '/../app/core/Auth.php';
+require __DIR__ . '/../app/core/Validator.php';
+require __DIR__ . '/../app/core/LegacyNormalizer.php';
+require __DIR__ . '/../app/rules/report_rules.php';
+require __DIR__ . '/../app/ai/AiProviderException.php';
+require __DIR__ . '/../app/ai/AiUnavailableException.php';
+require __DIR__ . '/../app/ai/AiSafetyGateException.php';
+require __DIR__ . '/../app/ai/AiNarrativeResult.php';
+require __DIR__ . '/../app/ai/AiNarrativeProvider.php';
+require __DIR__ . '/../app/ai/MaskingGateway.php';
+require __DIR__ . '/../app/ai/GeminiNarrativeProvider.php';
+require __DIR__ . '/../app/ai/CachedInstructionStore.php';
+require __DIR__ . '/../app/ai/NarrativeService.php';
+require __DIR__ . '/../app/controllers/NarrativeController.php';
+require __DIR__ . '/../app/controllers/AuthController.php';
+require __DIR__ . '/../app/controllers/UsersController.php';
+require __DIR__ . '/../app/controllers/ReportsController.php';
+require __DIR__ . '/../app/controllers/DashboardController.php';
+
+use App\Controllers\AuthController;
+use App\Controllers\DashboardController;
+use App\Controllers\NarrativeController;
+use App\Controllers\ReportsController;
+use App\Controllers\UsersController;
+use App\Core\Response;
+use App\Core\Session;
+
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+
+// Phase 4 security headers (API surface). The SPA pages themselves get the
+// equivalent headers from Apache — see docs/PHASE4_DASHBOARD.md for the
+// .htaccess snippet and the dev-mode CSP caveat.
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('Referrer-Policy: same-origin');
+
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+
+// Strip any prefix up to and including /api/v1 so routes are portable
+// whether Apache mounts /api directly or the app lives in a subfolder.
+$pos = strrpos($uri, '/api/v1');
+$path = $pos !== false ? substr($uri, $pos + strlen('/api/v1')) : $uri;
+$path = '/' . trim($path, '/');
+if ($path === '//') {
+    $path = '/';
+}
+
+$parts = array_values(array_filter(explode('/', $path), fn ($p) => $p !== ''));
+$seg0 = $parts[0] ?? null;
+$seg1 = $parts[1] ?? null;
+
+try {
+    // Login does not require an existing session or CSRF token (no session yet).
+    if ($seg0 === 'login' && $method === 'POST') {
+        (new AuthController())->login();
+    }
+
+    if ($seg0 === 'me' && $method === 'GET') {
+        (new AuthController())->me();
+    }
+
+    if ($seg0 === 'logout' && $method === 'POST') {
+        (new AuthController())->logout();
+    }
+
+    // From here on, requests must come from an authenticated session,
+    // with a valid CSRF token on state-changing methods.
+    Session::start();
+    \App\Core\Auth::requireCsrf();
+
+    if ($seg0 === 'users') {
+        $c = new UsersController();
+        if ($seg0 === 'users' && $seg1 === null && $method === 'GET') {
+            $c->index();
+        }
+        if ($seg0 === 'users' && $seg1 === null && $method === 'POST') {
+            $c->store();
+        }
+        if ($seg1 !== null && $method === 'PATCH') {
+            $c->update((string) $seg1);
+        }
+        if ($seg1 !== null && $method === 'DELETE') {
+            $c->destroy((string) $seg1);
+        }
+    }
+
+    if ($seg0 === 'ai' && $seg1 === 'health' && $method === 'GET') {
+        (new NarrativeController())->health();
+    }
+
+    if ($seg0 === 'dashboard' && $seg1 === 'stats' && $method === 'GET') {
+        (new DashboardController())->stats();
+    }
+
+    if ($seg0 === 'reports') {
+        $c = new ReportsController();
+        if ($seg1 === null && $method === 'GET') {
+            $c->index();
+        }
+        if ($seg1 === null && $method === 'POST') {
+            $c->store();
+        }
+        if ($seg1 !== null && isset($parts[2])) {
+            if ($parts[2] === 'narrative' && ($parts[3] ?? null) === 'generate' && $method === 'POST') {
+                (new NarrativeController())->generate((string) $seg1);
+            }
+            if ($parts[2] === 'history' && $method === 'GET') {
+                $c->history((string) $seg1);
+            }
+            if ($parts[2] === 'print' && $method === 'GET') {
+                $c->printData((string) $seg1);
+            }
+            if ($parts[2] === 'restore' && $method === 'PATCH') {
+                $c->restore((string) $seg1);
+            }
+        }
+        if ($seg1 !== null && $method === 'PATCH') {
+            $c->update((string) $seg1);
+        }
+        if ($seg1 !== null && $method === 'DELETE') {
+            $c->destroy((string) $seg1);
+        }
+    }
+
+    Response::json(404, ['error' => 'Endpoint not found.']);
+} catch (\Throwable $e) {
+    error_log('[BlueWrite] ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+    Response::json(500, ['error' => 'An unexpected server error occurred. The details were logged.']);
+}
