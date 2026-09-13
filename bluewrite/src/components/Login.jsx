@@ -7,6 +7,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
 import LetterGlitch from './LetterGlitch.jsx';
+import Logo from './Logo.jsx';
 import ConnectionNotice from './ConnectionNotice.jsx';
 
 
@@ -165,6 +166,7 @@ function TopStatusBar({ connState }) {
   return (
     <header className="la-topbar">
       <div className="la-brand">
+        <Logo size={20} animated={false} title="" />
         <span>BLUE</span>
         <em>WRITE</em>
       </div>
@@ -285,14 +287,7 @@ export default function Login({ onLogin }) {
             <section className="la-left">
               <div>
                 <div className="la-doc-icon" aria-hidden="true">
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="square"
-                      strokeWidth="1.5"
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                    <path strokeLinecap="square" strokeWidth="1.5" d="M12 3v18" />
-                  </svg>
+                  <Logo variant="mark-only" size={40} title="" />
                 </div>
 
                 <h1 className="la-hero">

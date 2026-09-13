@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- BlueWrite master mark — "a report being written under protection."
+       Police shield (service) + report text bars + block caret (documentation
+       in progress / AI-assisted writing). Colors are the app theme:
+       panel #0A1120, line #374151, cyan #00F0FF. Square corners to match
+       the HUD design language; slight rounding only on the dark plate. -->
+  <rect width="64" height="64" rx="6" fill="#0A1120"/>
+  <rect x="0.5" y="0.5" width="63" height="63" rx="5.5" fill="none" stroke="#374151"/>
+  <path d="M32 8 L52 14.5 V30 C52 42 43.5 50 32 55 C20.5 50 12 42 12 30 V14.5 Z"
+        fill="rgba(0,240,255,0.07)" stroke="#00F0FF" stroke-width="3.5" stroke-linejoin="miter"/>
+  <!-- report text lines -->
+  <rect x="20" y="22" width="21" height="4" fill="#FFFFFF" opacity="0.92"/>
+  <rect x="20" y="30" width="21" height="4" fill="#FFFFFF" opacity="0.92"/>
+  <!-- final line still being written: short bar + block caret -->
+  <rect x="20" y="38" width="12" height="4" fill="#00F0FF"/>
+  <rect x="35" y="38" width="4" height="4" fill="#00F0FF">
+    <animate attributeName="opacity" values="1;0.15;1" dur="1.2s" repeatCount="indefinite"/>
+  </rect>
+</svg>

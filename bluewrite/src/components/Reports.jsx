@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
 import ReportPrint from './ReportPrint.jsx';
+import Logo from './Logo.jsx';
 import ConnectionNotice from './ConnectionNotice.jsx';
 import {
   INCIDENT_TYPES,
@@ -177,8 +178,8 @@ export function ReportWelcome({ user, onNew, onOpenReport, reports, loading }) {
   return (
     <div className="welcome">
       <div className="welcome-intro">
-        <div className="welcome-mark" aria-hidden="true">
-          BLUE<em>WRITE</em>
+        <div className="welcome-logo" aria-hidden="true">
+          <Logo variant="lockup" size={56} animated={false} title="" />
         </div>
         <div className="welcome-rule" aria-hidden="true" />
         <p className="welcome-kicker">Incident documentation workspace</p>

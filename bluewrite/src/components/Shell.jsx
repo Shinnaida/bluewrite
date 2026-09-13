@@ -4,6 +4,7 @@ import Users from './Users.jsx';
 import Dashboard from './Dashboard.jsx';
 import LetterGlitch from './LetterGlitch.jsx';
 import ReportContextMenu from './ReportContextMenu.jsx';
+import Logo from './Logo.jsx';
 import { ConnectionBanner } from './ConnectionNotice.jsx';
 import {
   ReportsTable,
@@ -338,12 +339,11 @@ export default function Shell({ user, onLogout, notify }) {
           >
             {expanded ? (
               <>
+                <Logo size={26} />
                 BLUE<em>WRITE</em>
               </>
             ) : (
-              <>
-                B<em>W</em>
-              </>
+              <Logo size={30} title="BlueWrite home" />
             )}
           </button>
         </div>
