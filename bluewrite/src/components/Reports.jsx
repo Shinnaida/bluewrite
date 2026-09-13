@@ -175,7 +175,13 @@ function TypeSpecificFields({ incidentType, values, onChange, disabled }) {
 // ReportWelcome — the nothing-selected state of the main panel.
 // ===========================================================================
 export function ReportWelcome({ user, onNew, onOpenReport, reports, loading }) {
-  const recent = (reports ?? []).slice(0, 5);
+  // Recent list: unfinished drafts lead so they are one click to resume;
+  // the rest follow in incident-date order (Shell already sorts desc).
+  const all = reports ?? [];
+  const recent = [
+    ...all.filter((r) => r.status === 'draft'),
+    ...all.filter((r) => r.status !== 'draft'),
+  ].slice(0, 5);
   return (
     <div className="welcome">
       <div className="welcome-intro">
