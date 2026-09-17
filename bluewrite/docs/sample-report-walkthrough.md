@@ -60,12 +60,57 @@ Scroll to the **narrative** section (side-by-side AI panel):
    *"bag snatched sa market around 10:30am, victim shouted, suspect ran toward highway"*
 2. Click **Generate AI draft**
 3. The AI returns a formal draft in the PNP house style plus up to 5
-   suggestions (grammar/terminology for your notes) and up to 5
-   `possibleGaps` (missing info the narrative could not establish)
+   suggestions (grammar/terminology for your notes), up to 5
+   `possibleGaps` (missing info the narrative could not establish), up to 5
+   **notable findings** — your step-3 Notable Findings text formalised into
+   one-line findings for the sheet — and, under **"Not added — no source in
+   your record"**, the details it was tempted to add but withheld for lack of
+   source. That last list is advisory only: nothing in it is ever written
+   into the report, and an empty list is normal
 4. **Accept** copies the draft into your editable narrative field (it is
    never saved automatically); **Regenerate** re-runs with a feedback note
+5. The formalised wording needs no separate action: generating **replaces
+   two of your own fields** — Notable Findings (one printed line per
+   finding, printed in the NOTABLE FINDINGS block) and Action Taken / Status
+   (one restated line, printed in the ACTION TAKEN / STATUS block) — because
+   those fields are what save, snapshot and print. A generation that finds
+   nothing notable, or a report with no recorded disposition, leaves that
+   field untouched; check both fields after generating if you had written
+   something different, and edit them freely
+6. Prefer your own shorthand after all? Each replaced field shows
+   **"Formalised by the AI — Undo"** under it until you touch it: one click
+   puts your previous wording (or the blank you had) back. The offer
+   disappears as soon as you edit that field, and each field reverts
+   independently
+7. The printed **ACTION TAKEN / STATUS** block states your recorded
+   disposition once: your own lines first, then the recorded states
+   (suspect/recovery status, protection order, search actions, fire response,
+   medico-legal examination — the last only when the sheet's per-type facts do
+   not already print it), then the station's on-file or finalization note.
+   The station's routing line prints **only** when your disposition does not
+   already state an onward action, so the sheet never records two dispositions
 
-> The AI never writes the report directly — accepting is always your action.
+> Generating sends the text **currently in** both fields, not the last
+> autosaved version, so a note typed seconds before clicking Generate is the
+> text the AI formalises.
+
+> **The AI may only re-word — never add.** Its instruction forbids every fact
+> your report does not contain (no unstated times, places, persons, injuries,
+> weapons, outcomes, motives or scene conditions), permits only wording,
+> grammar, tense and sentence-structure changes, and requires a per-sentence
+> self-check before answering. It also may not STRENGTHEN an inference you did
+> state: "maybe an insider" comes back as "possible insider involvement",
+> never as "strongly implies an insider". A section you left blank is reported
+> as missing (a blank Action Taken / Status is flagged as a warning, since the
+> report cannot be closed without a disposition) rather than filled with
+> placeholder text. Casual phrasing is upgraded to formal police
+> wording ("gave warning" → "issued a verbal warning") without widening what
+> you said, and a thin record correctly yields a short draft rather than a
+> padded one. The disposition line is held to this rule most strictly of all.
+
+> The AI never writes the report directly — accepting is always your action
+> (one click per Generate: the panel does not retry a request that already
+> succeeded).
 
 ## 5. If you have no Gemini API key
 

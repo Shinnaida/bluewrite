@@ -7,7 +7,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateReport, resizeGroup, allItemsBlank } from '../../src/lib/reportRules.js';
+import {
+  validateReport,
+  validateReporterParty,
+  resizeGroup,
+  allItemsBlank,
+  stolenItemsTotal,
+} from '../../src/lib/reportRules.js';
 import { normalizeLegacyTypeSpecific, hasLegacyShape } from '../../src/lib/normalizeLegacy.js';
 import { GROUP_CONFIG } from '../../src/lib/incidentTypes.js';
 
@@ -22,6 +28,11 @@ function validBase(type, overrides = {}) {
       'Responding team proceeded to the scene after a phone call from a concerned citizen. ' +
       'Upon arrival, officers interviewed the parties involved and secured the area. ' +
       'All persons present were accounted for and medical personnel assessed the injured on site.',
+    // Required at finalize (migration 004): a finalizable report must record
+    // how the incident was handled and who carries the case.
+    action_taken:
+      'Subject turned over to the station for proper disposition. Follow-up investigation ongoing.',
+    ioc_name: 'Sgt. Test Investigator',
     type_specific: {},
     ...overrides,
   };
@@ -47,6 +58,33 @@ test('finalize gate blocks: no victims recorded, short narrative', () => {
   const paths = errors.map((e) => e.path);
   assert.ok(paths.includes('complainant'), 'missing victims group flagged');
   assert.ok(paths.includes('narrative'), 'short narrative flagged');
+});
+
+test('finalize gate blocks: no action taken / status recorded', () => {
+  for (const level of ['draft', 'finalize']) {
+    const { errors } = validateReport(
+      validBase('Theft', { action_taken: '' }),
+      level,
+    );
+    const flagged = errors.some((e) => e.path === 'action_taken');
+    if (level === 'finalize') {
+      assert.ok(flagged, 'finalize must be blocked without the action taken');
+    } else {
+      assert.equal(flagged, false, 'a draft may omit the action taken');
+    }
+  }
+});
+
+test('finalize gate blocks: no investigator-on-case recorded', () => {
+  for (const level of ['draft', 'finalize']) {
+    const { errors } = validateReport(validBase('Theft', { ioc_name: '' }), level);
+    const flagged = errors.some((e) => e.path === 'ioc_name');
+    if (level === 'finalize') {
+      assert.ok(flagged, 'finalize must be blocked without the IOC');
+    } else {
+      assert.equal(flagged, false, 'a draft may omit the IOC');
+    }
+  }
 });
 
 test('incident datetime in the future is rejected at finalize', () => {
@@ -330,4 +368,135 @@ test('every incident type has a GROUP_CONFIG entry with valid schemas', async ()
       assert.ok(g.minCount >= 0, `${type}.${role} bad minCount`);
     }
   }
+});
+
+// ---- 9. Part 1: victim / suspect / stolen-item schemas (§1.3–§1.5) ----------
+
+const keysOf = (type, role) => GROUP_CONFIG[type][role].itemSchema.map((f) => f.key);
+
+test('victim groups carry victim type + representative; suspect groups carry status + description', () => {
+  assert.ok(keysOf('Theft', 'complainant').includes('victim_type'));
+  assert.ok(keysOf('Theft', 'complainant').includes('representative_name'));
+  assert.ok(keysOf('Theft', 'complainant').includes('representative_position'));
+  assert.ok(keysOf('Theft', 'respondent').includes('suspect_status'));
+  assert.ok(keysOf('Theft', 'respondent').includes('suspect_description'));
+
+  // Drivers are parties, not victims — the victim document fields stay off
+  // that group. "Reported By" on a missing-person case is the relator, not
+  // the victim either.
+  assert.ok(!keysOf('Traffic Accident', 'complainant').includes('victim_type'));
+  assert.ok(!keysOf('Missing Person', 'complainant').includes('victim_type'));
+});
+
+test('a victim with no representative and an identified/organization mix is valid', () => {
+  const draft = validBase('Theft', {
+    type_specific: {
+      complainant: [{ name: 'Ana Cruz', victim_type: 'Individual' }],
+    },
+  });
+  const { errors } = validateReport(draft, 'finalize');
+  assert.equal(errors.length, 0, JSON.stringify(errors));
+});
+
+test('an unidentified suspect is valid with only a description', () => {
+  const draft = validBase('Theft', {
+    type_specific: {
+      complainant: [{ name: 'Ana Cruz' }],
+      respondent: [
+        { suspect_status: 'Unidentified', suspect_description: 'Rode a black motorcycle, no plate' },
+      ],
+    },
+  });
+  const { errors } = validateReport(draft, 'finalize');
+  assert.equal(errors.filter((e) => e.path.startsWith('respondent')).length, 0, JSON.stringify(errors));
+});
+
+test('stolen items take free-text quantities and may be absent entirely', () => {
+  const attempted = validBase('Theft', { type_specific: { complainant: [{ name: 'Ana Cruz' }] } });
+  assert.equal(validateReport(attempted, 'finalize').errors.length, 0, 'nothing taken is valid');
+
+  const withItems = validBase('Theft', {
+    type_specific: {
+      complainant: [{ name: 'Ana Cruz' }],
+      stolen_items: [
+        { item_description: 'Copper wire', quantity: '128m', unit: 'meters', estimated_value: '8,500' },
+        { item_description: 'Assorted tools', quantity: 'several, exact count unknown', estimated_value: '' },
+      ],
+    },
+  });
+  const { errors } = validateReport(withItems, 'finalize');
+  assert.equal(errors.filter((e) => e.path.startsWith('stolen_items')).length, 0, JSON.stringify(errors));
+});
+
+test('a malformed estimated value is flagged at finalize, not silently accepted', () => {
+  const draft = validBase('Theft', {
+    type_specific: {
+      complainant: [{ name: 'Ana Cruz' }],
+      stolen_items: [{ item_description: 'Wallet', estimated_value: 'value pending' }],
+    },
+  });
+  const { errors } = validateReport(draft, 'finalize');
+  assert.ok(
+    errors.some((e) => e.path.endsWith('estimated_value')),
+    `expected an estimated_value error, got ${JSON.stringify(errors)}`,
+  );
+});
+
+// ---- 10. Part 1: stolen-item totals (§1.5) ---------------------------------
+
+test('stolenItemsTotal sums what is known and labels a partial total', () => {
+  assert.deepEqual(stolenItemsTotal([{ estimated_value: '8,500' }, { estimated_value: '1500' }]), {
+    total: 10000,
+    partial: false,
+    rows: 2,
+    valued: 2,
+  });
+
+  const partial = stolenItemsTotal([{ estimated_value: '₱8,500' }, { estimated_value: '' }]);
+  assert.equal(partial.total, 8500, 'rows without a value are summed around, not treated as zero');
+  assert.equal(partial.partial, true, 'the total is partial when any row has no value');
+  assert.equal(partial.rows, 2);
+  assert.equal(partial.valued, 1);
+
+  assert.deepEqual(stolenItemsTotal([]), { total: 0, partial: false, rows: 0, valued: 0 });
+});
+
+// ---- 11. Part 1: reporting party + officer initials (Panels I / IV) --------
+
+test('the reporting party fields are optional and never block a blank report', () => {
+  assert.deepEqual(validateReporterParty({}), []);
+  assert.deepEqual(validateReporterParty({ reporter_name: 'Juan Dela Cruz' }), []);
+  // A report filed in person may have no ID, no email, no address at all.
+  assert.deepEqual(
+    validateReporterParty({
+      reporter_name: 'Nita B. Ramos',
+      reporter_id_no: 'N01-23-456789',
+      reporter_contact: '(032) 555-1234',
+      reporter_email: 'nita.ramos@example.gov.ph',
+      reporter_address: 'Poblacion, City of Naga, Cebu',
+      officer_initials: 'J.D.C.',
+    }),
+    [],
+  );
+});
+
+test('a malformed reporting-party value is named, not silently accepted', () => {
+  const problems = validateReporterParty({
+    reporter_email: 'nita.ramos@',
+    reporter_contact: 'call the station',
+    officer_initials: 'JDC 123',
+  });
+  assert.deepEqual(
+    problems.map((p) => p.path).sort(),
+    ['officer_initials', 'reporter_contact', 'reporter_email'],
+  );
+  assert.ok(problems.every((p) => p.level === 'error'));
+});
+
+test('the reporting-party shapes are a finalize check, not a draft nag', () => {
+  const draft = validBase('Theft', { reporter_email: 'not-an-email' });
+  const asDraft = validateReport(draft, 'draft');
+  assert.equal(asDraft.errors.filter((e) => e.path === 'reporter_email').length, 0);
+  const atFinalize = validateReport(draft, 'finalize');
+  assert.equal(atFinalize.errors.filter((e) => e.path === 'reporter_email').length, 1);
 });

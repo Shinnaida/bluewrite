@@ -264,6 +264,37 @@ export const PERSON_ITEM_FIELDS = [
   }),
 ];
 
+// Victim sub-schema (spec §1.3): the person plus the two document fields the
+// sheet needs — Victim Type and the optional representative who reports for
+// an organization. All optional: an individual victim with no representative
+// is the ordinary case, and extra victims are just extra items.
+export const VICTIM_ITEM_FIELDS = [
+  ...PERSON_ITEM_FIELDS,
+  f('victim_type', 'Victim Type', { select: ['Individual', 'Organization'] }),
+  f('representative_name', 'Representative Name', { type: 'name' }),
+  f('representative_position', 'Representative Position'),
+];
+
+// Suspect sub-schema (spec §1.4): the person plus Suspect Status and a
+// free-text description that is available whether or not the suspect is
+// identified — which is exactly how an unidentified suspect is recorded.
+export const SUSPECT_ITEM_FIELDS = [
+  ...PERSON_ITEM_FIELDS,
+  f('suspect_status', 'Suspect Status', { select: ['Unidentified', 'Identified'] }),
+  f('suspect_description', 'Suspect Description', { textarea: true }),
+];
+
+// Stolen / lost item row (spec §1.5). Quantity and unit are TEXT on purpose:
+// "128m", "2 kilos" and "several, exact count unknown" are all valid input.
+// Estimated Value is optional — a blank value means unknown, and the printed
+// total is then labelled partial rather than reading as zero.
+export const STOLEN_ITEM_FIELDS = [
+  f('item_description', 'Item Description'),
+  f('quantity', 'Quantity'),
+  f('unit', 'Unit'),
+  f('estimated_value', 'Estimated Value', { type: 'money' }),
+];
+
 // Shared vehicle sub-schema (traffic accidents, getaways, seizures).
 export const VEHICLE_ITEM_FIELDS = [
   f('plate_number', 'Plate Number', { type: 'plate' }),
@@ -290,33 +321,37 @@ export const WITNESS_ITEM_FIELDS = [
 // item of the matching group for old print/AI paths during rollout.
 export const GROUP_CONFIG = {
   'Theft': {
-    complainant: { label: 'Victims', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
-    respondent: { label: 'Suspects', minCount: 0, itemSchema: PERSON_ITEM_FIELDS },
+    complainant: { label: 'Victims', minCount: 1, itemSchema: VICTIM_ITEM_FIELDS },
+    respondent: { label: 'Suspects', minCount: 0, itemSchema: SUSPECT_ITEM_FIELDS },
     witness: { label: 'Witnesses', minCount: 0, itemSchema: WITNESS_ITEM_FIELDS },
+    stolen_items: { label: 'Stolen Items', minCount: 0, itemSchema: STOLEN_ITEM_FIELDS },
   },
   'Robbery': {
-    complainant: { label: 'Victims', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
-    respondent: { label: 'Suspects', minCount: 0, itemSchema: PERSON_ITEM_FIELDS },
+    complainant: { label: 'Victims', minCount: 1, itemSchema: VICTIM_ITEM_FIELDS },
+    respondent: { label: 'Suspects', minCount: 0, itemSchema: SUSPECT_ITEM_FIELDS },
     witness: { label: 'Witnesses', minCount: 0, itemSchema: WITNESS_ITEM_FIELDS },
+    stolen_items: { label: 'Stolen Items', minCount: 0, itemSchema: STOLEN_ITEM_FIELDS },
   },
   'Assault / Physical Injury': {
-    complainant: { label: 'Victims', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
-    respondent: { label: 'Suspects', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
+    complainant: { label: 'Victims', minCount: 1, itemSchema: VICTIM_ITEM_FIELDS },
+    respondent: { label: 'Suspects', minCount: 1, itemSchema: SUSPECT_ITEM_FIELDS },
     witness: { label: 'Witnesses', minCount: 0, itemSchema: WITNESS_ITEM_FIELDS },
   },
   'Traffic Accident': {
+    // Drivers, not victims — the victim-type/representative fields do not
+    // apply, so the plain person schema stays here.
     complainant: { label: 'Parties (Drivers)', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
     vehicles: { label: 'Vehicles Involved', minCount: 1, itemSchema: VEHICLE_ITEM_FIELDS, softWarnAt: 6 },
     injured_persons: { label: 'Injured / Deceased Persons', minCount: 0, itemSchema: PERSON_ITEM_FIELDS },
     witness: { label: 'Witnesses', minCount: 0, itemSchema: WITNESS_ITEM_FIELDS },
   },
   'Rape / Sexual Assault': {
-    complainant: { label: 'Victims', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
-    respondent: { label: 'Suspects', minCount: 0, itemSchema: PERSON_ITEM_FIELDS },
+    complainant: { label: 'Victims', minCount: 1, itemSchema: VICTIM_ITEM_FIELDS },
+    respondent: { label: 'Suspects', minCount: 0, itemSchema: SUSPECT_ITEM_FIELDS },
   },
   'Domestic Violence': {
-    complainant: { label: 'Victims', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
-    respondent: { label: 'Respondents', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
+    complainant: { label: 'Victims', minCount: 1, itemSchema: VICTIM_ITEM_FIELDS },
+    respondent: { label: 'Respondents', minCount: 1, itemSchema: SUSPECT_ITEM_FIELDS },
   },
   'Missing Person': {
     // The missing person is recorded per-person, not in a text field.
@@ -333,33 +368,35 @@ export const GROUP_CONFIG = {
     person_last_seen_with: { label: 'Persons Last Seen With', minCount: 0, itemSchema: PERSON_ITEM_FIELDS },
   },
   'Lost Property': {
-    complainant: { label: 'Owners', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
+    complainant: { label: 'Owners', minCount: 1, itemSchema: VICTIM_ITEM_FIELDS },
+    stolen_items: { label: 'Lost Items', minCount: 0, itemSchema: STOLEN_ITEM_FIELDS },
   },
   'Fraud / Estafa': {
-    complainant: { label: 'Complainants / Victims', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
-    respondent: { label: 'Suspects', minCount: 0, itemSchema: PERSON_ITEM_FIELDS },
+    complainant: { label: 'Complainants / Victims', minCount: 1, itemSchema: VICTIM_ITEM_FIELDS },
+    respondent: { label: 'Suspects', minCount: 0, itemSchema: SUSPECT_ITEM_FIELDS },
   },
   'Property Damage / Malicious Mischief': {
-    complainant: { label: 'Property Owners', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
-    respondent: { label: 'Suspects', minCount: 0, itemSchema: PERSON_ITEM_FIELDS },
+    complainant: { label: 'Property Owners', minCount: 1, itemSchema: VICTIM_ITEM_FIELDS },
+    respondent: { label: 'Suspects', minCount: 0, itemSchema: SUSPECT_ITEM_FIELDS },
   },
   'Fire Incident': {
-    complainant: { label: 'Property Owners', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
+    complainant: { label: 'Property Owners', minCount: 1, itemSchema: VICTIM_ITEM_FIELDS },
     injured_persons: { label: 'Injured / Deceased Persons', minCount: 0, itemSchema: PERSON_ITEM_FIELDS },
   },
   'Drug-Related Incident': {
-    respondent: { label: 'Suspects', minCount: 0, itemSchema: PERSON_ITEM_FIELDS },
+    respondent: { label: 'Suspects', minCount: 0, itemSchema: SUSPECT_ITEM_FIELDS },
     arrested_persons: { label: 'Arrested Persons', minCount: 0, itemSchema: PERSON_ITEM_FIELDS },
     vehicles: { label: 'Vehicles Involved', minCount: 0, itemSchema: VEHICLE_ITEM_FIELDS },
   },
   'Burglary / Break-In': {
-    complainant: { label: 'Property Owners', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
-    respondent: { label: 'Suspects', minCount: 0, itemSchema: PERSON_ITEM_FIELDS },
+    complainant: { label: 'Property Owners', minCount: 1, itemSchema: VICTIM_ITEM_FIELDS },
+    respondent: { label: 'Suspects', minCount: 0, itemSchema: SUSPECT_ITEM_FIELDS },
     witness: { label: 'Witnesses', minCount: 0, itemSchema: WITNESS_ITEM_FIELDS },
+    stolen_items: { label: 'Stolen Items', minCount: 0, itemSchema: STOLEN_ITEM_FIELDS },
   },
   'Other Incident': {
-    complainant: { label: 'Complainants', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
-    respondent: { label: 'Respondents', minCount: 0, itemSchema: PERSON_ITEM_FIELDS },
+    complainant: { label: 'Complainants', minCount: 1, itemSchema: VICTIM_ITEM_FIELDS },
+    respondent: { label: 'Respondents', minCount: 0, itemSchema: SUSPECT_ITEM_FIELDS },
     witness: { label: 'Witnesses', minCount: 0, itemSchema: WITNESS_ITEM_FIELDS },
   },
 };

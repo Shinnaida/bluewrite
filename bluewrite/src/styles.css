@@ -1,29 +1,48 @@
 /* ============================================================
-   BLUEWRITE app theme — cyan HUD (matches the login mockup)
-   Palette: void #030712 · panel #0A1120 · panel-raised #0F1C33
-   line #1E293B · line-bright #374151 · cyan #00F0FF · cyan-dim #6B7A8C
-   green-ok #3ED598 · amber #F59E0B · red #EF4444/#F87171 · paper #FFF · steel #9CA3AF
+   BLUEWRITE app theme — official document (light)
+
+   The whole application wears the "Official Incident Reporting System"
+   look: navy top bar, light gray page, white card panels, blue primary
+   action. The token NAMES are unchanged from the earlier dark HUD theme on
+   purpose — every rule that reads them follows the new palette instead of
+   needing a rewrite.
+
+   Palette: void #EEF0F4 (page) · panel #FFFFFF (card) · panel-raised #F4F6FA
+   line #D8DCE4 · line-bright #C2C9D6 · cyan #1F5FD0 (primary blue)
+   cyan-dim #6B7488 · green-ok #15803D · amber #B26A00 · red #B3261E
+   paper #1F2733 (primary text) · steel #5B6577 (secondary text)
+
+   The login screen (login-theme.css) wears the same palette: it used to be the
+   one deliberate exception — a dark terminal gate — and now uses these tokens
+   directly, so the gate and the workspace cannot drift apart.
    ============================================================ */
 
 :root {
-  --void: #030712;
-  --panel: #0A1120;
-  --panel-raised: #0F1C33;
-  --line: #1E293B;
-  --line-bright: #374151;
-  --cyan: #00F0FF;
-  --cyan-dim: #6B7A8C;
-  --green-ok: #3ED598;
-  --amber: #F59E0B;
-  --red: #EF4444;
-  --red-text: #F87171;
-  --red-bg: rgba(69, 10, 10, 0.4);
-  --paper: #FFFFFF;
-  --steel: #9CA3AF;
-  --input-bg: rgba(0, 0, 0, 0.62);
+  --void: #EEF0F4;
+  --panel: #FFFFFF;
+  --panel-raised: #F4F6FA;
+  --line: #D8DCE4;
+  --line-bright: #C2C9D6;
+  --cyan: #1F5FD0;
+  --cyan-dim: #6B7488;
+  --green-ok: #15803D;
+  --amber: #B26A00;
+  --red: #B3261E;
+  --red-text: #B3261E;
+  --red-bg: rgba(179, 38, 30, 0.07);
+  --paper: #1F2733;
+  --steel: #5B6577;
+  --input-bg: #FFFFFF;
+  --ink-dim: #33405A;
 
-  --font-hud: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Menlo, monospace;
-  --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  /* League Spartan is self-hosted (src/fonts/fonts.css) as a 100-900 variable
+     font, so bold here is a drawn weight, not faux-bold. System fonts stay
+     in the stack as the fallback if the bundle's fonts are ever missing. */
+  --font-family: 'League Spartan', 'Segoe UI', system-ui, sans-serif;
+  /* The old HUD-mono slot now aliases the body font: labels are uppercase
+     sans with letterspacing, matching the printed report. */
+  --font-hud: var(--font-family);
+  --font-body: var(--font-family);
 }
 
 * { box-sizing: border-box; }
@@ -93,25 +112,25 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 button.primary {
   background: var(--cyan);
   border-color: var(--cyan);
-  color: #000;
+  color: #FFFFFF;
   font-weight: 700;
 }
 button.primary:hover {
-  background: #fff;
-  border-color: #fff;
-  color: #000;
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.25);
+  background: #17489F;
+  border-color: #17489F;
+  color: #FFFFFF;
+  box-shadow: none;
 }
 
 button.danger {
-  border-color: rgba(239, 68, 68, 0.6);
+  border-color: rgba(179, 38, 30, 0.4);
   color: var(--red-text);
-  background: transparent;
+  background: #FFFFFF;
 }
 button.danger:hover {
   border-color: var(--red);
-  color: var(--red);
-  background: var(--red-bg);
+  color: var(--red-text);
+  background: rgba(179, 38, 30, 0.06);
 }
 
 label {
@@ -134,16 +153,17 @@ input, select, textarea {
   caret-color: var(--cyan);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-input::placeholder, textarea::placeholder { color: rgba(148, 163, 184, 0.85); }
+input::placeholder, textarea::placeholder { color: #9AA3B2; }
 input:disabled, select:disabled, textarea:disabled {
-  opacity: 0.55;
+  opacity: 1;
   cursor: not-allowed;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--panel-raised);
+  color: var(--steel);
 }
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--cyan);
-  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+  box-shadow: 0 0 0 3px rgba(31, 95, 208, 0.18);
 }
 input[aria-invalid='true'], textarea[aria-invalid='true'] {
   border-color: var(--red);
@@ -164,10 +184,13 @@ select option {
 }
 
 /* ---- App shell ---- */
-/* Full-viewport shell: the sidebar stays fixed (never scrolls with the
-   page); the main column scrolls internally instead. */
+/* Full-viewport shell, stacked: the navy top bar is fixed at the top of the
+   window (it never scrolls away), and the page below it scrolls internally.
+   This was a row while the dark sidebar rail existed; the rail is gone and
+   the bar is the only chrome, so the axis is vertical. */
 .shell {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
@@ -199,22 +222,13 @@ select option {
   -webkit-mask-image: radial-gradient(ellipse 80% 50% at 50% 50%, #000 70%, transparent 100%);
   mask-image: radial-gradient(ellipse 80% 50% at 50% 50%, #000 70%, transparent 100%);
 }
-.workspace-glitch {
-  opacity: 0.18;
-}
-
-/* Report editor views: hide the animated glitch/grid/scanline layers so the
-   form is easy to read; keep the plain dark base color from the backdrop. */
+/* Report editor views: hide the animated grid/scanline layers so the form is
+   easy to read; keep the plain dark base color from the backdrop. */
 .workspace-backdrop.is-plain > :not(.workspace-grid) {
   display: none;
 }
 .workspace-backdrop.is-plain .workspace-grid {
   display: none;
-}
-.workspace-glitch canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 .workspace-scanlines {
   position: absolute;
@@ -245,6 +259,13 @@ select option {
     box-shadow 260ms cubic-bezier(0.4, 0, 0.2, 1),
     border-color 260ms cubic-bezier(0.4, 0, 0.2, 1);
 }
+/* ---- Write Report screen (spec §1): that screen renders its own navy nav
+   bar (Home / My Reports / Write Report / Logout), so the dark rail is 
+   hidden while it is open — one nav bar, not two. The rail comes back the
+   moment the editor closes. The resize handle lives inside the rail, so it
+   goes with it. ---- */
+.shell.is-focus .sidebar { display: none; }
+
 .sidebar.is-resizing { transition: none; }
 
 /* ---- Edge resize handle ---- */
@@ -492,7 +513,7 @@ button.brand.brand-home:focus-visible {
   min-width: 11.5rem;
   padding: 0.7rem 1.4rem;
   font-size: 0.9rem;
-  box-shadow: 0 0 22px rgba(0, 240, 255, 0.12);
+  box-shadow: 0 0 22px rgba(31, 95, 208, 0.12);
 }
 .welcome-recent {
   width: 100%;
@@ -700,15 +721,15 @@ button.brand.brand-home:focus-visible {
 
 .main {
   flex: 1;
-  /* Paint above the shared workspace backdrop: without an explicit
-     stacking position, the absolutely-positioned backdrop (z-index 0)
-     renders on top of this in-flow element and buries the editor. */
+  /* min-height:0 is what lets this flex child scroll internally instead of
+     stretching the shell past the viewport. */
+  min-height: 0;
   position: relative;
   z-index: 1;
   /* Fluid padding + width: the content area adapts from phone to wide
      desktop instead of jumping at a single breakpoint. */
   padding: clamp(1rem, 2.5vw, 2rem) clamp(1rem, 3vw, 2rem);
-  background: linear-gradient(135deg, rgba(3, 7, 18, 0.32), rgba(3, 7, 18, 0.08) 55%, rgba(10, 17, 32, 0.2));
+  background: var(--void);
   /* Full-bleed: tables and toolbars use every pixel the window offers,
      so the scrollbar hugs the edge and no dead gap opens on the right
      at zoomed-out or ultra-wide sizes. */
@@ -734,11 +755,11 @@ button.brand.brand-home:focus-visible {
   border-radius: 2px;
   border: 1px solid;
 }
-.badge.draft { background: rgba(245, 158, 11, 0.12); color: var(--amber); border-color: rgba(245, 158, 11, 0.5); }
+.badge.draft { background: rgba(178, 106, 0, 0.12); color: var(--amber); border-color: rgba(178, 106, 0, 0.45); }
 .badge.submitted { background: var(--panel-raised); color: var(--steel); border-color: var(--line-bright); }
-.badge.finalized { background: rgba(62, 213, 152, 0.1); color: var(--green-ok); border-color: rgba(62, 213, 152, 0.5); transition: background 300ms ease, color 300ms ease; }
-.badge.active { background: rgba(62, 213, 152, 0.1); color: var(--green-ok); border-color: rgba(62, 213, 152, 0.5); }
-.badge.inactive { background: var(--red-bg); color: var(--red-text); border-color: rgba(239, 68, 68, 0.5); }
+.badge.finalized { background: rgba(21, 128, 61, 0.12); color: var(--green-ok); border-color: rgba(21, 128, 61, 0.4); transition: background 300ms ease, color 300ms ease; }
+.badge.active { background: rgba(21, 128, 61, 0.12); color: var(--green-ok); border-color: rgba(21, 128, 61, 0.4); }
+.badge.inactive { background: var(--red-bg); color: var(--red-text); border-color: rgba(179, 38, 30, 0.4); }
 
 /* ---- Tables: ruled HUD style ---- */
 /* Wide tables scroll inside their own container on narrow screens instead
@@ -783,12 +804,12 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 .row-actions button:hover {
   border-color: var(--cyan);
   color: var(--cyan);
-  background: rgba(0, 240, 255, 0.06);
+  background: rgba(31, 95, 208, 0.06);
 }
 .row-actions button.danger:hover {
   border-color: var(--red);
   color: var(--red-text);
-  background: rgba(239, 68, 68, 0.08);
+  background: rgba(179, 38, 30, 0.06);
 }
 .row-actions .locked-note {
   font-family: var(--font-hud);
@@ -802,7 +823,7 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 /* Sections are quiet panels: a raised surface groups each step of the
    report so a long form reads in chunks instead of one wall of fields. */
 .section {
-  background: rgba(13, 22, 40, 0.55);
+  background: var(--panel);
   border: 1px solid var(--line);
   border-top: 1px solid var(--line);
   border-radius: 4px;
@@ -827,7 +848,7 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   min-height: 12rem;
   font-size: 1.08rem;
   line-height: 1.85;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--input-bg);
 }
 
 .form-grid {
@@ -854,7 +875,43 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   margin-bottom: 0.6rem;
 }
 .ai-notes { flex: 1; min-width: 16rem; }
-.ai-manual-banner { border-color: var(--amber); background: rgba(245, 158, 11, 0.08); color: var(--steel); }
+
+/* Phase 5 — "Tighten my draft": runs the economy rules over the narrative the
+   OFFICER wrote (Generate works from the notes field instead). A peer of
+   Generate rather than a competitor, so it is styled as a secondary action
+   with its own one-line explanation instead of a second primary button. */
+.ai-tighten-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.ai-tighten {
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--paper);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+.ai-tighten:hover:not(:disabled) {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+.ai-tighten:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ai-tighten-row .field-hint {
+  flex: 1;
+  min-width: 14rem;
+  margin: 0;
+}
+.ai-tighten-result { margin-bottom: 0.7rem; }
+.ai-tighten-result .field-hint { margin: 0 0 0.5rem; }
+.ai-manual-banner { border-color: var(--amber); background: rgba(178, 106, 0, 0.08); color: var(--steel); }
 
 /* Loading state while the AI drafts: spinner + pulsing dots + progress bar. */
 .ai-loading {
@@ -950,9 +1007,9 @@ body.ai-panel-open .main {
   z-index: 95;
   display: flex;
   flex-direction: column;
-  background: var(--panel, #0b1226);
-  border-left: 1px solid var(--line-bright, #24355e);
-  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45);
+  background: var(--panel);
+  border-left: 1px solid var(--line-bright);
+  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.12);
   transition: width 0.15s ease-out;
 }
 .ai-side-panel.is-resizing { transition: none; }
@@ -969,7 +1026,7 @@ body.ai-panel-open .main {
   opacity: 0.92;
 }
 .ai-side-panel.rail.hover-open {
-  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45);
+  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.12);
   opacity: 1;
 }
 .ai-rail-expand {
@@ -984,7 +1041,7 @@ body.ai-panel-open .main {
   color: var(--steel, #8fa3c8);
   cursor: pointer;
 }
-.ai-rail-expand:hover { color: var(--ink, #e7eefc); background: rgba(255, 255, 255, 0.04); }
+.ai-rail-expand:hover { color: var(--paper); background: var(--panel-raised); }
 .ai-rail-label {
   writing-mode: vertical-rl;
   font-family: var(--font-hud, monospace);
@@ -1006,7 +1063,7 @@ body.ai-panel-open .main {
   cursor: col-resize;
   z-index: 2;
 }
-.ai-resizer:hover, .ai-resizer:focus-visible { background: rgba(97, 220, 163, 0.25); outline: none; }
+.ai-resizer:hover, .ai-resizer:focus-visible { background: rgba(31, 95, 208, 0.25); outline: none; }
 
 /* Collapse chevron in the panel header. */
 .ai-side-toggle {
@@ -1036,9 +1093,9 @@ body.ai-panel-open .main {
   line-height: 0;
 }
 .ai-side-pin:hover {
-  border-color: var(--line-bright, #24355e);
-  color: var(--ink, #e7eefc);
-  background: rgba(0, 240, 255, 0.06);
+  border-color: var(--line-bright);
+  color: var(--paper);
+  background: var(--panel-raised);
 }
 .ai-side-pin.pinned {
   color: var(--cyan, #00f0ff);
@@ -1081,16 +1138,16 @@ body.ai-panel-open .main {
 }
 .ai-draft {
   /* Large, easy-to-read reading experience for the officer reviewing the
-     draft — brighter text, generous leading, comfortable size. */
+     draft — generous leading, comfortable size. */
   white-space: pre-wrap;
   font-size: 1.08rem;
   line-height: 1.85;
-  color: var(--paper, #fff);
+  color: var(--paper);
   letter-spacing: 0.01em;
-  border: 1px dashed var(--line-bright, #24355e);
+  border: 1px dashed var(--line-bright);
   border-radius: 3px;
   padding: 0.75rem 0.9rem;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--panel-raised);
   /* Claude-style: the draft grows to its full height and the whole panel
      body scrolls as one — no nested scrollbar inside the draft box. */
   max-height: none;
@@ -1146,8 +1203,8 @@ body.ai-panel-open .main {
 }
 .picker-field::-webkit-calendar-picker-indicator {
   cursor: pointer;
-  opacity: 1;
-  filter: invert(70%) sepia(40%) saturate(500%) hue-rotate(140deg);
+  opacity: 0.55;
+  filter: none;
 }
 .picker-field::-webkit-calendar-picker-indicator:hover { opacity: 0.8; }
 
@@ -1164,7 +1221,7 @@ body.ai-panel-open .main {
   border: 1px solid var(--line-bright);
   border-radius: 4px;
   background: var(--panel);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
 }
 .timepicker-actions {
   display: flex;
@@ -1222,7 +1279,7 @@ body.ai-panel-open .main {
 }
 .timepicker-opt:hover { background: var(--panel-raised); }
 .timepicker-opt.is-selected {
-  background: rgba(0, 240, 255, 0.12);
+  background: rgba(31, 95, 208, 0.12);
   color: var(--cyan);
   font-weight: 600;
 }
@@ -1331,7 +1388,7 @@ body.ai-panel-open .main {
 }
 .alert.info {
   border-color: var(--cyan);
-  background: rgba(0, 240, 255, 0.06);
+  background: rgba(31, 95, 208, 0.07);
   color: var(--steel);
 }
 
@@ -1347,7 +1404,7 @@ body.ai-panel-open .main {
   margin-bottom: 1.2rem;
   padding: 0.8rem 0.9rem;
   border-left: 4px solid var(--amber);
-  background: rgba(245, 158, 11, 0.08);
+  background: rgba(178, 106, 0, 0.08);
 }
 .conn-notice-icon {
   flex-shrink: 0;
@@ -1387,11 +1444,11 @@ body.ai-panel-open .main {
   letter-spacing: 0.06em;
   color: var(--paper);
   background: transparent;
-  border: 1px solid rgba(245, 158, 11, 0.55);
+  border: 1px solid rgba(178, 106, 0, 0.45);
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease;
 }
-.conn-retry:hover { background: rgba(245, 158, 11, 0.14); }
+.conn-retry:hover { background: rgba(178, 106, 0, 0.1); }
 .conn-retry:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
 /* Slim banner for an already-loaded workspace that loses the server. */
@@ -1401,9 +1458,9 @@ body.ai-panel-open .main {
   gap: 0.5rem;
   margin-bottom: 1rem;
   padding: 0.55rem 0.9rem;
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  border: 1px solid rgba(178, 106, 0, 0.4);
   border-left-width: 4px;
-  background: rgba(245, 158, 11, 0.08);
+  background: rgba(178, 106, 0, 0.08);
   font-size: 0.85rem;
   color: var(--paper);
 }
@@ -1438,7 +1495,7 @@ body.ai-panel-open .main {
 .stale-note {
   margin: 0 0 0.75rem;
   padding: 0.4rem 0.7rem;
-  border-left: 3px solid rgba(245, 158, 11, 0.5);
+  border-left: 3px solid rgba(178, 106, 0, 0.45);
   font-size: 0.8rem;
   color: var(--steel);
 }
@@ -1456,14 +1513,14 @@ body.ai-panel-open .main {
   font-family: var(--font-hud);
   font-size: 0.8rem;
   z-index: 50;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
 }
 
 /* ---- Dialog confirm ---- */
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(3, 7, 18, 0.75);
+  background: rgba(15, 23, 42, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1473,11 +1530,11 @@ body.ai-panel-open .main {
 .dialog {
   background: var(--panel);
   border: 1px solid var(--line-bright);
-  border-top: 3px solid var(--red);
+  border-top: 3px solid var(--cyan);
   max-width: min(440px, 100%);
   width: 100%;
   padding: clamp(1rem, 3vw, 1.5rem);
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 25px 50px rgba(15, 23, 42, 0.25);
 }
 .dialog h2 { margin-bottom: 0.5rem; }
 .dialog p { color: var(--steel); }
@@ -1510,7 +1567,7 @@ body.ai-panel-open .main {
   border-bottom: 1px solid var(--line);
   vertical-align: top;
 }
-.audits-table tbody tr:hover { background: rgba(0, 240, 255, 0.04); }
+.audits-table tbody tr:hover { background: rgba(31, 95, 208, 0.05); }
 .audit-when { font-family: var(--font-hud); font-size: 0.78rem; white-space: nowrap; color: var(--paper); }
 .audit-system { color: var(--cyan-dim); font-style: italic; }
 .audit-entity { font-family: var(--font-hud); font-size: 0.78rem; }
@@ -1527,9 +1584,9 @@ body.ai-panel-open .main {
   color: var(--steel);
   white-space: nowrap;
 }
-.audit-action.red { color: var(--red-text); border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.08); }
-.audit-action.amber { color: var(--amber); border-color: rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.08); }
-.audit-action.green { color: var(--green-ok); border-color: rgba(62, 213, 152, 0.5); background: rgba(62, 213, 152, 0.08); }
+.audit-action.red { color: var(--red-text); border-color: rgba(179, 38, 30, 0.4); background: rgba(179, 38, 30, 0.07); }
+.audit-action.amber { color: var(--amber); border-color: rgba(178, 106, 0, 0.45); background: rgba(178, 106, 0, 0.08); }
+.audit-action.green { color: var(--green-ok); border-color: rgba(21, 128, 61, 0.4); background: rgba(62, 213, 152, 0.08); }
 .audits-skeleton .skeleton-row {
   height: 2.4rem;
   margin-bottom: 0.4rem;
@@ -1580,7 +1637,10 @@ button.dash-kpi--link:focus-visible {
 .field-hint { margin: 0.3rem 0 0; font-size: 0.78rem; color: var(--cyan-dim); }
 
 /* ---- Reports toolbar (Phase 2: search/filter/sort) ----
-   Two rows: search on its own line, filters below — no wrapping scramble. */
+   ONE row: the search field grows to fill whatever the fixed-width filters
+   leave, so search + every filter + the row actions sit on a single line at
+   desktop widths. Below ~1100px the row wraps instead of squashing the
+   inputs — a wrap is the graceful failure, not a second deliberate row. */
 .reports-toolbar {
   display: flex;
   flex-direction: column;
@@ -1598,14 +1658,35 @@ button.dash-kpi--link:focus-visible {
   width: auto;
   min-width: 0;
 }
+/* Compact controls: the filters have to share one line, so they run tighter
+   than a form field on the report screen. */
+.reports-toolbar input,
+.reports-toolbar select,
+.reports-toolbar-row > button,
+.reports-toolbar-row .button-link {
+  padding: 0.42rem 0.6rem;
+  font-size: 0.85rem;
+}
 .reports-search {
   display: flex;
-  flex: 1 1 18rem;
+  /* Grow to absorb the slack, shrink last: the filters keep their natural
+     width while the text field gives up space first. */
+  flex: 1 1 12rem;
+  min-width: 8.5rem;
   gap: 0.4rem;
 }
-.reports-search input { flex: 1; min-width: 8rem; }
-.reports-toolbar select { max-width: 100%; }
-.reports-toolbar input[type='date'] { flex: 0 1 9.5rem; min-width: 8rem; }
+.reports-search input { flex: 1; min-width: 6rem; }
+.reports-toolbar select {
+  flex: 0 1 auto;
+  max-width: 12rem;
+}
+.reports-toolbar input[type='date'] {
+  /* Fixed width: a date field never benefits from extra room, and the slack
+     it used to absorb is what the search box and the actions need. */
+  flex: 0 0 8.375rem;
+  min-width: 8.375rem;
+  max-width: 8.375rem;
+}
 
 /* ---- Print-ready report view (Phase 2, UC-015/016) ----
    PNP certification-letter format, matching the station's official
@@ -1648,15 +1729,19 @@ button.dash-kpi--link:focus-visible {
 }
 .pr-org strong { letter-spacing: 0.02em; }
 
+/* Sits directly under the header band: the office code holds the left
+   margin, the date the right one, and the shared baseline keeps the two
+   on the same line (`baseline` aligns the first lines, so the code and
+   the date text line up even though the date carries a caption below). */
 .pr-code-date {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-top: 1.25rem;
+  align-items: baseline;
+  margin-top: 0.35rem;
   font-size: inherit;
   font-weight: 700;
 }
-.pr-date { text-align: center; display: inline-block; padding-right: 0.25in; }
+.pr-date { text-align: center; display: inline-block; }
 .pr-date-label { display: block; font-size: 10pt; font-weight: 400; }
 
 /* Headings inside the sheet must be dark: the app-wide h1/h2/h3 rule
@@ -1738,25 +1823,28 @@ button.dash-kpi--link:focus-visible {
 }
 
 .pr-footer-block { margin-top: 2rem; }
-.pr-recorded { margin: 0 0 1.5rem; }
+/* "Recorded by:" and "IOC:" print as two consecutive lines — no blank line
+   between them (the line-height alone sets the spacing). */
+.pr-recorded { margin: 0; }
+/* "Noted by:" sits immediately above its signature rule and the printed
+   name — no blank space left for a signature. */
 .pr-noted {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2.25rem;
+  gap: 0;
   margin-top: 2.5rem;
 }
 .pr-noted-label { font-weight: 700; }
+/* The noting official's name prints straight under "Noted by:" — no
+   signature rule above it and no reserved blank space. */
 .pr-noted-name {
-  border-top: 1px solid #111;
-  padding-top: 0.3rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   min-width: 14rem;
   text-align: center;
 }
-.pr-noted-blank { border-top-color: #111; }
 
 .pr-foot {
   margin-top: 2.5rem;
@@ -1838,37 +1926,19 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   th, td { padding: 0.55rem 0.6rem; }
 }
 
-/* ---- Login page + small screens ---- */
+/* ---- Small screens: tighter chrome.
+   The shell stays a viewport-height column at every width — the bar keeps
+   its height at the top and the page scrolls inside .main. (This block used
+   to stack a full-width sidebar above the content and let the window itself
+   scroll, which no longer applies now that the bar is the only chrome.) ---- */
 @media (max-width: 720px) {
-  .shell { flex-direction: column; height: auto; overflow: visible; }
-  .main { overflow-y: visible; max-width: none; }
-  /* Hover-to-expand and the resize handle are desktop affordances; mobile
-     always shows the full stacked sidebar. */
-  .sidebar .side-resizer { display: none; }
-  .sidebar { width: 100% !important; }
-  .sidebar.collapsed, .sidebar.collapsed.hover-open { width: 100% !important; min-width: 0; box-shadow: none; }
-  /* Stack the sidebar vertically: brand, New Report, reports list,
-     workspace links, session — readable on a phone. */
-  .sidebar { width: 100%; flex-direction: column; overflow-y: visible; }
-  .side-reports { max-height: 32vh; }
-  .side-nav { display: flex; border-top: 1px solid var(--line); }
-  .side-link { width: auto; flex: 1; justify-content: center; padding: 0.6rem 0.75rem; }
-  .side-link.icon-only { flex: 0 0 auto; padding: 0.6rem 1rem; }
-  .session { border-top: 1px solid var(--line); }
   .main { padding: 1rem; }
   table { min-width: 34rem; }
   .reports-toolbar input[type='date'] { flex: 1 1 8rem; }
 }
 
-/* ---- Phones: everything single-column, tighter chrome ---- */
-/* Also: the resizer is a desktop affordance — remove on touch layouts. */
-@media (max-width: 720px) {
-  .side-resizer { display: none; }
-}
 @media (max-width: 480px) {
   body { font-size: 14px; }
-  .sidebar .brand-row { padding: 0.8rem 1rem; }
-  .sidebar nav a { padding: 0.55rem 0.9rem; font-size: 0.75rem; }
   .main { padding: 0.75rem; }
   table { min-width: 30rem; }
   th, td { padding: 0.5rem 0.5rem; }
@@ -1944,12 +2014,12 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 }
 .dash-field input:focus,
 .dash-field select:focus { outline: 2px solid var(--cyan); outline-offset: 1px; }
-.dash-field input::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+.dash-field input::-webkit-calendar-picker-indicator { filter: none; opacity: 0.55; }
 
 .dash-alert {
   background: var(--red-bg);
   color: var(--red-text);
-  border: 1px solid rgba(239, 68, 68, 0.4);
+  border: 1px solid rgba(179, 38, 30, 0.3);
   padding: 10px 14px;
   border-radius: 8px;
   margin-bottom: 16px;
@@ -1961,14 +2031,14 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 }
 .dash-alert__retry {
   background: transparent;
-  border: 1px solid rgba(239, 68, 68, 0.5);
+  border: 1px solid rgba(179, 38, 30, 0.4);
   color: var(--red-text);
   border-radius: 6px;
   padding: 3px 10px;
   cursor: pointer;
   font-size: 12.5px;
 }
-.dash-alert__retry:hover { background: rgba(239, 68, 68, 0.12); }
+.dash-alert__retry:hover { background: rgba(179, 38, 30, 0.08); }
 
 /* KPIs */
 .dash-kpis {
@@ -2017,8 +2087,8 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 
 .dash-flag {
   color: var(--amber);
-  border: 1px solid rgba(245, 158, 11, 0.45);
-  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(178, 106, 0, 0.45);
+  background: rgba(178, 106, 0, 0.08);
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 11.5px;
@@ -2042,7 +2112,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   display: flex;
   flex-direction: column;
   gap: 1px;
-  box-shadow: 0 4px 16px rgba(3, 7, 18, 0.55);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
 }
 .dash-tip strong { color: var(--cyan); font-variant-numeric: tabular-nums; }
 .dash-tip span { color: var(--steel); font-size: 11px; }
@@ -2123,7 +2193,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .sk {
   display: block;
   border-radius: 6px;
-  background: linear-gradient(90deg, rgba(55, 65, 81, 0.25) 25%, rgba(55, 65, 81, 0.45) 37%, rgba(55, 65, 81, 0.25) 63%);
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.25) 25%, rgba(148, 163, 184, 0.45) 37%, rgba(148, 163, 184, 0.25) 63%);
   background-size: 400% 100%;
   animation: sk-shimmer 1.4s ease infinite;
 }
@@ -2153,4 +2223,179 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   .dash { padding: 16px 14px 40px; }
   .dash-kpis { grid-template-columns: 1fr; }
   .dash-bar-row { grid-template-columns: minmax(80px, 120px) 1fr 56px; }
+}
+
+/* ============================================================
+   Print review dock, AI-narrative recovery affordances, and the
+   jump-flash targets.
+
+   These rules belong to the print / AI-narrative work, not to the app
+   restyle: the markup for them is live in Reports.jsx, ReportPrint.jsx,
+   AiNarrativePanel.jsx and RepeatableGroup.jsx, so they came across with
+   those components. Colours are expressed on the HUD palette above.
+   ============================================================ */
+
+/* ---- Welcome Recent list: hover + type tag on its rows ---- */
+.welcome-recent .side-report-item:hover { background: var(--panel-raised); }
+.welcome-recent .side-report-type { color: var(--steel); }
+
+/* ---- AI narrative: undo a generated draft; the cited reference line ---- */
+.ai-undo-hint {
+  margin-top: -0.55rem;
+  color: var(--cyan-dim);
+}
+.ai-undo {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--cyan);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.ai-undo:hover { color: var(--paper); }
+.ai-undo:focus-visible { outline: 1px solid var(--cyan); outline-offset: 2px; }
+.ai-reference {
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--steel);
+  opacity: 0.85;
+}
+.ai-reference em { color: var(--cyan); font-style: italic; }
+
+/* ---- Repeatable group: per-group validation message ---- */
+.rep-group-error {
+  margin: 0.35rem 0 0.6rem;
+  color: var(--red-text);
+  font-family: var(--font-hud);
+  font-size: 0.82rem;
+}
+
+/* ---- Jump-flash / alert pulse: draws the eye to the field a report
+   jump — or a failed validation — landed on. ---- */
+@keyframes jump-flash-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(31, 95, 208, 0.55);
+    border-color: var(--cyan);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(31, 95, 208, 0);
+    border-color: var(--cyan);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(31, 95, 208, 0);
+  }
+}
+.jump-flash {
+  position: relative;
+  z-index: 2;
+  animation: jump-flash-ring 1s ease-out 2;
+  border-radius: 4px;
+}
+@keyframes jump-flash-group-box {
+  0% { box-shadow: inset 0 0 0 2px rgba(179, 38, 30, 0.85); }
+  100% { box-shadow: inset 0 0 0 2px rgba(179, 38, 30, 0); }
+}
+.jump-flash-group {
+  animation: jump-flash-group-box 1s ease-out 2;
+  border-radius: 4px;
+}
+.alert-pulse {
+  animation: alert-pulse 1.1s ease-out 1;
+  scroll-margin: 6rem;
+}
+@keyframes alert-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(179, 38, 30, 0.45); }
+  60% { box-shadow: 0 0 0 10px rgba(179, 38, 30, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(179, 38, 30, 0); }
+}
+
+/* ---- Printed sheet masthead (on paper: no theme colours, no glow) ---- */
+.pr-head > .pr-seal {
+  height: 1in;
+  width: 1in;
+}
+.pr-head-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+.pr-code-logo {
+  width: 1in;
+  height: 1in; /* 1×1 — the seal never distorts on paper */
+  object-fit: contain;
+  object-position: top left;
+}
+.pr-office-code {
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.pr-actions .pr-entry { margin-left: 0; }
+.pr-recorded strong { font-style: italic; }
+
+/* ---- Print review overlay: the sheet scrolls, the bar stays docked ----
+   .print-overlay--review is the on-screen review step that replaced the
+   plain print dialog: .print-scroll holds the sheet, .finalize-bar holds
+   the confirm action. The base overlay centres with flex-start, which in
+   a column would shrink the bar to its content width — hence stretch. */
+.print-scroll { display: contents; }
+.print-overlay--review {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  align-items: stretch;
+}
+.print-overlay--review .print-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.finalize-bar {
+  position: static;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+  padding: 0.8rem 1rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.12);
+}
+.finalize-bar-text { color: var(--steel); font-size: 0.9rem; }
+.finalize-bar-actions { display: flex; gap: 0.6rem; flex-shrink: 0; }
+.finalize-bar-actions button:disabled { opacity: 0.6; cursor: wait; }
+.print-overlay--review .finalize-bar {
+  margin-top: 0;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.print-overlay--review .finalize-bar-text { max-width: 70ch; }
+.print-overlay--review .finalize-bar-actions { justify-content: center; }
+
+@media print {
+  /* The review chrome must not print — only the sheet itself. */
+  .print-overlay--review { display: block; }
+  .print-overlay--review .print-scroll {
+    display: block;
+    overflow: visible;
+    padding: 0;
+  }
 }

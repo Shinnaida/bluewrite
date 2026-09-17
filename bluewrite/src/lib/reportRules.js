@@ -28,8 +28,63 @@ const COMMON_RULES = {
     maxDate: 'now', // an incident cannot be reported before it happened
   },
   location: { required: true, label: 'Place of incident', minLength: 4 },
-  narrative: { required: true, label: 'Narrative', minLength: 120, maxDate: null },
+  // finalizeOnly: a half-written draft may omit these, but the report may
+  // NOT be finalized without them. Narrative and the Action Taken / Status
+  // both describe what happened and how it was handled.
+  narrative: { required: true, finalizeOnly: true, label: 'Narrative', minLength: 120, maxDate: null },
+  action_taken: {
+    required: true,
+    finalizeOnly: true,
+    label: 'Action taken / status',
+    minLength: 10,
+  },
+  ioc_name: {
+    required: true,
+    finalizeOnly: true,
+    label: 'Investigator-on-case (IOC)',
+    minLength: 3,
+  },
 };
+
+// ---------------------------------------------------------------------------
+// Reporting party + officer initials (Write Report screen, Panels I and IV).
+// Mirrors ReportRules::validateReporterParty() in app/rules/report_rules.php.
+//
+// None of it is required — a report filed in person may have no ID number,
+// no email and no address — so only a value that IS supplied is checked.
+// ---------------------------------------------------------------------------
+const REPORTER_FIELDS = [
+  {
+    key: 'reporter_email',
+    label: 'Email address',
+    pattern: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/,
+    hint: 'must be a valid email address.',
+  },
+  {
+    key: 'reporter_contact',
+    label: 'Contact number',
+    pattern: /^[0-9+()\-. ]{5,40}$/,
+    hint: 'must be a valid contact number.',
+  },
+  {
+    key: 'officer_initials',
+    label: 'Officer initials',
+    pattern: /^[\p{L}. ]{1,12}$/u,
+    hint: 'may contain letters, dots and spaces only.',
+  },
+];
+
+/** @returns {Array<{level,path,message}>} shape errors for the party fields. */
+export function validateReporterParty(draft) {
+  const problems = [];
+  for (const field of REPORTER_FIELDS) {
+    const value = String(draft?.[field.key] ?? '').trim();
+    if (value === '') continue; // optional and empty — nothing to check
+    if (field.pattern.test(value)) continue;
+    problems.push(err(field.key, `${field.label} ${field.hint}`));
+  }
+  return problems;
+}
 
 // Cross-field checks (v2 §4, generalized for groups per the addendum §4).
 // Each returns { level, message, path? } or null. `path` addresses one item
@@ -112,6 +167,14 @@ function checkField(rule, value) {
     // PH format: ABC1234 / ABC-1234, or the explicit 'NO PLATE'.
     if (!/^(no plate|[A-Z]{1,3}[- ]?\d{1,5}[A-Z]{0,2})$/i.test(v)) {
       return `${rule.label} must look like ABC1234 (or "NO PLATE").`;
+    }
+  }
+  if (rule.type === 'money') {
+    // Mirrors ReportRules::checkValue('money'). A blank value is how the
+    // officer says "amount unknown" — the total is then labelled partial.
+    const clean = v.replace(/[\s,₱]/g, '').replace(/php/gi, '');
+    if (!/^\d+(\.\d{1,2})?$/.test(clean)) {
+      return `${rule.label} must be a number (leave blank if the value is unknown).`;
     }
   }
   if (rule.maxDate === 'now') {
@@ -205,21 +268,28 @@ export function validateReport(draft, level = 'draft') {
   const errors = [];
   const warnings = [];
 
-  // Gate 1 or 2: the three fields that even a draft must carry.
+  // Gate 1 or 2: the fields that even a draft must carry.
   for (const [key, rule] of Object.entries(COMMON_RULES)) {
-    if (key === 'narrative') continue; // narrative is finalize-only
+    if (rule.finalizeOnly) continue; // checked at Gate 2 below
     const msg = checkField(rule, draft[key]);
     if (msg) errors.push(err(key, msg));
   }
 
-  // Groups + remaining common rules only matter at Gate 2.
+  // Groups + the finalize-only common rules only matter at Gate 2.
   if (level === 'finalize') {
-    const narrMsg = checkField(COMMON_RULES.narrative, draft.narrative);
-    if (narrMsg) errors.push(err('narrative', narrMsg));
+    for (const [key, rule] of Object.entries(COMMON_RULES)) {
+      if (!rule.finalizeOnly) continue;
+      const msg = checkField(rule, draft[key]);
+      if (msg) errors.push(err(key, msg));
+    }
 
     const g = validateGroups(draft, level);
     errors.push(...g.problems);
     warnings.push(...g.warnings);
+
+    // Panel I / IV shapes: only checked when the officer is submitting, so a
+    // half-typed email never nags while the draft is being written.
+    errors.push(...validateReporterParty(draft));
 
     for (const check of CROSS_CHECKS) {
       if (draft.incident_type && check.types.includes(draft.incident_type)) {
@@ -261,6 +331,35 @@ export function resizeGroup(current, targetCount, blankItem) {
   while (arr.length < targetCount) arr.push(blankItem());
   if (arr.length > targetCount) arr.length = targetCount;
   return arr;
+}
+
+/**
+ * Stolen / lost item totals (spec §1.5): rows with no value are summed
+ * around, never rejected — the total is flagged partial whenever any row is
+ * missing a value, so the sheet can never imply a complete figure it does
+ * not have. Mirrors ReportRules::stolenItemsTotal() in PHP.
+ *
+ * @param {Array<object>} items
+ * @returns {{total:number, partial:boolean, rows:number, valued:number}}
+ */
+export function stolenItemsTotal(items) {
+  const list = Array.isArray(items) ? items : [];
+  let total = 0;
+  let valued = 0;
+  for (const item of list) {
+    const raw = String(item?.estimated_value ?? '').trim();
+    if (raw === '') continue;
+    const clean = raw.replace(/[\s,₱]/g, '').replace(/php/gi, '');
+    if (!/^\d+(\.\d{1,2})?$/.test(clean)) continue;
+    total += Number(clean);
+    valued += 1;
+  }
+  return {
+    total: Math.round(total * 100) / 100,
+    partial: valued < list.length,
+    rows: list.length,
+    valued,
+  };
 }
 
 /** True when every object in the array is fully blank (safe to shrink). */

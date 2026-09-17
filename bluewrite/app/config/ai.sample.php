@@ -29,10 +29,20 @@ return [
 
         // Performance addendum §4 — generation output ceiling. Sized to the
         // longest expected narrative (1–3 dense paragraphs ≈ 700–1,000
-        // tokens) plus schema wrapper (≤5 suggestions, ≤5 gaps); 2048 gives
-        // headroom while capping runaway output. See
+        // tokens) plus the schema wrapper (≤5 suggestions, gaps, findings and
+        // advisory lines). NOTE: on thinking models the THINKING tokens are
+        // billed against this same ceiling — a measured run spent 1,964 of
+        // 2,048 on thoughts and the JSON answer was truncated (MAX_TOKENS),
+        // which the officer sees as a failed generation. Hence 4096 plus a
+        // constrained thinking level. See
         // GeminiNarrativeProvider::DEFAULT_MAX_OUTPUT_TOKENS.
-        'max_output_tokens' => 2048,
+        'max_output_tokens' => 4096,
+
+        // Thinking level for the generation call ('low' | 'high' | '' to
+        // leave the model's own default). Formalising the officer's own
+        // words needs no long deliberation, and thinking shares the output
+        // ceiling above. See GeminiNarrativeProvider::DEFAULT_THINKING_LEVEL.
+        'thinking_level' => 'low',
     ],
 
     // Performance addendum §3 — explicit Gemini context caching of the

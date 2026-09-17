@@ -30,11 +30,29 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
      * Output ceiling (addendum §4). Sized to the longest expected narrative:
      * 1–3 dense multi-clause paragraphs per the house style ≈ 450–600 words
      * ≈ 700–1,000 narrative tokens, plus the JSON schema wrapper with up to
-     * 5 suggestions and 5 possibleGaps. 2,048 leaves generous headroom for
-     * stop-free JSON while capping any runaway generation. Override via
-     * config 'gemini.max_output_tokens' if a future incident type needs more.
+     * 5 suggestions, 5 possibleGaps, 5 notable-finding lines and 5 advisory
+     * lines.
+     *
+     * THINKING TOKENS SHARE THIS CEILING. Measured 2026-09-16 on
+     * gemini-3.6-flash: one run spent 1,964 thought tokens + 66 answer tokens
+     * against a 2,048 ceiling and returned finishReason MAX_TOKENS — a
+     * TRUNCATED JSON body, which the parser cannot read and the officer sees
+     * as a failed generation. The ceiling therefore covers thinking, and
+     * DEFAULT_THINKING_LEVEL turns thinking down: this task formalises the
+     * officer's own words, where long deliberation buys nothing and costs
+     * latency. Override via config 'gemini.max_output_tokens' /
+     * 'gemini.thinking_level'.
      */
-    private const DEFAULT_MAX_OUTPUT_TOKENS = 2048;
+    private const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
+
+    /**
+     * Thinking budget for the call. Sent as thinkingConfig.thinkingLevel when
+     * non-empty; leaving it empty hands thinking back to the model's default.
+     * 'low' was verified accepted by the configured model (a run with it
+     * returned a complete schema-valid answer where the unconstrained default
+     * truncated).
+     */
+    private const DEFAULT_THINKING_LEVEL = 'low';
 
     public function __construct(
         private readonly string $apiKey,
@@ -42,6 +60,7 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
         private readonly int $timeoutSeconds = 20,
         private readonly ?CachedInstructionStore $cacheStore = null,
         private readonly int $maxOutputTokens = self::DEFAULT_MAX_OUTPUT_TOKENS,
+        private readonly string $thinkingLevel = self::DEFAULT_THINKING_LEVEL,
     ) {
     }
 
@@ -109,6 +128,9 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
                 'candidate_tokens' => (int) ($usage['candidatesTokenCount'] ?? 0),
                 'total_tokens' => (int) ($usage['totalTokenCount'] ?? 0),
             ],
+            self::normaliseFindings($parsed['notableFindings'] ?? []),
+            self::normaliseDisposition($parsed['actionTaken'] ?? ''),
+            self::normaliseWarnings($parsed['addedContentWarnings'] ?? []),
         );
     }
 
@@ -142,6 +164,13 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
                 'responseSchema' => self::responseSchema(),
             ],
         ];
+
+        // §4 — keep thinking from consuming the answer's budget (see the
+        // DEFAULT_MAX_OUTPUT_TOKENS note). Omitted when cleared, so operators
+        // can restore the provider's own default.
+        if ($this->thinkingLevel !== '') {
+            $body['generationConfig']['thinkingConfig'] = ['thinkingLevel' => $this->thinkingLevel];
+        }
 
         if ($cacheName !== null) {
             return self::attachInstruction($body, $cacheName, '');
@@ -264,8 +293,28 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
                         'required' => ['description', 'severity'],
                     ],
                 ],
+                // Formalised NOTABLE FINDINGS lines for the report sheet.
+                // Required but allowed to be EMPTY: the model must decide
+                // (and say) that there is nothing notable rather than be
+                // tempted to fill an optional field with boilerplate.
+                'notableFindings' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string'],
+                ],
+                // The recorded disposition restated for the sheet's ACTION
+                // TAKEN / STATUS block. Allowed to be EMPTY (no disposition
+                // was recorded) so the model never invents one.
+                'actionTaken' => ['type' => 'string'],
+                // Phrases the model was tempted to add but withheld because
+                // the officer's input does not state them. Required but
+                // allowed to be EMPTY; advisory only — never written into
+                // the narrative or any report field.
+                'addedContentWarnings' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string'],
+                ],
             ],
-            'required' => ['narrative', 'suggestions', 'possibleGaps'],
+            'required' => ['narrative', 'suggestions', 'possibleGaps', 'notableFindings', 'actionTaken', 'addedContentWarnings'],
         ];
     }
 
@@ -284,9 +333,49 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             $lines[] = 'ADDITIONAL FIELDS:';
             $lines[] = json_encode($masked['scalars'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         }
-        $lines[] = '';
-        $lines[] = 'OFFICER NOTES:';
-        $lines[] = (string) ($options['notes'] ?? '');
+        // The officer's recorded disposition. It is the ONLY source for the
+        // narrative's closing action: the model reflects it and may not
+        // invent, add, or upgrade any action of its own.
+        if (!empty($masked['action_taken'])) {
+            $lines[] = '';
+            $lines[] = 'ACTION TAKEN / STATUS (recorded by the officer — authoritative; the ONLY disposition you may state; RESTATE its substance in formal prose, never copy it word-for-word, and add NO fact it does not state):';
+            $lines[] = (string) $masked['action_taken'];
+        }
+        // The officer's own observations (evidence insight, behavior, tools…).
+        // Facts — formalised as findings lines, NOT restated in the narrative.
+        // This label used to say "weave them into the account … AND formalise
+        // each one", which is what put one proposition in two places (Phase 5
+        // §9 rule 1): the model did both, and the sheet printed both.
+        if (!empty($masked['notable_findings'])) {
+            $lines[] = '';
+            $lines[] = 'NOTABLE FINDINGS (recorded by the officer — treat as established facts: formalise each one as a notableFindings line and do NOT restate it in the narrative; merge lines that assert the same thing into one; add no observation of your own):';
+            $lines[] = (string) $masked['notable_findings'];
+        }
+        // The officer's free text — rough notes on a generate, their finished
+        // narrative on a tighten. It comes from the MASKED payload and never
+        // from $options, which is where it used to come from: the gateway had
+        // always pseudonymised this text into `officer_notes` (see
+        // MaskingGateway::buildMaskedPayload step 4, and the masking tests that
+        // assert no real name survives in it), while this method printed the
+        // RAW string handed to it in options. Two consequences, both live:
+        //   1. a name typed into the notes box was sent to the provider in the
+        //      clear, and the masking work on that field did nothing;
+        //   2. the tighten pass put the officer's narrative into
+        //      `officer_notes`, which nothing rendered, so the model never saw
+        //      the text it was asked to tighten — it re-wrote a narrative from
+        //      the structured fields and the prose screen threw the result away
+        //      for dropping half the content.
+        // The block is omitted entirely when empty: an empty "OFFICER NOTES:"
+        // label reads to the model as a blank input, which came back as the
+        // advisory "Officer notes were blank; specific details regarding the
+        // incident sequence were not recorded" while the narrative sat in the
+        // payload one field above.
+        $officerNotes = trim((string) ($masked['officer_notes'] ?? ''));
+        if ($officerNotes !== '') {
+            $lines[] = '';
+            $lines[] = 'OFFICER NOTES:';
+            $lines[] = $officerNotes;
+        }
         if (!empty($options['feedback'])) {
             $lines[] = '';
             $lines[] = 'REVISION FEEDBACK: ' . (string) $options['feedback'];
@@ -431,6 +520,96 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             ];
         }
         return $out;
+    }
+
+    /**
+     * Formalised NOTABLE FINDINGS lines (report-sheet block). Tolerant by
+     * design: bullets/numbering the model may add are stripped, blank lines
+     * dropped, duplicates collapsed and the list capped — the officer still
+     * reviews every line before it reaches the report. Pure/static for
+     * testability.
+     *
+     * @return array<int, string>
+     */
+    public static function normaliseFindings(mixed $raw): array
+    {
+        return self::normaliseLineList($raw, 5); // §5 — five lines is the ceiling
+    }
+
+    /**
+     * Advisory phrases the model withheld from the draft because the officer's
+     * input does not state them. Same shape rules as the findings (one line,
+     * no bullets, deduped, capped) — these never reach the report, only the
+     * review panel, so a stray entry is a cosmetic problem, not a legal one.
+     * Pure/static for testability.
+     *
+     * @return array<int, string>
+     */
+    public static function normaliseWarnings(mixed $raw): array
+    {
+        return self::normaliseLineList($raw, 5);
+    }
+
+    /**
+     * Shared normaliser for the report's/advisory one-line lists: whitespace
+     * collapsed onto ONE printed line, leading bullet/number stripped (the
+     * sheet prints its own dash), blanks and non-strings dropped, duplicates
+     * (case-insensitive) collapsed, list capped.
+     *
+     * @return array<int, string>
+     */
+    private static function normaliseLineList(mixed $raw, int $cap): array
+    {
+        if (!is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        $seen = [];
+        foreach ($raw as $line) {
+            // Defensive: a provider that answers with objects instead of
+            // plain strings still yields its text rather than nothing.
+            if (is_array($line) && isset($line['text']) && is_string($line['text'])) {
+                $line = $line['text'];
+            }
+            if (!is_string($line)) {
+                continue;
+            }
+            $text = trim(preg_replace('/\s+/u', ' ', $line) ?? '');
+            $text = trim((string) preg_replace('/^(?:[-–—•*]+|\d+[.)])\s*/u', '', $text));
+            if ($text === '') {
+                continue;
+            }
+            $key = mb_strtolower($text);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = $text;
+            if (count($out) >= $cap) {
+                break;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * The formalised ACTION TAKEN / STATUS line for the sheet. Whitespace is
+     * collapsed (the block prints one line per entry) and a leading label the
+     * model may have echoed ("Action Taken / Status:") is stripped — the
+     * block supplies its own heading. Empty stays empty: no disposition was
+     * recorded, so the field is left alone. Pure/static for testability.
+     */
+    public static function normaliseDisposition(mixed $raw): string
+    {
+        if (!is_string($raw)) {
+            return '';
+        }
+        $text = (string) preg_replace('/\s+/u', ' ', $raw);
+        $text = trim((string) preg_replace('/^(?:action\s+taken\s*\/?\s*status|status|disposition)\s*:\s*/iu', '', trim($text)));
+        // The narrative already carries the disposition as prose; this line is
+        // for the form field, so anything wildly long is a model slip, not a
+        // disposition. Cap generously and keep the head.
+        return mb_substr($text, 0, 600);
     }
 
     /** @return array<int, array{description:string,severity:string}> */

@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
 import ReportPrint from './ReportPrint.jsx';
-import HeroGlitchText from './HeroGlitchText.jsx';
 import ConnectionNotice from './ConnectionNotice.jsx';
 import {
   INCIDENT_TYPES,
@@ -16,6 +15,16 @@ import { validateReport } from '../lib/reportRules.js';
 import { normalizeLegacyTypeSpecific, hasLegacyShape } from '../lib/normalizeLegacy.js';
 import RepeatableGroup from './RepeatableGroup.jsx';
 import AiNarrativePanel from './AiNarrativePanel.jsx';
+// The official-document stylesheet: the navy top bar, page head, card panels,
+// field labels and signature blocks. Shared by every screen now that the whole
+// application uses this look (the tokens themselves live in styles.css).
+import '../incident-report.css';
+import {
+  caseNumber,
+  reportDateValue,
+  specDate,
+  specTimestamp,
+} from '../lib/incidentReport.js';
 
 const EMPTY = {
   incident_type: '',
@@ -24,6 +33,20 @@ const EMPTY = {
   complainant: '',
   respondent: '',
   narrative: '',
+  // Disposition fields printed on the sheet (migration 004): the officer's
+  // own ACTION TAKEN / STATUS text and the investigator-on-case name that
+  // signs the "IOC:" line.
+  action_taken: '',
+  ioc_name: '',
+  // Reporting party (migration 006, Panel I of the Write Report screen) and
+  // the officer initials of Panel IV. Separate from created_by: the person
+  // filing the report is not always the officer on the record.
+  reporter_name: '',
+  reporter_id_no: '',
+  reporter_contact: '',
+  reporter_email: '',
+  reporter_address: '',
+  officer_initials: '',
   status: 'draft',
   type_specific: {},
 };
@@ -90,15 +113,184 @@ const FIELD_LABELS = {
   incident_datetime: 'Date and time of incident',
   location: 'Place of incident',
   narrative: 'Narrative',
+  reporter_name: 'Reporting party name',
+  reporter_email: 'Email address',
+  reporter_contact: 'Contact number',
+  officer_initials: 'Officer initials',
 };
 
-// Scroll to a field and move focus to it (focus first so keyboard users
-// land in the input, then scrollIntoView centers it).
-function focusField(key) {
-  const el = document.getElementById(`r-${key === 'incident_datetime' ? 'dt' : key.replace('incident_', '')}`);
+// ---------------------------------------------------------------------------
+// Small pieces of the Write Report screen's chrome.
+// ---------------------------------------------------------------------------
+
+// Line icons for the field labels (spec: a small icon sits left of each
+// label). Inline SVG, 14px, currentColor — no icon dependency, and they
+// inherit the label's muted colour.
+const LABEL_ICONS = {
+  person: <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-3.3 0-7 1.7-7 4v1h14v-1c0-2.3-3.7-4-7-4Z" />,
+  id: (
+    <>
+      <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
+      <circle cx="8.5" cy="11" r="2.1" />
+      <path d="M5 16.4c.6-1.5 2-2.2 3.5-2.2s2.9.7 3.5 2.2M14.5 10h4M14.5 13.5h4" />
+    </>
+  ),
+  phone: <path d="M6.6 3.5h2.2l1.5 4-1.8 1.3a11 11 0 0 0 5.6 5.6l1.3-1.8 4 1.5v2.2c0 1.2-1 2.2-2.2 2.2A14.7 14.7 0 0 1 4.4 5.7c0-1.2 1-2.2 2.2-2.2Z" />,
+  mail: (
+    <>
+      <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
+      <path d="m3.5 7 8.5 6 8.5-6" />
+    </>
+  ),
+  pin: (
+    <>
+      <path d="M12 21s6.5-6 6.5-11a6.5 6.5 0 1 0-13 0C5.5 15 12 21 12 21Z" />
+      <circle cx="12" cy="10" r="2.4" />
+    </>
+  ),
+  calendar: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15" rx="2" />
+      <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </>
+  ),
+  hash: <path d="M9.5 4 8 20M16 4l-1.5 16M4.5 9h15M4 15h15" />,
+  lines: <path d="M5 6.5h14M5 12h14M5 17.5h9" />,
+};
+
+function LabelIcon({ name }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {LABEL_ICONS[name]}
+    </svg>
+  );
+}
+
+/** An icon + uppercase caption — the spec's field label treatment. */
+function IrLabel({ htmlFor, children, icon, required }) {
+  return (
+    <label className="ir-label" htmlFor={htmlFor}>
+      {icon && <LabelIcon name={icon} />}
+      <span>
+        {children}
+        {required ? <span className="req"> *</span> : null}
+      </span>
+    </label>
+  );
+}
+
+/** One white card with a light-gray section header bar. */
+function IrCard({ num, title, children, wide, flush, actions }) {
+  return (
+    <section className={wide ? 'ir-card ir-card--wide' : 'ir-card'}>
+      <div className="ir-card-head">
+        {num && <span className="ir-card-num">{num}.</span>}
+        <span>{title}</span>
+        {/* Card-level actions (export, view toggles) sit in the header bar,
+            not in a content row: they are not filters and would otherwise
+            compete with them for the single filter line. */}
+        {actions && <span className="ir-card-head-actions">{actions}</span>}
+      </div>
+      {/* flush: the body owns no padding — for card-wide tables. */}
+      <div className={flush ? 'ir-card-body ir-card-body--flush' : 'ir-card-body'}>{children}</div>
+    </section>
+  );
+}
+
+// Quick visual ring so the officer sees WHERE the jump landed, not just that
+// the page moved. Re-triggerable: removing the class first (and forcing a
+// reflow) restarts the animation when the same target is clicked twice.
+function flashTarget(el, cls = 'jump-flash') {
   if (!el) return;
-  el.focus({ preventScroll: true });
+  el.classList.remove(cls);
+  void el.offsetWidth;
+  el.classList.add(cls);
+  window.setTimeout(() => el.classList.remove(cls), 2200);
+}
+
+// Resolve a groupKey to its RepeatableGroup section, tolerating the plural /
+// singular spellings different groups are declared with.
+function groupSection(groupKey) {
+  return (
+    document.querySelector(`[data-group="${groupKey}"]`) ||
+    document.querySelector(`[data-group="${groupKey.replace(/s$/, '')}"]`) ||
+    document.querySelector(`[data-group="${groupKey}s"]`)
+  );
+}
+
+// Resolve a rule-engine error path to { el, section, level }.
+//   "vehicles[0].driver_name" -> that exact input (level 'field')
+//   "vehicles"                -> the WHOLE group (level 'group'): a count-floor
+//                                error has no field to point at, so the target
+//                                is the first flagged field, else the "+ Add"
+//                                button that fixes it.
+function resolveTarget(key) {
+  const item = /^(\w+)\[(\d+)\]\.(\w+)$/.exec(key);
+  if (item) {
+    const [, g, i, fld] = item;
+    // DOM ids are `<groupKey>-<index>-<field>`; some groups use a singular
+    // key ("respondent-0-name"), some plural ("vehicles-0-plate_number").
+    for (const id of [`${g}-${i}-${fld}`, `${g.replace(/s$/, '')}-${i}-${fld}`, `${g}s-${i}-${fld}`]) {
+      const el = document.getElementById(id);
+      if (el) return { el, section: groupSection(g) || el.closest('.rep-group'), level: 'field' };
+    }
+    const section = groupSection(g);
+    return section ? { el: section, section, level: 'group' } : null;
+  }
+
+  const section = groupSection(key);
+  if (section) {
+    const flagged = section.querySelector('[aria-invalid="true"]');
+    const el = flagged || section.querySelector('.rep-add') || section;
+    return { el, section, level: 'group' };
+  }
+
+  // Some form controls use a short id (r-narr, r-act, r-ioc) rather than the
+  // field key; map those so an error link still lands on the right input.
+  const aliases = {
+    narrative: 'r-narr',
+    action_taken: 'r-act',
+    ioc_name: 'r-ioc',
+    reporter_name: 'r-reporter-name',
+    reporter_id_no: 'r-reporter-id',
+    reporter_contact: 'r-reporter-contact',
+    reporter_email: 'r-reporter-email',
+    reporter_address: 'r-reporter-address',
+    officer_initials: 'r-officer-initials',
+  };
+  const el =
+    document.getElementById(aliases[key] ?? '') ||
+    document.getElementById(`r-${key === 'incident_datetime' ? 'dt' : key.replace('incident_', '')}`);
+  return el ? { el, section: el.closest('.section') || el.closest('.field'), level: 'field' } : null;
+}
+
+// Scroll to the offending field and make it obvious: focus it (so keyboard
+// users land in the input), center it, then flash it — and for a whole-group
+// error also flash the group box so the section itself is unmistakable.
+function focusField(key) {
+  const target = resolveTarget(key);
+  if (!target) return;
+  const { el, section, level } = target;
+  el.focus?.({ preventScroll: true });
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  flashTarget(el);
+  if (level === 'group' && section && section !== el) flashTarget(section, 'jump-flash-group');
 }
 
 function validate(r) {
@@ -173,7 +365,7 @@ function TypeSpecificFields({ incidentType, values, onChange, disabled }) {
 // ===========================================================================
 // ReportWelcome — the nothing-selected state of the main panel.
 // ===========================================================================
-export function ReportWelcome({ user, onNew, onOpenReport, reports, loading }) {
+export function ReportWelcome({ user, onNew, onOpenReport, onMyReports, reports, loading }) {
   // Recent list: unfinished drafts lead so they are one click to resume;
   // the rest follow in incident-date order (Shell already sorts desc).
   const all = reports ?? [];
@@ -181,39 +373,68 @@ export function ReportWelcome({ user, onNew, onOpenReport, reports, loading }) {
     ...all.filter((r) => r.status === 'draft'),
     ...all.filter((r) => r.status !== 'draft'),
   ].slice(0, 5);
+  // Home is the masthead, one action, and the register tail — all centred. It
+  // deliberately has no page title or officer meta line: the top bar already
+  // carries the department lockup, the identity sits in the profile menu, and
+  // every other officer screen (My Reports, Write Report) still uses the full
+  // left-aligned `ir-page-head` + `ir-status` grammar.
+  //
+  // The Report Intake card was removed by request, so the primary action now
+  // stands on its own under the masthead and Recent Reports closes the page.
+  // Its "View All My Reports" button went with it: the top bar already has that
+  // destination, so the card was the second route to a screen one click away.
+  //
+  // `.ir-home` is the ONLY thing that centres: it gives the centring rules a
+  // scope that stops at this screen, so the document grammar elsewhere is
+  // untouched.
   return (
-    <div className="welcome">
-      <div className="welcome-intro">
-        <div className="welcome-hero" aria-hidden="true">
-          <HeroGlitchText text="BLUEWRITE">
-            BLUE<em>WRITE</em>
-          </HeroGlitchText>
-        </div>
-        <div className="welcome-rule" aria-hidden="true" />
-        <p className="welcome-kicker">Incident documentation workspace</p>
-        <h1>What are you documenting today?</h1>
-        <p className="welcome-sub">
-          Signed in as {user.full_name} — {user.role}. {user.role === 'Admin' ? 'You can see every report in the station.' : 'You see the reports you recorded.'}
+    <div className="ir-home">
+      {/* The BlueWrite wordmark back on the page — the old hero, now on the
+          light document surface above the working cards. Plain type: BLUE in
+          navy, WRITE in the brand blue. */}
+      <section className="ir-hero">
+        <p className="ir-hero-wordmark">
+          BLUE<em>WRITE</em>
         </p>
-        <button type="button" className="primary welcome-cta" onClick={onNew}>
-          Start a new report
+        <p className="ir-hero-kicker">Incident documentation workspace</p>
+      </section>
+
+      {/* The page's one action. */}
+      <div className="ir-actions-row ir-home-actions">
+        <button type="button" className="ir-submit ir-home-cta" onClick={onNew}>
+          Start a New Report
         </button>
       </div>
 
-      {!loading && recent.length > 0 && (
-        <div className="welcome-recent">
-          <div className="side-section-label">Recent reports</div>
-          {recent.map((r) => (
-            <button key={r.id} type="button" className="side-report-item" onClick={() => onOpenReport(r)}>
-              <span className={`dot ${r.status}`} aria-hidden="true" />
-              <span className="side-report-text">
-                <span className="side-report-no">BW-{String(r.id).padStart(4, '0')}</span>
-                <span className="side-report-type">{r.incident_type}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+      <section className="ir-recent">
+        <IrCard num="I" title="Recent Reports">
+          {loading && <p className="ir-home-lead">Loading your reports…</p>}
+          {!loading && recent.length === 0 && (
+            <p className="ir-home-lead">
+              No reports recorded yet. Your first report will appear here.
+            </p>
+          )}
+          {!loading && recent.length > 0 && (
+            <ul className="ir-home-list">
+              {recent.map((r) => (
+                <li key={r.id}>
+                  <button
+                    type="button"
+                    className="ir-home-item"
+                    onClick={() => onOpenReport(r)}
+                    title={`${r.incident_type} — ${r.location || 'no location recorded'}`}
+                  >
+                    <span className="ir-home-no">BW-{String(r.id).padStart(4, '0')}</span>
+                    <span className="ir-home-type">{r.incident_type}</span>
+                    <span className="ir-home-when">{fmtIncident(r.incident_datetime)}</span>
+                    <span className={`badge ${r.status}`}>{r.status}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </IrCard>
+      </section>
     </div>
   );
 }
@@ -221,13 +442,31 @@ export function ReportWelcome({ user, onNew, onOpenReport, reports, loading }) {
 // ===========================================================================
 // ReportEditor — create/edit a single report in the main panel.
 // ===========================================================================
-export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onConnError }) {
+export function ReportEditor({
+  user,
+  notify,
+  reportId,
+  onMutated,
+  onClosed,
+  onConnError,
+}) {
   // For a new report, start with the empty form immediately; for an existing
   // one, null until fetched. (Starting null for BOTH would crash the first
   // render — effects run after render, so the new-report path must be ready.)
   const [draft, setDraft] = useState(reportId === null ? { ...EMPTY } : null);
   const [errors, setErrors] = useState({});
+  // AI disposition helper: the officer types a rough note ("follow up
+  // investigation") and the model rewrites it into the formal statement that
+  // prints in ACTION TAKEN / STATUS. The officer stays in the loop — the
+  // result lands in the editable field.
   const [error, setError] = useState(null);
+  // A blocked finalize (missing required fields) shows the red banner at the
+  // TOP of the form. The officer clicks Finalize from the actions row at the
+  // BOTTOM, so without help the banner is off-screen and the click looks like
+  // it did nothing. errorRef scrolls it into view; errorPulse re-keys it so
+  // the highlight replays on every attempt.
+  const errorRef = useRef(null);
+  const [errorPulse, setErrorPulse] = useState(0);
   // Infrastructure failures (server/DB unreachable) get their own state and
   // their own rendering — never the red validation banner.
   const [conn, setConn] = useState(null); // 'offline' | 'database' | 'server' | null
@@ -236,6 +475,9 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
   const [history, setHistory] = useState(null);
   const [historyError, setHistoryError] = useState(null);
   const [printing, setPrinting] = useState(false);
+  // Finalize flow: true while the review sheet (with its confirm bar) is up.
+  const [finalizePreview, setFinalizePreview] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
   const [loading, setLoading] = useState(reportId !== null);
   const dirtyRef = useRef(false);
   const draftRef = useRef(null);
@@ -246,7 +488,7 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
   const canFinalize = user.role === 'Admin' || user.role === 'Officer';
   // A report with no id yet is being created by this very user — always
   // editable. Otherwise ownership decides, as the server enforces.
-  const isOwner = draft && (draft.id === undefined || Number(draft.created_by) === Number(user.id));
+  const isOwner = draft && (draft.id === undefined || draft.created_by === undefined || Number(draft.created_by) === Number(user.id));
   const canEdit =
     draft &&
     (user.role === 'Admin' || (isOwner && draft.status !== 'finalized'));
@@ -259,6 +501,14 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
   // Phase 3: how the current narrative was authored ('manual'|'ai-assisted').
   // Recorded into report_history on the next save/finalize via change note.
   const narrativeSourceRef = useRef('manual');
+
+  // One-step "reject" for the two fields Generate rewrites in place (Notable
+  // Findings, Action Taken / Status): each keeps the text it held immediately
+  // BEFORE the draft replaced it, so an officer who preferred their own
+  // shorthand gets it back with one click instead of retyping. Cleared the
+  // moment they edit that field themselves, so a stale revert can never fight
+  // their typing.
+  const [aiUndo, setAiUndo] = useState({ findings: null, action_taken: null });
 
   // ---- Unsaved-work recovery (tab-session) ------------------------------
   // A dev-server rebuild, an accidental refresh, or a browser crash used to
@@ -368,7 +618,7 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
           const created = await api('/reports', { method: 'POST', body });
           idRef.current = created.report.id;
           setEditingId(created.report.id);
-          setDraft((prev) => ({ ...prev, id: created.report.id }));
+          setDraft((prev) => ({ ...prev, id: created.report.id, created_by: user.id }));
           onMutated?.();
         }
         dirtyRef.current = false;
@@ -389,6 +639,20 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
   // Nested setter for the type_specific JSON blob. When a controlling
   // select changes, dependent fields that no longer match showIf are cleared
   // so stale values never persist invisibly (prompt rule: empty = absent).
+  // Restore what a field held before the AI formalised it (see aiUndo).
+  function revertAiField(field) {
+    const prev = aiUndo[field];
+    if (prev === null) return;
+    if (field === 'findings') setTypeSpecific('notable_findings', prev);
+    else set('action_taken', prev);
+    setAiUndo((u) => ({ ...u, [field]: null }));
+  }
+
+  // Drop the revert offer for a field the officer is now editing by hand.
+  function clearAiUndo(field) {
+    setAiUndo((u) => (u[field] === null ? u : { ...u, [field]: null }));
+  }
+
   function setTypeSpecific(key, value) {
     dirtyRef.current = true;
     setDraft((d) => {
@@ -415,16 +679,15 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
     const errs = validate(draft);
     setErrors(errs);
     if (errs.incident_type || errs.incident_datetime || errs.location) return;
-    try {
-      const body = { ...draft, status: 'draft', narrative_source: narrativeSourceRef.current };
-      if (editingId) {
-        await api(`/reports/${editingId}`, { method: 'PATCH', body });
-      } else {
-        const created = await api('/reports', { method: 'POST', body });
-        setEditingId(created.report.id);
-        idRef.current = created.report.id;
-        setDraft((prev) => ({ ...prev, id: created.report.id }));
-      }
+    try {        const body = { ...draft, status: 'draft', narrative_source: narrativeSourceRef.current };
+        if (editingId) {
+          await api(`/reports/${editingId}`, { method: 'PATCH', body });
+        } else {
+          const created = await api('/reports', { method: 'POST', body });
+          setEditingId(created.report.id);
+          idRef.current = created.report.id;
+          setDraft((prev) => ({ ...prev, id: created.report.id, created_by: user.id }));
+        }
       dirtyRef.current = false;
       notify('Draft saved.');
       onMutated?.();
@@ -433,12 +696,17 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
     }
   }
 
-  async function finalize() {
-    // Gate 2: full v3 rule set — common fields, group items, cross-checks.
+  // Gate 2 shared by BOTH entry points (Finalize and Generate AI draft):
+  // the full v3 rule set — common fields, group items, cross-checks. Flags
+  // every problem (red banner, per-field inline errors, jump + flash) and
+  // returns false when blocked. `ignorePaths` lets the AI gate exempt the
+  // narrative — writing it IS the AI's job, so requiring it first is circular.
+  function checkFullRules({ ignorePaths = [] } = {}) {
     const { errors: ruleErrors, warnings: ruleWarnings } = validateReport(draft, 'finalize');
+    const blocking = ruleErrors.filter((e) => !ignorePaths.includes(e.path));
     const errs = {};
     const gErrs = {};
-    for (const e of ruleErrors) {
+    for (const e of blocking) {
       if (e.path.includes('[')) {
         gErrs[e.path] = e.message; // per-item group error
       } else if (errs[e.path] === undefined) {
@@ -448,7 +716,7 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
     setErrors(errs);
     setGroupErrors(gErrs);
     setRuleWarnings(ruleWarnings);
-    if (ruleErrors.length > 0) {
+    if (blocking.length > 0) {
       const all = { ...errs, ...gErrs };
       setError(
         <span>
@@ -471,28 +739,84 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
           </span>
         </span>,
       );
-      return;
+      // Bring the banner into view and pulse it, then land focus on the first
+      // offending field so a blocked action never looks like a dead click.
+      setErrorPulse((n) => n + 1);
+      window.requestAnimationFrame(() => {
+        errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const firstKey = blocking[0]?.path;
+        if (firstKey) window.setTimeout(() => focusField(firstKey), 350);
+      });
+      return false;
     }
     setRuleWarnings(null);
-    setConfirm({
-      title: 'Finalize this report?',
-      message:
-        'A finalized report is locked for editing. Only an administrator can make further changes, and every change is recorded in the report history.',
-      confirmLabel: 'Finalize Report',
-      doneMessage: 'Report finalized.',
-      action: async () => {
-        const body = { ...draft, status: 'finalized', narrative_source: narrativeSourceRef.current };
-        if (editingId) {
-          await api(`/reports/${editingId}`, { method: 'PATCH', body });
-        } else {
-          const created = await api('/reports', { method: 'POST', body });
-          setEditingId(created.report.id);
-          idRef.current = created.report.id;
-        }
-        dirtyRef.current = false;
-        onMutated?.();
-      },
-    });
+    return true;
+  }
+
+  // Generate AI draft flags problems FIRST: an incomplete report makes a poor
+  // AI draft, so the same banner + jump-to-field runs before any request.
+  // Only the narrative is exempt — that is what the AI is there to write.
+  function gateAiGenerate() {
+    const ok = checkFullRules({ ignorePaths: ['narrative'] });
+    if (ok) setError(null); // a previous failed attempt's banner must not linger
+    return ok;
+  }
+
+  async function finalize() {
+    if (!checkFullRules()) return;
+    // Finalize flow: REVIEW FIRST. The print sheet opens with a confirmation
+    // bar at its bottom; the PATCH (which locks the report) only fires when
+    // the officer confirms there. No modal popup beforehand.
+    setError(null); // a previous failed attempt's banner must not linger
+    setFinalizePreview(true);
+  }
+
+  // Runs on the confirmation bar at the bottom of the finalize preview.
+  async function confirmFinalize() {
+    const body = { ...draft, status: 'finalized', narrative_source: narrativeSourceRef.current };
+    try {
+      if (editingId) {
+        await api(`/reports/${editingId}`, { method: 'PATCH', body });
+      } else {
+        // A report that has never been saved is created FIRST and then
+        // finalized with a PATCH. The API always creates drafts (so every
+        // finalize goes through the one gate that re-validates the stored
+        // groups), which means the create call cannot carry status=finalized:
+        // previously it did, the API dropped it, and a report submitted
+        // straight from the form stayed a draft on the server while the UI
+        // showed it as finalized.
+        const created = await api('/reports', { method: 'POST', body: { ...body, status: 'draft' } });
+        setEditingId(created.report.id);
+        idRef.current = created.report.id;
+        await api(`/reports/${created.report.id}`, { method: 'PATCH', body });
+      }
+      // Reflect the new status locally so the badge flips to "finalized",
+      // the form locks, and the sidebar/status lists refresh immediately.
+      setDraft((d) => ({
+        ...d,
+        status: 'finalized',
+        id: d.id ?? (editingId ?? undefined),
+        created_by: d.created_by ?? user.id,
+      }));
+      dirtyRef.current = false;
+      setFinalizePreview(false);
+      notify('Report finalized.');
+      onMutated?.();
+    } catch (err) {
+      // Server-side rule gate rejections carry a details[] list (422 "invalid
+      // fields") — show them so the officer knows exactly what to fix.
+      const details = Array.isArray(err.details) ? err.details : null;
+      setError(
+        details && details.length > 0 ? (
+          <span>
+            {err.message}{' '}
+            <span className="error-summary-inline">
+              {details.join(', ')}
+            </span>
+          </span>
+        ) : err.message,
+      );
+    }
   }
 
   function askArchive() {
@@ -604,20 +928,38 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
 
   return (
     <>
-      <div className="page-head">
-        <h1>
-          {draft.id ? `Report #BW-${String(draft.id).padStart(4, '0')}` : 'New Incident Report'}{' '}
-          <span className={`badge ${draft.status || 'draft'}`}>{draft.status || 'draft'}</span>
-        </h1>
-        <p>
-          {canEdit
-            ? 'Fields marked with an error must be corrected before finalizing.'
-            : 'This report is locked. Only an administrator can make further changes.'}
-        </p>
+      {/* The Write Report screen (spec: "Official Incident Reporting
+          System"). The navy bar and the light page now belong to Shell; this
+          screen contributes only its document content. The print sheet and
+          the dialogs below render outside the form so the document stylesheet
+          can never repaint an official sheet. */}
+      <div className="ir-page-head">
+        <h1 className="ir-title">POLICE INCIDENT REPORT</h1>
+        <div className="ir-meta">
+          <div>CASE NO: {caseNumber(draft)}</div>
+          <div>DATE: {specDate(reportDateValue(draft, new Date().toISOString().slice(0, 10)))}</div>
+        </div>
+      </div>
+
+      <div className="ir-status">
+        <span className={`badge ${draft.status || 'draft'}`}>{draft.status || 'draft'}</span>
+        <span>
+          {draft.id
+            ? `Report BW-${String(draft.id).padStart(4, '0')} · Recorded by ${user.full_name} · Badge ${user.badge_number}`
+            : 'Not saved yet — the first save assigns the report number.'}
+        </span>
+        {!canEdit && (
+          <span>This report is locked. Only an administrator can make further changes.</span>
+        )}
       </div>
 
       {error && (
-        <div className="alert error" role="alert">
+        <div
+          className="alert error alert-pulse"
+          role="alert"
+          key={errorPulse}
+          ref={errorRef}
+        >
           {error}
         </div>
       )}
@@ -648,98 +990,307 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
         </div>
       )}
 
-      <p style={{ margin: '0 0 0.75rem', fontSize: '0.78rem', color: 'var(--steel)' }}>
-        <span className="req">*</span> Required before the report can be finalized.
+      <p className="ir-required-note">
+        <span className="req">*</span> Required before the report can be submitted.
       </p>
 
-      <form onSubmit={(e) => e.preventDefault()}>
-        <div className="section">
-          <h2>1. Incident Details</h2>
-          <p className="section-hint">What happened, when, and where.</p>
-          <div className="form-grid">
-            <div className="field">
-              <label htmlFor="r-type">Incident type<span className="req">*</span></label>
-              <select
-                id="r-type"
-                value={draft.incident_type}
-                onChange={(e) => changeType(e.target.value)}
-                disabled={!canEdit}
-                aria-invalid={!!errors.incident_type}
-              >
-                <option value="">Select type…</option>
-                {TYPES.map((t) => (
-                  <option key={t}>{t}</option>
-                ))}
-              </select>
-              {errors.incident_type && <div className="error">{errors.incident_type}</div>}
+      <form onSubmit={(e) => e.preventDefault()} className="ir-form">
+        {/* The spec's four panels, 2x2 on desktop. Panels I and II carry the
+            screen's own fields; Panel III is the narrative the AI drafts and
+            Panel IV is the signature block. The application's remaining
+            document sections follow the grid as full-width cards, so nothing
+            the blotter needs was dropped to match the layout. */}
+        <div className="ir-grid">
+          <IrCard num="I" title="Reporting Party Information">
+            <div className="ir-sub">
+              <div className="ir-field">
+                <IrLabel htmlFor="r-reporter-name" icon="person">Full Name</IrLabel>
+                <input
+                  id="r-reporter-name"
+                  autoComplete="name"
+                  placeholder="Last Name, First Name, M.I."
+                  value={draft.reporter_name || ''}
+                  onChange={(e) => set('reporter_name', e.target.value)}
+                  disabled={!canEdit}
+                />
+              </div>
+              <div className="ir-field">
+                <IrLabel htmlFor="r-reporter-id" icon="id">
+                  Identification / Driver&rsquo;s License No.
+                </IrLabel>
+                <input
+                  id="r-reporter-id"
+                  placeholder="e.g. N01-23-456789"
+                  value={draft.reporter_id_no || ''}
+                  onChange={(e) => set('reporter_id_no', e.target.value)}
+                  disabled={!canEdit}
+                />
+              </div>
+              <div className="ir-field">
+                <IrLabel htmlFor="r-reporter-contact" icon="phone">Contact Number</IrLabel>
+                <input
+                  id="r-reporter-contact"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="(000) 000-0000"
+                  value={draft.reporter_contact || ''}
+                  onChange={(e) => set('reporter_contact', e.target.value)}
+                  disabled={!canEdit}
+                  aria-invalid={!!errors.reporter_contact}
+                />
+                {errors.reporter_contact && <div className="error">{errors.reporter_contact}</div>}
+              </div>
+              <div className="ir-field">
+                <IrLabel htmlFor="r-reporter-email" icon="mail">Email Address</IrLabel>
+                <input
+                  id="r-reporter-email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="name@example.com"
+                  value={draft.reporter_email || ''}
+                  onChange={(e) => set('reporter_email', e.target.value)}
+                  disabled={!canEdit}
+                  aria-invalid={!!errors.reporter_email}
+                />
+                {errors.reporter_email && <div className="error">{errors.reporter_email}</div>}
+              </div>
+              <div className="ir-field ir-span-2">
+                <IrLabel htmlFor="r-reporter-address" icon="pin">Home Address</IrLabel>
+                <input
+                  id="r-reporter-address"
+                  autoComplete="street-address"
+                  placeholder="Street, barangay, city / municipality"
+                  value={draft.reporter_address || ''}
+                  onChange={(e) => set('reporter_address', e.target.value)}
+                  disabled={!canEdit}
+                />
+              </div>
             </div>
-            <div className="field">
-              <label htmlFor="r-date">Date of incident<span className="req">*</span></label>
-              <input
-                id="r-date"
-                type="date"
-                className="picker-field"
-                value={draft.incident_datetime ? draft.incident_datetime.slice(0, 10) : ''}
-                max={new Date().toISOString().slice(0, 10)}
+          </IrCard>
+
+          <IrCard num="II" title="Incident Details">
+            <div className="ir-sub">
+              <div className="ir-field">
+                <IrLabel htmlFor="r-type" icon="hash" required>Type of Incident</IrLabel>
+                <select
+                  id="r-type"
+                  value={draft.incident_type}
+                  onChange={(e) => changeType(e.target.value)}
+                  disabled={!canEdit}
+                  aria-invalid={!!errors.incident_type}
+                >
+                  <option value="">Select type…</option>
+                  {TYPES.map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
+                {errors.incident_type && <div className="error">{errors.incident_type}</div>}
+              </div>
+              <div className="ir-field">
+                <IrLabel icon="calendar">Date &amp; Time of Occurrence</IrLabel>
+                {/* Two fields, not one datetime-local: the incident date and
+                    time are recorded separately, and the time carries an
+                    "approximate" qualifier so “around 1:00 A.M.” survives
+                    without inventing a precise minute (spec §1.2). */}
+                <div className="ir-datetime">
+                  <div>
+                    <label className="ir-sub-label" htmlFor="r-date">Date</label>
+                    <input
+                      id="r-date"
+                      type="date"
+                      className="picker-field"
+                      value={draft.incident_datetime ? draft.incident_datetime.slice(0, 10) : ''}
+                      max={new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => {
+                        // Keep any already-entered time when only the date changes.
+                        const timePart = draft.incident_datetime.includes('T') ? draft.incident_datetime.split('T')[1] : '';
+                        set('incident_datetime', e.target.value ? (timePart ? `${e.target.value}T${timePart}` : e.target.value) : '');
+                      }}
+                      onClick={() => {
+                        // Whole field opens the picker, not just the corner icon.
+                        try { e.currentTarget.showPicker?.(); } catch { /* not openable */ }
+                      }}
+                      onFocus={() => {
+                        try { document.getElementById('r-date')?.showPicker?.(); } catch { /* not openable */ }
+                      }}
+                      disabled={!canEdit}
+                      aria-invalid={!!errors.incident_datetime}
+                    />
+                  </div>
+                  <div>
+                    <label className="ir-sub-label" htmlFor="r-time">Time</label>
+                    <input
+                      id="r-time"
+                      type="time"
+                      className="picker-field"
+                      value={draft.incident_datetime.includes('T') ? draft.incident_datetime.split('T')[1] : ''}
+                      onChange={(e) => {
+                        // A time without a date is stored as date+T+time once the
+                        // date exists; today is the fallback date when only a time
+                        // was picked first (server stores a full datetime).
+                        const datePart = draft.incident_datetime ? draft.incident_datetime.slice(0, 10) : new Date().toISOString().slice(0, 10);
+                        set('incident_datetime', e.target.value ? `${datePart}T${e.target.value}` : datePart);
+                      }}
+                      onClick={() => {
+                        try { e.currentTarget.showPicker?.(); } catch { /* not openable */ }
+                      }}
+                      onFocus={() => {
+                        try { document.getElementById('r-time')?.showPicker?.(); } catch { /* not openable */ }
+                      }}
+                      disabled={!canEdit}
+                      aria-invalid={!!errors.incident_datetime}
+                    />
+                  </div>
+                </div>
+                <label className="ir-approx" htmlFor="r-time-approx">
+                  <input
+                    id="r-time-approx"
+                    type="checkbox"
+                    checked={!!draft.incident_time_approximate}
+                    onChange={(e) => set('incident_time_approximate', e.target.checked)}
+                    disabled={!canEdit}
+                  />
+                  <span>Time is approximate (e.g. “around 1:00 A.M.”)</span>
+                </label>
+                {errors.incident_datetime && <div className="error">{errors.incident_datetime}</div>}
+              </div>
+              <div className="ir-field ir-span-2">
+                <IrLabel htmlFor="r-loc" icon="pin" required>Location of Incident</IrLabel>
+                <input
+                  id="r-loc"
+                  placeholder="Specific address or intersection"
+                  value={draft.location}
+                  onChange={(e) => set('location', e.target.value)}
+                  disabled={!canEdit}
+                  aria-invalid={!!errors.location}
+                />
+                {errors.location && <div className="error">{errors.location}</div>}
+              </div>
+            </div>
+          </IrCard>
+
+          <IrCard num="III" title="Incident Narrative">
+            <div className="ir-field ir-narrative">
+              <IrLabel htmlFor="r-narr" icon="lines" required>
+                Detailed Description of Events
+              </IrLabel>
+              <textarea
+                id="r-narr"
+                rows={8}
+                value={draft.narrative || ''}
                 onChange={(e) => {
-                  // Keep any already-entered time when only the date changes.
-                  const timePart = draft.incident_datetime.includes('T') ? draft.incident_datetime.split('T')[1] : '';
-                  set('incident_datetime', e.target.value ? (timePart ? `${e.target.value}T${timePart}` : e.target.value) : '');
-                }}
-                onClick={() => {
-                  // Whole field opens the picker, not just the corner icon.
-                  try { e.currentTarget.showPicker?.(); } catch { /* not openable */ }
-                }}
-                onFocus={() => {
-                  try { document.getElementById('r-date')?.showPicker?.(); } catch { /* not openable */ }
+                  set('narrative', e.target.value);
+                  if (narrativeSourceRef.current !== 'ai-assisted') narrativeSourceRef.current = 'manual';
                 }}
                 disabled={!canEdit}
-                aria-invalid={!!errors.incident_datetime}
+                aria-invalid={!!errors.narrative}
+                placeholder="Describe the incident in chronological order. Include suspect description, witness information, and any property damage or injuries."
               />
-              {errors.incident_datetime && <div className="error">{errors.incident_datetime}</div>}
+              {errors.narrative && <div className="error">{errors.narrative}</div>}
             </div>
-            <div className="field">
-              <label htmlFor="r-time">Time of incident<span className="req">*</span></label>
-              <input
-                id="r-time"
-                type="time"
-                className="picker-field"
-                value={draft.incident_datetime.includes('T') ? draft.incident_datetime.split('T')[1] : ''}
-                onChange={(e) => {
-                  // A time without a date is stored as date+T+time once the
-                  // date exists; today is the fallback date when only a time
-                  // was picked first (server stores a full datetime).
-                  const datePart = draft.incident_datetime ? draft.incident_datetime.slice(0, 10) : new Date().toISOString().slice(0, 10);
-                  set('incident_datetime', e.target.value ? `${datePart}T${e.target.value}` : datePart);
+            {canEdit && (
+              <AiNarrativePanel
+                reportId={draft.id ?? null}
+                canEdit={canEdit}
+                narrative={draft.narrative || ''}
+                // The AI closes the narrative with the recorded disposition,
+                // so the panel shows which text it is working from.
+                actionTaken={draft.action_taken || ''}
+                // The officer's own observations: the AI weaves them into the
+                // narrative AND formalises them into the sheet's NOTABLE
+                // FINDINGS block.
+                notableFindings={draft.type_specific?.notable_findings || ''}
+                // Completeness gate: flag "The report has N problems" and jump
+                // to the missing fields BEFORE any AI request is sent.
+                onBeforeGenerate={gateAiGenerate}
+                onAccept={(aiText) => {
+                  // Human-in-the-loop: the officer explicitly copies the AI
+                  // draft in; it stays fully editable afterwards. The source
+                  // tag lands in report_history via the next save/finalize.
+                  set('narrative', aiText);
+                  narrativeSourceRef.current = 'ai-assisted';
                 }}
-                onClick={() => {
-                  try { e.currentTarget.showPicker?.(); } catch { /* not openable */ }
+                // Generating the report IS the action for the findings: the
+                // drafted lines replace the Notable Findings field outright
+                // (one printed line per finding), because that field is what
+                // saves, snapshots and prints. A draft with no findings leaves
+                // the officer's text alone, and identical text is not rewritten
+                // (so no spurious unsaved-changes state).
+                onApplyFindings={(lines) => {
+                  const text = lines.join('\n');
+                  if (text.trim() === '') return;
+                  if (text === String(draft.type_specific?.notable_findings || '')) return;
+                  // Remember what we are about to replace so the officer can
+                  // reject the formalisation with one click.
+                  setAiUndo((u) => ({ ...u, findings: String(draft.type_specific?.notable_findings || '') }));
+                  setTypeSpecific('notable_findings', text);
                 }}
-                onFocus={() => {
-                  try { document.getElementById('r-time')?.showPicker?.(); } catch { /* not openable */ }
+                // The recorded disposition is enhanced the same way: the
+                // formalised line replaces the ACTION TAKEN / STATUS field,
+                // which is what saves and prints. A blank disposition in the
+                // draft leaves the officer's wording untouched.
+                onApplyActionTaken={(text) => {
+                  if (text.trim() === '') return;
+                  if (text === String(draft.action_taken || '')) return;
+                  setAiUndo((u) => ({ ...u, action_taken: String(draft.action_taken || '') }));
+                  set('action_taken', text);
                 }}
-                disabled={!canEdit}
-                aria-invalid={!!errors.incident_datetime}
               />
-              {errors.incident_datetime && <div className="error">{errors.incident_datetime}</div>}
+            )}
+          </IrCard>
+
+          <IrCard title="Signatures">
+            <div className="ir-sign-grid">
+              <div className="ir-sign-box">
+                <div className="ir-sign-caption">Signature of Reporting Party</div>
+                {/* No signature-pad component exists in the system, so this
+                    is a typed record: the name from Panel I over a signature
+                    rule, dated by the server when the report is submitted. */}
+                <div className="ir-sign-area">
+                  {draft.reporter_name
+                    ? draft.reporter_name
+                    : <span className="ir-sign-empty">Name typed in Panel I appears here</span>}
+                </div>
+                <div className="ir-sign-stamp">
+                  Timestamp:{' '}
+                  {draft.party_signed_at ? (
+                    <strong>{specTimestamp(draft.party_signed_at)}</strong>
+                  ) : (
+                    <span>auto-filled when the report is submitted</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="ir-sign-box">
+                <div className="ir-sign-caption">Officer Initial &amp; Badge No.</div>
+                <div>
+                  <label className="ir-sub-label" htmlFor="r-officer-initials">Initials</label>
+                  <input
+                    id="r-officer-initials"
+                    placeholder="e.g. J.D.C."
+                    maxLength={12}
+                    value={draft.officer_initials || ''}
+                    onChange={(e) => set('officer_initials', e.target.value)}
+                    disabled={!canEdit}
+                    aria-invalid={!!errors.officer_initials}
+                  />
+                  {errors.officer_initials && <div className="error">{errors.officer_initials}</div>}
+                </div>
+                <div>
+                  <label className="ir-sub-label" htmlFor="r-officer-badge">Badge No.</label>
+                  {/* Taken from the signed-in account, exactly like the
+                      "Recorded by" line — never typed, never overridable. */}
+                  <div className="ir-readonly" id="r-officer-badge">
+                    {user.badge_number} · {user.full_name}
+                  </div>
+                  <p className="ir-readonly-note">From your account — cannot be edited.</p>
+                </div>
+              </div>
             </div>
-            <div className="field span-2">
-              <label htmlFor="r-loc">Place of incident<span className="req">*</span></label>
-              <input
-                id="r-loc"
-                placeholder="Street, barangay, or landmark"
-                value={draft.location}
-                onChange={(e) => set('location', e.target.value)}
-                disabled={!canEdit}
-                aria-invalid={!!errors.location}
-              />
-              {errors.location && <div className="error">{errors.location}</div>}
-            </div>
-          </div>
+          </IrCard>
         </div>
 
-        <div className="section">
-          <h2>2. Parties Involved</h2>
+        <IrCard title="Parties Involved" wide>
           <p className="section-hint">Who reported the incident and who it involves. Use “Add” for each person.</p>
           {SENSITIVE_TYPES.includes(draft.incident_type) && (
             <div className="alert info">
@@ -762,6 +1313,7 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
               softWarnAt={cfg.softWarnAt}
               items={draft.type_specific?.[groupKey]}
               errors={groupErrors}
+              groupError={errors[groupKey]}
               disabled={!canEdit}
               onChange={(nextItems) =>
                 setDraft((d) => ({
@@ -772,11 +1324,10 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
               blankItem={() => ({})}
             />
           ))}
-        </div>
+        </IrCard>
 
         {draft.incident_type && (
-          <div className="section">
-            <h2>3. {BLOCK_HEADINGS[draft.incident_type] ?? 'Incident Details'}</h2>
+          <IrCard wide title={BLOCK_HEADINGS[draft.incident_type] ?? 'Incident Details'}>
             <p className="section-hint">Fill in only what applies. Blank fields are left out of the report.</p>
             <TypeSpecificFields
               incidentType={draft.incident_type}
@@ -784,71 +1335,211 @@ export function ReportEditor({ user, notify, reportId, onMutated, onClosed, onCo
               onChange={setTypeSpecific}
               disabled={!canEdit}
             />
-          </div>
+            {/* Notable findings: the officer's own observations that don't fit
+                any structured field (CCTV insight, tool marks, behavior…) —
+                printed in the NOTABLE FINDINGS block of the sheet and given
+                to the AI as narrative context. */}
+            <div className="field field-narrative">
+              <label htmlFor="r-find">Notable Findings</label>
+              <textarea
+                id="r-find"
+                rows={3}
+                value={draft.type_specific?.notable_findings || ''}
+                onChange={(e) => {
+                  setTypeSpecific('notable_findings', e.target.value);
+                  clearAiUndo('findings');
+                }}
+                disabled={!canEdit}
+                placeholder="e.g. CCTV shows the suspect knew exactly where the wires were kept; entry was made without a flashlight."
+              />
+              <div className="section-hint">
+                Printed in the NOTABLE FINDINGS block of the report sheet — one
+                line per typed line. Leave blank if there is nothing notable.
+              </div>
+              {canEdit && aiUndo.findings !== null && (
+                <div className="section-hint ai-undo-hint">
+                  Formalised by the AI —{' '}
+                  <button
+                    type="button"
+                    className="ai-undo"
+                    onClick={() => revertAiField('findings')}
+                  >
+                    Undo
+                  </button>
+                </div>
+              )}
+            </div>
+          </IrCard>
         )}
 
-        <div className="section">
-          <h2>4. Narrative</h2>
-          <p className="section-hint">Tell the story of the incident in order: before, during, after.</p>
+        {/* Action Taken / Status is a required document block: the narrative
+            generator receives it as context, and the report cannot be
+            submitted without it. It follows the four spec panels and sits
+            directly above the submit bar. */}
+        <IrCard wide title="Action Taken / Status">
+          <p className="section-hint">
+            How the incident was handled. Required before the report can be
+            submitted, and used by the AI when it writes the narrative.
+          </p>
           <div className="field field-narrative">
-            <label htmlFor="r-narr">Narrative<span className="req">*</span></label>
+            <label htmlFor="r-act">
+              Action Taken / Status<span className="req">*</span>
+            </label>
             <textarea
-              id="r-narr"
-              rows={8}
-              value={draft.narrative || ''}
+              id="r-act"
+              rows={4}
+              value={draft.action_taken || ''}
               onChange={(e) => {
-                set('narrative', e.target.value);
-                if (narrativeSourceRef.current !== 'ai-assisted') narrativeSourceRef.current = 'manual';
+                set('action_taken', e.target.value);
+                clearAiUndo('action_taken');
               }}
               disabled={!canEdit}
-              aria-invalid={!!errors.narrative}
+              aria-invalid={!!errors.action_taken}
+              placeholder="e.g. Subject turned over to the station for proper disposition. Follow-up investigation ongoing."
             />
-            {errors.narrative && <div className="error">{errors.narrative}</div>}
+            {errors.action_taken && <div className="error">{errors.action_taken}</div>}
+            <div className="section-hint">
+              Printed in the ACTION TAKEN / STATUS block of the report sheet.
+            </div>
+            {canEdit && aiUndo.action_taken !== null && (
+              <div className="section-hint ai-undo-hint">
+                Formalised by the AI —{' '}
+                <button
+                  type="button"
+                  className="ai-undo"
+                  onClick={() => revertAiField('action_taken')}
+                >
+                  Undo
+                </button>
+              </div>
+            )}
           </div>
-          {canEdit && (
-            <AiNarrativePanel
-              reportId={draft.id ?? null}
-              canEdit={canEdit}
-              narrative={draft.narrative || ''}
-              onAccept={(aiText) => {
-                // Human-in-the-loop: the officer explicitly copies the AI
-                // draft in; it stays fully editable afterwards. The source
-                // tag lands in report_history via the next save/finalize.
-                set('narrative', aiText);
-                narrativeSourceRef.current = 'ai-assisted';
-              }}
-            />
-          )}
-        </div>
+        </IrCard>
 
-        <div className="editor-actions">
-          {canEdit && canFinalize && (
-            <button className="primary" onClick={finalize}>
-              Finalize Report
-            </button>
-          )}
-          {canEdit && <button onClick={saveDraft}>Save Draft</button>}
-          {draft.id && (
-            <>
-              <button type="button" onClick={openHistory}>History</button>
-              <button type="button" onClick={() => setPrinting(true)}>Print</button>
-            </>
-          )}
-          {draft.id && canEdit && (
-            <button type="button" className="danger" onClick={askArchive}>
-              Archive
-            </button>
-          )}
+        {/* The narrative moved into Panel III of the grid above (with the AI
+            panel beside it) — it is not repeated here. */}
+        <IrCard wide title="Investigator-on-Case">
+          <p className="section-hint">
+            Who is carrying the case. Required before the report can be
+            submitted — the name is printed on the “IOC:” line.
+          </p>
+          <div className="field">
+            <label htmlFor="r-ioc">
+              Investigator-on-case (IOC)<span className="req">*</span>
+            </label>
+            <input
+              id="r-ioc"
+              value={draft.ioc_name || ''}
+              onChange={(e) => set('ioc_name', e.target.value)}
+              disabled={!canEdit}
+              aria-invalid={!!errors.ioc_name}
+              placeholder="Name of the officer handling the case"
+            />
+            {errors.ioc_name && <div className="error">{errors.ioc_name}</div>}
+          </div>
+        </IrCard>
+
+        {/* Submit bar: one full-width primary action that runs the same
+            completeness gate as before, so a report cannot be submitted with
+            required fields missing. The secondary actions stay underneath. */}
+        <div className="ir-actions">
           <button
             type="button"
-            onClick={onClosed}
+            className="ir-submit"
+            onClick={finalize}
+            disabled={!canEdit || !canFinalize}
+            title={
+              canFinalize
+                ? 'Validate and submit this report for the record'
+                : 'Your role does not have permission to submit reports'
+            }
           >
-            Close
+            Submit Official Report
           </button>
+          <div className="ir-actions-row">
+            {canEdit && <button onClick={saveDraft}>Save Draft</button>}
+            {draft.id && (
+              <>
+                <button type="button" onClick={openHistory}>History</button>
+                <button type="button" onClick={() => setPrinting(true)}>Print</button>
+              </>
+            )}
+            {draft.id && canEdit && (
+              <button type="button" className="danger" onClick={askArchive}>
+                Archive
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClosed}
+            >
+              Close
+            </button>
+          </div>
         </div>
+
+        {/* Footer (spec §5): the system's real writing-assistance advisory —
+            no placeholder phone number, since the station has not supplied a
+            support line. */}
+        <p className="ir-footer">
+          AI-generated suggestions are provided as writing assistance only. The
+          reporting officer remains responsible for reviewing and verifying all
+          report content.
+        </p>
       </form>
 
-      {printing && <ReportPrint reportId={draft.id} onClose={() => setPrinting(false)} />}
+      {printing && (
+        <ReportPrint
+          reportId={draft.id}
+          onClose={() => setPrinting(false)}
+          recordedBy={{ name: user.full_name, badge: user.badge_number }}
+        />
+      )}
+
+      {/* Finalize: the report sheet appears FIRST, with the confirmation bar
+          at its bottom. The report is only locked once the officer confirms.
+          The sheet renders the CURRENT draft — unsaved edits included — so
+          the officer reviews exactly what will be locked, and it works even
+          before the first save (no id yet). */}
+      {finalizePreview && (
+        <ReportPrint
+          report={draft}
+          autoPrint={false}
+          recordedBy={{ name: user.full_name, badge: user.badge_number }}
+          onClose={() => setFinalizePreview(false)}
+          footer={
+            <div className="finalize-bar no-print" role="alertdialog" aria-label="Confirm finalize">
+              <div className="finalize-bar-text">
+                <strong>Finalize this report?</strong>{' '}
+                A finalized report is locked for editing. Only an administrator
+                can make further changes, and every change is recorded in the
+                report history.
+              </div>
+              <div className="finalize-bar-actions">
+                <button
+                  type="button"
+                  onClick={() => setFinalizePreview(false)}
+                  disabled={finalizing}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={async () => {
+                    setFinalizing(true);
+                    await confirmFinalize();
+                    setFinalizing(false);
+                  }}
+                  disabled={finalizing}
+                >
+                  {finalizing ? 'Finalizing…' : 'Confirm Finalize'}
+                </button>
+              </div>
+            </div>
+          }
+        />
+      )}
 
       {historyOpen && (
         <div className="dialog-overlay" onClick={() => setHistoryOpen(false)}>
@@ -1041,13 +1732,25 @@ export function ReportsTable({ user, notify, onMutated, onConnError, initialStat
 
   return (
     <>
-      <div className="page-head">
-        <h1>All Reports</h1>
-        <p>
+      <div className="ir-page-head">
+        <h1 className="ir-title">{user.role === 'Admin' ? 'ALL REPORTS' : 'MY REPORTS'}</h1>
+        <div className="ir-meta">
+          <div>
+            {pagination
+              ? `${pagination.total} REPORT${pagination.total === 1 ? '' : 'S'}`
+              : 'LOADING…'}
+          </div>
+          <div>{showArchived ? 'ARCHIVED RECORDS' : 'ACTIVE RECORDS'}</div>
+        </div>
+      </div>
+
+      <div className="ir-status">
+        <span className="badge draft">{user.role}</span>
+        <span>
           {user.role === 'Admin'
             ? 'Every report in the station — search, filter, and sort.'
             : 'The reports you recorded — search, filter, and sort.'}
-        </p>
+        </span>
       </div>
 
       {/* Connection failures are reported to Shell (onConnError) which
@@ -1065,39 +1768,40 @@ export function ReportsTable({ user, notify, onMutated, onConnError, initialStat
         </div>
       )}
 
-      <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.6rem' }}>
-        {user.role === 'Admin' && (
-          <button onClick={() => setShowArchived((v) => !v)}>
-            {showArchived ? 'Show Active' : 'Show Archived'}
-          </button>
-        )}
-        <a
-          className="button-link"
-          href={(() => {
-            // Export honors the CURRENT filters (server reuses the same
-            // query pipeline) — what you see is what you get.
-            const params = new URLSearchParams();
-            for (const [k, v] of Object.entries(showArchived ? { archived: '1' } : query)) {
-              if (v !== '' && !(k === 'page' && v === 1)) params.set(k, String(v));
-            }
-            if (showArchived) params.set('archived', '1');
-            const qs = params.toString();
-            return `/api/v1/reports/export${qs ? `?${qs}` : ''}`;
-          })()}
-          download="bluewrite-reports.csv"
-        >
-          Export CSV
-        </a>
-      </div>
-      {reports && reports.length === 0 && !showArchived && !conn ? (
-        <div className="empty">
-          <strong>No reports found.</strong> Adjust the filters or start a new report from the sidebar.
-        </div>
-      ) : conn && reports && reports.length === 0 ? null : (
-        <>
-          {/* Row 1: search · Row 2: filters + sort. No wrapping scramble. */}
-          <div className="reports-toolbar">
-            <div className="reports-toolbar-row">
+      <IrCard
+        num="I"
+        title="Search & Filter"
+        actions={
+          <>
+            {user.role === 'Admin' && (
+              <button type="button" onClick={() => setShowArchived((v) => !v)}>
+                {showArchived ? 'Show Active' : 'Show Archived'}
+              </button>
+            )}
+            {/* Export honors the CURRENT filters (the server reuses the same
+                query pipeline) — what you see is what you get. */}
+            <a
+              className="button-link"
+              href={(() => {
+                const params = new URLSearchParams();
+                for (const [k, v] of Object.entries(showArchived ? { archived: '1' } : query)) {
+                  if (v !== '' && !(k === 'page' && v === 1)) params.set(k, String(v));
+                }
+                if (showArchived) params.set('archived', '1');
+                const qs = params.toString();
+                return `/api/v1/reports/export${qs ? `?${qs}` : ''}`;
+              })()}
+              download="bluewrite-reports.csv"
+            >
+              Export CSV
+            </a>
+          </>
+        }
+      >
+        {/* ONE row: search, then every filter. It wraps only when the viewport
+            genuinely cannot hold the controls (see .reports-toolbar-row). */}
+        <div className="reports-toolbar">
+          <div className="reports-toolbar-row">
               <form
                 className="reports-search"
                 onSubmit={(e) => {
@@ -1107,8 +1811,8 @@ export function ReportsTable({ user, notify, onMutated, onConnError, initialStat
               >
                 <input
                   type="search"
-                  placeholder="Search type, place, parties, narrative, officer…"
-                  aria-label="Search reports"
+                  placeholder="Search complainant, victim, suspect, place, narrative, officer…"
+                  aria-label="Search reports by complainant, victim, suspect, place, narrative, or officer"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={(e) => {
@@ -1120,8 +1824,6 @@ export function ReportsTable({ user, notify, onMutated, onConnError, initialStat
                 />
                 <button type="submit">Search</button>
               </form>
-            </div>
-            <div className="reports-toolbar-row">
               <select
                 aria-label="Filter by incident type"
                 value={query.type}
@@ -1186,7 +1888,25 @@ export function ReportsTable({ user, notify, onMutated, onConnError, initialStat
                 </button>
               )}
             </div>
-          </div>
+        </div>
+      </IrCard>
+
+      <IrCard
+        num="II"
+        wide
+        flush
+        title={`Report Register${pagination ? ` — ${pagination.total} found` : ''}`}
+      >
+        {reports && reports.length === 0 && !showArchived && !conn ? (
+          <p className="ir-card-empty">
+            <strong>No reports found.</strong> Adjust the filters above, or start a new report from Home.
+          </p>
+        ) : (conn || !reports) && (!reports || reports.length === 0) ? (
+          <p className="ir-card-empty">
+            {conn ? 'Waiting for the connection to come back…' : 'Loading reports…'}
+          </p>
+        ) : (
+          <>
           <div className="table-wrap">
             <table>
               <thead>
@@ -1264,10 +1984,17 @@ export function ReportsTable({ user, notify, onMutated, onConnError, initialStat
               </button>
             </div>
           )}
-        </>
-      )}
+          </>
+        )}
+      </IrCard>
 
-      {printingId && <ReportPrint reportId={printingId} onClose={() => setPrintingId(null)} />}
+      {printingId && (
+        <ReportPrint
+          reportId={printingId}
+          onClose={() => setPrintingId(null)}
+          recordedBy={{ name: user.full_name, badge: user.badge_number }}
+        />
+      )}
 
       {historyFor && (
         <div className="dialog-overlay" onClick={() => setHistoryFor(null)}>

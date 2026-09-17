@@ -127,9 +127,19 @@ export default function Users({ notify }) {
 
   return (
     <>
-      <div className="page-head">
-        <h1>User Management</h1>
-        <p>Administer officer, staff, and administrator accounts.</p>
+      {/* Same page grammar as every other screen: serif document title, a
+          right-aligned meta block, then the working surface. */}
+      <div className="ir-page-head">
+        <h1 className="ir-title">USER MANAGEMENT</h1>
+        <div className="ir-meta">
+          <div>{users ? `${users.length} ACCOUNT${users.length === 1 ? '' : 'S'}` : 'LOADING…'}</div>
+          <div>STATION DIRECTORY</div>
+        </div>
+      </div>
+
+      <div className="ir-status">
+        <span className="badge active">Admin</span>
+        <span>Administer officer, staff, and administrator accounts.</span>
       </div>
 
       {error && (

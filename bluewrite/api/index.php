@@ -15,6 +15,7 @@ require __DIR__ . '/../app/core/Audit.php';
 require __DIR__ . '/../app/core/Auth.php';
 require __DIR__ . '/../app/core/Validator.php';
 require __DIR__ . '/../app/core/LegacyNormalizer.php';
+require __DIR__ . '/../app/core/Station.php';
 require __DIR__ . '/../app/rules/report_rules.php';
 require __DIR__ . '/../app/ai/AiProviderException.php';
 require __DIR__ . '/../app/ai/AiUnavailableException.php';
@@ -24,6 +25,7 @@ require __DIR__ . '/../app/ai/AiNarrativeProvider.php';
 require __DIR__ . '/../app/ai/MaskingGateway.php';
 require __DIR__ . '/../app/ai/GeminiNarrativeProvider.php';
 require __DIR__ . '/../app/ai/CachedInstructionStore.php';
+require __DIR__ . '/../app/ai/NarrativeEconomy.php';
 require __DIR__ . '/../app/ai/NarrativeService.php';
 require __DIR__ . '/../app/controllers/NarrativeController.php';
 require __DIR__ . '/../app/controllers/AuthController.php';
@@ -31,12 +33,14 @@ require __DIR__ . '/../app/controllers/UsersController.php';
 require __DIR__ . '/../app/controllers/ReportsController.php';
 require __DIR__ . '/../app/controllers/DashboardController.php';
 require __DIR__ . '/../app/controllers/AuditsController.php';
+require __DIR__ . '/../app/controllers/StationController.php';
 
 use App\Controllers\AuditsController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\NarrativeController;
 use App\Controllers\ReportsController;
+use App\Controllers\StationController;
 use App\Controllers\UsersController;
 use App\Core\Response;
 use App\Core\Session;
@@ -110,6 +114,17 @@ try {
         (new DashboardController())->stats();
     }
 
+    // Station settings (spec §1.1): fixed agency header, type list, personnel.
+    if ($seg0 === 'station' && $seg1 === null) {
+        $c = new StationController();
+        if ($method === 'GET') {
+            $c->index();
+        }
+        if ($method === 'PATCH') {
+            $c->update();
+        }
+    }
+
     // Audit trail browser (Admin-only, read-only).
     if ($seg0 === 'audits' && $seg1 === null && $method === 'GET') {
         (new AuditsController())->index();
@@ -129,6 +144,12 @@ try {
         if ($seg1 !== null && isset($parts[2])) {
             if ($parts[2] === 'narrative' && ($parts[3] ?? null) === 'generate' && $method === 'POST') {
                 (new NarrativeController())->generate((string) $seg1);
+            }
+            // Phase 5 — "tighten this draft": the economy rules over the
+            // officer's own narrative (deterministic report + one bounded
+            // rewrite). Applies nothing; the panel proposes.
+            if ($parts[2] === 'narrative' && ($parts[3] ?? null) === 'tighten' && $method === 'POST') {
+                (new NarrativeController())->tighten((string) $seg1);
             }
             if ($parts[2] === 'history' && $method === 'GET') {
                 $c->history((string) $seg1);

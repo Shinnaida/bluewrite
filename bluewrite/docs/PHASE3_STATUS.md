@@ -37,8 +37,56 @@ access, exactly like the Phase 1–2 demos.
 ## Beyond the checklist (implemented, not in the roadmap bullets)
 
 - Reference wrapper: "Blotter Entry No. BW-xxxx" opening + "Investigated by:
-  rank name, Naga City Police Station" closing (`NarrativeService::withReferences`,
-  regression-tested).
+  rank name, City of Naga Police Station" closing (`NarrativeService::withReferences`,
+  regression-tested). The station name is the one the printed sheet carries
+  (`ReportPrint.jsx` — "City of Naga, Cebu"); the prompt and the closing line
+  used to say "Naga City Police Station", which named a different city and
+  contradicted the letterhead.
+- Advisory `addedContentWarnings[]`: details the draft deliberately withheld
+  because the officer's record does not state them, shown in the AI panel under
+  "Not added — no source in your record" and NEVER written into the report or
+  the narrative. The field is REQUIRED in the response schema but may be empty
+  — padding it is itself a failure the prompt names. A blank ACTION TAKEN /
+  STATUS is separately reported as a `possibleGaps` warning, because the report
+  cannot be closed without a disposition.
+- AI-drafted NOTABLE FINDINGS and ACTION TAKEN / STATUS: the officer's own
+  text in those two fields reaches the model in its own prompt blocks (never
+  buried in the scalars dump) and comes back as `notableFindings[]` and
+  `actionTaken` — formalised lines that REPLACE those fields (what saves,
+  snapshots and prints them) as part of the one Generate action, with no
+  second button. A draft with no findings, or a report with no recorded
+  disposition, leaves the officer's text untouched
+  (`GeminiNarrativeProvider::normaliseFindings`/`normaliseDisposition`,
+  `MaskingGateway::unmaskLines`, `AiNarrativePanel`).
+- Record-only ACTION TAKEN / STATUS block (`src/lib/printActions.js`,
+  unit-tested by `tests/rules/printActions.test.mjs`): the printed block used
+  to append two fixed lines to every sheet regardless of the record — a
+  routing line that restated a referral the officer had already recorded (a
+  second disposition on a legal document) and a disclaimer ("…and is subject
+  to further verification") printed on the record it disclaimed. The routing
+  line is now a conditional form convention (printed only when the recorded
+  disposition states no onward action) and the disclaimer is gone. A recorded
+  state the per-type fact block already prints is stated once, not twice.
+- Generating sends the text **currently in** those fields (the editor posts
+  `action_taken` / `notable_findings`; the endpoint prefers them over the
+  stored row via `NarrativeController::liveText`), because autosave only ticks
+  every 30s and the AI would otherwise formalise — and overwrite — a stale
+  value. Each replaced field offers a one-click **Undo** back to the officer's
+  own wording until they edit it themselves.
+- No-new-information discipline in the base prompt
+  (`resources/ai/narrative_system_prompt.txt`): an ABSOLUTE CONSTRAINT section
+  that outranks every other rule (the seven enumerated classes of fact the
+  model may never add, "only wording, grammar, tense and sentence structure",
+  a per-sentence self-check, and "short beats invented" for vague input),
+  plus a casual → formal POLICE TERMINOLOGY SUBSTITUTIONS table with four
+  rules (substitute only the equivalent term; never imply greater legal
+  weight; never classify the offense — the sanctioned per-type legal basis is
+  the one exception; keep the officer's wording when unsure). The rule is
+  restated inside ACTION TAKEN / STATUS as rule 5 with full force, because the
+  disposition carries the most legal weight, and the `actionTaken` output rule
+  points back at it. The GENERIC — THIN INPUT few-shot models it: a sparse
+  record yields a short narrative, a one-line `actionTaken` and an EMPTY
+  `notableFindings` array rather than padding.
 - Legal-basis citations per incident type in `type_vocabulary.json`
   (Theft → Art. 308 RPC, RA 9262, etc.); fact-dependent types left blank.
 - Unnamed-party fallback phrases ("an unidentified suspect, male, in his 30s")
@@ -49,6 +97,19 @@ access, exactly like the Phase 1–2 demos.
   report history note.
 - Retired-model guard note (gemini-2.0-flash started 404ing in Sept 2026 →
   `gemini-3.6-flash`).
+- Fixed: the generate retry loop never left the loop on SUCCESS, so every
+  click made three provider calls (three times the latency and token cost) and
+  re-applied the draft three times (`AiNarrativePanel::generate`).
+- Fixed: thinking tokens are billed against `maxOutputTokens`, so the 2,048
+  ceiling could be consumed entirely by the model's own reasoning — a measured
+  live run spent 1,964 thought tokens plus 66 answer tokens and returned
+  `finishReason: MAX_TOKENS`, i.e. a truncated JSON body the officer sees as a
+  failed generation. The ceiling is now 4,096 and the request carries
+  `thinkingConfig.thinkingLevel` (`low` by default, config
+  `gemini.thinking_level`), which the configured model accepts; the same call
+  then completed in ~9s with a schema-valid body
+  (`GeminiNarrativeProvider::DEFAULT_MAX_OUTPUT_TOKENS`/
+  `DEFAULT_THINKING_LEVEL`).
 
 ## Fixed during this audit (test infrastructure)
 

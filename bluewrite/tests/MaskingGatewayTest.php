@@ -120,6 +120,46 @@ check('legacy duplicate victim skipped', count($ms['groups']->victims) === 1, js
 check('no legacy respondent placeholder', !isset($ms['groups']->respondents));
 check('serialized has NO real names', stripos(json_encode($ms), 'Lopez') === false && stripos(json_encode($ms), 'Lita') === false);
 
+// ---- 2d. Notable findings + recorded action (own prompt blocks) ---------------
+// Both are the officer's own free text: they must reach the provider MASKED,
+// in their own keys (never inside the scalars dump), and a name typed ONLY
+// into them must still raise the residual-risk nudge.
+$tsF = [
+    'complainant' => [['name' => 'Ana Lopez', 'age' => '34', 'sex' => 'Female']],
+    'item_stolen' => 'Cash box',
+    'notable_findings' => "Ana Lopez said the CCTV shows Pedro Reyes entering the stockroom.\nThe padlock was cut, not picked.",
+];
+$repF = [
+    'incident_type' => 'Burglary / Break-In',
+    'location' => 'Stockroom',
+    'action_taken' => 'Barangay Captain Rico Medina mediated the parties.',
+];
+$outF = MaskingGateway::buildMaskedPayload($repF, $tsF, '');
+$mf = $outF['masked'];
+echo "\nNotable findings + recorded action\n";
+check('findings ride in their own key', isset($mf['notable_findings']));
+check('findings excluded from scalars dump', !isset($mf['scalars']['notable_findings']), json_encode($mf['scalars'] ?? null));
+check('findings keep both typed lines', substr_count((string) ($mf['notable_findings'] ?? ''), "\n") === 1);
+check('action rides in its own key', isset($mf['action_taken']));
+check('listed party named in findings masked', stripos(json_encode($mf), 'Lopez') === false, json_encode($mf));
+check('findings use the party placeholder', str_contains((string) ($mf['notable_findings'] ?? ''), '[VICTIM_1]'));
+check('blank findings omitted', !isset(MaskingGateway::buildMaskedPayload($repF, ['complainant' => [['name' => 'Ana']], 'notable_findings' => '  '], '')['masked']['notable_findings']));
+$flaggedF = implode(' | ', $outF['residualRisk']);
+check('name only in findings still flagged', str_contains($flaggedF, 'Pedro'), $flaggedF);
+check('name only in action still flagged', str_contains($flaggedF, 'Rico'), $flaggedF);
+
+// ---- 2e. Drafted findings list: unmask, drop blanks, drop leaks ----------------
+$lines = MaskingGateway::unmaskLines(
+    ['[VICTIM_1] reported the loss.', '   ', '[WITNESS_9] never existed.', 42, 'A padlock was cut.'],
+    $out['map']
+);
+echo "\nDrafted-findings unmasking\n";
+check('placeholder restored in findings', ($lines[0] ?? '') === 'Maria Santos reported the loss.');
+check('blank line dropped', count($lines) === 2, implode(' | ', $lines));
+check('unregistered token line dropped', !str_contains(implode(' | ', $lines), '[WITNESS_9]'));
+check('clean line kept', in_array('A padlock was cut.', $lines, true));
+check('non-list input yields nothing', MaskingGateway::unmaskLines('nope', []) === []);
+
 // ---- 3. Free-text notes masking -----------------------------------------------
 $notes = 'Maria Santos was near the market when Juan Dela Cruz grabbed her bag. Maria Santos shouted.';
 $outN = MaskingGateway::buildMaskedPayload($report, $ts, $notes);

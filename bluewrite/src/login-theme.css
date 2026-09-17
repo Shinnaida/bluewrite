@@ -1,11 +1,23 @@
 /* ============================================================
-   BLUEWRITE login — ported from the approved CAPS mockup.
-   Tactical grid + CRT scanlines + LetterGlitch backdrop,
-   RESTRICTED ACCESS console, HUD mono type, cyan/magenta glitch.
-   Palette (from tailwind.config.js):
-     void #030712 · panel #0A1120 · line #1E293B · line-bright #374151
-     cyan #00F0FF · cyan-dim #6B7A8C · green-ok #3ED598 · amber #F59E0B
-     red #EF4444 / #F87171 / #450A0A · paper #FFFFFF · steel #9CA3AF
+   BLUEWRITE login gate — the officer workspace's own document language.
+
+   This screen used to be the app's one dark place: a tactical grid, CRT
+   scanlines, a LetterGlitch backdrop, HUD mono type and a neon cyan console.
+   It is now built from the workspace's vocabulary — the light page, the navy
+   bar, white cards over a 1px rule, the blue primary action, League Spartan
+   throughout, uppercase micro-labels — so signing in and then working in the
+   app read as one product instead of two.
+
+   Colours are shared tokens from styles.css / incident-report.css
+   (--void --panel --line --paper --steel --cyan --ir-navy …) instead of hex
+   literals, which is what keeps the gate and the workspace from drifting: the
+   palette changes once and both screens follow. The only values written out
+   longhand are the white-alpha inks on the navy bar, which have no token
+   because nothing else sits on navy except the workspace's own nav links.
+
+   Deliberately still login-only: the two-column arrangement (brand and system
+   context beside the access panel), the PHT clock, and the SYS_STATUS /
+   ENC_LEVEL readout — the facts an officer wants before they type a passcode.
    ============================================================ */
 
 .la-page {
@@ -14,47 +26,17 @@
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
-  background: #030712;
-  color: #9ca3af;
-  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  background: var(--void);
+  color: var(--paper);
+  font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
 }
 
 .la-page * { box-sizing: border-box; }
 
-/* ---- tactical grid backdrop ---- */
-.la-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(to right, #1e293b 1px, transparent 1px),
-    linear-gradient(to bottom, #1e293b 1px, transparent 1px);
-  background-size: 3rem 3rem;
-  opacity: 0.2;
-  -webkit-mask-image: radial-gradient(ellipse 80% 50% at 50% 50%, #000 70%, transparent 100%);
-  mask-image: radial-gradient(ellipse 80% 50% at 50% 50%, #000 70%, transparent 100%);
-}
-
-/* ---- CRT scanline overlay ---- */
-.la-scanlines {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  pointer-events: none;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%);
-  background-size: 100% 4px;
-}
-
-/* ---- LetterGlitch backdrop ---- */
-.la-bg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.18;
-}
-
-/* ---- top status bar ---- */
+/* ============================================================
+   1. Top bar — the same navy chrome as the app's own .ir-nav
+   ============================================================ */
 .la-topbar {
   position: relative;
   z-index: 20;
@@ -62,25 +44,49 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
-  height: 44px;
-  padding: 0 1.5rem;
-  background: #030712;
-  border-bottom: 1px solid #1e293b;
+  gap: 1rem;
+  padding: 0.7rem clamp(1rem, 3vw, 2rem);
+  background: var(--ir-navy);
+  color: #fff;
 }
+
+/* The department lockup, mirrored from the workspace bar so the seal sits in
+   the same place on both screens. */
 .la-brand {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-family: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Menlo, monospace;
-  font-size: 0.72rem;
+  gap: 0.65rem;
+  min-width: 0;
+}
+.la-brand-mark {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.la-brand-mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.la-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
+}
+.la-brand-line1 {
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+.la-brand-line2 {
+  font-size: 0.94rem;
   font-weight: 700;
-  letter-spacing: 0.26em;
-  color: #ffffff;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
-.la-brand em {
-  font-style: normal;
-  color: #00f0ff;
-}
+
 .la-clock {
   position: absolute;
   left: 50%;
@@ -90,33 +96,35 @@
   align-items: baseline;
   gap: 0.4rem;
   margin: 0;
-  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  color: #00f0ff;
-  text-shadow: 0 0 12px rgba(0, 240, 255, 0.45);
+  color: #fff;
   font-variant-numeric: tabular-nums;
 }
 .la-clock .la-clock-label {
-  font-size: 0.62rem;
+  font-size: 0.66rem;
   font-weight: 500;
-  letter-spacing: 0.2em;
-  color: #6b7a8c;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.62);
 }
 .la-topmeta {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  font-size: 0.62rem;
-  letter-spacing: 0.14em;
-  color: #9ca3af;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.72);
+  white-space: nowrap;
 }
-.la-topmeta .pipe { color: #374151; }
-.la-topmeta .ok { color: #3ed598; }
-.la-topmeta .accent { color: #00f0ff; }
+.la-topmeta .pipe { color: rgba(255, 255, 255, 0.28); }
+.la-topmeta .ok { color: #7fe3a6; }
+.la-topmeta .warn { color: #ffca6b; }
+.la-topmeta .accent { color: #9cc2ff; }
 
-/* ---- scrollable content region ---- */
+/* ============================================================
+   2. Page body — a centred two-column spread on the light page
+   ============================================================ */
 .la-content {
   position: relative;
   z-index: 10;
@@ -127,7 +135,7 @@
 .la-content-inner {
   display: flex;
   min-height: 100%;
-  padding: 1.5rem 1rem;
+  padding: 1.75rem 1rem;
 }
 .la-columns {
   margin: auto;
@@ -136,7 +144,7 @@
   align-items: center;
   gap: 2.5rem;
   width: 100%;
-  max-width: 80rem;
+  max-width: 76rem;
 }
 @media (min-width: 1024px) {
   .la-columns {
@@ -146,76 +154,65 @@
   }
 }
 
-/* ---- left column ---- */
+/* ============================================================
+   3. Left column — the brand lockup and the two advisory cards
+   ============================================================ */
 .la-left {
   display: flex;
   min-width: 0;
   flex-direction: column;
   align-items: flex-start;
-  gap: 1.5rem;
+  gap: 1.75rem;
 }
+
+/* The mark's own artwork is the navy master (transparent background), so the
+   page shows through it and no plate is needed. */
 .la-doc-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   width: 64px;
   height: 64px;
-  padding: 0.75rem;
-  border: 2px solid #00f0ff;
-  background: rgba(0, 240, 255, 0.1);
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+  margin-bottom: 1rem;
 }
-.la-doc-icon svg { width: 40px; height: 40px; color: #00f0ff; }
+.la-doc-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
 .la-hero {
-  font-size: clamp(28px, 4vw, 56px);
+  margin: 0;
+  font-size: clamp(1.75rem, 1.15rem + 2.4vw, 2.9rem);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.05;
-  color: #ffffff;
-  text-shadow: 0 0 28px rgba(255, 255, 255, 0.35);
-  margin: 0;
+  color: var(--ir-navy);
   white-space: normal;
-  overflow: hidden;
   max-width: 100%;
   word-break: break-word;
+}
+/* The wordmark's second half wears the brand blue, exactly as on Home. */
+.la-hero em {
+  font-style: normal;
+  color: var(--ir-blue);
 }
 .la-tagline {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-top: 0.55rem;
-  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  margin-top: 0.4rem;
   font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #00f0ff;
-  white-space: nowrap;
-}
-.la-tagline .pulse {
-  width: 8px;
-  height: 8px;
-  background: #00f0ff;
-  animation: la-pulse 2s ease-in-out infinite;
-}
-@keyframes la-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+  color: var(--ir-muted);
 }
 .la-version {
   display: inline-block;
   margin-top: 0.9rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid #1e293b;
-  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  font-size: 0.75rem;
+  border-bottom: 1px solid var(--ir-border);
+  font-size: 0.72rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #9ca3af;
+  color: var(--ir-muted);
 }
 
-/* ---- value / advisory cards ---- */
 .la-cards {
   display: flex;
   flex-direction: column;
@@ -223,39 +220,43 @@
   width: 100%;
   max-width: 460px;
 }
+/* A card is a document card: white, 1px rule, no glow. The colour that marks
+   it is a 4px left rule, the same device the workspace uses for emphasis. */
 .la-card {
   padding: 1rem;
-  border: 1px solid #1e293b;
-  border-left: 4px solid #00f0ff;
-  background: rgba(10, 17, 32, 0.5);
-  backdrop-filter: blur(4px);
+  border: 1px solid var(--ir-border);
+  border-left: 4px solid var(--ir-blue);
+  border-radius: 4px;
+  background: var(--ir-card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
-.la-card.advisory { border-left-color: #f59e0b; }
+.la-card.advisory { border-left-color: var(--ir-amber); }
 .la-card-head {
   display: flex;
   align-items: center;
   gap: 0.7rem;
   margin-bottom: 0.5rem;
 }
-.la-card-head svg { flex-shrink: 0; color: #00f0ff; }
-.la-card.advisory .la-card-head svg { color: #f59e0b; }
+.la-card-head svg { flex-shrink: 0; color: var(--ir-blue); }
+.la-card.advisory .la-card-head svg { color: var(--ir-amber); }
 .la-card-head h3 {
   margin: 0;
-  font-size: 0.98rem;
+  font-size: 0.92rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: #ffffff;
+  color: var(--ir-text);
 }
 .la-card p {
-  margin: 0 0 0 2.1rem;
-  font-size: 0.88rem;
+  margin: 0 0 0 2rem;
+  font-size: 0.86rem;
   line-height: 1.55;
-  color: #9ca3af;
+  color: var(--ir-muted);
 }
 
-/* ---- right column: console panel ---- */
+/* ============================================================
+   4. Right column — the access panel
+   ============================================================ */
 .la-right {
-  position: relative;
   margin: 0 auto;
   width: 100%;
   max-width: 520px;
@@ -263,126 +264,104 @@
 @media (min-width: 1024px) {
   .la-right { margin-left: 0; }
 }
-.la-bracket-tl,
-.la-bracket-br {
-  position: absolute;
-  z-index: 20;
-  width: 24px;
-  height: 24px;
-}
-.la-bracket-tl {
-  top: -8px;
-  left: -8px;
-  border-top: 2px solid #00f0ff;
-  border-left: 2px solid #00f0ff;
-}
-.la-bracket-br {
-  bottom: -8px;
-  right: -8px;
-  border-bottom: 2px solid #00f0ff;
-  border-right: 2px solid #00f0ff;
-}
+
 .la-panel {
-  position: relative;
-  z-index: 10;
   padding: 2rem;
-  border: 1px solid #1e293b;
-  background: #0a1120;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--ir-border);
+  border-radius: 4px;
+  background: var(--ir-card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 .la-panel-head {
   margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--ir-border);
   text-align: center;
 }
 .la-lock {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
-  margin-bottom: 0.8rem;
-  border: 1px solid #374151;
-  border-radius: 9999px;
-  background: #0f1c33;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 0.6rem;
+  color: var(--ir-navy);
 }
-.la-lock svg { color: #ffffff; }
+.la-lock svg { color: inherit; }
 .la-panel-head h2 {
   margin: 0;
-  font-size: 1.4rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: #ffffff;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ir-navy);
 }
 .la-panel-sub {
-  margin: 0.4rem 0 0;
-  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  margin: 0.35rem 0 0;
   font-size: 0.72rem;
-  letter-spacing: 0.18em;
+  font-weight: 600;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #00f0ff;
+  color: var(--ir-muted);
 }
 
-/* ---- SYS_STATUS degraded readout ---- */
-.la-topmeta .warn {
-  color: #fbbf24;
-}
-
-/* ---- error banner ---- */
+/* ---- error banner: the workspace's red, on its tinted background ---- */
 .la-error {
   display: flex;
   align-items: flex-start;
   gap: 0.7rem;
   margin-bottom: 1.2rem;
   padding: 0.75rem;
-  border-left: 4px solid #ef4444;
-  background: rgba(69, 10, 10, 0.4);
+  border: 1px solid var(--red);
+  border-left: 4px solid var(--red);
+  border-radius: 3px;
+  background: var(--red-bg);
 }
-.la-error svg { flex-shrink: 0; margin-top: 2px; color: #ef4444; }
+.la-error svg { flex-shrink: 0; margin-top: 2px; color: var(--red); }
 .la-error p {
   margin: 0;
-  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  font-size: 0.78rem;
-  line-height: 1.45;
-  color: #f87171;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--red-text);
 }
 
-/* ---- form fields ---- */
+/* ---- fields: the workspace's label + input grammar ---- */
 .la-field { margin-bottom: 1.2rem; }
 .la-label {
   display: block;
-  margin-bottom: 0.5rem;
-  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  font-size: 0.7rem;
-  letter-spacing: 0.14em;
+  margin-bottom: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #9ca3af;
+  color: var(--ir-muted);
 }
 .la-input-wrap { position: relative; }
 .la-input-wrap > svg {
   position: absolute;
-  left: 1rem;
+  left: 0.85rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #6b7a8c;
+  color: #8b95a7;
   pointer-events: none;
 }
 .la-input {
   width: 100%;
-  padding: 0.65rem 1rem 0.65rem 2.75rem;
-  border: 1px solid #374151;
-  background: rgba(0, 0, 0, 0.5);
-  color: #ffffff;
-  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  font-size: 0.88rem;
-  caret-color: #00f0ff;
+  padding: 0.7rem 1rem 0.7rem 2.6rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 3px;
+  background: var(--input-bg);
+  color: var(--ir-text);
+  font-family: var(--font-family);
+  font-size: 0.92rem;
+  caret-color: var(--ir-blue);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-.la-input::placeholder { color: rgba(107, 122, 140, 0.7); }
+.la-input::placeholder { color: #9aa3b2; }
 .la-input:focus {
   outline: none;
-  border-color: #00f0ff;
-  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+  border-color: var(--ir-blue);
+  box-shadow: 0 0 0 3px rgba(31, 95, 208, 0.16);
 }
 .la-input:disabled { opacity: 0.6; cursor: not-allowed; }
 
@@ -391,16 +370,16 @@
   right: 0.6rem;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
   padding: 0.25rem;
   border: none;
   background: transparent;
-  color: #6b7a8c;
+  color: var(--ir-muted);
   cursor: pointer;
-  display: flex;
 }
-.la-eye:hover { color: #00f0ff; }
+.la-eye:hover { color: var(--ir-blue); }
 
-/* ---- submit button ---- */
+/* ---- the one action: the workspace's primary button ---- */
 .la-submit {
   display: flex;
   width: 100%;
@@ -408,133 +387,101 @@
   justify-content: center;
   gap: 0.5rem;
   margin-top: 0.4rem;
-  padding: 0.8rem 1rem;
-  border: none;
-  background: #00f0ff;
-  color: #000;
-  font-family: 'Inter', 'Segoe UI', sans-serif;
-  font-size: 0.88rem;
-  font-weight: 800;
-  letter-spacing: 0.2em;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--ir-blue);
+  border-radius: 4px;
+  background: var(--ir-blue);
+  color: #fff;
+  font-family: var(--font-family);
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
-  transition: background 200ms ease, box-shadow 200ms ease;
+  transition: background 160ms ease, border-color 160ms ease;
 }
-.la-submit svg { transition: transform 200ms ease; }
-.la-submit:hover {
-  background: #ffffff;
-  box-shadow: 0 0 25px rgba(255, 255, 255, 0.5);
+.la-submit svg { transition: transform 160ms ease; }
+.la-submit:hover:not(:disabled) {
+  background: var(--ir-blue-hi);
+  border-color: var(--ir-blue-hi);
 }
-.la-submit:hover svg { transform: translateX(4px); }
-.la-submit:disabled { opacity: 0.6; cursor: wait; }
+.la-submit:hover:not(:disabled) svg { transform: translateX(4px); }
+.la-submit:disabled { opacity: 0.55; cursor: not-allowed; }
 
-/* ---- footer reassurance ---- */
+/* ---- footer reassurance: the workspace's raised panel ---- */
 .la-footer {
   display: flex;
   align-items: flex-start;
   gap: 0.7rem;
   margin-top: 1.5rem;
   padding: 1rem;
-  border: 1px solid #1e293b;
-  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--ir-border);
+  border-radius: 4px;
+  background: var(--panel-raised);
 }
-.la-footer > svg { flex-shrink: 0; margin-top: 2px; color: #6b7a8c; }
+.la-footer > svg { flex-shrink: 0; margin-top: 2px; color: var(--ir-muted); }
 .la-footer h4 {
   margin: 0;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #9ca3af;
+  color: var(--ir-text);
 }
 .la-footer p {
   margin: 0.3rem 0 0;
-  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   line-height: 1.5;
-  color: #6b7a8c;
+  color: var(--ir-muted);
 }
 
 /* ============================================================
-   HUD glitch — clock digits (per-tick jitter, cyan/red split)
+   5. Hero wordmark
+
+   Both screens that carry the wordmark (this one and Home) render it as
+   plain type, so there is nothing to animate or recolour here.
    ============================================================ */
-@keyframes hud-glitch-jitter {
-  0%   { transform: translate(0, 0); text-shadow: none; }
-  20%  { transform: translate(-1px, 1px);
-         text-shadow: -1.5px 0 rgba(239, 68, 68, 0.8), 1.5px 0 rgba(0, 240, 255, 0.8); }
-  45%  { transform: translate(1px, -1px);
-         text-shadow: 1.5px 0 rgba(239, 68, 68, 0.65), -1.5px 0 rgba(0, 240, 255, 0.65); }
-  70%  { transform: translate(-0.5px, 0);
-         text-shadow: -1px 0 rgba(239, 68, 68, 0.4), 1px 0 rgba(0, 240, 255, 0.4); }
-  100% { transform: translate(0, 0); text-shadow: none; }
-}
-.hud-glitch { display: inline-block; animation: hud-glitch-jitter 180ms steps(4, end); }
-.hud-glitch-char { display: inline-block; }
 
 /* ============================================================
-   HUD glitch — hero wordmark ghost bursts (cyan + magenta)
+   6. Small screens / short viewports
    ============================================================ */
-.hud-glitch-ghost {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  pointer-events: none;
-  will-change: transform, clip-path, opacity;
-  z-index: 20;
-}
-.hud-glitch-ghost-a { color: #00f0ff; }
-.hud-glitch-ghost-b { color: #e0498f; }
-.hud-glitch-ghost-a.hud-glitch-active { animation: hud-glitch-burst-a 280ms steps(1, end) both; }
-.hud-glitch-ghost-b.hud-glitch-active { animation: hud-glitch-burst-b 280ms steps(1, end) both; }
 
-@keyframes hud-glitch-burst-a {
-  0%   { opacity: 0; clip-path: inset(0 0 62% 0); transform: translate(0, 0); }
-  20%  { opacity: 1; clip-path: inset(0 0 40% 0); transform: translate(-16px, 6px);
-         text-shadow: -8px 0 rgba(0,240,255,1), -16px 0 rgba(0,240,255,0.6); }
-  40%  { opacity: 1; clip-path: inset(5% 0 25% 0); transform: translate(-22px, -6px);
-         text-shadow: -12px 0 rgba(0,240,255,1), -22px 0 rgba(0,240,255,0.5); }
-  60%  { opacity: 1; clip-path: inset(0 0 45% 0); transform: translate(-14px, 4px);
-         text-shadow: -8px 0 rgba(0,240,255,0.9), -16px 0 rgba(0,240,255,0.4); }
-  80%  { opacity: 0.8; clip-path: inset(2% 0 38% 0); transform: translate(-8px, -3px);
-         text-shadow: -4px 0 rgba(0,240,255,0.7), -8px 0 rgba(0,240,255,0.3); }
-  100% { opacity: 0; clip-path: inset(0 0 62% 0); transform: translate(0, 0); text-shadow: none; }
+/* Under the two-column breakpoint the spread stacks, and the ORDER matters:
+   this screen exists to be signed into, so the panel sits directly under the
+   brand and the two advisory cards — which are context, not the task — come
+   last. `display: contents` promotes the left column's own children so the
+   order can be set here without duplicating the markup into this file's
+   concern. Desktop is untouched: this is inside the max-width query. */
+@media (max-width: 1023px) {
+  .la-columns {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2rem;
+    max-width: 40rem;
+  }
+  .la-left { display: contents; }
+  .la-left > div:first-child { order: 1; }
+  .la-right { order: 2; max-width: none; }
+  .la-left > .la-cards { order: 3; max-width: none; }
 }
 
-@keyframes hud-glitch-burst-b {
-  0%   { opacity: 0; clip-path: inset(58% 0 0 0); transform: translate(0, 0); }
-  20%  { opacity: 1; clip-path: inset(38% 0 0 0); transform: translate(16px, -6px);
-         text-shadow: 8px 0 rgba(224,73,143,1), 16px 0 rgba(224,73,143,0.6); }
-  40%  { opacity: 1; clip-path: inset(25% 0 10% 0); transform: translate(22px, 6px);
-         text-shadow: 12px 0 rgba(224,73,143,1), 22px 0 rgba(224,73,143,0.5); }
-  60%  { opacity: 1; clip-path: inset(42% 0 0 0); transform: translate(14px, -4px);
-         text-shadow: 8px 0 rgba(224,73,143,0.9), 16px 0 rgba(224,73,143,0.4); }
-  80%  { opacity: 0.8; clip-path: inset(38% 0 3% 0); transform: translate(8px, 3px);
-         text-shadow: 4px 0 rgba(224,73,143,0.7), 8px 0 rgba(224,73,143,0.3); }
-  100% { opacity: 0; clip-path: inset(58% 0 0 0); transform: translate(0, 0); text-shadow: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hud-glitch,
-  .hud-glitch-ghost,
-  .la-tagline .pulse { animation: none; }
-}
-
-/* ---- small screens / short viewports ---- */
 @media (max-width: 640px) {
   .la-topmeta { display: none; }
-  .la-hero { font-size: clamp(1.3rem, 7vw, 1.8rem); }
+  .la-clock { position: static; transform: none; margin-left: auto; }
+  .la-hero { font-size: clamp(1.5rem, 8vw, 2rem); }
   .la-panel { padding: 1.4rem; }
 }
 @media (max-height: 700px) {
   .la-content-inner { padding: 0.75rem 1rem; }
   .la-columns { gap: 1.75rem; }
   .la-left { gap: 1rem; }
+  .la-doc-icon { width: 48px; height: 48px; margin-bottom: 0.6rem; }
   .la-cards { gap: 0.7rem; }
   .la-card { padding: 0.7rem; }
   .la-panel { padding: 1.4rem; }
-  .la-panel-head { margin-bottom: 1rem; }
+  .la-panel-head { margin-bottom: 1rem; padding-bottom: 0.7rem; }
   .la-footer { margin-top: 1rem; padding: 0.7rem; }
   .la-hero { font-size: 1.5rem; }
-  .la-tagline { font-size: 0.62rem; margin-top: 0.4rem; }
+  .la-tagline { font-size: 0.62rem; }
 }

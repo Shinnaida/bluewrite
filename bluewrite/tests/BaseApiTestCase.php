@@ -36,10 +36,20 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
 
         // Phase 3 migrations — the scratch DB must replay the FULL schema,
         // not just the Phase 1 baseline: 002 adds reports.type_specific
-        // (report creation 500s without it) and 003 adds the ai_requests /
-        // ai_cache tables the narrative service writes to.
+        // (report creation 500s without it), 003 adds the ai_requests /
+        // ai_cache tables the narrative service writes to, and 004 adds the
+        // action_taken / ioc_name disposition fields (same 500 without them).
         $this->runSqlFile(__DIR__ . '/../migrations/002_type_specific_fields.sql');
         $this->runSqlFile(__DIR__ . '/../migrations/003_ai_assist.sql');
+        $this->runSqlFile(__DIR__ . '/../migrations/004_action_taken_and_ioc.sql');
+        // 005 adds station_settings plus the official-document fields
+        // (report/blotter dates, the split incident date+time with its
+        // approximate flag, discovery, noted_by, updated_by) — the API
+        // writes those columns on every report insert.
+        $this->runSqlFile(__DIR__ . '/../migrations/005_station_settings_and_official_fields.sql');
+        // 006 adds the reporting party (Panel I of the Write Report screen)
+        // plus the signature block's officer initials and sign-off timestamp.
+        $this->runSqlFile(__DIR__ . '/../migrations/006_reporting_party_and_signatures.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         $hash = password_hash('Passw0rd!23', PASSWORD_BCRYPT);
@@ -158,6 +168,10 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
             'complainant' => 'Test Complainant',
             'respondent' => 'Test Respondent',
             'narrative' => 'Test narrative for the report.',
+            // Required to finalize (migration 004) — seeded here so tests that
+            // only PATCH status=finalized still pass the completeness gate.
+            'action_taken' => 'Subject turned over to the station for proper disposition.',
+            'ioc_name' => 'Sgt. Test Investigator',
             'status' => 'draft',
         ], $overrides);
         $res = $this->request('POST', '/reports', $payload, $cookie, $csrf);

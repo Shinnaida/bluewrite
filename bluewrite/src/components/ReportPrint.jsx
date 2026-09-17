@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../lib/api.js';
 import { normalizeLegacyTypeSpecific } from '../lib/normalizeLegacy.js';
+import { buildActionBlock } from '../lib/printActions.js';
+// Station seals: bundled by Vite (src/assets) so they survive the offline
+// build — the sheet must print with the logos even without network access.
+import pnpLogo from '../assets/pnp-logo.png';
+import citySeal from '../assets/city-of-naga-seal.png';
 
 // “August 06, 2026” — the format the PNP template uses for dates.
 const LONG_DATE = new Intl.DateTimeFormat('en-PH', {
@@ -337,9 +342,16 @@ function buildTypeFacts(type, ctx) {
   }
 }
 
-// NOTABLE FINDINGS — only genuinely recorded evidence-type observations.
+// NOTABLE FINDINGS — the officer's own free-text observations come FIRST
+// (one printed line per typed line), then genuinely recorded evidence-type
+// observations from the structured fields.
 function buildFindings(ts) {
   const findings = [];
+  const officerLines = String(ts.notable_findings || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  findings.push(...officerLines);
   if (ts.cctv_available === 'Yes') {
     findings.push(`CCTV footage is available${has(ts.cctv_description) ? ` — ${N(ts.cctv_description)}` : ''}.`);
   } else if (ts.cctv_available === 'No') {
@@ -366,9 +378,11 @@ function buildFindings(ts) {
   return findings;
 }
 
-// ACTION TAKEN / STATUS — recorded follow-up states plus the standard
-// station referral (form convention, not invented data).
-function buildActions(report, ts, finalized) {
+// ACTION TAKEN / STATUS — the RECORDED states only. The station's own fixed
+// lines (on-file note, finalization note, routing line) and the rule that the
+// routing line prints only when the disposition does not already state an
+// onward action live in src/lib/printActions.js, which is unit-tested.
+function buildStructuredActions(ts) {
   const actions = [];
   if (has(ts.suspect_status)) actions.push(`Suspect status: ${N(ts.suspect_status)}.`);
   if (has(ts.recovery_status)) actions.push(`Recovery status: ${N(ts.recovery_status)}.`);
@@ -377,16 +391,14 @@ function buildActions(report, ts, finalized) {
   if (has(ts.protection_order_information)) actions.push(`Protection order: ${N(ts.protection_order_information)}.`);
   if (has(ts.search_actions_taken)) actions.push(`Search actions taken: ${N(ts.search_actions_taken)}.`);
   if (has(ts.fire_department_response)) actions.push(`Fire department response: ${N(ts.fire_department_response)}.`);
-  actions.push(
-    finalized && report.finalized_by_name
-      ? `The entry was reviewed and finalized by ${report.finalized_by_name} on ${fmtLong(report.finalized_at)}.`
-      : 'The entry is on file with this station and is subject to further verification.',
-  );
-  actions.push(
-    'For further investigation and appropriate action, this report is referred to the station investigator-on-case.',
-  );
   return actions;
 }
+
+// The reviewing official who signs the "Noted by:" line of every printed
+// station report. Fixed by the station (not per-report data), so it prints on
+// drafts and finalized reports alike. The finalized-by officer is still named
+// in the ACTION TAKEN / STATUS block.
+const NOTED_BY_NAME = 'DEXTER MALEZA CALACAR';
 
 /**
  * Phase 2 (UC-015/016) — print-ready report matching the station's official
@@ -401,8 +413,21 @@ function buildActions(report, ts, finalized) {
  * portaled to document.body (body.print-sheet-open) so print CSS hides
  * the whole app and the paper shows ONLY this sheet.
  */
-export default function ReportPrint({ reportId, onClose }) {
-  const [report, setReport] = useState(null);
+// autoPrint: open the browser print dialog automatically after load (the
+// plain "Print" button path). The finalize flow passes false — it wants the
+// officer to REVIEW the sheet and confirm before any printing.
+// report: optional in-memory report object — when given, the sheet renders
+// THIS data directly instead of re-fetching the saved copy, so the finalize
+// review shows exactly what the officer sees on the form (including unsaved
+// edits) and works for a report that has never been saved (no id yet).
+// footer: optional React node rendered at the bottom of the sheet INSTEAD of
+// the default Print/Close row — used for the finalize confirmation bar.
+// recordedBy: the officer USING the system right now ({ name, badge }). The
+// "Recorded by:" line names them — that is who is accountable for the sheet
+// being printed/entered here — falling back to the report's stored creator
+// when the caller has no session context.
+export default function ReportPrint({ reportId, onClose, autoPrint = true, footer = null, report: initialReport = null, recordedBy = null }) {
+  const [report, setReport] = useState(initialReport);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -411,19 +436,22 @@ export default function ReportPrint({ reportId, onClose }) {
   }, []);
 
   useEffect(() => {
+    if (initialReport) return; // direct data — no fetch needed
     let alive = true;
     api(`/reports/${reportId}/print`)
       .then((data) => {
         if (!alive) return;
         setReport(data.report);
-        // Give the layout a tick to paint before opening the dialog.
-        setTimeout(() => window.print(), 150);
+        if (autoPrint) {
+          // Give the layout a tick to paint before opening the dialog.
+          setTimeout(() => window.print(), 150);
+        }
       })
       .catch((err) => setError(err.message));
     return () => {
       alive = false;
     };
-  }, [reportId]);
+  }, [reportId, autoPrint, initialReport]);
 
   // type_specific (groups + per-type fields), normalized to v3 group shape.
   const ts = useMemo(() => {
@@ -460,22 +488,53 @@ export default function ReportPrint({ reportId, onClose }) {
   }
 
   const finalized = report.status === 'finalized';
-  const reportNo = `BW-${String(report.id).padStart(4, '0')}`;
+  // A not-yet-saved report has no id — the sheet still needs a number for the
+  // certification line; the placeholder is replaced on the first save.
+  const reportNo = report.id ? `BW-${String(report.id).padStart(4, '0')}` : 'BW-____';
   const facts = buildTypeFacts(report.incident_type, { report, ts });
   const findings = buildFindings(ts);
-  const actions = buildActions(report, ts, finalized);
+  // The officer's own Action Taken / Status text (one printed line per typed
+  // line) prints FIRST, so the block reads as their words followed by the
+  // standard station lines.
+  // Who signs the "Recorded by:" line: the officer using the system now
+  // (passed in by the caller), else the report's stored creator. Printed as
+  // a plain name line ("Recorded by: PMSg Juvi Egdamin") — no badge suffix,
+  // matching the station's scanned reference sheet.
+  const recorderName = recordedBy?.name || report.created_by_name || '—';
+  // ACTION TAKEN / STATUS: the officer's recorded disposition prints FIRST (one
+  // line per typed line), then the recorded structured states, then the
+  // station's note — and the routing line only when the disposition does not
+  // already state an onward action. See src/lib/printActions.js.
+  const actionLines = buildActionBlock({
+    recordedLines: String(report.action_taken || '').split('\n'),
+    structured: buildStructuredActions(ts),
+    // A state the per-type fact block already prints (Medico-Legal Examination
+    // on a Rape / Sexual Assault sheet) is stated once, not twice.
+    perTypeLabels: facts.map((f) => f.label),
+    finalizedLine:
+      finalized && report.finalized_by_name
+        ? `The entry was reviewed and finalized by ${report.finalized_by_name} on ${fmtLong(report.finalized_at)}.`
+        : '',
+  });
 
+  // The finalize review passes a `footer` (the confirmation bar). In that
+  // case the overlay becomes a column: the sheet scrolls inside
+  // .print-scroll while the bar stays DOCKED at the bottom of the screen —
+  // so it is always visible no matter how long the report is (a sticky bar
+  // inside a long sheet could sit below the fold and look like nothing to
+  // confirm). The plain Print path keeps the original tree (.print-scroll is
+  // display:contents there).
   return createPortal(
-    <div className="print-overlay">
-      <div className="print-sheet">
-        {/* ---- Agency header: PNP + RP seals flanking the org block ---- */}
+    <div className={`print-overlay${footer ? ' print-overlay--review' : ''}`}>
+      <div className="print-scroll">
+        <div className="print-sheet">
+        {/* ---- Agency header: station seal (upper LEFT, 1×1, with the
+             bold Arial "NCPS-INVEST" code beneath it) + org block, RP seal
+             on the right ---- */}
         <header className="pr-head">
-          <img
-            className="pr-seal"
-            src="./assets/seal-left.png"
-            alt="PNP seal"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
+          <div className="pr-head-left">
+            <img className="pr-code-logo" src={pnpLogo} alt="PNP seal" />
+          </div>
           <div className="pr-org">
             Republic of the Philippines
             <br />
@@ -491,28 +550,23 @@ export default function ReportPrint({ reportId, onClose }) {
           </div>
           <img
             className="pr-seal"
-            src="./assets/seal-right.png"
-            alt="Republic seal"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            src={citySeal}
+            alt="City of Naga Police Station seal"
           />
         </header>
 
-        {/* ---- Office code (left, bold) + date (right, “Date” label under) ---- */}
+        {/* ---- Office code | Date: one row under the seals, the station's
+             code at the left margin and the report date at the right —
+             the two sit on the same line, as on the scanned sheet. ---- */}
         <div className="pr-code-date">
-          <span className="pr-office-code">NCPS &ndash; INVEST</span>
+          <span className="pr-office-code">NCPS – INVEST</span>
           <span className="pr-date">
-            {fmtLong(new Date())}
+            {fmtLong(report.report_date || new Date())}
             <span className="pr-date-label">Date</span>
           </span>
         </div>
 
         <h1 className="pr-title">POLICE REPORT</h1>
-
-        {report.status !== 'finalized' && (
-          <p className="pr-draft-note">
-            DRAFT &mdash; NOT YET FINAL. This printout is a working copy.
-          </p>
-        )}
 
         <p className="pr-salutation">To whom it may concern:</p>
 
@@ -592,9 +646,11 @@ export default function ReportPrint({ reportId, onClose }) {
           </div>
         )}
 
-        <div className="pr-section">
+        {/* Flush-left entries (scanned reference: the action text starts at
+            the same margin as the heading, unlike the indented findings). */}
+        <div className="pr-section pr-actions">
           <strong>ACTION TAKEN / STATUS:</strong>
-          {actions.map((act, i) => (
+          {actionLines.map((act, i) => (
             <div className="pr-entry" key={`act-${i}`}>{act}</div>
           ))}
         </div>
@@ -602,37 +658,40 @@ export default function ReportPrint({ reportId, onClose }) {
         {/* ---- Signature block: Recorded by / IOC / Noted by ---- */}
         <div className="pr-footer-block">
           <p className="pr-recorded">
-            <strong>Recorded by:</strong> {report.created_by_name}
-            {report.created_by_badge ? ` (Badge ${report.created_by_badge})` : ''}
+            <strong>Recorded by:</strong> {recorderName}
           </p>
 
+          {/* IOC: the name entered in the form. No signature rule — the name
+              itself is the record (required before a report can finalize). */}
           <p className="pr-recorded">
-            <strong>IOC:</strong> <span className="pr-sign-blank" aria-hidden="true" />
+            <strong>IOC:</strong> {String(report.ioc_name || '').trim() || '—'}
           </p>
 
           <div className="pr-noted">
             <span className="pr-noted-label">Noted by:</span>
-            {finalized && report.finalized_by_name ? (
-              <span className="pr-noted-name">{report.finalized_by_name}</span>
-            ) : (
-              <span className="pr-noted-name pr-noted-blank">&nbsp;</span>
-            )}
+            <span className="pr-noted-name">{NOTED_BY_NAME}</span>
           </div>
         </div>
 
-        {/* Screen-only trail line — the paper stays exactly on template. */}
+        {/* Screen-only trail line — the paper stays exactly on template.
+            Wording is date · brand · report number: no "Printed" prefix, and
+            the brand is the wordmark alone, matching the BLUEWRITE lockup
+            rather than spelling the system's full name out. */}
         <footer className="pr-foot no-print">
-          Printed {fmtLong(new Date())} · BlueWrite Incident Documentation
-          System · {reportNo}
+          {fmtLong(new Date())} · BLUEWRITE · {reportNo}
         </footer>
 
-        <div className="print-actions no-print">
-          <button className="primary" onClick={() => window.print()}>
-            Print
-          </button>
-          <button onClick={onClose}>Close</button>
+        {footer ? null : (
+          <div className="print-actions no-print">
+            <button className="primary" onClick={() => window.print()}>
+              Print
+            </button>
+            <button onClick={onClose}>Close</button>
+          </div>
+        )}
         </div>
       </div>
+      {footer}
     </div>,
     document.body,
   );

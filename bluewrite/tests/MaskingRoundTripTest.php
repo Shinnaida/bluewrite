@@ -156,7 +156,7 @@ $wrapped = NarrativeService::withReferences(
     ['id' => 8, 'officer_name' => 'Juan Dela Cruz', 'officer_rank' => 'Pat'],
 );
 check('opening blotter reference present', str_contains($wrapped, 'Blotter Entry No. BW-0008.'), $wrapped);
-check('closing investigator line present', str_contains($wrapped, 'Investigated by: Pat Juan Dela Cruz, Naga City Police Station.'), $wrapped);
+check('closing investigator line present', str_contains($wrapped, 'Investigated by: Pat Juan Dela Cruz, City of Naga Police Station.'), $wrapped);
 check('body preserved between references', str_contains($wrapped, 'the vendor saw the suspect flee'), $wrapped);
 
 $noOfficer = NarrativeService::withReferences('Body text.', ['id' => 8]);

@@ -57,6 +57,45 @@ final class ReportsTest extends BaseApiTestCase
         $this->assertStringContainsString('narrative', $res['body']['error']);
     }
 
+    /**
+     * Migration 004: a report may not be finalized without an Action Taken /
+     * Status. The rule is enforced server-side too (the form is only the
+     * first gate).
+     */
+    public function testFinalizeRequiresActionTaken(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $report = $this->createReport($cookie, $csrf, ['action_taken' => '']);
+
+        $res = $this->patchReport($cookie, $csrf, (int) $report['id'], ['status' => 'finalized']);
+        $this->assertSame(422, $res['status']);
+        $this->assertStringContainsString('action taken', strtolower((string) ($res['body']['error'] ?? '')));
+
+        // Supplying it in the same PATCH finalizes cleanly.
+        $ok = $this->patchReport($cookie, $csrf, (int) $report['id'], [
+            'status' => 'finalized',
+            'action_taken' => 'Subject turned over to the station for proper disposition.',
+        ]);
+        $this->assertSame(200, $ok['status']);
+    }
+
+    /** Migration 004: the IOC name is required to finalize as well. */
+    public function testFinalizeRequiresIoc(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $report = $this->createReport($cookie, $csrf, ['ioc_name' => '']);
+
+        $res = $this->patchReport($cookie, $csrf, (int) $report['id'], ['status' => 'finalized']);
+        $this->assertSame(422, $res['status']);
+        $this->assertStringContainsString('investigator-on-case', strtolower((string) ($res['body']['error'] ?? '')));
+
+        $ok = $this->patchReport($cookie, $csrf, (int) $report['id'], [
+            'status' => 'finalized',
+            'ioc_name' => 'Sgt. Test Investigator',
+        ]);
+        $this->assertSame(200, $ok['status']);
+    }
+
     public function testArchiveIsSoftDeleteOnly(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');

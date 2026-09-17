@@ -98,12 +98,21 @@ export default function Audits({ notify, onConnError }) {
 
   return (
     <div className="audits-page">
-      <header className="page-head">
-        <h1>Audit Trail</h1>
-        <p className="page-sub">
+      {/* Document page head, matching the report register and Home. */}
+      <div className="ir-page-head">
+        <h1 className="ir-title">AUDIT TRAIL</h1>
+        <div className="ir-meta">
+          <div>{pagination ? `${pagination.total} ENTRIES` : 'LOADING…'}</div>
+          <div>APPEND-ONLY RECORD</div>
+        </div>
+      </div>
+
+      <div className="ir-status">
+        <span className="badge draft">Audit</span>
+        <span>
           Every sign-in, report change, and account action on the system — append-only, nothing here can be edited or removed.
-        </p>
-      </header>
+        </span>
+      </div>
 
       <form className="reports-toolbar" onSubmit={applyFilters}>
         <div className="reports-toolbar-row">

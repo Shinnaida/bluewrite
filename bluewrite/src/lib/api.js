@@ -74,6 +74,8 @@ export async function api(path, { method = 'GET', body } = {}) {
     const err = new Error(data?.error || `Request failed (${res.status})`);
     err.status = res.status;
     err.field = data?.field;
+    // Field-level validation details from the server's rule gates (422s).
+    err.details = Array.isArray(data?.details) ? data.details : null;
     err.manual_mode = data?.manual_mode === true; // Phase 3: AI unavailable
     err.retryIn = typeof data?.retry_in === 'number' ? data.retry_in : null;
     // Separate the three infrastructure causes:

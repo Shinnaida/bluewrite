@@ -1,13 +1,26 @@
 # resources/ai — AI prompt assets
 
-Derived prompt assets for Phase 3 narrative generation. **Source of truth:**
-the terminology glossary (`bluewrite-police-terminology-glossary.md`,
-delivered alongside the implementation brief
-`bluewrite-terminology-integration-prompt.md`).
+Derived prompt assets for Phase 3 narrative generation, tightened in Phase 5
+(economy, house register, accuracy).
+
+**Reference:** the terminology glossary,
+`docs/bluewrite-police-terminology-glossary.md` — the human-readable statement
+of every language rule (§1–§10) with the reason behind it and an anti-drift map
+(§11) to the test guarding each rule.
+
+**The three files in this directory are the executable text**: they are what
+Gemini receives, so if a rule is not in them the model does not have it. The
+glossary is the reference; change the executable file and the glossary in the
+same commit, and let the guards fail if they diverge. (This directory used to
+point at a glossary, `bluewrite-police-terminology-glossary.md`, that was not in
+the repository, alongside an implementation brief
+`bluewrite-terminology-integration-prompt.md` that also does not exist — so the
+rules lived only inside the prompt. The glossary has been restored in `docs/`;
+the brief is not part of the repository.)
 
 | File | Role |
 |---|---|
-| `narrative_system_prompt.txt` | Base style instruction sent on EVERY narrative-generation call. Condensed from glossary §1–§8 (structure, "alleged" rule, jargon, doublets, pro-forms, identity pattern, tone). Lines starting with `#` are maintainer comments — stripped by the provider before the text reaches Gemini. |
+| `narrative_system_prompt.txt` | Base style instruction sent on EVERY narrative-generation call. Carries glossary §1–§9: structure, the "alleged" rule, jargon and doublets, pro-forms, the identity pattern, tone, the **ECONOMY AND NON-REDUNDANCY** contract (one proposition one place, findings are observations not negations, no duplicate findings, two different shapes for the disposition, no fact-free padding, negatives once, stop when the facts end) with a worked before/after pair, the **HOUSE REGISTER AND WORD FORMS** section and the **ACCURACY** rules. Lines starting with `#` are maintainer comments — stripped by the provider before the text reaches Gemini. |
 | `type_vocabulary.json` | Per-incident-type vocabulary + sensitivity notes from glossary §9, keyed by the exact canonical type strings in `src/lib/incidentTypes.js` (`INCIDENT_TYPES`). Only the row matching the report's type is appended. `sensitivity: null` for non-sensitive types. |
 | `narrative_few_shots.md` | Masked few-shot examples per category block; the provider includes GENERIC plus the matching category. |
 | `model-tier-note.md` | Performance addendum §5: informal tier justification, pilot checklist, cache-sizing rationale. |
@@ -23,7 +36,18 @@ delivered alongside the implementation brief
    row silently won't match and only the base instruction applies.
 4. `tests/SystemInstructionTest.php` guards the contract: all 14 types
    present, comment-stripping works, per-type/sensitivity appending works,
-   unknown/empty types fall back to the base instruction only.
+   unknown/empty types fall back to the base instruction only, and the Phase 5
+   sections (economy, worked pair, house register, accuracy, the duplication
+   few-shot) are present exactly where the glossary says they are.
+
+## Scope rule for `type_vocabulary.json` (Phase 5)
+
+A row holds only what is **specific to its type**. The register every type
+shares — 24-hour time, "said" + noun, pro-forms, the banned-padding list, the
+economy rules — lives in `narrative_system_prompt.txt`, once. Only one row is
+appended per call, so a shared string copied into all fourteen rows would be
+maintained fourteen times and drift out of sync. Enforced by the `SCOPE` note
+in the JSON's `_comment`; see §10 of the glossary.
 
 ## Wiring
 

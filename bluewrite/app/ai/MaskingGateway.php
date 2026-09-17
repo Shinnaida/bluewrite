@@ -114,6 +114,13 @@ final class MaskingGateway
             if (isset(self::PERSON_GROUPS[$key]) || in_array($key, self::VEHICLE_GROUP, true)) {
                 continue;
             }
+            // notable_findings rides in its own prompt block (like the
+            // recorded action) instead of the generic scalars dump — it is
+            // the officer's observations and deserves emphasis, and skipping
+            // it here avoids a duplicate.
+            if ($key === 'notable_findings') {
+                continue;
+            }
             if (is_scalar($val) && trim((string) $val) !== '') {
                 $scalars[$key] = trim((string) $val);
             }
@@ -132,14 +139,35 @@ final class MaskingGateway
         if (trim($maskedNotes) !== '') {
             $masked['officer_notes'] = $maskedNotes;
         }
+
+        // ---- Officer's recorded Action Taken / Status ---------------------
+        // Part of the report's own account of the incident, so the narrative
+        // may build on it (masked like any other free text). Absent on older
+        // rows, in which case the key is omitted entirely.
+        $maskedAction = self::maskFreeText((string) ($report['action_taken'] ?? ''), $map);
+        if (trim($maskedAction) !== '') {
+            $masked['action_taken'] = $maskedAction;
+        }
+        // The officer's free-text notable findings (type_specific scalar).
+        // Masked like any free text; the residual-risk scan covers it too —
+        // a name typed only into findings must still be surfaced.
+        $maskedFindings = self::maskFreeText((string) ($typeSpecific['notable_findings'] ?? ''), $map);
+        if (trim($maskedFindings) !== '') {
+            $masked['notable_findings'] = $maskedFindings;
+        }
         if (($masked['when'] ?? '') === '') {
             unset($masked['when']);
         }
 
+        // Residual-risk scan covers BOTH free-text fields that reach the
+        // provider (notes and the recorded action), so a name typed only into
+        // the Action Taken / Status is still surfaced to the officer.
+        $freeTextForRisk = trim($maskedNotes . "\n" . $maskedAction . "\n" . $maskedFindings);
+
         return [
             'masked' => $masked,
             'map' => $map,
-            'residualRisk' => self::freeTextResidualRisk($maskedNotes),
+            'residualRisk' => self::freeTextResidualRisk($freeTextForRisk),
         ];
     }
 
@@ -324,7 +352,17 @@ final class MaskingGateway
             $n++;
             $plateRef = "[VEHICLE_{$n}_PLATE]";
             $driverRef = "[VEHICLE_{$n}_DRIVER]";
-            $record = ['ref' => "[VEHICLE_{$n}]"];
+            $ref = "[VEHICLE_{$n}]";
+            $record = ['ref' => $ref];
+            // The bare vehicle ref must ALSO be registered: the model
+            // legitimately reuses the structured record's own 'ref' value
+            // ("involving [VEHICLE_1], bearing plate number …"), and an
+            // unregistered token would survive unmasking and trip the §2
+            // safety gate — refusing an otherwise valid draft.
+            $makeModel = trim((string) ($item['make_model'] ?? ''));
+            $map[$ref] = $makeModel !== ''
+                ? "the {$makeModel}"
+                : 'a motor vehicle';
             // Both refs are ALWAYS registered in the map: an empty plate or
             // unnamed driver would otherwise leak the raw token at unmask
             // (same class of bug as the unnamed-person §1.1 case).
@@ -338,11 +376,12 @@ final class MaskingGateway
                 : 'the then unidentified driver';
             $record['plate_ref'] = $plateRef;
             $record['driver_ref'] = $driverRef;
-            foreach (['make_model', 'damage_description'] as $keep) {
-                $v = trim((string) ($item[$keep] ?? ''));
-                if ($v !== '') {
-                    $record[$keep] = $v;
-                }
+            if ($makeModel !== '') {
+                $record['make_model'] = $makeModel;
+            }
+            $damage = trim((string) ($item['damage_description'] ?? ''));
+            if ($damage !== '') {
+                $record['damage_description'] = $damage;
             }
             $out[] = $record;
         }
@@ -376,6 +415,46 @@ final class MaskingGateway
             return $text;
         }
         return strtr($text, $map);
+    }
+
+    /**
+     * Restore real values into a list of provider lines (currently the
+     * drafted NOTABLE FINDINGS). Unlike the narrative, a line that still
+     * carries an unregistered placeholder is DROPPED — findings are an
+     * offer the officer accepts line by line, so one bad line must not
+     * throw away an otherwise valid draft. The narrative itself stays under
+     * the leakedTokens() gate, which still refuses the request outright.
+     * Drops are logged so the privacy signal is never silent.
+     *
+     * @param mixed $lines provider output (masked; non-strings ignored)
+     * @param array<string,string> $map
+     * @return string[] real-value lines, in order, blanks and leaks removed
+     */
+    public static function unmaskLines(mixed $lines, array $map): array
+    {
+        if (!is_array($lines)) {
+            return [];
+        }
+        $out = [];
+        foreach ($lines as $line) {
+            if (!is_string($line)) {
+                continue;
+            }
+            $text = trim(self::unmask($line, $map));
+            if ($text === '') {
+                continue;
+            }
+            $leaked = self::leakedTokens($text);
+            if ($leaked !== []) {
+                error_log(sprintf(
+                    '[BlueWrite][ai-safety-gate] dropped a generated line with unregistered token(s): %s',
+                    implode(',', $leaked),
+                ));
+                continue;
+            }
+            $out[] = $text;
+        }
+        return $out;
     }
 
     /** Exact age → non-reversible band (never a real value). */
@@ -418,10 +497,10 @@ final class MaskingGateway
      *
      * @return string[] offending tokens
      */
-    public static function freeTextResidualRisk(string $maskedNotes): array
+    public static function freeTextResidualRisk(string $maskedFreeText): array
     {
         // Capitalised word pairs not already inside a placeholder.
-        $withoutPlaceholders = preg_replace('/\[[A-Z_0-9]+\]/', ' ', $maskedNotes) ?? '';
+        $withoutPlaceholders = preg_replace('/\[[A-Z_0-9]+\]/', ' ', $maskedFreeText) ?? '';
         if (!preg_match_all('/\b([A-Z][a-z]{1,20})\s+([A-Z][a-z]{1,20})\b/u', $withoutPlaceholders, $m, PREG_SET_ORDER)) {
             return [];
         }

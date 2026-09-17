@@ -1,14 +1,23 @@
-// BLUEWRITE — LoginPage (ported from the approved CAPS mockup)
-// Tactical grid + CRT scanlines + LetterGlitch backdrop, RESTRICTED ACCESS
-// console, HUD mono type, glitching PHT clock and hero wordmark.
-// Adapted: plain CSS instead of Tailwind, inline SVGs instead of lucide-react,
-// wired to the real BlueWrite PHP API (no router).
+// BLUEWRITE — LoginPage
+//
+// The gate wears the workspace's own document language (see login-theme.css):
+// the navy bar with the department lockup, the light page, white cards, the
+// blue primary action, League Spartan throughout. The dark console — tactical
+// grid, CRT scanlines, LetterGlitch backdrop, HUD mono type and the neon
+// clock scramble — was removed so signing in and then working in the app read
+// as one product. What stays is the fact an officer wants BEFORE typing a
+// passcode: the PHT clock and the SYS_STATUS / ENC_LEVEL readout.
+//
+// The wordmark is plain type on both this screen and Home: BLUE in navy,
+// WRITE in the brand blue. No animation touches it.
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
-import LetterGlitch from './LetterGlitch.jsx';
-import Logo from './Logo.jsx';
-import HeroGlitchText from './HeroGlitchText.jsx';
+// The navy master artwork, not the knockout: this screen is light, so the mark
+// is navy ink on the page. The navy bar above it shows the knockout variant,
+// exactly as the workspace's top bar does.
+import logoNavy from '../assets/bluewrite-logo.png';
+import logoKnockout from '../assets/bluewrite-logo-light.png';
 import ConnectionNotice from './ConnectionNotice.jsx';
 
 
@@ -22,61 +31,11 @@ const PHT_TIME_FORMAT = new Intl.DateTimeFormat('en-PH', {
 });
 const getPhilippineTime = () => PHT_TIME_FORMAT.format(new Date());
 
-// Glitch scramble glyphs used during the per-second clock tick.
-const GLITCH_GLYPHS = '01<>/#@$%&*+=?!';
-
-// ---------------------------------------------------------------------------
-// GlitchDigits — per-character spans; changed trailing digits (seconds) get a
-// brief glyph scramble on top of the CSS hud-glitch RGB-split jitter.
-function GlitchDigits({ text }) {
-  const previous = useRef(text);
-  const [glitch, setGlitch] = useState(null);
-
-  useEffect(() => {
-    if (text === previous.current) return undefined;
-    const previousText = previous.current;
-    previous.current = text;
-
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      return undefined;
-    }
-
-    let firstDiff = 0;
-    while (firstDiff < text.length && text[firstDiff] === previousText[firstDiff]) {
-      firstDiff += 1;
-    }
-    if (firstDiff < text.length - 2) return undefined;
-
-    setGlitch({ from: firstDiff });
-    const id = window.setTimeout(() => setGlitch(null), 190);
-    return () => window.clearTimeout(id);
-  }, [text]);
-
-  return (
-    <>
-      {text.split('').map((char, index) => {
-        const isGlitching = glitch !== null && index >= glitch.from && char !== ':';
-        const display = isGlitching
-          ? GLITCH_GLYPHS[Math.floor(Math.random() * GLITCH_GLYPHS.length)]
-          : char;
-        return (
-          <span
-            key={isGlitching ? `hud-g-${index}` : `hud-s-${index}-${char}`}
-            aria-hidden="true"
-            className={isGlitching ? 'hud-glitch hud-glitch-char' : 'hud-glitch-char'}
-          >
-            {display}
-          </span>
-        );
-      })}
-    </>
-  );
-}
-
-// TopStatusBar — mini two-tone wordmark, glowing cyan PHT clock, readouts.
-// SYS_STATUS probes /me: OPTIMAL (green) when the API answers, DOWN (amber)
-// when it can't be reached — so an officer sees the problem before typing
-// credentials that can't be checked.
+// TopStatusBar — the navy bar, carrying the SAME department lockup the
+// workspace's top bar shows, plus the two readouts that belong to a login
+// screen: the PHT clock (the time an officer signs on, which is what the audit
+// trail records) and SYS_STATUS, which probes /me so a connection problem is
+// visible BEFORE credentials are typed that cannot be checked.
 function TopStatusBar({ connState }) {
   const [time, setTime] = useState(getPhilippineTime);
 
@@ -90,16 +49,18 @@ function TopStatusBar({ connState }) {
   return (
     <header className="la-topbar">
       <div className="la-brand">
-        <Logo size={20} animated={false} title="" />
-        <span>BLUE</span>
-        <em>WRITE</em>
+        <span className="la-brand-mark" aria-hidden="true">
+          <img src={logoKnockout} alt="" />
+        </span>
+        <span className="la-brand-text">
+          <span className="la-brand-line1">Public Safety Department</span>
+          <span className="la-brand-line2">Official Incident Reporting System</span>
+        </span>
       </div>
 
       <p className="la-clock" title="Philippine Standard Time (PHT, UTC+8)">
         <span className="la-clock-label">PHT</span>
-        <span aria-hidden="true" style={{ display: 'inline-flex' }}>
-          <GlitchDigits text={time} />
-        </span>
+        <span>{time}</span>
       </p>
 
       <div className="la-topmeta">
@@ -130,7 +91,7 @@ export default function Login({ onLogin }) {
   // officer must never read a DB outage as a wrong-password typo.
   const [error, setError] = useState('');
   const [conn, setConn] = useState('ok'); // 'ok' | 'offline' | 'database' | 'server'
-  const [formFocused, setFormFocused] = useState(false);
+
 
   // Probe the backend so SYS_STATUS and the inline notice reflect reality
   // even before the first submit attempt.
@@ -145,8 +106,6 @@ export default function Login({ onLogin }) {
     };
   }, []);
 
-  // Pause ambient hero glitch while the user engages the form.
-  const glitchPaused = formFocused || submitting || Boolean(error) || conn !== 'ok';
 
   async function retryConnection() {
     setConn('ok');
@@ -187,21 +146,6 @@ export default function Login({ onLogin }) {
 
   return (
     <main className="la-page">
-      {/* Tactical grid backdrop */}
-      <div className="la-grid" aria-hidden="true" />
-
-      {/* LetterGlitch backdrop */}
-      <div className="la-bg" aria-hidden="true">
-        <LetterGlitch
-          glitchSpeed={35}
-          centerVignette={false}
-          outerVignette={true}
-          smooth={true}
-          glitchColors={['#2b4539', '#61dca3', '#61b3dc']}
-          backgroundColor="transparent"
-        />
-      </div>
-
       <TopStatusBar connState={conn} />
 
       <div className="la-content">
@@ -211,19 +155,16 @@ export default function Login({ onLogin }) {
             <section className="la-left">
               <div>
                 <div className="la-doc-icon" aria-hidden="true">
-                  <Logo variant="mark-only" size={40} title="" />
+                  <img src={logoNavy} alt="" />
                 </div>
 
+                {/* The wordmark is the workspace's, to the letter: BLUE in navy,
+                    WRITE in the brand blue. Home's hero is the same treatment. */}
                 <h1 className="la-hero">
-                  <HeroGlitchText text="BLUEWRITE" paused={glitchPaused}>
-                    BLUEWRITE
-                  </HeroGlitchText>
+                  BLUE<em>WRITE</em>
                 </h1>
-                <div className="la-tagline">
-                  <span className="pulse" aria-hidden="true" />
-                  AI-Assisted Police Incident Reporting
-                </div>
-                <p className="la-version">// Secure Incident Documentation System v2.4.1</p>
+                <div className="la-tagline">AI-Assisted Police Incident Reporting</div>
+                <p className="la-version">Secure Incident Documentation System v2.4.1</p>
               </div>
 
               <div className="la-cards">
@@ -256,9 +197,6 @@ export default function Login({ onLogin }) {
 
             {/* ============ RIGHT — RESTRICTED ACCESS console ============ */}
             <section className="la-right">
-              <div className="la-bracket-tl" aria-hidden="true" />
-              <div className="la-bracket-br" aria-hidden="true" />
-
               <div className="la-panel">
                 <div className="la-panel-head">
                   <div className="la-lock" aria-hidden="true">
@@ -274,10 +212,6 @@ export default function Login({ onLogin }) {
                 <form
                   onSubmit={handleSubmit}
                   noValidate
-                  onFocus={() => setFormFocused(true)}
-                  onBlur={(e) => {
-                    if (!e.currentTarget.contains(e.relatedTarget)) setFormFocused(false);
-                  }}
                 >
                   {conn !== 'ok' ? (
                     <ConnectionNotice
@@ -384,9 +318,6 @@ export default function Login({ onLogin }) {
           </div>
         </div>
       </div>
-
-      {/* CRT scanline overlay */}
-      <div className="la-scanlines" aria-hidden="true" />
     </main>
   );
 }

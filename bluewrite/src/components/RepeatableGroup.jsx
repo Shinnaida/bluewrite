@@ -22,6 +22,7 @@ export default function RepeatableGroup({
   onChange,
   disabled,
   errors,        // map of "groupKey[i].field" -> message (optional)
+  groupError,    // message for the group as a whole (e.g. minCount unmet)
   softWarnAt = DEFAULT_SOFT_WARN_AT,
   blankItem,     // () => ({}) factory
 }) {
@@ -44,7 +45,9 @@ export default function RepeatableGroup({
   const showSoftWarn = list.length > softWarnAt;
 
   return (
-    <div className="rep-group" data-group={groupKey}>
+    // id/anchor used by the editor's error-summary jump links (focusField)
+    // to land on the whole group when the group itself is the problem.
+    <div className="rep-group" data-group={groupKey} id={`g-${groupKey}`}>
       <div className="rep-group-head">
         <label>{label}</label>
       </div>
@@ -53,6 +56,14 @@ export default function RepeatableGroup({
         <p className="field-hint">
           None recorded{minCount >= 1 ? ` (at least ${minCount} required before finalizing)` : ''}.
         </p>
+      )}
+
+      {groupError && (
+        // The rule engine prefixes the group's label ("Vehicles Involved: …")
+        // which is redundant right under the heading — drop it here.
+        <div className="error rep-group-error" role="alert">
+          {String(groupError).replace(`${label}: `, '')}
+        </div>
       )}
 
       {list.map((item, i) => (

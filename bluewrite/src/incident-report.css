@@ -1,0 +1,963 @@
+/* ===========================================================================
+   incident-report.css — the official document look, shared app-wide.
+
+   Spec: "Official Incident Reporting System" — navy top bar, light gray page,
+   white card panels, blue primary action.
+
+   This used to be the private stylesheet of the Write Report screen (.ir-screen
+   / .ir-body scoped); the whole application now uses the same look, so these
+   classes are the app's document grammar: the navy bar (AppTopBar), the page
+   head, the card panels, field labels, the signature blocks and the register
+   table. The colour tokens themselves live in styles.css; the print sheet
+   renders outside every one of these scopes so a document on paper can never
+   inherit a screen colour.
+   =========================================================================== */
+
+/* ---- The document palette, named once, on :root ---------------------------
+   These aliases used to be scoped to .ir-screen/.ir-nav, which worked only
+   while the navy bar was the outermost element of them. They are app-wide
+   now, and they source their colours from the one palette in styles.css so
+   the document layer and the app chrome can never drift apart. */
+:root {
+  --ir-navy: #1a2b4a;
+  --ir-navy-hi: #26406c;
+  --ir-page: var(--void);
+  --ir-card: var(--panel);
+  --ir-card-head: #eceef2;
+  --ir-border: var(--line);
+  --ir-text: var(--paper);
+  --ir-muted: var(--steel);
+  --ir-blue: var(--cyan);
+  --ir-blue-hi: #17489f;
+  --ir-amber: var(--amber);
+  --ir-red: var(--red);
+}
+
+/* ===========================================================================
+   1. Top navigation bar
+   =========================================================================== */
+.ir-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  /* The bar is chrome: it keeps its height and never scrolls with the page. */
+  flex: none;
+  background: var(--ir-navy);
+  color: #fff;
+  padding: 0.7rem clamp(1rem, 3vw, 2rem);
+}
+
+.ir-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+/* No backing plate — the mark is the knockout (white) variant of the artwork,
+   so it stays legible on the navy bar and the bar shows through the crest. */
+.ir-brand-mark {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.ir-brand-mark img {
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.ir-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.ir-brand-line1 {
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  font-weight: 400;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.ir-brand-line2 {
+  font-size: 0.94rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ir-nav-links {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.5rem, 1.6vw, 1.6rem);
+  flex-wrap: wrap;
+}
+
+.ir-nav-link {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.1rem;
+  border-bottom: 2px solid transparent;
+}
+.ir-nav-link:hover {
+  background: transparent;
+  color: #fff;
+  border-bottom-color: rgba(255, 255, 255, 0.55);
+}
+.ir-nav-link[aria-current='page'] {
+  color: #fff;
+  border-bottom-color: #fff;
+}
+
+/* ===========================================================================
+   2. The light page itself.
+
+   Token inversion is the whole trick: the editor's existing components,
+   RepeatableGroup, the AI panel, alerts and hints all style themselves from
+   these custom properties, so flipping them here restyles every descendant
+   without a rewrite of rules that other screens still need dark.
+   =========================================================================== */
+/* The light page body. Shell puts this class on <main>, so every screen sits
+   on the same document surface. The colour tokens are global now (styles.css);
+   this class only owns the page surface and its breathing room. */
+.ir-body {
+  background: var(--ir-page);
+  color: var(--ir-text);
+  padding: clamp(1rem, 2.4vw, 1.75rem) clamp(1rem, 3vw, 2rem) 2.5rem;
+  flex: 1;
+}
+
+/* ---- Page header: title left, case no. + date right ---- */
+.ir-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem clamp(1rem, 4vw, 3rem);
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.ir-title {
+  /* The page titles used a Georgia serif for the "official document" read.
+     The project's one typeface (League Spartan, see src/fonts/fonts.css)
+     replaces it; the serif is gone, not falling back. */
+  font-family: var(--font-family);
+  font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.1rem);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--ir-text);
+  margin: 0;
+}
+
+.ir-meta {
+  text-align: right;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ir-muted);
+  line-height: 1.6;
+}
+
+.ir-status {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0 0 1rem;
+  font-size: 0.8rem;
+  color: var(--ir-muted);
+}
+
+.ir-required-note {
+  margin: 0 0 1rem;
+  font-size: 0.78rem;
+  color: var(--ir-muted);
+}
+.ir-required-note .req,
+.ir-body .req {
+  color: var(--ir-red);
+}
+
+/* ===========================================================================
+   3. Four panels, 2x2 on desktop
+   =========================================================================== */
+.ir-form {
+  display: block;
+}
+
+.ir-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(0.85rem, 1.6vw, 1.25rem);
+  align-items: start;
+}
+
+.ir-card {
+  background: var(--ir-card);
+  border: 1px solid var(--ir-border);
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+  margin: 0;
+}
+
+/* Full-width cards (the app's own document sections and the submit bar). */
+.ir-card--wide {
+  grid-column: 1 / -1;
+  margin-top: clamp(0.85rem, 1.6vw, 1.25rem);
+}
+
+.ir-card-head {
+  background: var(--ir-card-head);
+  border-bottom: 1px solid var(--ir-border);
+  padding: 0.55rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2b3547;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.ir-card-head .ir-card-num {
+  color: var(--ir-blue);
+}
+
+.ir-card-body {
+  padding: clamp(0.85rem, 1.6vw, 1.15rem) clamp(0.9rem, 1.6vw, 1.25rem);
+}
+
+/* Two-column sub-grids inside Panel I and Panel II. */
+.ir-sub {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 1rem;
+}
+.ir-sub .ir-span-2 {
+  grid-column: 1 / -1;
+}
+
+/* ---- Field with an icon beside its label ---- */
+.ir-field {
+  margin-bottom: 0.9rem;
+}
+.ir-field:last-child {
+  margin-bottom: 0;
+}
+
+.ir-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+  margin-bottom: 0.35rem;
+}
+.ir-label svg {
+  flex: none;
+  color: #8b95a7;
+}
+
+.ir-body input,
+.ir-body select,
+.ir-body textarea {
+  background: #fff;
+  border: 1px solid var(--ir-border);
+  border-radius: 3px;
+  color: var(--ir-text);
+  box-shadow: none;
+}
+.ir-body input::placeholder,
+.ir-body textarea::placeholder {
+  color: #9aa3b2;
+}
+.ir-body select option {
+  background: #fff;
+  color: var(--ir-text);
+}
+.ir-body input:focus,
+.ir-body select:focus,
+.ir-body textarea:focus {
+  outline: none;
+  border-color: var(--ir-blue);
+  box-shadow: 0 0 0 3px rgba(31, 95, 208, 0.18);
+}
+.ir-body input:disabled,
+.ir-body select:disabled,
+.ir-body textarea:disabled {
+  background: #f4f6fa;
+}
+.ir-body input[aria-invalid='true'],
+.ir-body textarea[aria-invalid='true'] {
+  border-color: var(--ir-red);
+}
+
+/* The date/time pair shares one field cell, with the approximate qualifier
+   under it — the qualifier preserves "around 1:00 A.M." without inventing a
+   precise minute. */
+.ir-datetime {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.ir-sub-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #7c8697;
+  margin-bottom: 0.2rem;
+}
+
+.ir-approx {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.76rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ir-muted);
+}
+.ir-approx input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+  accent-color: var(--ir-blue);
+}
+
+/* The narrative is the heart of the panel: room to write. */
+.ir-narrative textarea {
+  min-height: 13rem;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+/* ---- Panel IV: the two signature areas ---- */
+.ir-sign-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.ir-sign-box {
+  border: 1px solid var(--ir-border);
+  border-radius: 3px;
+  background: #fbfcfe;
+  padding: 0.75rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 9.5rem;
+}
+
+.ir-sign-caption {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+}
+
+.ir-sign-area {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-bottom: 1px solid var(--ir-border);
+  padding-bottom: 0.3rem;
+  font-family: var(--font-family);
+  font-size: 1rem;
+  color: var(--ir-text);
+  text-align: center;
+}
+
+.ir-sign-empty {
+  color: #9aa3b2;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.ir-sign-stamp {
+  font-size: 0.74rem;
+  color: var(--ir-muted);
+}
+.ir-sign-stamp strong {
+  color: var(--ir-text);
+}
+
+/* ===========================================================================
+   4. Submit bar + footer
+   =========================================================================== */
+.ir-actions {
+  margin-top: clamp(1rem, 2vw, 1.5rem);
+}
+
+.ir-submit {
+  width: 100%;
+  background: var(--ir-blue);
+  border: 1px solid var(--ir-blue);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.85rem 1rem;
+  border-radius: 4px;
+}
+.ir-submit:hover:not(:disabled) {
+  background: var(--ir-blue-hi);
+  border-color: var(--ir-blue-hi);
+  color: #fff;
+}
+.ir-submit:disabled {
+  opacity: 0.55;
+}
+
+.ir-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.7rem;
+}
+
+.ir-body button:not(.ir-submit):not(.ir-nav-link) {
+  background: #fff;
+  border: 1px solid var(--ir-border);
+  color: #33405a;
+}
+.ir-body button:not(.ir-submit):not(.ir-nav-link):hover {
+  border-color: var(--ir-blue);
+  color: var(--ir-blue);
+  background: #fff;
+}
+.ir-body button.danger {
+  border-color: rgba(179, 38, 30, 0.4);
+  color: var(--ir-red);
+  background: #fff;
+}
+.ir-body button.danger:hover {
+  border-color: var(--ir-red);
+  background: rgba(179, 38, 30, 0.06);
+  color: var(--ir-red);
+}
+.ir-body button.primary {
+  background: var(--ir-blue);
+  border-color: var(--ir-blue);
+  color: #fff;
+}
+.ir-body button.primary:hover {
+  background: var(--ir-blue-hi);
+  border-color: var(--ir-blue-hi);
+  box-shadow: none;
+  color: #fff;
+}
+
+.ir-footer {
+  margin: 1.25rem 0 0;
+  text-align: center;
+  font-size: 0.76rem;
+  line-height: 1.6;
+  color: var(--ir-muted);
+  max-width: 46rem;
+  margin-inline: auto;
+}
+
+/* ===========================================================================
+   5. The app's own sections, restyled for this screen
+   =========================================================================== */
+.ir-body .section,
+.ir-body .rep-group,
+.ir-body .rep-item {
+  background: #fff;
+  border-color: var(--ir-border);
+}
+
+.ir-body .section {
+  border-radius: 4px;
+}
+
+.ir-body .section-hint,
+.ir-body .field-hint {
+  color: var(--ir-muted);
+}
+
+.ir-body .alert {
+  border-radius: 4px;
+}
+.ir-body .alert.error {
+  background: rgba(179, 38, 30, 0.07);
+  border-color: rgba(179, 38, 30, 0.4);
+  color: #7f1d16;
+}
+.ir-body .alert.info {
+  background: rgba(31, 95, 208, 0.07);
+  border-color: rgba(31, 95, 208, 0.3);
+  color: #1b3f7a;
+}
+
+.ir-body label {
+  font-family: var(--font-body);
+  color: var(--ir-muted);
+}
+
+.ir-body .badge.draft {
+  background: rgba(178, 106, 0, 0.12);
+  color: var(--ir-amber);
+  border-color: rgba(178, 106, 0, 0.45);
+}
+.ir-body .badge.finalized,
+.ir-body .badge.active {
+  background: rgba(21, 128, 61, 0.12);
+  color: #15803d;
+  border-color: rgba(21, 128, 61, 0.4);
+}
+
+.ir-body .field .error,
+.ir-body .rep-group-error,
+.ir-body .error {
+  color: var(--ir-red);
+}
+
+/* Read-only sign-off line (badge number comes from the account, never typed). */
+.ir-readonly {
+  display: flex;
+  align-items: center;
+  min-height: 2.35rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px dashed var(--ir-border);
+  border-radius: 3px;
+  background: #f4f6fa;
+  color: var(--ir-text);
+  font-size: 0.9rem;
+}
+.ir-readonly-note {
+  margin: 0.3rem 0 0;
+  font-size: 0.72rem;
+  color: var(--ir-muted);
+}
+
+/* ===========================================================================
+   5b. The register table (My Reports / All Reports)
+
+   Rows sit inside a card with no body padding (ir-card-body--flush), so the
+   table's own rules are the only thing separating the rows.
+   =========================================================================== */
+.ir-card-body--flush {
+  padding: 0;
+}
+
+.ir-card-empty {
+  margin: 0;
+  padding: 1.6rem 1.1rem;
+  font-size: 0.9rem;
+  color: var(--ir-muted);
+  text-align: center;
+}
+.ir-card-empty strong {
+  color: var(--ir-text);
+}
+
+/* Card-level actions in the header bar (Show Archived, Export CSV).
+   margin-left:auto pins them to the right edge of the head; they must not
+   compete with the filter row for its single line of width. */
+.ir-card-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+/* Compact, quiet controls on the tinted header bar — they read as part of
+   the card's chrome, not as another field. */
+.ir-card-head-actions button,
+.ir-card-head-actions .button-link {
+  padding: 0.25rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: #fff;
+  border: 1px solid var(--ir-border);
+  color: #33405a;
+  text-decoration: none;
+}
+.ir-card-head-actions button:hover,
+.ir-card-head-actions .button-link:hover {
+  border-color: var(--ir-blue);
+  color: var(--ir-blue);
+  background: #fff;
+}
+
+.ir-body table th {
+  background: var(--ir-card-head);
+  color: #2b3547;
+  border-bottom: 1px solid var(--ir-border);
+}
+.ir-body tbody tr:hover {
+  background: #f7f9fc;
+  border-left-color: var(--ir-blue);
+}
+.ir-body .reports-toolbar {
+  margin-bottom: 0;
+}
+.ir-body .stale-note {
+  border-left-color: var(--ir-amber);
+}
+
+/* ===========================================================================
+   6. Home — the officer's landing page, in the same document grammar
+   =========================================================================== */
+.ir-home-lead {
+  margin: 0 0 1rem;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--ir-text);
+}
+
+/* The submit bar is full-width on the report screen; on the landing card it
+   is one action among a row. */
+.ir-home-cta {
+  width: auto;
+  flex: 0 0 auto;
+  padding: 0.75rem 1.5rem;
+}
+
+.ir-home-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ir-home-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  margin-bottom: 0.45rem;
+  padding: 0.6rem 0.7rem;
+  background: #fff;
+  border: 1px solid var(--ir-border);
+  border-radius: 3px;
+  text-align: left;
+}
+.ir-home-item:hover {
+  border-color: var(--ir-blue);
+  background: #fff;
+}
+.ir-home-no {
+  flex: none;
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--ir-blue);
+  white-space: nowrap;
+}
+.ir-home-type {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--ir-text);
+}
+.ir-home-when {
+  flex: none;
+  font-size: 0.82rem;
+  color: var(--ir-muted);
+  white-space: nowrap;
+}
+
+/* ===========================================================================
+   6b. Brand hero — the BlueWrite wordmark on the Home page
+
+   The old welcome hero, kept on the light document surface: a navy wordmark
+   with an ink rule, above the working cards. Plain type — BLUE in navy, WRITE
+   in the brand blue — the same wordmark the login carries. Nothing animates.
+   =========================================================================== */
+.ir-hero {
+  margin: 0 0 clamp(0.85rem, 1.6vw, 1.25rem);
+  padding: 0 0 clamp(0.7rem, 1.4vw, 1rem);
+  border-bottom: 1px solid var(--ir-border);
+}
+
+.ir-hero-wordmark {
+  margin: 0;
+  font-size: clamp(1.75rem, 1.15rem + 2.4vw, 2.9rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--ir-navy);
+}
+.ir-hero-wordmark em {
+  font-style: normal;
+  color: var(--ir-blue);
+}
+
+.ir-hero-kicker {
+  margin: 0.4rem 0 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+}
+
+/* ===========================================================================
+   6c. Home — centred
+
+   Scoped to `.ir-home`, which ONLY the Home screen renders, so the centring
+   never reaches the report editor, the register, the admin screens or the
+   print sheet. On Home everything is centred: the masthead wordmark and its
+   kicker, the card head, the body copy and the action button.
+
+   The page is now three stacked blocks — masthead, the one action, then the
+   register tail — because the Report Intake card was removed on request. The
+   register is no longer half of a two-column row, so it gets its own measure
+   and sits centred at the bottom instead of being sized by a grid column.
+
+   One deliberate exception to the centring: the Recent Reports rows stay
+   left-aligned — that block is a record (no. · type · date · status) meant to
+   be read across, not centred.
+   =========================================================================== */
+.ir-home {
+  text-align: center;
+}
+
+/* The page's single action, directly under the masthead. */
+.ir-home .ir-actions-row {
+  justify-content: center;
+  margin-top: clamp(0.5rem, 2vw, 1.25rem);
+}
+
+/* 46rem = 690px at the app's 15px root: wide enough that a report row (no. ·
+   type · date · status) never ellipses its incident type, narrow enough to
+   read as a deliberate centred block rather than a full-bleed table. */
+.ir-home .ir-recent {
+  max-width: 46rem;
+  margin: clamp(1.75rem, 5vw, 3.25rem) auto 0;
+}
+
+.ir-home .ir-card-head {
+  justify-content: center;
+}
+
+.ir-home .ir-card-body {
+  text-align: center;
+}
+
+/* The loading / empty-state copy centres itself via `.ir-card-empty`, but a
+   centred paragraph still needs a measure or a wide card would run one line
+   of prose the full width of the panel. */
+.ir-home .ir-home-lead {
+  max-width: 34rem;
+  margin: 0 auto 1rem;
+}
+
+/* A record reads across; keep the rows left-aligned under a centred head. */
+.ir-home .ir-home-item {
+  text-align: left;
+}
+
+/* ===========================================================================
+   7. Profile — the identity + sign-out control that replaced the nav's Logout
+   =========================================================================== */
+.ir-brand-home {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ir-brand-home:hover .ir-brand-line2 {
+  text-decoration: underline;
+}
+.ir-brand-home:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.ir-profile-wrap {
+  position: relative;
+  /* Never shrink the profile: the trigger should wrap to its own line when
+     the bar runs out of room, not collapse and lose the officer's name.
+     (Below 560px the name is dropped on purpose — see the media query.) */
+  flex: none;
+}
+
+.ir-profile-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.7rem 0.25rem 0.3rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.ir-profile-trigger:hover,
+.ir-profile-trigger[aria-expanded='true'] {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.6);
+  color: #fff;
+}
+
+.ir-profile-avatar {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ir-navy-hi);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.ir-profile-trigger-name {
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ir-profile-caret {
+  opacity: 0.75;
+}
+
+.ir-profile-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 60;
+  min-width: 16rem;
+  padding: 0.35rem;
+  background: #fff;
+  border: 1px solid var(--ir-border);
+  border-radius: 4px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  color: var(--ir-text);
+}
+
+.ir-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.6rem 0.7rem;
+}
+.ir-profile-menu .ir-profile-avatar {
+  width: 32px;
+  height: 32px;
+  background: var(--ir-navy);
+}
+.ir-profile-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ir-profile-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ir-text);
+}
+.ir-profile-meta {
+  font-size: 0.74rem;
+  color: var(--ir-muted);
+}
+
+.ir-profile-sep {
+  height: 1px;
+  margin: 0 0.35rem 0.35rem;
+  background: var(--ir-border);
+}
+
+.ir-profile-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  background: #fff;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--ir-text);
+  font-size: 0.85rem;
+  text-align: left;
+}
+.ir-profile-item:hover {
+  background: var(--ir-page);
+  border-color: var(--ir-border);
+  color: var(--ir-red);
+}
+
+/* ===========================================================================
+   8. Responsiveness — single column on narrow viewports
+   =========================================================================== */
+@media (max-width: 980px) {
+  .ir-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ir-page-head {
+    flex-direction: column;
+  }
+  .ir-meta {
+    text-align: left;
+  }
+}
+
+@media (max-width: 560px) {
+  .ir-sub,
+  .ir-sign-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ir-nav {
+    padding: 0.6rem 0.9rem;
+  }
+  .ir-brand-line2 {
+    font-size: 0.82rem;
+  }
+  /* The name would crowd the nav on a phone; the avatar carries the profile. */
+  .ir-profile-trigger-name {
+    display: none;
+  }
+  .ir-profile-menu {
+    right: -0.5rem;
+  }
+  .ir-home-item {
+    flex-wrap: wrap;
+  }
+  .ir-home-when {
+    width: 100%;
+  }
+}

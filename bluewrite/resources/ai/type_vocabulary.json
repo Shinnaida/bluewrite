@@ -1,5 +1,5 @@
 {
-  "_comment": "DERIVED FILE — do not edit here first. Per-type vocabulary from bluewrite-police-terminology-glossary.md §9. Update the glossary first, then propagate into this file. Keys match INCIDENT_TYPES in src/lib/incidentTypes.js exactly. GeminiNarrativeProvider::buildSystemInstruction() appends only the entry matching the report's incident type to the base system instruction (see app/ai/GeminiNarrativeProvider.php). The 'sensitivity' text here is the AI-side instruction; it deliberately differs in wording from the officer-facing UI reminder in SENSITIVE_TYPES (incidentTypes.js) and the architecture v2 §5.2 note — one is for the model, the other for the officer.",
+  "_comment": "DERIVED FILE — do not edit here first. Per-type vocabulary from bluewrite-police-terminology-glossary.md §9. Update the glossary first, then propagate into this file. Keys match INCIDENT_TYPES in src/lib/incidentTypes.js exactly. GeminiNarrativeProvider::buildSystemInstruction() appends only the entry matching the report's incident type to the base system instruction (see app/ai/GeminiNarrativeProvider.php). The 'sensitivity' text here is the AI-side instruction; it deliberately differs in wording from the officer-facing UI reminder in SENSITIVE_TYPES (incidentTypes.js) and the architecture v2 §5.2 note — one is for the model, the other for the officer. SCOPE: this file holds what is SPECIFIC to a type. The register every type shares — 24-hour time, 'said' + noun, pro-forms, the banned-padding list, the economy rules — lives in narrative_system_prompt.txt, ONCE. Do not copy shared register into these rows: only one row is appended per call, so a duplicated string would be maintained 14 times and drift.",
 
   "Theft": {
     "vocabulary": ["unlawfully taken", "forcible taking", "estimated value in the amount of ₱[X]"],
@@ -59,7 +59,7 @@
     "sensitivity": null
   },
   "Other Incident": {
-    "vocabulary": [],
+    "vocabulary": ["the incident transpired", "investigation disclosed", "for proper disposition"],
     "sensitivity": null
   }
 }

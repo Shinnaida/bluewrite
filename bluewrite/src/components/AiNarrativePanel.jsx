@@ -18,6 +18,16 @@ import { useRotatingStatus, holdVerifyPhase, VERIFY_PHRASE, THINKING_PHRASES } f
 
 // AI panel resize bounds — collapse below the minimum into the rail,
 // mirroring the sidebar's SIDEBAR_MIN/COLLAPSE_BELOW pattern.
+// Phase 5 economy kinds → the officer's label. The server sends a `kind` as
+// well as a sentence so the label stays short here and the sentence stays
+// available to anything that only renders text.
+const REDUNDANCY_LABEL = {
+  merged: 'Merged into one finding',
+  'restates-narrative': 'Dropped — the narrative already says it',
+  negation: 'Dropped — not an observation',
+  padding: 'Trimmed as padding',
+};
+
 const PANEL_MIN = 320;
 const PANEL_MAX = 560;
 const COLLAPSE_BELOW = 280;
@@ -44,6 +54,15 @@ function PinIcon({ filled }) {
   );
 }
 
+// Line-set comparison for the tighten proposals. Order- and blank-insensitive
+// on purpose: the analyser's list is the officer's OWN lines with duplicates
+// merged and repeats dropped, so a difference in the SET is the only thing
+// worth offering to apply.
+const normaliseLineSet = (lines) =>
+  [...new Set((Array.isArray(lines) ? lines : []).map((l) => String(l).trim().toLowerCase()).filter(Boolean))]
+    .sort()
+    .join('\n');
+
 // Session persistence (per tab): the AI draft survives navigation and
 // reloads within the same browser tab. Keyed by report id so opening a
 // different report never shows another report's draft.
@@ -59,9 +78,29 @@ function loadStoredDraft(rid) {
   }
 }
 
-export default function AiNarrativePanel({ reportId, canEdit, narrative, onAccept }) {
+export default function AiNarrativePanel({
+  reportId,
+  canEdit,
+  narrative,
+  actionTaken = '',
+  // The form's current Notable Findings text: shown in the Generate row so
+  // the officer knows it is what the AI formalises into the draft.
+  notableFindings = '',
+  onAccept,
+  // Called automatically with the drafted NOTABLE FINDINGS lines as soon as
+  // a draft lands — no second button: generating the report IS the action.
+  // The editor writes them into the form field (the record the sheet prints
+  // from); it never blanks a field the draft left empty.
+  onApplyFindings,
+  // Same rule for the formalised ACTION TAKEN / STATUS line.
+  onApplyActionTaken,
+  // Optional completeness gate owned by the editor (Reports.jsx): when it
+  // returns false, generation is refused BEFORE any request — the editor has
+  // already flagged "The report has N problems" with jump-to-field links.
+  onBeforeGenerate,
+}) {
   const [mode, setMode] = useState('idle'); // idle|ready|loading|done|error|manual
-  const [draft, setDraft] = useState(null); // { narrative, suggestions, possibleGaps }
+  const [draft, setDraft] = useState(null); // { narrative, suggestions, possibleGaps, addedContentWarnings }
   const [notes, setNotes] = useState('');
   const [feedback, setFeedback] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
@@ -105,9 +144,13 @@ export default function AiNarrativePanel({ reportId, canEdit, narrative, onAccep
     api('/ai/health')
       .then((d) => {
         if (!alive) return;
-        setMode(d.enabled ? 'ready' : 'manual');
+        // Functionally guarded: the probe resolves AFTER the restore effect,
+        // so an unconditional set would overwrite 'done' and silently hide a
+        // draft restored from sessionStorage (and could cut a generation
+        // short mid-'loading'). Only settle an as-yet-undecided panel.
+        setMode((m) => (m === 'done' || m === 'loading' ? m : d.enabled ? 'ready' : 'manual'));
       })
-      .catch(() => alive && setMode('manual'));
+      .catch(() => alive && setMode((m) => (m === 'done' || m === 'loading' ? m : 'manual')));
     return () => {
       alive = false;
     };
@@ -222,13 +265,27 @@ export default function AiNarrativePanel({ reportId, canEdit, narrative, onAccep
   }
 
   const generate = async (feedbackText = '') => {
+    // Gate FIRST: a blocked generate flags the problems and never opens the
+    // loading panel — exactly like a blocked finalize.
+    if (onBeforeGenerate && !onBeforeGenerate()) return;
     setMode('loading');
     setThinkPhase('waiting'); // Phase A: rotating thinking phrases
     setMessage(null);
     setResidual([]);
     setRail(false); // loading always shows the full panel
     setPanelOpen(true); // open the side panel immediately (shows the spinner)
-    const body = { notes, feedback: feedbackText || undefined };
+    // The officer's CURRENT Notable Findings and Action Taken / Status text is
+    // sent with the request, not left to the server's stored row: autosave
+    // only ticks every 30s, so a note typed right before clicking Generate
+    // would reach the AI as the OLD value — and the formalised draft would
+    // then overwrite the note the officer just wrote. The server prefers
+    // these live values when they are present.
+    const body = {
+      notes,
+      feedback: feedbackText || undefined,
+      action_taken: String(actionTaken || ''),
+      notable_findings: String(notableFindings || ''),
+    };
     lastPayloadRef.current = body;
 
     // The server's queued-retry model answers a transient provider error
@@ -247,11 +304,26 @@ export default function AiNarrativePanel({ reportId, canEdit, narrative, onAccep
         await holdVerifyPhase();
         setDraft(out);
         setResidual(out.residualRisk ?? []);
+        // Auto-apply the formalised findings to the report's own field: one
+        // action (this generation) produces the whole draft, and the field —
+        // never the panel — is what saves, snapshots and prints.
+        const draftedFindings = Array.isArray(out.notableFindings) ? out.notableFindings : [];
+        if (draftedFindings.length > 0) {
+          onApplyFindings?.(draftedFindings);
+        }
+        const draftedDisposition = String(out.actionTaken || '').trim();
+        if (draftedDisposition !== '') {
+          onApplyActionTaken?.(draftedDisposition);
+        }
         setRevealDone(false); // suggestions/gaps wait for the new reveal
         setMode('done');
         setThinkPhase('waiting'); // reset for the next generation
         setRevealOn(true); // play the NarrativeReveal for THIS generation
         setGenCounter((g) => g + 1); // new resetKey → clean remount
+        // DONE — leave the retry loop. Without this the loop ran all three
+        // attempts on SUCCESS too: three provider calls per click (three times
+        // the latency and token cost) and the draft applied three times.
+        return;
       } catch (err) {
         setThinkPhase('waiting'); // failure path: no thinking text (addendum §2)
         setRevealOn(false); // never reveal a failed response
@@ -274,7 +346,78 @@ export default function AiNarrativePanel({ reportId, canEdit, narrative, onAccep
     }
   };
 
+  // Phase 5 — "Tighten this draft": the economy rules over the narrative the
+  // OFFICER wrote, not over a generated one. Two things differ from generate:
+  // there is no completeness gate (a half-written report is exactly when
+  // tightening the prose helps), and NOTHING is applied when it lands — this
+  // call edits the officer's own words, so the merged findings and trimmed
+  // status come back as proposals with their own buttons.
+  const tighten = async () => {
+    const text = String(narrative || '').trim();
+    if (!text) {
+      setMessage('Write the narrative first — there is nothing to tighten yet.');
+      setMode('error');
+      setPanelOpen(true);
+      return;
+    }
+    setMode('loading');
+    setThinkPhase('waiting');
+    setMessage(null);
+    setResidual([]);
+    setRail(false);
+    setPanelOpen(true);
+    try {
+      const out = await api(`/reports/${reportId}/narrative/tighten`, {
+        method: 'POST',
+        body: {
+          narrative: text,
+          // The live form values, same reason as generate: autosave can be 30s
+          // behind, and the merges must be computed from exactly the text the
+          // officer is looking at.
+          notable_findings: String(notableFindings || ''),
+          action_taken: String(actionTaken || ''),
+        },
+      });
+      setThinkPhase('verifying');
+      await holdVerifyPhase();
+      setDraft({ ...out, tighten: true });
+      setResidual(out.residualRisk ?? []);
+      setRevealDone(false);
+      setMode('done');
+      setThinkPhase('waiting');
+      // Replay the typing reveal only when the prose actually changed — an
+      // untouched copy animating itself would claim work it did not do.
+      setRevealOn(out.tightened === true);
+      setGenCounter((g) => g + 1);
+    } catch (err) {
+      setThinkPhase('waiting');
+      setRevealOn(false);
+      if (err.status === 503 || err.manual_mode) {
+        setMode('manual');
+        setMessage(err.message);
+      } else {
+        setMode('error');
+        setMessage(err.message || 'The draft could not be tightened.');
+      }
+    }
+  };
+
   if (!reportId || !canEdit) return null;
+
+  // What a TIGHTEN result proposes for the officer's own two fields. A button
+  // is offered only when the analyser's version actually differs from what is
+  // in the form — a button that writes back the identical string is a no-op
+  // pretending to be an action.
+  const tightenDraft = draft?.tighten === true;
+  const findingsProposed =
+    tightenDraft
+    && Array.isArray(draft.notableFindings)
+    && draft.notableFindings.length > 0
+    && normaliseLineSet(draft.notableFindings) !== normaliseLineSet(String(notableFindings || '').split('\n'));
+  const statusProposed =
+    tightenDraft
+    && String(draft.actionTaken || '').trim() !== ''
+    && String(draft.actionTaken || '').trim() !== String(actionTaken || '').trim();
 
   const closePanel = () => {
     setRevealOn(false); // unmounts NarrativeReveal — cancels its timer
@@ -286,6 +429,12 @@ export default function AiNarrativePanel({ reportId, canEdit, narrative, onAccep
 
   const expanded = !rail || hoverOpen || mode === 'loading' || resizing;
 
+  // The recorded disposition the model must close the narrative with. Long
+  // text is trimmed for the hint; the full text rides on the tooltip.
+  const referenceText = String(actionTaken || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+  const findingsReference = String(notableFindings || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+
+
   return (
     <div className="ai-panel">
       {mode === 'manual' && (
@@ -295,18 +444,52 @@ export default function AiNarrativePanel({ reportId, canEdit, narrative, onAccep
       )}
 
       {mode === 'ready' && (
-        <div className="ai-generate-row">
-          <button type="button" className="side-new" onClick={() => generate()}>
-            Generate AI draft
-          </button>
-          <input
-            type="text"
-            className="ai-notes"
-            placeholder="Rough notes (optional) — the AI writes from these"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
+        <>
+          <div className="ai-generate-row">
+            <button type="button" className="side-new" onClick={() => generate()}>
+              Generate AI draft
+            </button>
+            <input
+              type="text"
+              className="ai-notes"
+              placeholder="Rough notes (optional) — the AI writes from these"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+          {/* Sits beside Generate because it is the other thing an officer can
+              ask for, but on top of the narrative THEY wrote: Generate writes
+              from the notes, Tighten works on the form's own narrative text.
+              Disabled while that text is empty — there is nothing to tighten,
+              and a live button that can only refuse is a dead click. */}
+          <div className="ai-tighten-row">
+            <button
+              type="button"
+              className="ai-tighten"
+              onClick={tighten}
+              disabled={!String(narrative || '').trim()}
+              title="Runs the economy rules over your own narrative: repeated propositions merged, padding and closing formulas removed. Nothing is written into the report until you click."
+            >
+              Tighten my draft
+            </button>
+            <p className="field-hint">
+              On the narrative you wrote — removes repetition and padding. You review every
+              change before it lands.
+            </p>
+          </div>
+          {referenceText && (
+            <p className="ai-reference" title={referenceText}>
+              Closes with your recorded Action Taken / Status:{' '}
+              <em>“{referenceText}”</em>
+            </p>
+          )}
+          {findingsReference && (
+            <p className="ai-reference" title={findingsReference}>
+              Also formalises your Notable Findings for the sheet:{' '}
+              <em>“{findingsReference}”</em>
+            </p>
+          )}
+        </>
       )}
 
       {mode === 'error' && !panelOpen && (
@@ -479,6 +662,41 @@ export default function AiNarrativePanel({ reportId, canEdit, narrative, onAccep
                       into the report automatically.
                     </p>
 
+                    {/* Tighten edits the officer's OWN text, so there is no
+                        auto-apply here (generate applies its own findings
+                        because writing the report is its job). The server's
+                        own sentence says what happened — including when the
+                        wording was deliberately left alone — and the two
+                        proposals for the officer's fields get their own
+                        buttons. Undo is the existing aiUndo snapshot. */}
+                    {tightenDraft && (
+                      <div className="ai-tighten-result">
+                        <p className="field-hint">{draft.note}</p>
+                        {(findingsProposed || statusProposed) && (
+                          <div className="ai-actions">
+                            {findingsProposed && (
+                              <button
+                                type="button"
+                                onClick={() => onApplyFindings?.(draft.notableFindings)}
+                                title="Replaces your Notable Findings with the merged lines shown below. Undo is available after applying."
+                              >
+                                Apply merged findings ({draft.notableFindings.length})
+                              </button>
+                            )}
+                            {statusProposed && (
+                              <button
+                                type="button"
+                                onClick={() => onApplyActionTaken?.(draft.actionTaken)}
+                                title="Replaces your Action Taken / Status with the trimmed line — padding removed, no fact changed."
+                              >
+                                Apply trimmed status
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {residual.length > 0 && (
                       <div className="alert error" role="alert">
                         These names appear in your notes but are not listed as
@@ -508,15 +726,43 @@ export default function AiNarrativePanel({ reportId, canEdit, narrative, onAccep
                       )}
                     </div>
 
+                    {/* Tighten only, and deterministic (server side): the
+                        numbers, times, dates and placeholders the rewrite
+                        dropped. A "make it shorter" pass can lose a fact
+                        without ever looking wrong, so the check is named next
+                        to the button that would write the rewrite into the
+                        record. It advises rather than blocks — this panel is a
+                        review surface and the officer is the reviewer. */}
+                    {tightenDraft && (draft.factLoss?.length ?? 0) > 0 && (
+                      <div className="alert error" role="alert">
+                        The rewrite no longer states:{' '}
+                        <strong>{draft.factLoss.join(', ')}</strong>. Tightening
+                        removes wording, never facts — run it again, or fix the
+                        text yourself before accepting.
+                      </div>
+                    )}
+
                     <div className="ai-actions">
                       <button
                         type="button"
                         className="primary"
                         onClick={() => { onAccept(draft.narrative); setDraft(null); setMode('ready'); closePanel(); }}
+                        disabled={tightenDraft && !draft.tightened}
+                        title={tightenDraft && !draft.tightened ? 'Your wording was not changed, so there is nothing to accept.' : undefined}
                       >
                         Accept into narrative
                       </button>
-                      <button type="button" onClick={() => setShowFeedback((v) => !v)}>Regenerate…</button>
+                      {/* Each result offers to repeat ITSELF: a generated draft
+                          regenerates from the notes, a tightened draft is
+                          tightened again. Offering "Regenerate" on a tighten
+                          result would swap the officer's own prose for an
+                          AI-written one under a button they did not mean to
+                          press. */}
+                      {tightenDraft ? (
+                        <button type="button" onClick={tighten}>Tighten again</button>
+                      ) : (
+                        <button type="button" onClick={() => setShowFeedback((v) => !v)}>Regenerate…</button>
+                      )}
                       <button type="button" onClick={closePanel}>Close</button>
                     </div>
 
@@ -543,7 +789,7 @@ export default function AiNarrativePanel({ reportId, canEdit, narrative, onAccep
                     {/* §4/§5: lists appear as soon as the reveal completes
                         (naturally OR via skip — both paths fire the same
                         onComplete) with a simple fade, no char reveal. */}
-                    {(revealDone || !revealOn) && (draft.suggestions.length > 0 || draft.possibleGaps.length > 0) && (
+                    {(revealDone || !revealOn) && (draft.suggestions.length > 0 || draft.possibleGaps.length > 0 || (draft.addedContentWarnings?.length ?? 0) > 0 || (draft.redundancy?.length ?? 0) > 0 || (draft.narrativeRepetition?.length ?? 0) > 0) && (
                       <div className="ai-advice ai-advice-fade">
                         {draft.suggestions.length > 0 && (
                           <>
@@ -570,9 +816,68 @@ export default function AiNarrativePanel({ reportId, canEdit, narrative, onAccep
                             </ul>
                           </>
                         )}
+                        {/* Details the draft deliberately left out because
+                            the officer's record does not state them. Shown
+                            here only — never written into the report. */}
+                        {(draft.addedContentWarnings?.length ?? 0) > 0 && (
+                          <>
+                            <h4>Not added — no source in your record (advisory)</h4>
+                            <ul>
+                              {draft.addedContentWarnings.map((w, i) => (
+                                <li key={i} className="gap-info">
+                                  {w}
+                                </li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                        {/* Phase 5 — the economy pass. The findings field is
+                            replaced wholesale by this response, so a line
+                            merged away or dropped has to be VISIBLE here: it
+                            was in the officer's own record, and a silent
+                            removal would be an edit they never agreed to.
+                            The kept text is shown beside it, so "merged"
+                            names what it merged INTO, not just that
+                            something went. Undo is the existing findings
+                            undo (aiUndo), which this panel does not own. */}
+                        {(draft.redundancy?.length ?? 0) > 0 && (
+                          <>
+                            <h4>Merged or dropped as repeated (advisory)</h4>
+                            <ul>
+                              {draft.redundancy.map((r, i) => (
+                                <li key={i} className="gap-info">
+                                  <strong>{REDUNDANCY_LABEL[r.kind] ?? 'Adjusted as repeated'}:</strong>{' '}
+                                  “{r.line}”
+                                  {r.kept ? <> → “{r.kept}”</> : null}
+                                </li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                        {/* Only reachable when the one repair pass did not run
+                            or did not clear the repetition — the pass is
+                            bounded, and the officer decides what to do next. */}
+                        {(draft.narrativeRepetition?.length ?? 0) > 0 && (
+                          <>
+                            <h4>The narrative still says this twice (advisory)</h4>
+                            <ul>
+                              {draft.narrativeRepetition.map((f, i) => (
+                                <li key={i} className="gap-info">
+                                  “{f.sentence}” repeats “{f.repeated}”
+                                </li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                        {draft.narrativeRepaired && (
+                          <p className="field-hint">
+                            Rewritten once to remove repeated wording. Review the wording as
+                            usual — every fact still traces back to your record.
+                          </p>
+                        )}
                       </div>
                     )}
-                    {draft.suggestions.length === 0 && draft.possibleGaps.length === 0 && (
+                    {draft.suggestions.length === 0 && draft.possibleGaps.length === 0 && (draft.addedContentWarnings?.length ?? 0) === 0 && (draft.redundancy?.length ?? 0) === 0 && (draft.narrativeRepetition?.length ?? 0) === 0 && !draft.narrativeRepaired && (
                       <p className="field-hint">No suggestions or gaps detected for this draft.</p>
                     )}
                   </>
