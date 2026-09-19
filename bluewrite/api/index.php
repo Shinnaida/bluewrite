@@ -16,6 +16,7 @@ require __DIR__ . '/../app/core/Auth.php';
 require __DIR__ . '/../app/core/Validator.php';
 require __DIR__ . '/../app/core/LegacyNormalizer.php';
 require __DIR__ . '/../app/core/Station.php';
+require __DIR__ . '/../app/core/ReportVerification.php';
 require __DIR__ . '/../app/rules/report_rules.php';
 require __DIR__ . '/../app/ai/AiProviderException.php';
 require __DIR__ . '/../app/ai/AiUnavailableException.php';
@@ -34,6 +35,7 @@ require __DIR__ . '/../app/controllers/ReportsController.php';
 require __DIR__ . '/../app/controllers/DashboardController.php';
 require __DIR__ . '/../app/controllers/AuditsController.php';
 require __DIR__ . '/../app/controllers/StationController.php';
+require __DIR__ . '/../app/controllers/VerificationController.php';
 
 use App\Controllers\AuditsController;
 use App\Controllers\AuthController;
@@ -42,6 +44,7 @@ use App\Controllers\NarrativeController;
 use App\Controllers\ReportsController;
 use App\Controllers\StationController;
 use App\Controllers\UsersController;
+use App\Controllers\VerificationController;
 use App\Core\Response;
 use App\Core\Session;
 
@@ -98,10 +101,14 @@ try {
         if ($seg0 === 'users' && $seg1 === null && $method === 'POST') {
             $c->store();
         }
-        if ($seg1 !== null && $method === 'PATCH') {
+        // PATCH/DELETE apply to the record itself, never to a sub-resource:
+        // /reports/:id/verifications must NOT fall through to report update or
+        // delete (the verification table is append-only, and a stray subpath
+        // must not mutate the record). An unrecognised subpath 404s below.
+        if ($seg1 !== null && !isset($parts[2]) && $method === 'PATCH') {
             $c->update((string) $seg1);
         }
-        if ($seg1 !== null && $method === 'DELETE') {
+        if ($seg1 !== null && !isset($parts[2]) && $method === 'DELETE') {
             $c->destroy((string) $seg1);
         }
     }
@@ -151,6 +158,15 @@ try {
             if ($parts[2] === 'narrative' && ($parts[3] ?? null) === 'tighten' && $method === 'POST') {
                 (new NarrativeController())->tighten((string) $seg1);
             }
+            // Phase 6 Stage 4 — the translation verification record.
+            // Append-only: POST records an act, GET reads the history. No
+            // update and no delete route exists, by design.
+            if ($parts[2] === 'verify' && $method === 'POST') {
+                (new VerificationController())->store((string) $seg1);
+            }
+            if ($parts[2] === 'verifications' && $method === 'GET') {
+                (new VerificationController())->index((string) $seg1);
+            }
             if ($parts[2] === 'history' && $method === 'GET') {
                 $c->history((string) $seg1);
             }
@@ -161,10 +177,14 @@ try {
                 $c->restore((string) $seg1);
             }
         }
-        if ($seg1 !== null && $method === 'PATCH') {
+        // PATCH/DELETE apply to the record itself, never to a sub-resource:
+        // /reports/:id/verifications must NOT fall through to report update or
+        // delete (the verification table is append-only, and a stray subpath
+        // must not mutate the record). An unrecognised subpath 404s below.
+        if ($seg1 !== null && !isset($parts[2]) && $method === 'PATCH') {
             $c->update((string) $seg1);
         }
-        if ($seg1 !== null && $method === 'DELETE') {
+        if ($seg1 !== null && !isset($parts[2]) && $method === 'DELETE') {
             $c->destroy((string) $seg1);
         }
     }

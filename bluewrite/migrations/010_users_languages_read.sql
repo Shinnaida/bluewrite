@@ -1,0 +1,33 @@
+-- BlueWrite migration 010: which source languages a user can read.
+--
+-- Phase 6 Stage 4 (docs/PHASE6_MULTILINGUAL.md §8 Q6, decision "who may
+-- verify"). A translation may be verified only by a second officer who can
+-- READ the source language. That ability is a recorded ATTRIBUTE, not a tested
+-- competency (the plan says so plainly), and this is the whole of it: one
+-- optional column on `users`.
+--
+--   languages_read — a comma-separated list of language codes the account is
+--     recorded as able to read, drawn from the Stage 1 set
+--     (ReportsController::NARRATIVE_LANGUAGES):
+--       en, ceb, tl, mixed, other
+--     Example: 'ceb,tl' — an officer who reads both Bisaya/Cebuano and
+--     Tagalog. NULL or empty means "not recorded as able to read any
+--     non-English source", so the account cannot verify a translation.
+--
+-- Why an attribute and not a new table or role: the existing role model
+-- (Admin/Officer/Staff) says nothing about languages, and the plan forbids
+-- inventing a permission model. A column edited in the EXISTING Users screen by
+-- an Admin extends that model minimally. VARCHAR(120) is ample for every code
+-- with room to spare; it is not an ENUM so a later language is not an ALTER.
+--
+-- NULLABLE, default NULL: every existing account keeps working and simply
+--   cannot verify until an Admin records the languages it reads.
+--
+-- The API enforces the rule (a verifier's `languages_read` must contain the
+--   report's `narrative_source_language`); the column itself is data.
+--
+-- Rollback: migrations/010_users_languages_read.down.sql — states plainly what
+--   it loses.
+
+ALTER TABLE users
+  ADD COLUMN languages_read VARCHAR(120) NULL AFTER status;

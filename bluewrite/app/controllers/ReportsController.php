@@ -6,6 +6,7 @@ namespace App\Controllers;
 use App\Core\Audit;
 use App\Core\Auth;
 use App\Core\Database;
+use App\Core\ReportVerification;
 use App\Core\Response;
 use App\Core\Station;
 use App\Core\Validator;
@@ -217,8 +218,9 @@ final class ReportsController
         $sql = "SELECT r.id, r.incident_type, r.report_date, r.blotter_no, r.blotter_date,
                     r.incident_datetime, r.incident_date, r.incident_time,
                     r.incident_time_approximate, r.location, r.status,
-                    r.narrative_language,
-                    r.created_by, u.full_name AS created_by_name, r.deleted_at
+                    r.narrative_language, r.narrative_source_language,
+                    r.created_by, u.full_name AS created_by_name, r.deleted_at,
+                    r.narrative, r.narrative_source_text
              FROM reports r JOIN users u ON u.id = r.created_by
              WHERE {$whereSql}
              ORDER BY {$orderBy}, r.id DESC
@@ -227,8 +229,18 @@ final class ReportsController
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
 
+        // Phase 6 Stage 4 (D5) — the derived status is attached server-side, and
+        // the narrative/source Text columns the derivation needs are then
+        // STRIPPED: the list never carries narrative or source text (the same
+        // rule the list has always followed).
+        $rows = $this->attachVerificationStatus($pdo, $stmt->fetchAll());
+        foreach ($rows as &$row) {
+            unset($row['narrative'], $row['narrative_source_text']);
+        }
+        unset($row);
+
         Response::json(200, [
-            'reports' => $stmt->fetchAll(),
+            'reports' => $rows,
             'pagination' => [
                 'page' => $page,
                 'per_page' => $perPage,
@@ -260,13 +272,20 @@ final class ReportsController
 
         $stmt = $pdo->prepare(
             "SELECT r.id, r.incident_type, r.incident_datetime, r.location, r.status,
-                    u.full_name AS created_by_name, r.complainant, r.respondent, r.deleted_at
+                    u.full_name AS created_by_name, r.complainant, r.respondent, r.deleted_at,
+                    r.narrative_language, r.narrative_source_language,
+                    r.narrative, r.narrative_source_text
              FROM reports r JOIN users u ON u.id = r.created_by
              WHERE {$whereSql}
              ORDER BY {$orderBy}, r.id DESC
              LIMIT 20000"
         );
         $stmt->execute($params);
+        // Phase 6 Stage 4 — the export carries the derived verification STATUS
+        // (label only). It NEVER carries the source text: adding it would widen
+        // exposure, and the CSV has never carried the narrative either.
+        $exportRows = $this->attachVerificationStatus($pdo, $stmt->fetchAll());
+        $stmt = null;
 
         if (ob_get_level() !== 0) {
             ob_end_clean();
@@ -278,9 +297,10 @@ final class ReportsController
         $out = fopen('php://output', 'w');
         // UTF-8 BOM so Excel opens Filipino text (ñ, é) correctly.
         fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['Report No.', 'Incident Type', 'Incident Datetime', 'Location', 'Status', 'Recorded By', 'Complainant', 'Respondent', 'Archived']);
+        fputcsv($out, ['Report No.', 'Incident Type', 'Incident Datetime', 'Location', 'Status', 'Recorded By', 'Complainant', 'Respondent', 'Archived', 'Verification']);
 
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $exported = 0;
+        foreach ($exportRows as $row) {
             fputcsv($out, [
                 'BW-' . str_pad((string) $row['id'], 4, '0', STR_PAD_LEFT),
                 $row['incident_type'],
@@ -291,11 +311,13 @@ final class ReportsController
                 $row['complainant'],
                 $row['respondent'],
                 $row['deleted_at'] !== null ? 'yes' : 'no',
+                $row['verification_label'] ?? '',
             ]);
+            $exported++;
         }
         fclose($out);
 
-        Audit::log((int) $user['id'], 'report.export', 'report', null, 'csv export, ' . $stmt->rowCount() . ' rows');
+        Audit::log((int) $user['id'], 'report.export', 'report', null, 'csv export, ' . $exported . ' rows');
         exit;
     }
 
@@ -315,6 +337,46 @@ final class ReportsController
         if ($user['role'] !== 'Admin') {
             $where[] = 'r.created_by = :uid';
             $params[':uid'] = (int) $user['id'];
+        }
+
+        // Phase 6 Stage 4 — the "awaiting verification" view: a MODE of this same
+        // list. It shows translated reports with no verification yet, in the
+        // source languages this account can read, and it deliberately lifts the
+        // own-reports restriction (a second officer must be able to open a
+        // translation they did not write). It is limited to reports that HAVE a
+        // source, so it never widens access to ordinary reports.
+        if (($_GET['verification'] ?? '') === 'awaiting') {
+            $where = array_values(array_filter(
+                $where,
+                static fn (string $w): bool => !str_contains($w, 'r.created_by = :uid')
+            ));
+            unset($params[':uid']);
+            $where[] = 'r.narrative_source_text IS NOT NULL';
+            $where[] = 'NOT EXISTS (SELECT 1 FROM report_verifications v WHERE v.report_id = r.id)';
+
+            $readable = array_values(array_filter(array_map(
+                static fn ($c) => strtolower(trim($c)),
+                explode(',', strtolower((string) ($user['languages_read'] ?? ''))),
+            ), static fn ($c) => $c !== ''));
+            if ($user['role'] !== 'Admin') {
+                if ($readable === []) {
+                    // The account reads no source language: nothing to review.
+                    $where[] = '1 = 0';
+                } else {
+                    $place = [];
+                    foreach ($readable as $i => $code) {
+                        $key = ":rl{$i}";
+                        $place[] = $key;
+                        $params[$key] = $code;
+                    }
+                    $where[] = 'r.narrative_source_language IN (' . implode(', ', $place) . ')';
+                }
+            }
+            $lang = strtolower(trim((string) ($_GET['language'] ?? '')));
+            if ($lang !== '') {
+                $where[] = 'r.narrative_source_language = :rlang';
+                $params[':rlang'] = $lang;
+            }
         }
 
         // Keyword search (UC-013): type, location, parties, creator, narrative.
@@ -1001,15 +1063,36 @@ n     * view. Officers and Staff may print only their own reports; Admin may
         if ($report === false || $report['deleted_at'] !== null) {
             Response::json(404, ['error' => 'Report not found.']);
         }
-        // Same visibility rule as the list: non-Admin, own reports only.
-        if ($user['role'] !== 'Admin' && (int) $report['created_by'] !== (int) $user['id']) {
+        // Visibility: own reports or Admin, PLUS the Stage 4 verification
+        // extension — an account recorded as reading a translated report's
+        // source language may open it to review (read-only; only reports that
+        // have a source).
+        if (!ReportVerification::mayViewForVerification($user, $report)) {
             Response::json(403, ['error' => 'You can only open reports you recorded.']);
         }
 
         Audit::log((int) $user['id'], 'report.print', 'report', (string) (int) $id);
         // The sheet's fixed letterhead travels with the report so the printed
-        // document never depends on a second request (spec §1.1).
-        Response::json(200, ['report' => $report, 'station' => Station::header()]);
+        // document never depends on a second request (spec §1.1). The
+        // verification status and records travel with it too, so the appendix
+        // is rendered from the SAME derivation as every other surface.
+        $vstmt = $pdo->prepare(
+            'SELECT v.*, u.full_name AS verifier_name, r.name AS verifier_role
+             FROM report_verifications v
+             JOIN users u ON u.id = v.verifier_id
+             JOIN roles r ON r.id = u.role_id
+             WHERE v.report_id = :rid ORDER BY v.id DESC'
+        );
+        $vstmt->execute([':rid' => (int) $id]);
+        $verifications = $vstmt->fetchAll();
+        $status = ReportVerification::status($report, $verifications);
+        Response::json(200, [
+            'report' => $report,
+            'station' => Station::header(),
+            'verification_status' => $status['code'],
+            'verification_label' => $status['label'],
+            'verifications' => $verifications,
+        ]);
     }
 
     public function history(string $id): void
@@ -1044,6 +1127,45 @@ n     * view. Officers and Staff may print only their own reports; Admin may
         $stmt->execute([':id' => $id]);
         $row = $stmt->fetch();
         return $row === false ? null : $row;
+    }
+
+    /**
+     * Phase 6 Stage 4 (D5) — attach the derived verification status to each row
+     * in ONE batched query, using the single status function. The rows must
+     * carry `narrative` and `narrative_source_text` for the hash comparison; the
+     * caller decides whether those columns are stripped from the response
+     * (the list strips them; the export never prints them).
+     *
+     * @param array<int, array<string,mixed>> $rows
+     * @return array<int, array<string,mixed>>
+     */
+    private function attachVerificationStatus(PDO $pdo, array $rows): array
+    {
+        if ($rows === []) {
+            return $rows;
+        }
+        $place = [];
+        $params = [];
+        foreach (array_values($rows) as $i => $row) {
+            $key = ":rv{$i}";
+            $place[] = $key;
+            $params[$key] = (int) $row['id'];
+        }
+        $stmt = $pdo->prepare(
+            'SELECT * FROM report_verifications WHERE report_id IN (' . implode(', ', $place) . ') ORDER BY id DESC'
+        );
+        $stmt->execute($params);
+        $byReport = [];
+        foreach ($stmt->fetchAll() as $v) {
+            $byReport[(int) $v['report_id']][] = $v;
+        }
+        foreach ($rows as &$row) {
+            $status = ReportVerification::status($row, $byReport[(int) $row['id']] ?? []);
+            $row['verification_status'] = $status['code'];
+            $row['verification_label'] = $status['label'];
+        }
+        unset($row);
+        return $rows;
     }
 
     private function snapshot(PDO $pdo, int $reportId, int $userId, string $note): void

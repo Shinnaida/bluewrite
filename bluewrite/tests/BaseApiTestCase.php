@@ -60,6 +60,11 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // kept source text, nullable, paired with narrative_source_text). The
         // API writes it from Stage 3 on, so the scratch DB must carry it.
         $this->runSqlFile(__DIR__ . '/../migrations/008_narrative_source_language.sql');
+        // 009 adds report_verifications (the append-only translation review)
+        // and 010 adds users.languages_read. The API writes both from Stage 4
+        // on, so the scratch DB must carry them.
+        $this->runSqlFile(__DIR__ . '/../migrations/009_report_verification.sql');
+        $this->runSqlFile(__DIR__ . '/../migrations/010_users_languages_read.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         $hash = password_hash('Passw0rd!23', PASSWORD_BCRYPT);

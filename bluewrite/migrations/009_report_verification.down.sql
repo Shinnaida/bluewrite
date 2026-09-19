@@ -1,0 +1,23 @@
+-- BlueWrite migration 009 DOWN — undo `009_report_verification.sql`.
+--
+-- Run it only to undo 009. To go forward again, apply
+-- 009_report_verification.sql.
+--
+-- WHAT THIS LOSES — stated plainly, as 007's and 008's down files do:
+--
+--   * EVERY translation verification that has been recorded. A verification is
+--     an append-only human attestation with no other copy anywhere: dropping
+--     the table destroys every "this was reviewed" and every dispute, and the
+--     history snapshots do NOT carry it (verifications are their own records,
+--     never folded into report_history). There is no backup of the table.
+--     Reports become "translated — not independently verified" again.
+--
+-- It does NOT touch the `reports` table at all: every narrative, kept source,
+--   source language, party, date and status is exactly as it was. It does not
+--   touch `report_history`, `audit_logs` (the audit trail keeps its own record
+--   of the acts that happened) or any row's identity.
+--
+-- It does NOT touch `users.languages_read` (migration 010) — undo 010
+--   separately if that is also being rolled back.
+
+DROP TABLE IF EXISTS report_verifications;

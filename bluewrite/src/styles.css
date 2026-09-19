@@ -2362,6 +2362,53 @@ button.dash-kpi--link:focus-visible {
   margin: 1.25rem 0 1.5rem;
 }
 
+/* Phase 6 Stage 4 (D2) — the appendix page: the officer's original text.
+   Rendered ONLY when a stored source exists (see ReportPrint), so a report
+   with no translation prints exactly the sheet it printed before this stage.
+   It starts on its own page, and its text is the officer's verbatim words —
+   pre-wrap keeps their line breaks and React escapes the characters. */
+.pr-appendix {
+  break-before: page;
+  page-break-before: always;
+  margin-top: 2rem;
+  border-top: 1px solid #111;
+  padding-top: 1rem;
+}
+.pr-appendix-title {
+  font-size: 11pt;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin: 0 0 0.75rem;
+  text-align: center;
+}
+.pr-appendix-intro { margin: 0 0 1rem; text-align: justify; }
+.pr-appendix-label {
+  font-weight: 700;
+  font-size: 9pt;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+}
+/* The original is quoted verbatim. `pre-wrap` preserves the officer's line
+   breaks; long paragraphs must be allowed to break ACROSS pages (never hidden),
+   so the appendix grows to as many pages as the text needs. */
+.pr-appendix-source {
+  white-space: pre-wrap;
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.75rem;
+  border-left: 2px solid #999;
+  background: #f7f7f7;
+  text-align: left;
+  break-inside: auto;
+  page-break-inside: auto;
+}
+.pr-appendix-note { margin: 0 0 0.75rem; text-align: justify; }
+.pr-appendix-close {
+  margin: 0;
+  font-size: 8.5pt;
+  font-style: italic;
+  color: #444;
+}
+
 .pr-footer-block { margin-top: 2rem; }
 /* "Recorded by:" and "IOC:" print as two consecutive lines — no blank line
    between them (the line-height alone sets the spacing). */

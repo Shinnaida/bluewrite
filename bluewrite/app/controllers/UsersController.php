@@ -17,7 +17,8 @@ final class UsersController
         Auth::requireRole('Admin');
         $pdo = Database::pdo();
         $rows = $pdo->query(
-            'SELECT u.id, u.full_name, u.badge_number, u.username, u.status, u.last_login_at, r.name AS role
+            'SELECT u.id, u.full_name, u.badge_number, u.username, u.status, u.last_login_at,
+                    u.languages_read, r.name AS role
              FROM users u JOIN roles r ON r.id = u.role_id
              ORDER BY u.full_name'
         )->fetchAll();
@@ -34,6 +35,9 @@ final class UsersController
         $v->require('badge_number', $body['badge_number'] ?? null, 'Badge / employee number', 40);
         $v->require('username', $body['username'] ?? null, 'Username', 60);
         $v->in('role', $body['role'] ?? null, ['Admin', 'Officer', 'Staff'], 'Role');
+        // Phase 6 Stage 4 — which source languages the account reads. Optional;
+        // NULL means "not recorded", so it cannot verify a translation.
+        $languagesRead = $this->validateLanguages($body['languages_read'] ?? null, $v);
         $password = (string) ($body['password'] ?? '');
         if (strlen($password) < 10) {
             $v = new Validator();
@@ -53,8 +57,8 @@ final class UsersController
         }
 
         $stmt = $pdo->prepare(
-            'INSERT INTO users (role_id, full_name, badge_number, username, password_hash, status)
-             VALUES (:role, :name, :badge, :username, :hash, :status)'
+            'INSERT INTO users (role_id, full_name, badge_number, username, password_hash, status, languages_read)
+             VALUES (:role, :name, :badge, :username, :hash, :status, :langs)'
         );
         $stmt->execute([
             ':role' => (int) $roleId,
@@ -63,6 +67,7 @@ final class UsersController
             ':username' => trim((string) $body['username']),
             ':hash' => password_hash($password, PASSWORD_BCRYPT),
             ':status' => 'active',
+            ':langs' => $languagesRead,
         ]);
         $id = (int) $pdo->lastInsertId();
         Audit::log((int) $admin['id'], 'user.create', 'user', (string) $id, "username: {$body['username']}, role: {$body['role']}");
@@ -97,6 +102,7 @@ final class UsersController
         if (array_key_exists('status', $body)) {
             $v->in('status', $body['status'], ['active', 'inactive'], 'Status');
         }
+        $languagesRead = $this->validateLanguages($body['languages_read'] ?? null, $v);
         $this->fail($v);
 
         // Guard: never let the station lock itself out of Admin.
@@ -119,6 +125,10 @@ final class UsersController
                 $sets[] = "{$field} = :{$field}";
                 $params[":{$field}"] = trim((string) $body[$field]);
             }
+        }
+        if (array_key_exists('languages_read', $body)) {
+            $sets[] = 'languages_read = :languages_read';
+            $params[':languages_read'] = $languagesRead;
         }
         if (array_key_exists('role', $body)) {
             $roleStmt = $pdo->prepare('SELECT id FROM roles WHERE name = :name');
@@ -204,12 +214,46 @@ final class UsersController
     private function fetchUser(PDO $pdo, int $id): ?array
     {
         $stmt = $pdo->prepare(
-            'SELECT u.id, u.full_name, u.badge_number, u.username, u.status, r.name AS role
+            'SELECT u.id, u.full_name, u.badge_number, u.username, u.status, u.languages_read, r.name AS role
              FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = :id'
         );
         $stmt->execute([':id' => $id]);
         $row = $stmt->fetch();
         return $row === false ? null : $row;
+    }
+
+    /**
+     * Phase 6 Stage 4 — validate the optional `languages_read` attribute: a
+     * comma-separated list of the Stage 1 language codes, or blank/NULL. An
+     * unknown code is rejected rather than silently dropped, so a typo cannot
+     * quietly grant or remove the ability to verify.
+     */
+    private function validateLanguages(mixed $value, Validator $v): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (!is_string($value)) {
+            $v->add('languages_read', 'Languages read must be text.');
+            return null;
+        }
+        $allowed = ['en', 'ceb', 'tl', 'mixed', 'other'];
+        $codes = array_values(array_filter(
+            array_map(static fn ($c) => strtolower(trim($c)), explode(',', $value)),
+            static fn ($c) => $c !== ''
+        ));
+        foreach ($codes as $code) {
+            if (!in_array($code, $allowed, true)) {
+                $v->add('languages_read', "Unknown language code: {$code}.");
+                return null;
+            }
+        }
+        $out = implode(',', array_values(array_unique($codes)));
+        if (mb_strlen($out) > 120) {
+            $v->add('languages_read', 'Too many languages recorded.');
+            return null;
+        }
+        return $out === '' ? null : $out;
     }
 
     private function assertUnique(PDO $pdo, string $username, string $badge, ?int $exceptId = null): void

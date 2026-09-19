@@ -9,7 +9,20 @@ import { resolveHeader } from '../lib/stationSettings.js';
 // Phase 6 Stage 1 (D6) — the "not translated" line, or null for an English
 // narrative. Same module the editor reads, so the sheet and the form cannot
 // disagree about what a stored code means.
-import { printLanguageLine } from '../lib/reportLanguages.js';
+import { printLanguageLine, languageLabel } from '../lib/reportLanguages.js';
+// Phase 6 Stage 4 (D2) — the appendix page's wording and its status lines. The
+// status CODE is the server's derivation; these helpers only state it in
+// sentences. Nothing here may claim certification (Invariant 7).
+import {
+  hasSource,
+  APPENDIX_HEADING,
+  appendixIntro,
+  appendixSourceLabel,
+  // Which sentence the appendix prints for a status is a PURE function in the
+  // lib, so the exact printed wording is unit-tested rather than buried here.
+  appendixReviewLine,
+  appendixCloseLine,
+} from '../lib/reportVerification.js';
 // Station seals: bundled by Vite (src/assets) so they survive the offline
 // build — the sheet must print with the logos even without network access.
 import pnpLogo from '../assets/pnp-logo.png';
@@ -40,6 +53,7 @@ function fmtLong(v) {
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? String(v) : LONG_DATE.format(d);
 }
+
 
 const N = (v) => String(v ?? '').trim();
 const has = (v) => N(v) !== '';
@@ -462,6 +476,13 @@ export default function ReportPrint({ reportId, onClose, autoPrint = true, foote
   // is deployment data (Station settings), not part of a report, which is why it
   // travels beside the report rather than inside it.
   const [stationHeader, setStationHeader] = useState(null);
+  // Phase 6 Stage 4 (D2) — the translation's review record, for the appendix
+  // page. It travels with the report on the fetch path (see
+  // ReportsController::printData); on the finalize-review path, where the report
+  // is in memory, one small read fills it. Empty for a report with no source,
+  // which is exactly when no appendix is rendered.
+  const [verifications, setVerifications] = useState([]);
+  const [verificationStatus, setVerificationStatus] = useState(null);
 
   useEffect(() => {
     document.body.classList.add('print-sheet-open');
@@ -478,6 +499,10 @@ export default function ReportPrint({ reportId, onClose, autoPrint = true, foote
         // Sent with the report precisely so the sheet needs no second request
         // (see ReportsController::printData).
         setStationHeader(data.station ?? null);
+        // Same request carries the review record, so the appendix is rendered
+        // from the SAME derivation as every other surface.
+        setVerifications(data.verifications ?? []);
+        setVerificationStatus(data.verification_status ?? null);
         if (autoPrint) {
           // Give the layout a tick to paint before opening the dialog.
           setTimeout(() => window.print(), 150);
@@ -504,6 +529,20 @@ export default function ReportPrint({ reportId, onClose, autoPrint = true, foote
       .catch(() => {
         // Best-effort: resolveHeader falls back to the built-in lines below.
       });
+    // The review record for the appendix, when this in-memory report is a saved
+    // one that carries a source. A report with no source asks for nothing.
+    if (initialReport.id && hasSource(initialReport)) {
+      api(`/reports/${initialReport.id}/verifications`)
+        .then((d) => {
+          if (!alive) return;
+          setVerifications(d.verifications ?? []);
+          setVerificationStatus(d.verification_status ?? null);
+        })
+        .catch(() => {
+          // Best-effort: the appendix then states the translation is unreviewed,
+          // which is the honest reading when the record cannot be read.
+        });
+    }
     return () => {
       alive = false;
     };
@@ -566,6 +605,17 @@ export default function ReportPrint({ reportId, onClose, autoPrint = true, foote
   // a plain name line ("Recorded by: PMSg Juvi Egdamin") — no badge suffix,
   // matching the station's scanned reference sheet.
   const recorderName = recordedBy?.name || report.created_by_name || '—';
+  // Phase 6 Stage 4 (D2) — the appendix exists if and only if a stored source
+  // exists. An English report therefore gains no node at all, and its sheet is
+  // the same tree it was before this stage.
+  const showAppendix = hasSource(report);
+  const sourceLanguageLabel = languageLabel(report.narrative_source_language);
+  // Newest first from the endpoint (ORDER BY id DESC) — the latest record is
+  // the one the status was derived from.
+  const latestReview = verifications.length > 0 ? verifications[0] : null;
+  // D8 — the approved sentence for the status, chosen by a pure, unit-tested
+  // function so the printed wording cannot drift from the tested wording.
+  const reviewLine = appendixReviewLine(verificationStatus, latestReview);
   // ACTION TAKEN / STATUS: the officer's recorded disposition prints FIRST (one
   // line per typed line), then the recorded structured states, then the
   // station's note — and the routing line only when the disposition does not
@@ -741,6 +791,21 @@ export default function ReportPrint({ reportId, onClose, autoPrint = true, foote
             <span className="pr-noted-name">{NOTED_BY_NAME}</span>
           </div>
         </div>
+
+        {/* ---- D2 — the appendix page. Only when a stored source exists; the
+             original is printed verbatim (React escapes it, so `<`, `&`, `ñ`
+             and line breaks are the officer's own text, never markup), and the
+             review line states the status at print time. ---- */}
+        {showAppendix && (
+          <section className="pr-appendix">
+            <h2 className="pr-appendix-title">{APPENDIX_HEADING}</h2>
+            <p className="pr-appendix-intro">{appendixIntro(sourceLanguageLabel)}</p>
+            <div className="pr-appendix-label">{appendixSourceLabel(sourceLanguageLabel)}</div>
+            <p className="pr-appendix-source">{report.narrative_source_text}</p>
+            <p className="pr-appendix-note">{reviewLine}</p>
+            <p className="pr-appendix-close">{appendixCloseLine}</p>
+          </section>
+        )}
 
         {/* Screen-only trail line — the paper stays exactly on template.
             Wording is date · brand · report number: no "Printed" prefix, and

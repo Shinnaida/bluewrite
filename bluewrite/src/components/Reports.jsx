@@ -59,6 +59,11 @@ import {
 } from '../lib/reviewFields.js';
 import RepeatableGroup from './RepeatableGroup.jsx';
 import AiNarrativePanel from './AiNarrativePanel.jsx';
+// Phase 6 Stage 4 — the translation review surface: the original beside the
+// English, the derived status, and (when the server allows it) the verify /
+// dispute form. Same component for the editor and the reviewing officer, since
+// a verifier opens the report read-only through the same screen.
+import ReportVerificationPanel from './ReportVerificationPanel.jsx';
 // The official-document stylesheet: the navy top bar, page head, card panels,
 // field labels and signature blocks. Shared by every screen now that the whole
 // application uses this look (the tokens themselves live in styles.css).
@@ -77,12 +82,22 @@ import {
   NARRATIVE_LANGUAGES,
   DEFAULT_LANGUAGE,
   languageHint,
+  languageLabel,
   normaliseLanguage,
   untranslatedNotice,
   aiBlockedReason,
   finalizeLanguageWarning,
   suggestedLanguage,
 } from '../lib/reportLanguages.js';
+// Phase 6 Stage 4 (D5/D8) — the status vocabulary and the finalize notice. The
+// server DERIVES the status; these helpers only turn its code into a label, so
+// the editor cannot disagree with the list, the sheet or the export.
+import {
+  statusLabel,
+  statusClass,
+  hasSource,
+  finalizeNotice,
+} from '../lib/reportVerification.js';
 
 const EMPTY = {
   incident_type: '',
@@ -1593,6 +1608,14 @@ export function ReportEditor({
   draftRef.current = draft;
   const idRef = useRef(reportId);
   const [editingId, setEditingId] = useState(reportId);
+  // Phase 6 Stage 4 — the DERIVED verification status, lifted from the review
+  // panel so the finalize notice reads the SAME code the server gave it. Reset
+  // when another report loads, so one report's status can never colour
+  // another's notice.
+  const [verificationStatus, setVerificationStatus] = useState(null);
+  useEffect(() => {
+    setVerificationStatus(null);
+  }, [editingId]);
 
   const canFinalize = user.role === 'Admin' || user.role === 'Officer';
   // A report with no id yet is being created by this very user — always
@@ -2616,6 +2639,14 @@ export function ReportEditor({
             ? `Report BW-${String(draft.id).padStart(4, '0')} · Recorded by ${user.full_name} · Badge ${user.badge_number}`
             : 'Not saved yet — the first save assigns the report number.'}
         </span>
+        {/* Phase 6 Stage 4 (D5/D8) — the translation status, wherever the
+            report is. Shown only once the server has reported one, so a report
+            with no source (and a report not yet read) says nothing here. */}
+        {verificationStatus && verificationStatus !== 'english_original' && (
+          <span className={`rv-badge ${statusClass(verificationStatus)}`}>
+            {statusLabel(verificationStatus)}
+          </span>
+        )}
         {!canEdit && (
           <span>This report is locked. Only an administrator can make further changes.</span>
         )}
@@ -3008,20 +3039,20 @@ export function ReportEditor({
                 placeholder="Describe the incident in chronological order. Include suspect description, witness information, and any property damage or injuries."
               />
               {errors.narrative && <div className="error">{errors.narrative}</div>}
-              {/* Phase 6 Stage 3 (D10) — the kept original text, read-only. After
+              {/* Phase 6 Stage 4 (D7) — the side-by-side review surface. After
                   Apply the native words are no longer in the narrative field, so
-                  the officer must still be able to see what was translated.
-                  Deliberately minimal; Stage 4 builds the side-by-side. */}
-              {draft.narrative_source_text && (
-                <details className="ir-source" open>
-                  <summary>
-                    Original text ({draft.narrative_source_language === 'ceb' ? 'Bisaya (Cebuano)'
-                      : draft.narrative_source_language === 'tl' ? 'Tagalog'
-                      : draft.narrative_source_language === 'mixed' ? 'Mixed'
-                      : draft.narrative_source_language === 'other' ? 'Other' : 'Unknown'}) — kept as the source
-                  </summary>
-                  <p className="ir-source-text">{draft.narrative_source_text}</p>
-                </details>
+                  the original is shown BESIDE the English, read-only and
+                  literal, with the derived status and — when the server says
+                  this account may — the verify / dispute form. Mounted only on a
+                  saved report that carries a source; a report with no source has
+                  nothing to review against. */}
+              {hasSource(draft) && editingId && (
+                <ReportVerificationPanel
+                  reportId={editingId}
+                  report={draft}
+                  onStatus={setVerificationStatus}
+                  notify={notify}
+                />
               )}
               {/* ON THE DESK, NOT ON THE PAGE: in the sheet format this card is
                   the paper itself, so the selector renders under the sheet
@@ -3454,6 +3485,16 @@ export function ReportEditor({
                     {finalizeLanguageWarning(languageCode)}
                   </span>
                 )}
+                {/* Phase 6 Stage 4 (D1/D8) — a translated report that no second
+                    officer has verified is SAID here, plainly, and it still
+                    files: the confirm button below is unchanged. A verified or
+                    disputed report says nothing extra, because its status is
+                    already on the form and on the sheet. */}
+                {hasSource(draft) && verificationStatus !== 'verified' && (
+                  <span className="finalize-bar-language" role="status">
+                    {finalizeNotice(languageLabel(draft.narrative_source_language))}
+                  </span>
+                )}
               </div>
               <div className="finalize-bar-actions">
                 <button
@@ -3751,7 +3792,11 @@ export function ReportsTable({
   const [menu, setMenu] = useState(null);
   // A report opened for editing from the table (opens in the same panel).
   const [openId, setOpenId] = useState(null);
-  const [query, setQuery] = useState({ q: '', type: '', status: initialStatus ?? '', date_from: '', date_to: '', sort: 'incident_datetime', dir: 'desc', page: 1 });
+  // `verification` is a MODE of this same list (Phase 6 Stage 4): 'awaiting'
+  // shows translated reports with no review yet, scoped by the server to the
+  // languages the account is recorded as reading. Empty = no filter, so an
+  // ordinary register is unchanged.
+  const [query, setQuery] = useState({ q: '', type: '', status: initialStatus ?? '', date_from: '', date_to: '', sort: 'incident_datetime', dir: 'desc', page: 1, verification: '' });
   const [pagination, setPagination] = useState(null);
   const [search, setSearch] = useState('');
   const [flashId, setFlashId] = useState(null);
@@ -4178,12 +4223,24 @@ export function ReportsTable({
                 <option value="created_by_name:asc">Officer A→Z</option>
                 <option value="created_by_name:desc">Officer Z→A</option>
               </select>
-              {(query.q || query.type || query.status || query.date_from || query.date_to) && (
+              {/* Phase 6 Stage 4 — the awaiting-verification view. A second
+                  officer's queue: translated reports they can read and nobody
+                  has reviewed yet. The server filters by their recorded
+                  languages; this control only asks. */}
+              <select
+                aria-label="Filter by translation review"
+                value={query.verification}
+                onChange={(e) => setQuery((q) => ({ ...q, verification: e.target.value, page: 1 }))}
+              >
+                <option value="">All translations</option>
+                <option value="awaiting">Awaiting verification</option>
+              </select>
+              {(query.q || query.type || query.status || query.date_from || query.date_to || query.verification) && (
                 <button
                   type="button"
                   onClick={() => {
                     setSearch('');
-                    setQuery((q) => ({ q: '', type: '', status: '', date_from: '', date_to: '', sort: q.sort, dir: q.dir, page: 1 }));
+                    setQuery((q) => ({ q: '', type: '', status: '', date_from: '', date_to: '', sort: q.sort, dir: q.dir, page: 1, verification: '' }));
                   }}
                 >
                   Clear filters
@@ -4294,6 +4351,19 @@ export function ReportsTable({
                       <td>{r.location}</td>
                       <td className="status">
                         <span className={`badge ${r.status}`}>{r.status}</span>
+                        {/* Phase 6 Stage 4 (D5/D8) — the translation status,
+                            derived server-side from the SAME function every
+                            other surface uses. Only shown when there is
+                            something to say: a report with no source is left
+                            exactly as it was. */}
+                        {r.verification_status && r.verification_status !== 'english_original' && (
+                          <span
+                            className={`rv-badge rv-badge--sm ${statusClass(r.verification_status)}`}
+                            title={statusLabel(r.verification_status)}
+                          >
+                            {statusLabel(r.verification_status)}
+                          </span>
+                        )}
                       </td>
                       <td>{r.created_by_name || '—'}</td>
                     </tr>

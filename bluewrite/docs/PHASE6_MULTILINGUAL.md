@@ -1,30 +1,35 @@
 # Phase 6 — Multilingual input (Bisaya / Tagalog → formal English report)
 
-Status: **Stage 3 implemented (pending live evaluation at gate G4); Stages 4–5
-remain planned.** Stages 1–3 have shipped in code. Stage 3 — *AI understanding
-and translation* — lets an officer hand the system a Bisaya, Tagalog or mixed
-source (their narrative, or notes) and receive a formal English draft plus an
+Status: **Stage 4 implemented; Stage 5 remains planned.** Stages 1–4 have
+shipped in code. Stage 4 — *verification and the record* — makes the bilingual
+record honest and checkable after the translation exists: the officer's original
+text is shown beside the English, the printed sheet carries it as an appendix,
+and a **second officer who reads the source language** may record that they
+compared the two (or dispute them) — an append-only record **bound by hash to
+the exact texts they saw**, so it can never vouch for words changed afterwards.
+**No AI is involved in Stage 4.** Verification is optional and blocks nothing.
+
+Stage 3 — *AI understanding and translation* — lets an officer hand the system a
+Bisaya, Tagalog or mixed source and receive a formal English draft plus an
 "understood as" gloss in both languages, with every placeholder and every
 legal-weight term protected; the officer applies it, and their original words are
-kept verbatim as the source. **The translation feature has now been run
-against the live model in the evaluation set (§8): 44 of 45 runs produced valid
-output with every automatic check clean (the one gap was a transient provider
-error), and the output ceiling was re-measured with wide headroom. It is NOT yet
-cleared for real use, because the bilingual review of the outputs at gate G4 is
-pending.** The per-type kill switch and the sensitive types' review are part of
-that gate.
+kept verbatim as the source. The translation feature has been run against the
+live model in the evaluation set (§8): 44 of 45 runs produced valid output with
+every automatic check clean (the one gap was a transient provider error), and the
+output ceiling was re-measured with wide headroom. **It is NOT yet cleared for
+real use, because the bilingual review of the outputs at gate G4 is pending**
+(see Stage 3's Known limitations, and Stage 4's below).
 
 Stage 1 — *accept and preserve* — stores the declared language, keeps
 the officer's words verbatim, skips English-only checks rather than guessing,
 and never blocks filing. Stage 2 — *the bilingual terminology table* — adds an
 approved-only glossary of report terms and an offline lookup for the officer;
-**it does not touch the model**, and the assembled instruction block is
-byte-identical to before it. Both as-built records are at the end under **§10
-Implemented**, in the style of `docs/PHASE5_AI_STRICTNESS.md`. Stages 3–5 have
-no code yet — in particular there is still **no translation and no language
-detection** anywhere in the system, and the terminology table ships with **zero
-approved entries**, so it publishes nothing until the station's records/legal
-officer approves terms.
+it does not touch the model, and the assembled instruction block is
+byte-identical to before it. The as-built records for all four stages are at the
+end under **§10 Implemented**, in the style of `docs/PHASE5_AI_STRICTNESS.md`.
+There is still **no language detection** anywhere in the system, and the
+terminology table ships with **zero approved entries**, so it publishes nothing
+until the station's records/legal officer approves terms.
 
 Goal, in the user's words: *the system accepts Bisaya and Tagalog, with a
 dictionary, so an officer who is not good in English can use his native
@@ -248,6 +253,38 @@ So the source is stored, not consumed:
 A bilingual report is not a failure state. It is the ordinary output of this
 feature, and the record should say so honestly.
 
+**As built in Stage 4, three things complete this section.**
+
+1. **The source is shown beside the English** (D7) — read-only, literal and
+   complete, in the report editor and on the reviewing officer's screen. It is
+   printed exactly as stored: no trimming, normalizing or markup interpretation,
+   and line breaks are preserved.
+2. **A second officer may record a review.** `report_verifications` is
+   **append-only** — there is no update and no delete path — with one row per
+   act: the report, the verifier (taken from the session, never the request
+   body), a server timestamp, the outcome (`verified` or `disputed`), an optional
+   note (required for a dispute), the source language, and **the SHA-256 of both
+   texts exactly as the verifier saw them**. A review is a human attestation; no
+   AI, default or migration can ever create one, and the author of a report can
+   never be its verifier.
+3. **The verification is bound to the exact texts.** The hash rule is newline
+   canonicalization only — CRLF and lone CR become LF, then SHA-256 over the
+   UTF-8 bytes. Nothing else is normalized, deliberately: Unicode normalization
+   would make the same `ñ` typed two ways hash differently and show a verifier a
+   false "changed". If either text differs from what was hashed, the record is
+   **stale** ("changed since verification") and is never silently carried over.
+   The request also carries the hashes of the texts on the verifier's screen, and
+   the server **rejects** a submission whose texts no longer match — so nobody
+   can sign against a text that changed a moment earlier.
+
+**The status vocabulary (D5) is derived, never stored**, by one server-side
+function every consumer uses — the editor, the review screen, the list, the
+print sheet and the export therefore cannot disagree: *English original*,
+*not translated*, *translated — not independently verified*, *verified*,
+*disputed*, *changed since verification*. Nothing in the UI or the print may say
+or imply that a translation is *certified*, *official*, *accurate* or *legally
+valid*; a test fails the build if those words reach a new string.
+
 ### 5.5 Degrading well
 
 The AI is optional (`NarrativeService::enabled()`), can be down, and can fail
@@ -310,11 +347,15 @@ Each stage ships on its own and leaves the app working.
 | **1** | **Accept and preserve.** Any language in any field, source kept, declared language stored, nothing blocked, "untranslated" flag. No AI. | 0 |
 | **2** | **Terminology glossary.** Bilingual entries in the glossary doc → derived JSON → officer-facing lookup → prompt injection. Guards in place. | 1 |
 | **3** | **AI understanding.** Language section in the prompt, **pinned-term injection from the Stage 2 table (D2)**, gloss output, placeholder rule, few-shots, cache flush. | 2 |
-| **4** | **Verification and record.** Source text beside the English, source in history snapshots, print appendix, bilingual-officer review. | 3 |
+| **4** | **Verification and record.** Source text beside the English, source in history snapshots, print appendix, bilingual-officer review. **Implemented** — see §10. | 3 |
 | **5** | **Polish.** Dictionary as a full panel, more languages, per-language few-shots, tightening a native narrative. | 4 |
 
 Stage 1 is the one with most of the user-visible benefit and no AI risk. If the
 phase has to stop early, that is where it should stop.
+
+Stages 1–4 have shipped. Stage 5 remains planned and nothing in it is prepared
+for here (no required-verification mode, no notifications, no competency test,
+no additional languages).
 
 ---
 
@@ -345,14 +386,22 @@ English; it must never run on the native text.
 It is a property of the report, not of a history entry, and every read path
 (print, review, export) needs it without a join.
 
-**Q5. Does the printed sheet carry the source text?**
-*Recommendation:* an appendix page, rendered **only** when the source is not
-English, so the ordinary English report is unchanged.
+**Q5. Does the printed sheet carry the source text?** — **ANSWERED
+(2026-09-20, project owner).** Yes: a separate **appendix page**, rendered
+**only when a stored source exists**, so a report with no translation prints
+exactly as it did before. The appendix states, in approved wording, that the
+English was produced from the original with AI assistance and reviewed and
+applied by the reporting officer, and it prints the review lines only when they
+exist. Its exact wording was approved at gate G2.
 
-**Q6. Who signs off on a translation?**
-*Recommendation:* decide with the station's records/legal officer. If a named
-verifier is required, it is a second officer who reads both languages, recorded
-like any other signature — and that changes Stage 4.
+**Q6. Who signs off on a translation?** — **ANSWERED (2026-09-20, project
+owner).** A second officer who reads the source language **may** record a
+`verified` or `disputed` review; **verification is optional and never blocks
+filing**. The station's legal position on how an AI-assisted bilingual record
+may stand remains the station's decision, not the software's — so no *required*
+mode was built. "Can read the language" is a recorded account attribute
+(`users.languages_read`), which is a declaration, **not a tested competency**.
+The exact wording of the verifier's statement was approved at gate G2.
 
 **Q7. Is the dictionary's terminology table authoritative over the model?**
 *Recommendation:* yes, within its terms: a term in the table is rendered exactly
@@ -367,9 +416,9 @@ as the table says. Outside the table the model chooses as it does today.
 | **A mistranslation becomes a fact** | A translator rewrites every word; the existing rules assume input and output share a language | The gloss (§5.2), the pinned terminology table (§4), the officer applying the draft rather than the model (`§1`, invariant 2) |
 | **The leak gate gets worse, not better** | Translation invites the model to touch placeholders | Explicit pass-through rule, new leak tests (§5.3) |
 | **A sensitive type renders wrongly** | Rape / Sexual Assault and Domestic Violence carry `sensitivity` instructions written for English register; a Cebuano euphemism rendered too literally, or too graphically, is a real harm | Sensitivity text reviewed per language **before** Stage 3; the gloss lets the officer catch it; both types stay in the test set |
-| **The source is lost** | One `TEXT` column today | Stage 1 stores it; Stage 4 prints it |
+| **The source is lost** | One `TEXT` column today | Stage 1 stores it; Stage 4 prints it (appendix) and shows it beside the English |
 | **The output ceiling truncates** | A measured `MAX_TOKENS` truncation already happened once at 2,048; the ceiling is 4,096 and a new field grows the wrapper | Re-measure and re-pin in Stage 3 (§5.2) |
-| **The station's legal position is assumed** | Whether an untranslated Cebuano narrative may stand as the record, and whether a named verifier is needed, are the station's questions — not the software's | Q6 is answered by the station before Stage 4; the app must not pretend the answer is obvious |
+| **The station's legal position is assumed** | Whether an untranslated Cebuano narrative may stand as the record, and whether a named verifier is needed, are the station's questions — not the software's | Q6 answered (optional second-officer review, never blocks). The software now RECORDS what was produced and who reviewed it, hash-bound and append-only, and deliberately claims no more: no certification, no accuracy, no legal validity. A station-imposed *required* mode remains theirs to ask for |
 | **The dictionary is mistaken for a translator** | The obvious reading of "dictionary" produces confident nonsense | §4, and Stage 2 ships a lookup with a stated scope rather than a translate button |
 
 ---
@@ -831,3 +880,181 @@ the author's own reading of the Bisaya/Tagalog is not evidence.
    change — noted because it is what let the accidental call happen.
 3. **Chatty eval output.** The harness prints per-run lines; fine for a CLI
    harness, left alone.
+
+---
+
+### Stage 4 — verification and the record (2026-09-20)
+
+Stage 4 makes the bilingual record honest and checkable *after* the translation
+exists, and **involves no AI at all**. An officer's original text is now shown
+beside the English and printed as an appendix page, and a second officer who
+reads the source language can record that they compared the two — an
+append-only, hash-bound record that can never vouch for words changed
+afterwards. Verification is optional and blocks nothing.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `migrations/009_report_verification.sql` | **new** — the append-only `report_verifications` table + two composite indexes |
+| `migrations/009_report_verification.down.sql` | **new** — the rollback (drops the table; states plainly that it destroys every verification, with no backup) |
+| `migrations/010_users_languages_read.sql` | **new** — `users.languages_read VARCHAR(120) NULL` |
+| `migrations/010_users_languages_read.down.sql` | **new** — the rollback (loses who could read which language) |
+| `app/core/ReportVerification.php` | **new** — the ONE status derivation (D5) and the hash rule (D6); pure and static |
+| `app/controllers/VerificationController.php` | **new** — `POST /reports/:id/verify` and `GET /reports/:id/verifications`; no update or delete method exists |
+| `api/index.php` | the two routes, plus `sub === null` sub-path guards so `/reports/{id}/<unknown>` can no longer fall through to `update`/`destroy` |
+| `app/controllers/ReportsController.php` | the source fields on the print payload, the derived status on every list row (one batched query), the `verification=awaiting` list mode, and the export's status column |
+| `app/controllers/UsersController.php` | `languages_read` on the user store/update/index paths |
+| `app/core/Auth.php` | carries `languages_read` on the authenticated user |
+| `src/lib/reportVerification.js` | **new** — the client twin of the hash rule and status vocabulary, the panel/appendix wording, and `userReadsLanguage` |
+| `src/components/ReportVerificationPanel.jsx` | **new** — the side-by-side review surface, status badge, verify/dispute form and review history |
+| `src/components/Reports.jsx` | mounts the panel; status badge in the editor and the list; the awaiting-verification filter; the non-blocking finalize notice |
+| `src/components/ReportPrint.jsx` | the appendix page (only when a stored source exists) |
+| `src/styles.css` | `.pr-appendix` print styles (own page, verbatim text, break rules) |
+| `src/incident-report.css` | `.rv-*` panel styles (replacing the now-dead `.ir-source` block) |
+| `tests/BaseApiTestCase.php` | replays `009`/`010` into the scratch DB |
+| `tests/ReportVerificationTest.php` | **new** — the status truth table, the hash vectors, and the HTTP guards |
+| `tests/rules/reportVerification.test.mjs` | **new** — status vocabulary, hash parity, who-reads-what, print wording, forbidden-claim words |
+| `package.json` | the new `.mjs` in the `test` script |
+
+**Untouched** (checked with `git status`): everything under `app/ai/` and
+`resources/ai/`, `tests/SystemInstructionTest.php`, `src/lib/reportRules.js`,
+the Stage 2 glossary and table, and print output for reports without a source.
+
+### How each decision was realized
+
+| | Realized as |
+|---|---|
+| **D1** | **Optional, never blocking.** No required mode is built. The finalize dialog shows a non-blocking notice for a translated-but-unverified report and the confirm button is unchanged; a report finalizes whether its status is unverified, disputed or stale (asserted three ways). |
+| **D2** | The appendix renders **if and only if** `hasSource(report)` is true, so a report with no stored source gains no node at all. Which sentence it prints is a **pure function** (`appendixReviewLine`) chosen by the derived status — `verified` / `disputed` / `stale` name the reviewer; every other case states plainly that no second officer has reviewed it. |
+| **D3** | `report_verifications` holds report, verifier, server timestamp, outcome, note, source language and both hashes. Identity and time come from the server (`Auth::requireUser()`, `NOW()`), never the body — a request supplying `verifier_id: 999` and `verified_at: 2000-01-01` is ignored (asserted). |
+| **D4** | `outcome` is `verified` or `disputed` only (422 otherwise); a `disputed` outcome **requires a note** (422 without one). A dispute blocks nothing and simply shows in the status. |
+| **D5** | One server function, `ReportVerification::status()`, used by the editor, the review screen, the list (batched), the print payload and the export. Status is derived at read time, never stored. The client only turns the code into a label and a class. |
+| **D6** | The request carries the hashes of the texts the verifier's screen showed; the server re-hashes the current texts and **rejects** any mismatch with 409 + `stale: true`, writing nothing (asserted: the table stays at 0 rows). The hash rule is newline canonicalization only, then SHA-256; a client module mirrors it and a test pins both to the same vectors. |
+| **D7** | `ReportVerificationPanel` shows the original beside the English, read-only; the original is a plain string (`white-space: pre-wrap`), so React escapes it and line breaks survive. It stacks to one column under 720px. |
+| **D8** | Every new sentence lives in `reportVerification.js` and is exported as `NEW_WORDING`; a test fails if *certified*, *official*, *accurate* or *valid* appears in any of them. No UI or print string asserts a quality. |
+| **D9** | The appendix wording and the verifier's statement were approved at gate G2 before implementation, and the printed lines are the approved text. |
+
+### Live evidence
+
+**Migrations, on a copy (`bluewrite_p6s4_copy`), never on real data first.**
+checksum = `MD5(GROUP_CONCAT(MD5(CONCAT(id,':',narrative,'|',lang,'|',source_text,'|',source_lang)) ORDER BY id))`:
+
+| Stage | reports | users | reports checksum | verifications | `languages_read` |
+|---|---|---|---|---|---|
+| before | 301 | 3 | `13f0e58e4a714b9972301a8917979bda` | — | absent |
+| after `009`+`010` | 301 | 3 | `13f0e58e4a714b9972301a8917979bda` | 0 | present |
+| after down | 301 | 3 | `13f0e58e4a714b9972301a8917979bda` | gone | gone |
+| forward again | 301 | 3 | `13f0e58e4a714b9972301a8917979bda` | 0 | present |
+
+**The reports checksum is identical at every stage** — no existing value
+changed — and down → up is repeatable. Applied to the real database afterwards
+after a pre-migration dump, with both migrations still missing at the time of
+the pre-check.
+
+**Suites.** PHP **221 tests / 1140 assertions / 0 failures** (baseline 208 /
+1037). JS `node --test` **168 pass / 0 fail** (baseline 157). The 3 PHPUnit
+*runner warnings* (`LegacyNormalizerTest`, `MaskingGatewayTest`,
+`MaskingRoundTripTest` — standalone CLI scripts with no test class) are
+pre-existing and untouched. Build (`npm run build`) is clean.
+
+**The guards, over real HTTP** (`ReportVerificationTest`, 13 tests):
+
+- the **status truth table** — every combination including verified→edit→stale,
+  verified→re-translate→stale, verify→no change→verified, two reviews with
+different outcomes, and a dispute followed by a verification;
+- the **race guard** — outdated hashes → 409 and **0 rows written**;
+- **permissions** — the author cannot verify (`can_verify` false, POST 403), an
+  account that does not read the source language cannot, an anonymous POST is
+  refused, and a dispute without a note is 422;
+- **server authority** — a client-supplied verifier id and timestamp are ignored;
+- **append-only** — no update or delete path exists, and a second act is a new row;
+- **non-blocking** — an unverified report and a disputed report both finalize 200;
+- the **list** carries the derived status, never the narrative or the source, and
+  the awaiting filter returns the language-appropriate rows.
+
+**English print unchanged (Invariant 8) — proven structurally.** `git diff
+--numstat HEAD` over `src/components/ReportPrint.jsx` is **91 added / 1 deleted**,
+and the single deleted line is the old one-line import of
+`printLanguageLine`. **No render-tree node was removed or altered**: the appendix
+block is a new conditional node gated on `hasSource(report)`, so an English
+report produces exactly the sheet it produced at Stage 3. The appendix sentences
+are additionally pinned by unit tests on `appendixReviewLine` for all four
+cases.
+
+### Deviations from the plan
+
+1. **The brief's D3 names a column `narrative_source`; it does not exist and
+   never did.** Stage 1 shipped `narrative_source_text` (plus Stage 3's
+   `narrative_source_language`) because `narrative_source` is Phase 3's
+   *provenance* field. Stage 4 uses the real names. Same deviation already
+   recorded for Stage 1/3, not new — but it changes the column names in the
+   brief's every step.
+2. **The read endpoint also returns `is_author` and `can_verify`.** Not in the
+   brief: the UI must hide a control the server would refuse, and the safest way
+   is to ask the server that enforces the rule rather than model the permission
+   again on the client. The server remains the authority; the button is not the
+   guard (asserted — a POST without eligibility is still 403).
+3. **Two migrations, not one** (009 table, 010 user column): they are
+   independent changes with independent rollbacks.
+4. **The D6 hash is computed client-side only where SubtleCrypto exists.** On the
+   station's plain-HTTP LAN origin `crypto.subtle` is absent, so the panel falls
+   back to the hashes the server returned with the very text on screen — the same
+   values by construction, since the read is atomic. The server's check is
+   unchanged either way. See the limitations for why this was chosen.
+
+### Known limitations
+
+- **Verification is a human attestation, not proof.** It records that an
+  identified officer stated they compared the two texts. It does not prove the
+  translation is right, and the software never claims it.
+- **"Can read the source language" is a recorded attribute, not a tested
+  competency.** `users.languages_read` is set by an Admin in the existing Users
+  screen; no test, certification or evidence is required. Nothing verifies the
+  reviewer could in fact read the original.
+- **There are no notifications and no required mode.** A verifier finds work
+  through the list's *Awaiting verification* filter, scoped by the server to the
+  languages they are recorded as reading. Nothing pushes, and no station policy
+  can be expressed as a gate — deliberately (D1).
+- **The station's legal position on the record's standing remains the station's
+  decision.** The software records what was produced and who reviewed it; whether
+  that suffices is a question for the station's records/legal officer (plan Q6).
+- **The React views and the print rendering have no automated test** — this
+  project has no React test infrastructure. The *pure* logic each layer uses is
+  covered (status vocabulary, hash parity, `hasSource`, wording and
+  forbidden-claim words, `appendixReviewLine`); the rendered DOM is not. The
+  manual procedure below was **not observed by the author**, who has no browser
+  here:
+  1. open a translated report in the editor → *Translation review* shows the
+     original and the English side by side, the original read-only and with its
+     line breaks;
+  2. the status badge reads *Translated — not independently verified*;
+  3. as the **author**, the panel says the author cannot be the reviewer (no
+     form); as a second officer recorded as reading the language, the
+     verify / dispute form appears;
+  4. record a review → the badge becomes *Verified* and the review appears in
+     the history with the compared hashes; edit the English, reload → *Changed
+     since verification*;
+  5. print a translated report → the appendix is on its own page, the original
+     verbatim (including `<`, `&` and `ñ`), with the review line matching the
+     status; print an English report → no appendix, sheet unchanged.
+- **The appendix's page break is CSS.** It relies on `break-before: page`; the
+  browser decides how a very long source paginates. Not observed on paper.
+- **`crypto.subtle` is unavailable on an insecure LAN origin**, so the client
+  normally submits the server-returned hashes rather than computing them — the
+  race guard still holds (the server always compares against its own current
+  texts), but the D6 "hash exactly what the verifier's screen showed" guarantee
+  is stronger when the origin is HTTPS or `localhost`.
+
+### Noticed, not changed
+
+1. **The history endpoint still orders by `created_at` with no tiebreaker**
+   (`ReportsController.php`) — noted in Stage 1 and left alone; a verification is
+   not a history row, so this stage neither hits nor fixes it.
+2. **A verification may be recorded after the report is finalized** (allowed by
+   the design): the review is append-only and touches neither the narrative nor
+   the source, which stay locked. The print then reflects the status at print
+   time.
+3. **No `users` admin UI change beyond one text field.** `languages_read` is
+   entered as a comma-separated list; a picker would be nicer, but nothing in
+   this stage needs it and the validation lives with the rest of the user rules.

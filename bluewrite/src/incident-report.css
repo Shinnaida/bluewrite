@@ -923,28 +923,135 @@
   line-height: 1.7;
 }
 
-/* Phase 6 Stage 3 (D10) — the kept ORIGINAL text, read-only, under the
-   narrative. Deliberately quiet: it is a reference, not a field. Stage 4
-   builds the full side-by-side view. */
-.ir-source {
-  margin-top: 0.5rem;
-  border: 1px solid var(--ir-line, #d9dee6);
+/* ---- Phase 6 Stage 4 — the translation review surface (D7) ----------------
+   The kept original beside the English, the derived status, and the verify /
+   dispute form. Deliberately quiet: this is a record to read and, when the
+   server allows it, to attest to — not a field of the report. */
+.rv-panel {
+  margin-top: 0.75rem;
+  border: 1px solid var(--ir-border);
   border-radius: 0.4rem;
-  padding: 0.4rem 0.6rem;
-  background: var(--ir-panel, #f7f8fa);
+  padding: 0.6rem 0.75rem;
+  /* The DEFINED tokens (--ir-border / --ir-soft / --ir-muted) rather than
+     raw hex, so the panel follows the dark theme with the rest of the form. */
+  background: var(--ir-soft);
 }
-.ir-source > summary {
-  cursor: pointer;
-  font-size: 0.8rem;
-  color: var(--ir-muted, #6b7280);
+.rv-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
-.ir-source-text {
-  margin: 0.4rem 0 0;
+.rv-panel-head strong { font-size: 0.85rem; letter-spacing: 0.02em; }
+.rv-note { margin: 0.35rem 0 0; font-size: 0.78rem; color: var(--ir-muted); }
+.rv-note--why { margin-top: 0.75rem; }
+
+/* Status badges (D5/D8). The CODE is the server's; these only colour it,
+   with wording that states facts rather than asserting quality. */
+.rv-badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  border: 1px solid currentColor;
+}
+.rv-badge--sm { margin-left: 0.35rem; font-size: 0.65rem; }
+.rv-badge.plain { color: #4b5563; }
+.rv-badge.untranslated { color: #92400e; }
+.rv-badge.unverified { color: #1d4ed8; }
+.rv-badge.verified { color: #166534; }
+.rv-badge.disputed { color: #b91c1c; }
+.rv-badge.stale { color: #6d28d9; }
+
+/* Side by side (D7): original left, English right. Stacks on narrow screens so
+   neither column is squeezed into a few characters per line. */
+.rv-side {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+}
+@media (max-width: 720px) {
+  .rv-side { grid-template-columns: minmax(0, 1fr); }
+}
+.rv-side-col { min-width: 0; }
+.rv-side-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--ir-muted);
+  margin-bottom: 0.25rem;
+}
+/* `pre-wrap` keeps the officer's own line breaks; React escapes every
+   character, so `<b>`, `&` and quotes render as their literal text. */
+.rv-side-text {
+  margin: 0;
   white-space: pre-wrap;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   line-height: 1.6;
-  color: var(--ir-ink, #1f2937);
+  color: inherit;
+  background: var(--ir-soft);
+  border: 1px solid var(--ir-border);
+  border-radius: 0.3rem;
+  padding: 0.45rem 0.55rem;
+  min-height: 4rem;
 }
+.rv-side-text--source { border-left: 3px solid var(--ir-muted); }
+
+/* The recorded reviews — append-only, newest first. */
+.rv-history { margin-top: 0.75rem; }
+.rv-history-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--ir-muted);
+}
+.rv-history-list {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.rv-history-item {
+  font-size: 0.8rem;
+  border-left: 3px solid var(--ir-border);
+  padding-left: 0.5rem;
+}
+.rv-history-item.verified { border-left-color: #166534; }
+.rv-history-item.disputed { border-left-color: #b91c1c; }
+.rv-history-what { font-weight: 700; }
+.rv-history-note { margin-top: 0.15rem; }
+.rv-history-hash {
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  color: var(--ir-muted);
+}
+
+/* The verify / dispute form — shown only when the server says this account
+   may use it. */
+.rv-form { margin-top: 0.75rem; }
+.rv-form-row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.rv-radio { display: flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; }
+.rv-statement {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: inherit;
+}
+.rv-note-input {
+  width: 100%;
+  margin-top: 0.45rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.rv-notice { margin-top: 0.4rem; font-size: 0.8rem; color: #166534; }
+.rv-form-actions { margin-top: 0.5rem; display: flex; justify-content: flex-end; }
 
 /* ---- Panel IV: the two signature areas ---- */
 .ir-sign-grid {

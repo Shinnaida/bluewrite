@@ -36,7 +36,8 @@ final class Auth
     public static function fetchUser(int $id): ?array
     {
         $stmt = Database::pdo()->prepare(
-            'SELECT u.id, u.role_id, u.full_name, u.badge_number, u.username, u.status, u.last_login_at, r.name AS role
+            'SELECT u.id, u.role_id, u.full_name, u.badge_number, u.username, u.status, u.last_login_at,
+                    u.languages_read, r.name AS role
              FROM users u JOIN roles r ON r.id = u.role_id
              WHERE u.id = :id'
         );
