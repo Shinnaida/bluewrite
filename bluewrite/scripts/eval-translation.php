@@ -77,6 +77,20 @@ function fixtures(): array
     ];
 }
 
+function tokenFixture(): array
+{
+    // Worst case: a long native narrative (multi-clause, placeholder-dense)
+    // plus the structured fields, so the ceiling covers both glosses and the
+    // largest expected answer. Roughly the longest realistic account.
+    $long = str_repeat(
+        'Nagsumbong ang [VICTIM_1] nga ang suspek nga si [RESPONDENT_1] nagkuha sa bag ug ' .
+        'dayon midagan paingon sa [LOCATION] samtang ang [WITNESS_1] mitabang sa pagtawag ' .
+        'sa pulis. Wala pa masayri kung giaresto ba ang suspek ug wala pay nadakpan hangtod karon. ',
+        6,
+    );
+    return ['id' => 'worst-case-ceiling', 'type' => 'Traffic Accident', 'lang' => 'ceb', 'source' => $long];
+}
+
 /** Test-only pinned table (never the real glossary). */
 function evalTermFixture(): array
 {
@@ -116,6 +130,26 @@ function maskedFor(string $source, string $language, string $type): array
 }
 
 /**
+ * The numerals the incident type's OWN sanctioned legal citation contains
+ * (RA 9262 for Domestic Violence, RA 8353 for Rape, per type_vocabulary.json).
+ * The prompt explicitly permits citing the named legal basis, so a numeral
+ * that is part of it is NOT an added fact — exempt it rather than report a
+ * false positive.
+ *
+ * @return array<int,string>
+ */
+function sanctionedLegalNumbers(string $type): array
+{
+    static $vocab = null;
+    if ($vocab === null) {
+        $f = dirname(__DIR__) . '/resources/ai/type_vocabulary.json';
+        $vocab = is_file($f) ? (json_decode((string) file_get_contents($f), true) ?: []) : [];
+    }
+    $basis = (string) ($vocab[$type]['legalBasis'] ?? '');
+    return tokensIn($basis);
+}
+
+/**
  * AUTOMATIC CHECKS — only the ones that can be defended. Anything requiring
  * judgement is left to the human review sheet.
  *
@@ -130,8 +164,9 @@ function automaticFailures(array $fx, string $narrative, array $ambiguities, arr
             $fail[] = "placeholder {$ph} missing/altered";
         }
     }
-    // 2. No numeral the source did not contain.
-    $srcNums = tokensIn((string) $fx['source']);
+    // 2. No numeral the source did not contain, EXCEPT one that belongs to the
+    //    type's sanctioned legal citation.
+    $srcNums = array_merge(tokensIn((string) $fx['source']), sanctionedLegalNumbers((string) $fx['type']));
     foreach (tokensIn($narrative) as $n) {
         if (!in_array($n, $srcNums, true)) {
             $fail[] = "number '{$n}' not in source";
@@ -166,8 +201,13 @@ $provider = new GeminiNarrativeProvider(
     (int) ($g['max_output_tokens'] ?? 4096),
     (string) ($g['thinking_level'] ?? 'low'),
 );
-$fixtures = fixtures();
-$calls = $tokenOnly ? 1 : count($fixtures) * $runs;
+// --token runs ONE worst-case fixture; otherwise the whole set.
+$fixtures = $tokenOnly ? [tokenFixture()] : fixtures();
+if ($tokenOnly) {
+    $runs = 1;
+}
+$calls = count($fixtures) * $runs;
+$append = in_array('--append', $args, true);
 
 echo "Phase 6 Stage 3 evaluation harness\n";
 echo "provider : " . (new ReflectionClass($provider))->getShortName() . "\n";
@@ -175,18 +215,21 @@ echo "fixtures : " . count($fixtures) . "  runs each: " . ($tokenOnly ? '-' : $r
 echo "model calls this run: {$calls}\n";
 echo str_repeat('-', 70) . "\n";
 
-if (!$live && !$tokenOnly) {
+// Dry run whenever --live is absent: --token only changes WHICH fixture, never
+// whether calls are spent.
+if (!$live) {
     foreach ($fixtures as $fx) {
-        printf("  %-26s %-28s %s\n", $fx['id'], $fx['type'], $fx['lang']);
+        printf("  %-26s %-28s %-4s %d chars\n", $fx['id'], $fx['type'], $fx['lang'], mb_strlen((string) $fx['source']));
     }
-    echo "\nDRY RUN — no calls spent. Re-run with --live to spend {$calls} calls, or\n";
-    echo "--token for the worst-case ceiling probe.\n";
+    echo "\nDRY RUN — no calls spent. Re-run with --live to spend {$calls} call(s)\n";
+    echo ($tokenOnly ? "(worst-case ceiling probe).\n" : "(full fixture set).\n");
     exit(0);
 }
 
 $rows = [];
 $hardTotals = [];
 $maxTokens = 0;
+$maxCandidate = 0;
 $terms = evalTermFixture();
 
 $started = microtime(true);
@@ -197,12 +240,21 @@ foreach ($fixtures as $fx) {
             $res = $provider->generate($payload, ['feedback' => '', 'incidentType' => (string) $fx['type']]);
             $arr = $res->toArray();
             $maxTokens = max($maxTokens, (int) ($arr['usage']['total_tokens'] ?? 0));
+            $maxCandidate = max($maxCandidate, (int) ($arr['usage']['candidate_tokens'] ?? 0));
             $fails = automaticFailures($fx, (string) $arr['narrative'], $arr['ambiguities'] ?? [], $terms);
             $rows[] = ['fx' => $fx, 'out' => $arr, 'fails' => $fails];
             foreach ($fails as $f) {
                 $hardTotals[$f] = ($hardTotals[$f] ?? 0) + 1;
             }
-            printf("  %-26s run %d: %s (%d tokens)\n", $fx['id'], $r + 1, $fails === [] ? 'clean' : implode('; ', $fails), (int) ($arr['usage']['total_tokens'] ?? 0));
+            printf(
+                "  %-26s run %d: %s  [prompt=%d candidate=%d total=%d]\n",
+                $fx['id'],
+                $r + 1,
+                $fails === [] ? 'clean' : implode('; ', $fails),
+                (int) ($arr['usage']['prompt_tokens'] ?? 0),
+                (int) ($arr['usage']['candidate_tokens'] ?? 0),
+                (int) ($arr['usage']['total_tokens'] ?? 0),
+            );
         } catch (AiProviderException $e) {
             $rows[] = ['fx' => $fx, 'out' => null, 'fails' => ['provider: ' . $e->getMessage()]];
             $hardTotals['provider_error'] = ($hardTotals['provider_error'] ?? 0) + 1;
@@ -213,7 +265,7 @@ foreach ($fixtures as $fx) {
 
 $elapsed = round(microtime(true) - $started);
 echo str_repeat('-', 70) . "\n";
-echo "calls: {$calls}  elapsed: {$elapsed}s  max total_tokens seen: {$maxTokens}\n";
+echo "calls: {$calls}  elapsed: {$elapsed}s  max candidate_tokens: {$maxCandidate} (ceiling 4096)  max total_tokens: {$maxTokens}\n";
 if ($hardTotals === []) {
     echo "AUTOMATIC CHECKS: no hard failures in this run.\n";
 } else {
@@ -255,5 +307,10 @@ foreach ($rows as $row) {
     $sheet .= "| accurate | mistranslated | added fact | escalated | gloss wrong | comments |\n|---|---|---|---|---|---|\n|  |  |  |  |  |  |\n\n";
 }
 $sheetPath = dirname(__DIR__) . '/docs/phase6-stage3-eval-review-sheet.md';
-file_put_contents($sheetPath, $sheet);
-echo "review sheet written: docs/phase6-stage3-eval-review-sheet.md\n";
+if ($append && is_file($sheetPath)) {
+    // Append another pass's results (the §8 repeat runs) without a new header.
+    file_put_contents($sheetPath, "\n<!-- pass appended " . date('Y-m-d H:i') . " -->\n" . substr($sheet, strpos($sheet, '## ')), FILE_APPEND);
+} else {
+    file_put_contents($sheetPath, $sheet);
+}
+echo "review sheet written: docs/phase6-stage3-eval-review-sheet.md" . ($append ? ' (appended)' : '') . "\n";

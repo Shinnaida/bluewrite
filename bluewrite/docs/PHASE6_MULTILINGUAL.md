@@ -6,11 +6,13 @@ and translation* — lets an officer hand the system a Bisaya, Tagalog or mixed
 source (their narrative, or notes) and receive a formal English draft plus an
 "understood as" gloss in both languages, with every placeholder and every
 legal-weight term protected; the officer applies it, and their original words are
-kept verbatim as the source. **The translation feature has not yet been run
-against the live model in the evaluation set (§8) — the harness is built
-(`scripts/eval-translation.php`) and its results are pending the owner's go-ahead
-and a bilingual reviewer, so the feature is not yet cleared for real use.** The
-per-type kill switch and the sensitive types' review are part of that gate.
+kept verbatim as the source. **The translation feature has now been run
+against the live model in the evaluation set (§8): 44 of 45 runs produced valid
+output with every automatic check clean (the one gap was a transient provider
+error), and the output ceiling was re-measured with wide headroom. It is NOT yet
+cleared for real use, because the bilingual review of the outputs at gate G4 is
+pending.** The per-type kill switch and the sensitive types' review are part of
+that gate.
 
 Stage 1 — *accept and preserve* — stores the declared language, keeps
 the officer's words verbatim, skips English-only checks rather than guessing,
@@ -705,6 +707,7 @@ reviewer. Until then the feature is enabled in code but unreviewed.
 | `tests/PinnedTermsTest.php`, `tests/LeakGateFieldsTest.php` | **new** — pinned-term matching and the multi-field leak gate |
 | `tests/MultilingualTest.php` | Stage 3 storage/snapshot tests; the Stage 1 AI-guard test split into tighten-only + a pure Generate decision test |
 | `scripts/eval-translation.php` | **new** — the §8 evaluation + token-measurement harness (refuses to spend calls without `--live`) |
+| `docs/phase6-stage3-eval-review-sheet.md` | **new (generated)** — the bilingual review sheet: source, English narrative, both glosses, ambiguities and the automatic-check verdict for all 45 runs |
 | `public/` | rebuilt bundle |
 
 Nothing on the do-not-touch list was modified: the **existing** prompt rules are
@@ -759,8 +762,24 @@ and diacritic-insensitively (*Pena* → *Peña*), no match when absent or when t
 affixed form is unlisted, the "use"/"never" rendering in the block, and that the
 **real derived table is inert at ship** (zero approved entries).
 
-**Token ceiling — NOT measured here.** The measurement needs live calls; see the
-harness note and the known limitations below.
+**Output ceiling — re-measured live.** The worst-case fixture (a 1,512-character
+native narrative with the structured fields and both glosses) returned
+**463 candidate tokens against the 4096 ceiling** — roughly 11× headroom. Across
+all 45 evaluation runs the largest candidate count was **479 tokens**. The
+ceiling is therefore **left at 4096**, and the pinned assertion in
+`SystemInstructionTest.php` is unchanged because the measurement supports it.
+(prompt tokens ≈ 8.2–9.0k do not count against `maxOutputTokens`.)
+
+**Evaluation (§8) — run, 5 passes × 9 fixtures.** 45 model calls, of which **44
+produced valid output and 44/44 automatic checks passed**; the single gap was a
+transient provider error on `ceb-theft-sakpan` (retried in production). The
+automatic checks found **no placeholder mangling, no added numeral** and **no
+forbidden rendering** of the test-only pinned term in any run. The two numeric
+`not-in-source` hits on the first pass were `RA 9262` / `RA 8353` — the incident
+types' **sanctioned legal-basis citations** the prompt explicitly permits — and
+the harness now exempts them. The outputs (including both sensitive types) are
+in `docs/phase6-stage3-eval-review-sheet.md` for the **bilingual review at G4**;
+the author's own reading of the Bisaya/Tagalog is not evidence.
 
 ### Deviations from the plan
 
@@ -777,17 +796,19 @@ harness note and the known limitations below.
 
 ### Known limitations
 
-- **The evaluation has NOT been run.** `scripts/eval-translation.php` builds the
-  9-case set (including the two sensitive types, a legal-weight case where the
-  source does not state an arrest, placeholder-dense accounts, and a
-  test-only pinned term) and the bilingual review sheet; it refuses to spend
-  calls without `--live`. The automatic-check rates and the review sheet are
-  **pending the owner's go-ahead**. The feature is therefore **implemented but
-  not cleared for real use**.
-- **The token ceiling is NOT re-measured.** `maxOutputTokens` stays 4096 and the
-  `SystemInstructionTest` assertion is unchanged; the harness's `--token` mode is
-  the measurement, pending live calls. The new gloss fields grow the JSON
-  wrapper, so this must be done before enabling the feature for real use.
+- **The feature is implemented and evaluated, but NOT cleared for real use.**
+  The automatic checks are clean and the ceiling is measured, but the **G4
+  bilingual review of the review sheet is pending** — the 9 fixtures are the
+  harness author's own text and only prove the plumbing; real, anonymized
+  officer notes and a reviewer who reads Bisaya/Tagalog are still required
+  before enabling translation for real reports.
+- **One of 45 evaluation runs hit a transient provider error** (`ceb-theft-
+  sakpan`, pass 3). It is an operational condition the service already retries,
+  not a translation defect, but it is recorded because the automatic-check
+  success rate is 44/45, not 45/45.
+- **The token ceiling did not need to change.** Measured worst case 463
+  candidate tokens vs the 4096 ceiling (max 479 across all runs); 4096 stays,
+  and the `SystemInstructionTest` pin is unchanged.
 - **Pinned terms are inert until the records/legal officer approves terms.** The
   table has zero approved entries, so nothing is injected; the mechanism is
   proven with test-only fixtures.
