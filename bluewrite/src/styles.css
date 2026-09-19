@@ -2242,6 +2242,18 @@ button.dash-kpi--link:focus-visible {
   border-bottom: 1px solid #111;
 }
 
+/* Phase 6 Stage 1 (D6) — the "not translated" line on the sheet. Rendered ONLY
+   for a narrative declared as something other than English (see ReportPrint),
+   so an English report's sheet has exactly the nodes it had before this phase.
+   Unemphatic on purpose: it is a fact about the record, not a warning printed
+   on the document. */
+.pr-language {
+  margin: 0 0 1.5rem;
+  font-size: 8.5pt;
+  font-style: italic;
+  color: #444;
+}
+
 .pr-narrative {
   text-align: justify;
   text-indent: 0;
@@ -2819,6 +2831,19 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   border-radius: 4px;
   box-shadow: var(--shadow-up);
 }
+/* D5 — the finalize warning for a narrative that is not in English. It sits
+   inside the confirmation bar, where the officer is already deciding, and it
+   NEVER blocks: the confirm button beside it is still the only thing that
+   finalizes, so the warning is read on the way to it rather than instead of it.
+   Amber, not red — an untranslated narrative is allowed, not an error. */
+.finalize-bar-language {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--amber);
+}
+
 .finalize-bar-text { color: var(--steel); font-size: 0.9rem; }
 .finalize-bar-actions { display: flex; gap: 0.6rem; flex-shrink: 0; }
 .finalize-bar-actions button:disabled { opacity: 0.6; cursor: wait; }

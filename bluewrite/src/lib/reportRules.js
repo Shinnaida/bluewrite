@@ -16,6 +16,10 @@ import {
   TYPE_FIELDS,
   DEFAULT_SOFT_WARN_AT,
 } from './incidentTypes.js';
+// Phase 6 Stage 1 — the DECLARED language of the narrative. Exactly one rule
+// below reads English words, and this is what tells the engine to SKIP it for
+// a narrative in another language rather than translate or approximate it.
+import { normaliseLanguage } from './reportLanguages.js';
 
 // ---------------------------------------------------------------------------
 // Common-field rules (v2 §3 table). Required keys map to the r-* input ids
@@ -277,6 +281,11 @@ const CROSS_CHECKS = [
   {
     id: 'casualty_consistency',
     types: ['Traffic Accident', 'Fire Incident', 'Robbery', 'Assault / Physical Injury'],
+    // The ONE rule in this engine that reads the narrative's own words: it
+    // looks for English medical terms. Marked here rather than keyed off the
+    // rule's name, so this is the switch a future narrative-reading rule has
+    // to set, and the skip below stays one line instead of a list to maintain.
+    readsNarrativeText: true,
     run(draft) {
       // Backed by real per-person records now, not a bare number.
       const pools = ['injured_persons'];
@@ -447,12 +456,22 @@ function validateGroups(draft, level) {
  * Validate a report draft.
  * @param {object} draft  full report draft (type_specific includes groups)
  * @param {'draft'|'finalize'} level  Gate 1 is lenient, Gate 2 is full
+ * @param {string|null} language  the narrative's declared language. Omit it and
+ *   the draft's own `narrative_language` is used, so a caller that has a draft
+ *   cannot accidentally run the English-only rules over a Bisaya narrative —
+ *   and a caller that is not language-aware (or an English report, which has
+ *   no language to report) behaves exactly as it did before this phase.
  * @returns {{ errors: Array<{level,path,message}>, warnings: Array<...> }}
  *   errors.level === 'error' blocks finalize; 'warning' never blocks.
  */
-export function validateReport(draft, level = 'draft') {
+export function validateReport(draft, level = 'draft', language = null) {
   const errors = [];
   const warnings = [];
+
+  // Phase 6 Stage 1 (§6). Read once: every rule that cares about language asks
+  // this, and normaliseLanguage means an absent or unrecognised value is
+  // English — the behaviour every report had before the phase.
+  const narrativeLanguage = normaliseLanguage(language ?? draft?.narrative_language);
 
   // Gate 1 or 2: the fields that even a draft must carry.
   for (const [key, rule] of Object.entries(COMMON_RULES)) {
@@ -482,6 +501,15 @@ export function validateReport(draft, level = 'draft') {
 
     for (const check of CROSS_CHECKS) {
       if (draft.incident_type && check.types.includes(draft.incident_type)) {
+        // SKIPPED, not translated, for a narrative that is not in English. The
+        // casualty check looks for English medical words; a correct Bisaya
+        // narrative saying "gidala sa ospital" contains none of them, so a
+        // report that is right would collect a false warning. There is
+        // deliberately no non-English keyword list to fall back to — Stage 1
+        // adds no vocabulary for any language (§4 of the plan), because a word
+        // list here would be this code guessing at a language the officer
+        // never declared.
+        if (check.readsNarrativeText && narrativeLanguage !== 'en') continue;
         for (const p of check.run(draft)) {
           (p.level === 'warning' ? warnings : errors).push(p);
         }

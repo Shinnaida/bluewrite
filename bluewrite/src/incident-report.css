@@ -2663,6 +2663,89 @@
 /* The action row below the sheet: same column as the page, and no top margin of
    its own — `.ir-actions` already carries one, so adding a second here would
    leave a gap half again as tall as the one under the AI panel. */
+/* ===========================================================================
+   Phase 6 Stage 1 — the declared language of the narrative (migration 007)
+
+   An officer who writes better in Bisaya or Tagalog than in English declares
+   the language of the narrative, and this is that control. Three things shape
+   how it is drawn, and none of them is decoration:
+
+     * It is a CONTROL, not paper. In the sheet format everything inside the
+       sheet's card IS the page, so the selector renders on the desk beneath
+       the paper instead (.ir-sheet-language, below); everywhere else it sits
+       inside the narrative field. Never both — see Reports.jsx.
+
+     * It is a LABEL on the record, so nothing here is coloured as danger.
+       Filing in Bisaya is a supported way to file; the note that the text is
+       untranslated states a fact and uses informational ink.
+
+     * It follows the narrative's own lock (disabled when the report cannot be
+       edited), so a locked selector has to LOOK locked rather than faded into
+       looking broken.
+   =========================================================================== */
+
+.ir-language {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.75rem;
+  /* Sized to its own row rather than to the field grid: the language is a
+     property OF the narrative, not one of the report's fields. */
+  max-width: 22rem;
+}
+
+.ir-language-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+}
+
+.ir-language-select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.5rem;
+  color: var(--ir-head-ink);
+  background: var(--ir-input);
+  border: 1px solid var(--ir-border);
+  border-radius: 4px;
+}
+
+.ir-language-select:focus-visible {
+  outline: 2px solid var(--ir-focus-ring);
+  outline-offset: 1px;
+}
+
+.ir-language-select:disabled {
+  color: var(--ir-muted);
+  cursor: not-allowed;
+}
+
+/* The "not translated" fact beside the narrative. Informational ink, not the
+   danger colour, on purpose: this is a supported way to file a report. */
+.ir-language-note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--ir-info-ink);
+}
+
+/* The sheet format's home for the selector: on the desk under the paper,
+   sharing the paper's column so the control and the sheet read as one block.
+   In view in BOTH of the sheet's states — including the blank page, where the
+   writing area is what is on screen. */
+.ir-sheet-language {
+  max-width: 8.5in;
+  margin: 1rem auto 0;
+}
+
+/* D3 — the reason the AI controls are unavailable, in the panel where those
+   controls would be. A disabled button with no explanation reads as a bug. */
+.ai-language-blocked {
+  margin: 0 0 0.55rem;
+}
+
 .ir-sheet-actions {
   max-width: 8.5in;
   margin: 0 auto;

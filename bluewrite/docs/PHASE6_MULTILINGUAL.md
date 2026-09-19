@@ -1,8 +1,13 @@
 # Phase 6 — Multilingual input (Bisaya / Tagalog → formal English report)
 
-Status: **planned — nothing built.** This file is the plan, written and agreed
-before any code. When the work lands, the as-built record goes at the end under
-**§10 Implemented**, in the style of `docs/PHASE5_AI_STRICTNESS.md`.
+Status: **Stage 1 implemented; Stages 2–5 remain planned.** The plan below was
+written and agreed before any code, and Stage 1 — *accept and preserve* — has
+since shipped: the declared language is stored, the officer's words are kept
+verbatim, English-only checks are skipped rather than guessed at, and filing is
+never blocked. Its as-built record is at the end under **§10 Implemented**, in
+the style of `docs/PHASE5_AI_STRICTNESS.md`. Stages 2–5 have no code at all —
+in particular there is still **no translation, no language detection and no
+bilingual vocabulary** anywhere in the system.
 
 Goal, in the user's words: *the system accepts Bisaya and Tagalog, with a
 dictionary, so an officer who is not good in English can use his native
@@ -349,5 +354,165 @@ as the table says. Outside the table the model chooses as it does today.
 
 ## 10. Implemented
 
-*Empty. This section records what shipped, with live-run evidence, when the
-phase lands — see `docs/PHASE5_AI_STRICTNESS.md` §7 for the shape.*
+### Stage 1 — accept and preserve (2026-09-19)
+
+An officer can now declare the language of the narrative, write it in that
+language, and save, review, print and finalize the report — with the report
+honestly marked untranslated and nothing blocked. **No AI is involved in this
+stage at all**, which is the point: it works with the model switched off, and it
+adds no vocabulary for any language. The language is only ever what the officer
+declares; nothing detects it, and nothing translates it.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `migrations/007_narrative_language.sql` | **new** — adds `narrative_language VARCHAR(20) NOT NULL DEFAULT 'en'` and `narrative_source_text TEXT NULL` |
+| `migrations/007_narrative_language.down.sql` | **new** — the rollback (the project's first `.down.sql`) |
+| `app/controllers/ReportsController.php` | `NARRATIVE_LANGUAGES` allowlist; `narrativeLanguage()` validator; `store()` inserts it; `update()` validates + writes it; `index()` selects it; the finalize note (D5, Q9) |
+| `app/controllers/NarrativeController.php` | the server-side AI guard `languageRefusal()` (D3), applied to both Generate and Tighten |
+| `src/lib/reportLanguages.js` | **new** — the one place a stored code becomes a label, a warning or a printed line |
+| `src/lib/reportRules.js` | the language becomes an input; the single English-reading rule is marked `readsNarrativeText` and skipped for non-`en` |
+| `src/components/Reports.jsx` | the language selector, the untranslated indicator, the D7 default, the finalize confirmation, the AI disable |
+| `src/components/AiNarrativePanel.jsx` | Generate / Tighten disabled with the visible reason |
+| `src/components/Shell.jsx` | carries the report's language through to the editor |
+| `src/components/ReportPrint.jsx` | the D6 sheet line |
+| `src/incident-report.css`, `src/styles.css` | styling for the selector, the indicator and `.pr-language` |
+| `tests/BaseApiTestCase.php` | replays `007` into the scratch DB (without it every create 500s) |
+| `tests/rules/reportLanguages.test.mjs` | **new** — 20 tests for the module and the rule engine |
+| `tests/MultilingualTest.php` | **new** — 19 tests for persistence, round trip, snapshots and guards (18 over HTTP, 1 pure) |
+| `package.json` | the new `.mjs` added to the `test` script |
+
+Nothing on the §4 do-not-touch list was modified — `git status` over
+`resources/`, `app/ai/` and `tests/SystemInstructionTest.php` is empty, and that
+test alone runs **38 tests / 237 assertions, OK**, unmodified.
+
+### How each decision was realized
+
+| | Realized as |
+|---|---|
+| **D1** | Two columns on `reports`. `narrative_language` is `VARCHAR(20) NOT NULL DEFAULT 'en'`+allowlist (the `incident_type` convention, Q2 — not `ENUM`), so a sixth language later is not an `ALTER TABLE`. `narrative_source_text` is created and **written by nothing**: both write paths name their columns, so an incoming `narrative_source_text` is dropped rather than stored (asserted). "Untranslated" is derived — `isUntranslated(code) === (code !== 'en')`, asserted against the derived form itself so the two cannot drift. |
+| **D2** | `en`, `ceb`, `tl`, `mixed`, `other`, offered as **English, Bisaya (Cebuano), Tagalog, Mixed, Other**. The API rejects anything else with 422 and never coerces (asserted, including that a rejected relabel leaves the stored value alone). The read side falls back to English instead, because a read has no officer to ask. |
+| **D3** | Disabled in the editor with the brief's exact wording — *"AI drafting and tightening currently work on English text only."* — and guarded **on the server too** (Q4): `NarrativeController::languageRefusal()` refuses both endpoints with 409 **before dispatch**, so the guard costs nothing to run and nothing to test. The button is not the guard; the endpoint can be called directly. |
+| **D4** | Automatic: the snapshot is the whole row as JSON, so `narrative_language` is in it from the first snapshot. A change of language therefore leaves the old value in history and the new one on the report (asserted both ways). |
+| **D5** | A warning with explicit confirm/cancel in the editor, stating plainly that the narrative is not in English and has not been translated. It never blocks, and the **server never refuses a filing for language** (asserted: a `ceb` report finalizes 200). Recorded per **Q9** by appending to the existing `change_note` — no new column, no extra audit row. |
+| **D6** | `printLanguageLine()` returns `Narrative language: <short> (not translated)` for non-`en` and **null** for `en`; `ReportPrint.jsx` renders the node only when it is non-null, so an English sheet is the same nodes it always was. The short form exists so the line does not read "Bisaya (Cebuano) (not translated)". The source-text appendix remains Stage 4. |
+| **D7** | `suggestedLanguage()` filters the fetched list to the officer's own rows and takes the greatest `id` — not the first row, because the list is sorted by incident date and an Admin's list is the whole station's. A suggestion only: the editor shows a stored report's own value, and the selector is always visible and changeable. |
+
+### Live evidence
+
+**Migration, on a copy (`bluewrite_p6_copy`), never on real data first.** Column
+checksum `MD5(GROUP_CONCAT(MD5(CONCAT(id,':',narrative)) ORDER BY id))`:
+
+| Stage | rows | bytes / chars | narrative checksum |
+|---|---|---|---|
+| before | 301 | 106030 / 106022 | `4c58f1c2a5ce9eb02f05be3df7473ec6` |
+| after `007` up | 301 | 106030 / 106022 | `4c58f1c2a5ce9eb02f05be3df7473ec6` |
+| after `007` down | 301 | 106030 / 106022 | `4c58f1c2a5ce9eb02f05be3df7473ec6` |
+
+Every existing row ends up `en`; `narrative` is byte-unchanged; down→up is
+repeatable. Applied to the real database afterwards, after a pre-migration dump:
+301 reports, **0 rows not `en`**, checksum still identical. (The 8-byte gap
+between bytes and characters before the migration is itself the proof that the
+column already held non-ASCII text.)
+
+**Step 2 — 21 assertions, 21 pass** (real HTTP against `bluewrite_test`): create
+with each code; print payload returns it; the narrative byte-identical; snapshot
+carries it; relabel `ceb`→`tl` leaves the text untouched; `klingon` → 422 and the
+stored value survives; non-string → 422; a client that omits the field gets
+`en`; the Tagalog fixture is 78 bytes / 77 chars; the pre-existing
+`narrative_source` provenance still works and does **not** land in
+`narrative_source_text` (NULL).
+
+**Steps 3 and 7 — 11 assertions, 11 pass**:
+
+- a **four-byte** character round-trips whole (40 bytes / 37 chars), which a
+  `utf8mb3` column could not do;
+- the `ñ` fixture is byte-identical through the print payload and the snapshot;
+- the server counts **characters**, not bytes: a 200-character multibyte
+  location is accepted and 201 refused with a character-count message;
+- tighten and generate on a `ceb` report both return **409** with the exact
+  wording, and the same call on an `en` report is not a language refusal.
+
+**Full suites.** JS `node --test`: **124 pass / 0 fail** (baseline 104 — the 20
+new tests). PHP: **164 tests / 879 assertions / 0 failures** (baseline 145 / 721).
+The 3 remaining PHPUnit *runner warnings* ("class … cannot be found" in
+`LegacyNormalizerTest.php`, `MaskingGatewayTest.php`, `MaskingRoundTripTest.php`)
+are pre-existing and unrelated: those three files are standalone CLI scripts with
+no test class, by their own comments, and none of them was touched.
+
+### Deviations from the plan
+
+1. **The Stage 3 column is `narrative_source_text`, not `narrative_source`.**
+   `narrative_source` is already taken: it is an existing **request** field
+   meaning provenance (`manual` / `ai-assisted`), read at
+   `ReportsController.php:867` and written into the change note. Reusing the
+   name would have merged two unrelated ideas and broken Phase 3's audit trail.
+2. **A rollback file convention had to be invented** (`.down.sql`): the project
+   is forward-only and has no down migrations at all.
+3. **`narrative.minLength: 120` is kept for every language** (Q6). It is a
+   character count, so it is language-independent; changing it would change
+   English behaviour, which §2 invariant 3 forbids.
+4. **No `duplicate`/`clone` or `import` path exists to carry the language** —
+   the brief expected one. Verified against the router: `/reports` offers index,
+   create, show, update, delete, restore, history, print, export and the two
+   narrative endpoints, and nothing else. The CSV export does not carry
+   `narrative` (or any language), so there is nothing to thread through.
+
+### Known limitations
+
+- **An officer can still type Bisaya into the AI panel's notes box and press
+  Generate on an `en`-declared report.** The guard keys off the *report's*
+  declared language; the notes box is free text and Stage 1 adds no language
+  handling to the prompt. This is Stage 3's problem, exactly as §4 of the brief
+  states, and it is recorded here rather than papered over.
+- **The masking layer is untouched and untested for native text** (Q8).
+  `MaskingGateway` is on the do-not-touch list, so whether a Bisaya free-text
+  note masks as well as an English one is unknown and unproven. It matters from
+  Stage 3, when native text is actually sent.
+- **The editor leg of the round trip has no automated test** — there is no React
+  test infrastructure in this project. The API, snapshot and print legs are
+  machine-verified; the in-browser leg is listed below as a manual procedure
+  and was **not** observed by the author, who has no browser here.
+- **The printed-sheet line is verified as data, not as pixels.** The server
+  returns `narrative_language` on the print payload (asserted), and
+  `printLanguageLine()` maps it to the line (asserted); that the `<p>` renders
+  on paper in a real browser was not observed.
+
+### Noticed, not changed
+
+1. **The history endpoint orders by `created_at` with no tiebreaker**
+   (`ReportsController.php:995`), so "the latest snapshot" is not deterministic
+   when two snapshots land in the same second. It cost two false failures while
+   writing these tests. Not fixed — out of scope, and reordering an audit view
+   is a decision, not a chore.
+2. **`narrative_source` is not a stored column.** A PATCH carrying only
+   `narrative_source` changes nothing and writes no snapshot; the provenance is
+   only recorded when something else on the row also changes.
+3. **`npm run build` is the only safe build.** `vite.config.js` sets
+   `outDir: 'public'` with `emptyOutDir: true`, so `vite build` **alone deletes
+   `public/api.php` and `public/.htaccess`** — the tracked deploy files restored
+   by the `cp -r public-assets/. public/` half of the npm script. Running the
+   binary directly silently breaks the LAN deployment.
+4. **`TEXT` is a byte-limited column type** (Q5): at `utf8mb4` the 65,535-byte
+   ceiling is ~16k Bisaya/Tagalog characters rather than 65k. The API's own
+   length check is in characters. Recorded, not changed — no such narrative
+   exists today.
+
+### Still to decide
+
+- **Q10 — the "untranslated" badge in list/review views.** *Proposed, not
+  built.* The data is already there (every list row carries
+  `narrative_language`), so a badge on the reports list would be a small change
+  — but it changes how an officer's record **looks** to a supervisor, which is
+  the station's call, not the software's.
+- **Whether a translation must be signed off by a second officer** (§8 Q6) —
+  still open, and it shapes Stage 4.
+- **Those already answered for Stage 1:** the migration shape (Q1), the column
+  type (Q2), the locking rule (Q3 — the language follows the narrative's own
+  lock exactly), the server guard (Q4 — added), the byte ceiling (Q5 — recorded),
+  the length floor (Q6 — kept), the D7 lookup (Q7 — client-side, from the list
+  already fetched), the masking gap (Q8 — deferred to Stage 3), the finalize
+  record (Q9 — the change note) and the `₱`/`fonts.css` comment (Q11 — no font
+  change; the only bundled glyph gap found was `₱` in League Spartan, which is
+  not a Bisaya or Tagalog character and does not affect the printed sheet).

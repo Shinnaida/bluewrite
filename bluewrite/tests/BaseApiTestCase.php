@@ -50,6 +50,12 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // 006 adds the reporting party (Panel I of the Write Report screen)
         // plus the signature block's officer initials and sign-off timestamp.
         $this->runSqlFile(__DIR__ . '/../migrations/006_reporting_party_and_signatures.sql');
+        // 007 adds narrative_language (the DECLARED language of the narrative,
+        // NOT NULL default 'en') and narrative_source_text (reserved for Stage
+        // 3 — created but never written). The API writes narrative_language on
+        // every report insert, so the scratch DB must carry the column or
+        // every create 500s.
+        $this->runSqlFile(__DIR__ . '/../migrations/007_narrative_language.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         $hash = password_hash('Passw0rd!23', PASSWORD_BCRYPT);

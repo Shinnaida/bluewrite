@@ -18,6 +18,18 @@ final class ReportsController
     private const LEGACY_TYPES = ['Physical Injury', 'Vehicular Accident', 'Drug-related', 'Other'];
 
     /**
+     * Phase 6 Stage 1 — the languages an officer may DECLARE for the narrative
+     * (migration 007). Declared, never detected: §8 Q2 of the plan settles
+     * that, because detection by function words is unreliable (ang, sa and nga
+     * are shared between Tagalog and Cebuano) and a wrong guess would silently
+     * apply the wrong terminology table in Stage 2.
+     *
+     * Mirrored in src/lib/reportLanguages.js — keep the two lists in step, the
+     * way REPORTER_FIELDS mirrors ReportRules::validateReporterParty().
+     */
+    private const NARRATIVE_LANGUAGES = ['en', 'ceb', 'tl', 'mixed', 'other'];
+
+    /**
      * Every person a report can name, as [group path, name path] inside its
      * type_specific blob. Keep this in step with GROUP_CONFIG in
      * src/lib/incidentTypes.js: a group that carries a `name` (or a vehicle's
@@ -61,6 +73,28 @@ final class ReportsController
     private function allowedTypes(): array
     {
         return array_values(array_unique(array_merge(Station::incidentTypes(), self::LEGACY_TYPES)));
+    }
+
+    /**
+     * The narrative language off a request body, validated against the fixed
+     * list, or null when the caller did not send one.
+     *
+     * null means "not provided", and the CALLER decides what that means: a
+     * create stores the column's own default ('en', so a client that has never
+     * heard of this field keeps working), while a PATCH leaves the stored value
+     * alone. An unknown value is REJECTED with a 422, never coerced — a report
+     * that says 'ceb' must not quietly become 'en', because the language is
+     * what tells a reader the narrative is not English.
+     */
+    private function narrativeLanguage(array $body, Validator $v): ?string
+    {
+        if (!array_key_exists('narrative_language', $body) || $body['narrative_language'] === null) {
+            return null;
+        }
+        // $v->in() rejects a non-string as well as an unknown code, so both
+        // misuses produce one clear message rather than a silent default.
+        $v->in('narrative_language', $body['narrative_language'], self::NARRATIVE_LANGUAGES, 'Narrative language');
+        return is_string($body['narrative_language']) ? $body['narrative_language'] : null;
     }
 
     /**
@@ -183,6 +217,7 @@ final class ReportsController
         $sql = "SELECT r.id, r.incident_type, r.report_date, r.blotter_no, r.blotter_date,
                     r.incident_datetime, r.incident_date, r.incident_time,
                     r.incident_time_approximate, r.location, r.status,
+                    r.narrative_language,
                     r.created_by, u.full_name AS created_by_name, r.deleted_at
              FROM reports r JOIN users u ON u.id = r.created_by
              WHERE {$whereSql}
@@ -464,6 +499,10 @@ final class ReportsController
         if (isset($body['narrative']) && !is_string($body['narrative'])) {
             Response::json(422, ['error' => 'Narrative must be text.']);
         }
+        // Phase 6 Stage 1: the language the narrative is written in, DECLARED by
+        // the officer. Absent means 'en' — the column's own default — so an
+        // older client, and the API driven directly, keep working unchanged.
+        $narrativeLanguage = $this->narrativeLanguage($body, $v) ?? 'en';
         // Disposition fields printed on the sheet (migration 004). Both are
         // optional: an officer may finalize without them.
         $v->optional('action_taken', $body['action_taken'] ?? null, 'Action taken / status', 4000);
@@ -493,14 +532,15 @@ final class ReportsController
             'INSERT INTO reports (created_by, incident_type, report_date, blotter_no, blotter_date,
                                   incident_datetime, incident_date, incident_time, incident_time_approximate,
                                   discovery_date, discovery_time, discovery_time_approximate,
-                                  location, complainant, respondent, narrative, action_taken, ioc_name,
+                                  location, complainant, respondent, narrative, narrative_language,
+                                  action_taken, ioc_name,
                                   reporter_name, reporter_id_no, reporter_contact, reporter_email,
                                   reporter_address, officer_initials,
                                   type_specific, status)
              VALUES (:created_by, :type, :report_date, :blotter_no, :blotter_date,
                      :dt, :incident_date, :incident_time, :incident_time_approx,
                      :discovery_date, :discovery_time, :discovery_time_approx,
-                     :loc, :comp, :resp, :narr, :act, :ioc,
+                     :loc, :comp, :resp, :narr, :narr_lang, :act, :ioc,
                      :reporter_name, :reporter_id, :reporter_contact, :reporter_email,
                      :reporter_address, :officer_initials,
                      :ts, :status)'
@@ -522,6 +562,7 @@ final class ReportsController
             ':comp' => isset($body['complainant']) && $body['complainant'] !== null ? trim((string) $body['complainant']) : null,
             ':resp' => isset($body['respondent']) && $body['respondent'] !== null ? trim((string) $body['respondent']) : null,
             ':narr' => (string) ($body['narrative'] ?? ''),
+            ':narr_lang' => $narrativeLanguage,
             ':act' => isset($body['action_taken']) && $body['action_taken'] !== null ? trim((string) $body['action_taken']) : null,
             ':ioc' => isset($body['ioc_name']) && $body['ioc_name'] !== null ? trim((string) $body['ioc_name']) : null,
             ':reporter_name' => $official['reporter_name'],
@@ -630,6 +671,15 @@ final class ReportsController
             // migration needed since no row ever uses it.
             $v->in('status', $body['status'], ['draft', 'finalized'], 'Status');
         }
+        // Phase 6 Stage 1: the declared narrative language. A PATCH that does
+        // not send it leaves the stored value untouched (null = not provided,
+        // see narrativeLanguage()); one that sends an unknown code is rejected.
+        // The finalized lock above already settles who may change it: an Admin
+        // can, and nobody else can touch a finalized report at all. The value
+        // column itself is written by the allowlist below, like every other
+        // column a PATCH may set; the validated value is kept for the audit
+        // note below.
+        $narrativeLanguage = $this->narrativeLanguage($body, $v);
         $typeSpecific = array_key_exists('type_specific', $body)
             ? $this->sanitizeTypeSpecific(
                 $body['type_specific'],
@@ -726,6 +776,11 @@ final class ReportsController
             'complainant' => 'complainant',
             'respondent' => 'respondent',
             'narrative' => 'narrative',
+            // Phase 6 Stage 1 — changed together with the narrative's language
+            // declaration, and by the same rule (anyone who may edit the
+            // report). Selecting it RELABELS the text: it never converts,
+            // translates or re-processes a single character of it.
+            'narrative_language' => 'narrative_language',
             'action_taken' => 'action_taken',
             'ioc_name' => 'ioc_name',
             'status' => 'status',
@@ -811,6 +866,19 @@ final class ReportsController
             // content is traceable in report_history (audit requirement).
             if (($body['narrative_source'] ?? null) === 'ai-assisted') {
                 $note .= ' Narrative source: ai-assisted.';
+            }
+            // Phase 6 Stage 1 (D5, decision Q9): the officer's finalize
+            // confirmation for a non-English narrative is recorded in this same
+            // note — the history then says plainly that a narrative was filed
+            // without a translation. No new column and no extra audit row: the
+            // officer who finalized is already on the row and on this snapshot.
+            // The language that takes effect is the PATCH's when it sent one,
+            // else the stored value; an unknown code never reaches here (the
+            // validator above answers 422 first).
+            $noteLanguage = $narrativeLanguage ?? ($report['narrative_language'] ?? 'en');
+            if (($body['status'] ?? null) === 'finalized' && $report['status'] !== 'finalized'
+                && $noteLanguage !== 'en') {
+                $note .= ' Narrative language: ' . $noteLanguage . ' (not translated).';
             }
             $this->snapshot($pdo, $reportId, (int) $user['id'], $note);
             Audit::log((int) $user['id'], 'report.update', 'report', (string) $reportId, implode('; ', array_keys($body)));

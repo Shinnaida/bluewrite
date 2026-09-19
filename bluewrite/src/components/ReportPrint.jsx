@@ -6,6 +6,10 @@ import { buildActionBlock } from '../lib/printActions.js';
 // The letterhead's fixed lines: the station's own where it has configured them,
 // the built-in defaults where it has not.
 import { resolveHeader } from '../lib/stationSettings.js';
+// Phase 6 Stage 1 (D6) — the "not translated" line, or null for an English
+// narrative. Same module the editor reads, so the sheet and the form cannot
+// disagree about what a stored code means.
+import { printLanguageLine } from '../lib/reportLanguages.js';
 // Station seals: bundled by Vite (src/assets) so they survive the offline
 // build — the sheet must print with the logos even without network access.
 import pnpLogo from '../assets/pnp-logo.png';
@@ -547,6 +551,11 @@ export default function ReportPrint({ reportId, onClose, autoPrint = true, foote
   // must never print blank where the Republic's name belongs.
   const head = resolveHeader(stationHeader);
   const reportNo = report.id ? `BW-${String(report.id).padStart(4, '0')}` : 'BW-____';
+  // D6 — null unless the narrative was declared as something other than
+  // English. A reader of the sheet cannot tell a Bisaya narrative from a
+  // badly-written English one, so a non-English report says so; an English
+  // report renders exactly the nodes it rendered before this phase.
+  const languageLine = printLanguageLine(report.narrative_language);
   const facts = buildTypeFacts(report.incident_type, { report, ts });
   const findings = buildFindings(ts);
   // The officer's own Action Taken / Status text (one printed line per typed
@@ -692,6 +701,10 @@ export default function ReportPrint({ reportId, onClose, autoPrint = true, foote
           <strong>FACTS OF THE CASE: </strong>
           {report.narrative || '—'}
         </div>
+
+        {/* D6 — rendered ONLY for a non-English declaration, so the sheet of an
+            English report is unchanged, node for node. */}
+        {languageLine && <p className="pr-language">{languageLine}</p>}
 
         {findings.length > 0 && (
           <div className="pr-section">

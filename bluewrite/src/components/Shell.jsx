@@ -432,6 +432,11 @@ export default function Shell({ user, onLogout, notify, theme, onTheme, density,
             formFormat={formFormat}
             incidentTypes={stationTypes}
             stationHeader={stationHeader}
+            // The officer's own recent reports, already fetched above for the
+            // Home list. D7 reads the most recent one's declared language to
+            // pre-select the language selector on a NEW report — a suggestion
+            // only, and one the officer can see and change.
+            recentReports={recentReports}
             onRegisterFlush={registerFlush}
             onRegisterSave={registerSave}
           />
@@ -459,6 +464,11 @@ export default function Shell({ user, onLogout, notify, theme, onTheme, density,
             formFormat={formFormat}
             incidentTypes={stationTypes}
             stationHeader={stationHeader}
+            // The officer's own recent reports, already fetched above for the
+            // Home list. D7 reads the most recent one's declared language to
+            // pre-select the language selector on a NEW report — a suggestion
+            // only, and one the officer can see and change.
+            recentReports={recentReports}
             onRegisterFlush={registerFlush}
             onRegisterSave={registerSave}
             onReportOpenChange={setListReportOpen}

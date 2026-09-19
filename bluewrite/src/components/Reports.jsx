@@ -69,6 +69,20 @@ import {
   specDate,
   specTimestamp,
 } from '../lib/incidentReport.js';
+// Phase 6 Stage 1 — the DECLARED language of the narrative. One module behind
+// the selector, the "not translated" notice, the AI guard's reason, the
+// finalize warning and the printed line, so the editor and the sheet cannot
+// disagree about what a code means.
+import {
+  NARRATIVE_LANGUAGES,
+  DEFAULT_LANGUAGE,
+  languageHint,
+  normaliseLanguage,
+  untranslatedNotice,
+  aiBlockedReason,
+  finalizeLanguageWarning,
+  suggestedLanguage,
+} from '../lib/reportLanguages.js';
 
 const EMPTY = {
   incident_type: '',
@@ -91,6 +105,11 @@ const EMPTY = {
   reporter_email: '',
   reporter_address: '',
   officer_initials: '',
+  // Phase 6 Stage 1 (migration 007) — the language the NARRATIVE is written
+  // in, DECLARED by the officer. A new report starts here and D7 pre-selects
+  // the officer's last-used language over it; an existing report always shows
+  // its own stored value.
+  narrative_language: DEFAULT_LANGUAGE,
   status: 'draft',
   type_specific: {},
 };
@@ -1524,6 +1543,10 @@ export function ReportEditor({
   // by ONE format: the sheet draws these lines at the head of its page, so the
   // officer writes on the station's own paper rather than on a blank anonymous
   // rectangle. Null falls back to the built-in lines — see resolveHeader.
+  // The officer's own recent reports. Shell already fetches the list for Home,
+  // and D7 reads the most recent one's declared language to pre-select the
+  // selector on a NEW report — a suggestion only, visible and changeable.
+  recentReports = null,
   stationHeader = null,
 }) {
   const typeOptions = incidentTypes && incidentTypes.length > 0 ? incidentTypes : TYPES;
@@ -1531,7 +1554,15 @@ export function ReportEditor({
   // For a new report, start with the empty form immediately; for an existing
   // one, null until fetched. (Starting null for BOTH would crash the first
   // render — effects run after render, so the new-report path must be ready.)
-  const [draft, setDraft] = useState(reportId === null ? { ...EMPTY } : null);
+  // A NEW report starts from D7's suggestion — the language of this officer's
+  // most recent report, or English when there is none. An EXISTING report is
+  // loading at this point (reportId !== null) and always shows its own stored
+  // value, so the suggestion can never relabel a report that already has one.
+  const [draft, setDraft] = useState(() => (
+    reportId === null
+      ? { ...EMPTY, narrative_language: suggestedLanguage(recentReports, user.id) }
+      : null
+  ));
   const [errors, setErrors] = useState({});
   // AI disposition helper: the officer types a rough note ("follow up
   // investigation") and the model rewrites it into the formal statement that
@@ -2144,6 +2175,15 @@ export function ReportEditor({
   // AI draft, so the same banner + jump-to-field runs before any request.
   // Only the narrative is exempt — that is what the AI is there to write.
   function gateAiGenerate() {
+    // D3 — refused one layer in as well as in the panel's own buttons. The AI
+    // tools are English-only: the economy rules running over a Bisaya
+    // narrative would rewrite prose in the wrong language rather than improve
+    // it, and a draft in English could be applied into a field labelled Bisaya.
+    const blocked = aiBlockedReason(draft?.narrative_language);
+    if (blocked) {
+      setError(blocked);
+      return false;
+    }
     const ok = checkFullRules({ ignorePaths: ['narrative'] });
     if (ok) setError(null); // a previous failed attempt's banner must not linger
     return ok;
@@ -2352,6 +2392,47 @@ export function ReportEditor({
   // survives a step change by design — the panel restores it from the per-tab
   // session store keyed by report id — and so does its own visibility, which
   // is settled by the health probe on mount.
+  // The declared language of the narrative (Phase 6 Stage 1). Read through
+  // normaliseLanguage so a stored value this build does not know — an older
+  // row, a draft restored from sessionStorage — shows as English rather than
+  // as a language nobody can name.
+  const languageCode = normaliseLanguage(draft?.narrative_language);
+
+  // One element, two mutually-exclusive homes — the rule the AI panel and the
+  // action row already follow, and for the same reason: everything inside the
+  // sheet's card IS the page, and a <select> is a control, so in the sheet
+  // format this renders on the desk beneath the paper instead (see the block
+  // after </form>). Never both, so there is always exactly one selector.
+  //
+  // Changing it RELABELS: set() marks the draft dirty and edits nothing else.
+  // No conversion, no translation, no re-processing of a character of text.
+  const languagePicker = (
+    <div className="ir-language">
+      <label className="ir-language-label" htmlFor="r-lang">
+        Narrative language
+      </label>
+      <select
+        id="r-lang"
+        className="ir-language-select"
+        value={languageCode}
+        onChange={(e) => set('narrative_language', e.target.value)}
+        disabled={!canEdit}
+      >
+        {NARRATIVE_LANGUAGES.map((l) => (
+          <option key={l.code} value={l.code}>
+            {l.label}
+          </option>
+        ))}
+      </select>
+      <p className="field-hint">{languageHint()}</p>
+      {untranslatedNotice(languageCode) && (
+        <p className="ir-language-note" role="status">
+          {untranslatedNotice(languageCode)}
+        </p>
+      )}
+    </div>
+  );
+
   const aiPanel = canEdit ? (
     <AiNarrativePanel
       reportId={draft?.id ?? null}
@@ -2367,6 +2448,9 @@ export function ReportEditor({
       // Completeness gate: flag "The report has N problems" and jump
       // to the missing fields BEFORE any AI request is sent.
       onBeforeGenerate={gateAiGenerate}
+      // D3 — the panel disables Generate and Tighten and states the reason,
+      // rather than offering a control whose only possible answer is no.
+      languageBlocked={aiBlockedReason(languageCode)}
       onAccept={(aiText) => {
         // Human-in-the-loop: the officer explicitly copies the AI
         // draft in; it stays fully editable afterwards. The source
@@ -2916,6 +3000,10 @@ export function ReportEditor({
                 placeholder="Describe the incident in chronological order. Include suspect description, witness information, and any property damage or injuries."
               />
               {errors.narrative && <div className="error">{errors.narrative}</div>}
+              {/* ON THE DESK, NOT ON THE PAGE: in the sheet format this card is
+                  the paper itself, so the selector renders under the sheet
+                  instead (the other home, after </form>). */}
+              {!sheet && languagePicker}
             </div>
             {/* Where the AI panel lives is settled PER FORMAT — one home each,
                 never two, because the panel owns the slide-in side panel and the
@@ -3294,6 +3382,12 @@ export function ReportEditor({
           Outside the form on purpose: everything inside `.ir-form--sheet` is the
           page, and an officer who asked for a blank sheet of paper should not
           find a toolbar printed at the foot of it. */}
+      {/* The selector's other home, and the same rule: it is a control, so in
+          the sheet format it sits on the desk under the paper rather than
+          being printed on it. In view in both of the sheet's states, so an
+          officer can declare the language while writing on the blank page. */}
+      {sheet && <div className="ir-sheet-language">{languagePicker}</div>}
+
       {sheet && canEdit && <div className="ir-sheet-ai">{aiPanel}</div>}
 
       {/* ...and the action row, under it. The sheet format's whole point is that
@@ -3328,6 +3422,15 @@ export function ReportEditor({
                 A finalized report is locked for editing. Only an administrator
                 can make further changes, and every change is recorded in the
                 report history.
+                {/* D5 — a non-English narrative is flagged HERE, where the
+                    officer confirms — and it never blocks: the confirm button
+                    beside this remains the only thing that finalizes, so the
+                    warning is read on the way to it rather than instead of it. */}
+                {finalizeLanguageWarning(languageCode) && (
+                  <span className="finalize-bar-language" role="alert">
+                    {finalizeLanguageWarning(languageCode)}
+                  </span>
+                )}
               </div>
               <div className="finalize-bar-actions">
                 <button
@@ -3590,6 +3693,10 @@ export function ReportsTable({
   // ...and the station's letterhead, for the same reason again: a report opened
   // from the register gets the sheet format's page exactly as one opened from
   // Write Report does.
+  // The officer's own recent reports. Shell already fetches the list for Home,
+  // and D7 reads the most recent one's declared language to pre-select the
+  // selector on a NEW report — a suggestion only, visible and changeable.
+  recentReports = null,
   stationHeader = null,
   // Tells the shell whether this list is showing its own editor panel. The
   // panel replaces the list WITHOUT changing `view.kind` (that is how the
@@ -3870,6 +3977,11 @@ export function ReportsTable({
         // the bundle was built with.
         incidentTypes={incidentTypes}
         stationHeader={stationHeader}
+        // ...and the officer's own recent reports, which is where D7's
+        // suggested language comes from. A report opened from the register is
+        // an EXISTING report (its own language is shown), but the same editor
+        // creates new ones, so it needs the same input here.
+        recentReports={recentReports}
         onRegisterFlush={onRegisterFlush}
         onRegisterSave={onRegisterSave}
       />

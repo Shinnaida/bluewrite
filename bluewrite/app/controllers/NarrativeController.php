@@ -52,6 +52,17 @@ final class NarrativeController
         if (($report['status'] ?? '') === 'finalized') {
             Response::json(409, ['error' => 'This report is finalized and locked.']);
         }
+        // Phase 6 Stage 1 (D3) — the AI tools are English-only. The editor
+        // disables Generate and Tighten for a non-English narrative and states
+        // the reason, but a UI disable is not a guard: this is the same refusal
+        // on the server, because the request can be made directly. The English
+        // economy rules running over Bisaya text would rewrite prose in the
+        // wrong language rather than improve it, and a draft written from
+        // English must not be applied into a narrative declared otherwise.
+        // Wording matches src/lib/reportLanguages.js aiBlockedReason().
+        if (($refusal = self::languageRefusal($report['narrative_language'] ?? null)) !== null) {
+            Response::json(409, ['error' => $refusal]);
+        }
 
         $body = NarrativeController::jsonBody();
         $notes = trim((string) ($body['notes'] ?? ''));
@@ -201,6 +212,17 @@ final class NarrativeController
         if (($report['status'] ?? '') === 'finalized') {
             Response::json(409, ['error' => 'This report is finalized and locked.']);
         }
+        // Phase 6 Stage 1 (D3) — the AI tools are English-only. The editor
+        // disables Generate and Tighten for a non-English narrative and states
+        // the reason, but a UI disable is not a guard: this is the same refusal
+        // on the server, because the request can be made directly. The English
+        // economy rules running over Bisaya text would rewrite prose in the
+        // wrong language rather than improve it, and a draft written from
+        // English must not be applied into a narrative declared otherwise.
+        // Wording matches src/lib/reportLanguages.js aiBlockedReason().
+        if (($refusal = self::languageRefusal($report['narrative_language'] ?? null)) !== null) {
+            Response::json(409, ['error' => $refusal]);
+        }
 
         $body = NarrativeController::jsonBody();
         $narrative = trim((string) (self::liveText($body, 'narrative', 20000) ?? ''));
@@ -277,6 +299,32 @@ final class NarrativeController
      *
      * @param array<string,mixed> $body
      */
+    /**
+     * Phase 6 Stage 1 (D3) — why the AI tools must refuse this report's
+     * language, or null when they may run.
+     *
+     * The editor disables Generate and Tighten for a non-English narrative and
+     * says why, but a disabled button is not a guard: the endpoint can be
+     * called directly. The English economy rules running over Bisaya or
+     * Tagalog text would rewrite prose in the wrong language rather than
+     * improve it, and an English draft must never be applied into a narrative
+     * the officer declared otherwise.
+     *
+     * A null language is English: that is what `$report['narrative_language']`
+     * is for every row written before migration 007, so an untouched report
+     * behaves exactly as it did before this phase.
+     *
+     * Static and pure so both legs can be tested with no network, no database
+     * and no API key — the same reason liveText() is a static. The wording is
+     * the brief's, and matches reportLanguages.js aiBlockedReason().
+     */
+    public static function languageRefusal(?string $language): ?string
+    {
+        return ($language ?? 'en') === 'en'
+            ? null
+            : 'AI drafting and tightening currently work on English text only.';
+    }
+
     public static function liveText(array $body, string $key, int $maxLength): ?string
     {
         if (!array_key_exists($key, $body) || !is_string($body[$key])) {

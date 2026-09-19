@@ -98,6 +98,12 @@ export default function AiNarrativePanel({
   // returns false, generation is refused BEFORE any request — the editor has
   // already flagged "The report has N problems" with jump-to-field links.
   onBeforeGenerate,
+  // D3 (Phase 6 Stage 1) — the reason Generate and Tighten are unavailable for
+  // a narrative that is not in English, or null when they are. The EDITOR owns
+  // the wording (src/lib/reportLanguages.js), so the panel, the finalize bar
+  // and the printed sheet state the same fact in the same words rather than
+  // three paraphrases drifting apart.
+  languageBlocked = null,
 }) {
   const [mode, setMode] = useState('idle'); // idle|ready|loading|done|error|manual
   const [draft, setDraft] = useState(null); // { narrative, suggestions, possibleGaps, addedContentWarnings }
@@ -265,7 +271,17 @@ export default function AiNarrativePanel({
   }
 
   const generate = async (feedbackText = '') => {
-    // Gate FIRST: a blocked generate flags the problems and never opens the
+    // The language guard FIRST, and it is not redundant with the disabled
+    // button: the done-state's Regenerate controls reach this function long
+    // after a draft exists, so an officer who generated in English and then
+    // declared the narrative Bisaya could otherwise ask again.
+    if (languageBlocked) {
+      setMessage(languageBlocked);
+      setMode('error');
+      setPanelOpen(true);
+      return;
+    }
+    // Gate next: a blocked generate flags the problems and never opens the
     // loading panel — exactly like a blocked finalize.
     if (onBeforeGenerate && !onBeforeGenerate()) return;
     setMode('loading');
@@ -353,6 +369,12 @@ export default function AiNarrativePanel({
   // call edits the officer's own words, so the merged findings and trimmed
   // status come back as proposals with their own buttons.
   const tighten = async () => {
+    if (languageBlocked) {
+      setMessage(languageBlocked);
+      setMode('error');
+      setPanelOpen(true);
+      return;
+    }
     const text = String(narrative || '').trim();
     if (!text) {
       setMessage('Write the narrative first — there is nothing to tighten yet.');
@@ -445,8 +467,22 @@ export default function AiNarrativePanel({
 
       {mode === 'ready' && (
         <>
+          {/* D3 — the reason is stated where the controls would be, not only
+              on the disabled buttons' tooltips: a button that is off with no
+              explanation reads as a broken feature. */}
+          {languageBlocked && (
+            <div className="alert info ai-language-blocked" role="status">
+              {languageBlocked}
+            </div>
+          )}
           <div className="ai-generate-row">
-            <button type="button" className="side-new" onClick={() => generate()}>
+            <button
+              type="button"
+              className="side-new"
+              onClick={() => generate()}
+              disabled={!!languageBlocked}
+              title={languageBlocked || undefined}
+            >
               Generate AI draft
             </button>
             <input
@@ -467,7 +503,7 @@ export default function AiNarrativePanel({
               type="button"
               className="ai-tighten"
               onClick={tighten}
-              disabled={!String(narrative || '').trim()}
+              disabled={!!languageBlocked || !String(narrative || '').trim()}
               title="Runs the economy rules over your own narrative: repeated propositions merged, padding and closing formulas removed. Nothing is written into the report until you click."
             >
               Tighten my draft
@@ -747,8 +783,13 @@ export default function AiNarrativePanel({
                         type="button"
                         className="primary"
                         onClick={() => { onAccept(draft.narrative); setDraft(null); setMode('ready'); closePanel(); }}
-                        disabled={tightenDraft && !draft.tightened}
-                        title={tightenDraft && !draft.tightened ? 'Your wording was not changed, so there is nothing to accept.' : undefined}
+                        // Accept is blocked for the same reason Generate is, and
+                        // it is the reason D3 actually names FIRST: a draft
+                        // written from English must not be applied into a
+                        // narrative now declared Bisaya. The draft is not lost —
+                        // switch the language back and it is still here.
+                        disabled={!!languageBlocked || (tightenDraft && !draft.tightened)}
+                        title={languageBlocked || (tightenDraft && !draft.tightened ? 'Your wording was not changed, so there is nothing to accept.' : undefined)}
                       >
                         Accept into narrative
                       </button>
