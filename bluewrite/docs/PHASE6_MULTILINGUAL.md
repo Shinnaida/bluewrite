@@ -1456,6 +1456,16 @@ The harness's real cost, from its own dry run: **9 fixtures = 9 calls**; at
 Stage 3's repetition count (`--runs=5`) that is **45 calls per run, 90 for a
 before/after pair**.
 
+The two inputs, and the format they must arrive in, are documented in
+**`docs/track-d-officer-notes.md`** — a fill-in template with the account mix the
+set needs (two ordinary, two thin, one repetitive, one ambiguous), the
+placeholder tokens the masking gateway knows, and the privacy rules that apply
+because a few-shot example becomes part of the instructions sent to the model.
+Nothing in that file is an example and nothing in it is enabled.
+
+**Owner decision (this session): Track D stays HELD, not dropped.** Phase 6 is
+code-complete without it; the shipped feature depends on it in no way.
+
 **The audit's one finding.** `UsersController::validateLanguages()` still held a
 literal language list. Fixed in that same pass (Track A, deviation 4), which is
 why the audit was worth running rather than declaring the checklist met.
