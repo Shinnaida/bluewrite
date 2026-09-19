@@ -71,4 +71,14 @@ return [
 
     // §7 — when false, the UI hides Generate and shows manual-mode.
     'enabled' => true,
+
+    // Phase 6 Stage 3 — translation of a Bisaya/Tagalog/mixed source into a
+    // formal English narrative (decision D6). Enabled by default for every
+    // incident type, INCLUDING the sensitive ones, by the owner's decision.
+    // 'disabled_incident_types' is the per-type kill switch: list any incident
+    // type here to refuse ONLY its translation (an English-source draft on the
+    // same type still works), with no code change and no redeploy of logic.
+    'translation' => [
+        'disabled_incident_types' => [],
+    ],
 ];

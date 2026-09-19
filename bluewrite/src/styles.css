@@ -1185,6 +1185,59 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 }
 .ai-notes { flex: 1; min-width: 16rem; }
 
+/* Phase 6 Stage 3 — the notes box is a textarea (native accounts are longer
+   than one line invites), with a declared notes-language selector beside it. */
+.ai-notes-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.ai-notes-lang {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--muted, #6b7280);
+}
+.ai-notes-lang select { min-width: 9rem; }
+
+/* D3 — exactly one source per Apply. The choice is explicit and the ignored
+   side is named, so a native narrative and native notes are never merged. */
+.ai-source-choice {
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  margin-bottom: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.ai-source-choice label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
+
+/* The "understood as" gloss pair — labelled as a reading to check, never
+   presented as verification. */
+.ai-gloss {
+  border-left: 3px solid var(--accent, #2563eb);
+  background: var(--surface-2, #f8fafc);
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.35rem;
+  margin: 0.6rem 0;
+}
+.ai-gloss h4 { margin: 0 0 0.3rem; font-size: 0.85rem; }
+.ai-gloss-native { font-style: italic; margin: 0 0 0.35rem; }
+.ai-gloss p { margin: 0.2rem 0; }
+
+.ai-pinned {
+  margin: 0.6rem 0;
+  font-size: 0.85rem;
+}
+.ai-pinned h4 { margin: 0 0 0.3rem; font-size: 0.85rem; }
+.ai-pinned ul { margin: 0; padding-left: 1.1rem; }
+
+.ai-apply-note { font-size: 0.85rem; }
+
 /* Phase 5 — "Tighten my draft": runs the economy rules over the narrative the
    OFFICER wrote (Generate works from the notes field instead). A peer of
    Generate rather than a competitor, so it is styled as a secondary action
@@ -1221,6 +1274,55 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 .ai-tighten-result { margin-bottom: 0.7rem; }
 .ai-tighten-result .field-hint { margin: 0 0 0.5rem; }
 .ai-manual-banner { border-color: var(--amber); background: var(--amber-bg); color: var(--steel); }
+
+/* ---- Phase 6 Stage 2: approved report terminology (offline lookup) ----
+   Sits at the top of the AI panel and renders in every mode, including when
+   the AI is disabled. Compact and read-only: it is a terminology table, not a
+   translator, and the scope line says so on screen at all times. */
+.narrative-terms {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-soft);
+  padding: 0.7rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.narrative-terms-title {
+  margin: 0 0 0.2rem;
+  font-size: 0.82rem;
+  color: var(--steel);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.narrative-terms-scope {
+  margin: 0 0 0.55rem;
+  font-size: 0.74rem;
+  color: var(--cyan-dim);
+  line-height: 1.35;
+}
+.narrative-terms-controls { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.narrative-terms-search { flex: 1; min-width: 9rem; }
+.narrative-terms-filter select { font-size: 0.8rem; }
+.narrative-terms-hint,
+.narrative-terms-empty { margin: 0.5rem 0 0; font-size: 0.76rem; color: var(--cyan-dim); }
+.narrative-terms-results { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.55rem; }
+.narrative-terms-entry { border-top: 1px solid var(--line); padding-top: 0.5rem; }
+.narrative-terms-term { font-weight: 700; color: var(--paper); font-size: 0.86rem; }
+.narrative-terms-lang { margin-left: 0.4rem; font-weight: 500; font-size: 0.72rem; color: var(--cyan-dim); }
+.narrative-terms-forms { font-size: 0.74rem; color: var(--cyan-dim); }
+.narrative-terms-english { margin-top: 0.25rem; font-size: 0.86rem; color: var(--green-ok); font-weight: 600; }
+.narrative-terms-english-label {
+  display: inline-block;
+  margin-right: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cyan-dim);
+}
+.narrative-terms-meta { margin-top: 0.15rem; }
+.narrative-terms-category { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--icon-dim); }
+.narrative-terms-forbidden { margin-top: 0.2rem; font-size: 0.78rem; color: var(--red-text); }
+.narrative-terms-note { margin-top: 0.2rem; font-size: 0.76rem; color: var(--steel); }
 
 /* Loading state while the AI drafts: spinner + pulsing dots + progress bar. */
 .ai-loading {

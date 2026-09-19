@@ -1,13 +1,28 @@
 # Phase 6 — Multilingual input (Bisaya / Tagalog → formal English report)
 
-Status: **Stage 1 implemented; Stages 2–5 remain planned.** The plan below was
-written and agreed before any code, and Stage 1 — *accept and preserve* — has
-since shipped: the declared language is stored, the officer's words are kept
-verbatim, English-only checks are skipped rather than guessed at, and filing is
-never blocked. Its as-built record is at the end under **§10 Implemented**, in
-the style of `docs/PHASE5_AI_STRICTNESS.md`. Stages 2–5 have no code at all —
-in particular there is still **no translation, no language detection and no
-bilingual vocabulary** anywhere in the system.
+Status: **Stage 3 implemented (pending live evaluation at gate G4); Stages 4–5
+remain planned.** Stages 1–3 have shipped in code. Stage 3 — *AI understanding
+and translation* — lets an officer hand the system a Bisaya, Tagalog or mixed
+source (their narrative, or notes) and receive a formal English draft plus an
+"understood as" gloss in both languages, with every placeholder and every
+legal-weight term protected; the officer applies it, and their original words are
+kept verbatim as the source. **The translation feature has not yet been run
+against the live model in the evaluation set (§8) — the harness is built
+(`scripts/eval-translation.php`) and its results are pending the owner's go-ahead
+and a bilingual reviewer, so the feature is not yet cleared for real use.** The
+per-type kill switch and the sensitive types' review are part of that gate.
+
+Stage 1 — *accept and preserve* — stores the declared language, keeps
+the officer's words verbatim, skips English-only checks rather than guessing,
+and never blocks filing. Stage 2 — *the bilingual terminology table* — adds an
+approved-only glossary of report terms and an offline lookup for the officer;
+**it does not touch the model**, and the assembled instruction block is
+byte-identical to before it. Both as-built records are at the end under **§10
+Implemented**, in the style of `docs/PHASE5_AI_STRICTNESS.md`. Stages 3–5 have
+no code yet — in particular there is still **no translation and no language
+detection** anywhere in the system, and the terminology table ships with **zero
+approved entries**, so it publishes nothing until the station's records/legal
+officer approves terms.
 
 Goal, in the user's words: *the system accepts Bisaya and Tagalog, with a
 dictionary, so an officer who is not good in English can use his native
@@ -140,11 +155,16 @@ station already uses** — not a translation engine. It earns its place twice:
    this way*, which removes the `nasakpan` → "arrested" class of error by
    decision rather than by hope.
 
-**Where it lives:** `docs/bluewrite-police-terminology-glossary.md` is already
-the source of truth, with `type_vocabulary.json` derived from it and
-`SystemInstructionTest.php` guarding the pair. A bilingual table is a new
-section of that glossary, propagated into the derived JSON — not a new file with
-its own rules.
+**Where it lives:** `docs/bluewrite-police-terminology-glossary.md` is the
+source of truth. The bilingual table is a new section of that glossary (**§13**),
+propagated into its **own derived file**, `resources/ai/narrative_terms.json`
+(as built; see the Stage 2 record in §10 — an earlier draft of this section
+expected it to fold into `type_vocabulary.json`). It deliberately does **not**
+go into `type_vocabulary.json`: assembly iterates every plain top-level key
+there, so a bilingual key would be injected into the model's instruction as
+though it were an incident type. The separate file makes that structurally
+impossible, and Stage 3 wires it into the prompt deliberately, beside the
+language section.
 
 ---
 
@@ -268,13 +288,13 @@ after.
 | "Understood as" gloss in the response | `app/ai/NarrativeService.php`, `GeminiNarrativeProvider`, `AiNarrativePanel.jsx` |
 | Language section + placeholders-pass-through rule | `resources/ai/narrative_system_prompt.txt` — **and flush the cache** (`app/ai/cache_cli.php`) |
 | Native input → formal English few-shots | `resources/ai/narrative_few_shots.md` |
-| Bilingual terminology table | `docs/bluewrite-police-terminology-glossary.md` → `resources/ai/type_vocabulary.json` (derived) |
-| Pinned terms for the model | same JSON, appended per call |
-| Dictionary lookup for the officer | new panel/row in `AiNarrativePanel.jsx` |
+| Bilingual terminology table | `docs/bluewrite-police-terminology-glossary.md` §13 → `resources/ai/narrative_terms.json` (derived) |
+| Pinned terms for the model | **Stage 3** — the derived table, injected per call only for matched terms (D2) |
+| Dictionary lookup for the officer | `NarrativeTermsLookup.jsx`, mounted in the AI panel (renders with the AI off) |
 | Notes box becomes a textarea | `AiNarrativePanel.jsx` |
 | Language of the narrative shown and set | `Reports.jsx` |
 | Language-aware validation (the medical rule, minimum lengths) | `src/lib/reportRules.js` |
-| Guards | `tests/SystemInstructionTest.php`, new leak-gate and masking cases |
+| Guards | `tests/SystemInstructionTest.php`, `tests/rules/narrativeTerms.test.mjs` (drift), `tests/NarrativeTermsPromptGuardTest.php` (no prompt leak), new leak-gate and masking cases |
 
 ---
 
@@ -287,7 +307,7 @@ Each stage ships on its own and leaves the app working.
 | **0** | This document; the §8 decisions answered | — |
 | **1** | **Accept and preserve.** Any language in any field, source kept, declared language stored, nothing blocked, "untranslated" flag. No AI. | 0 |
 | **2** | **Terminology glossary.** Bilingual entries in the glossary doc → derived JSON → officer-facing lookup → prompt injection. Guards in place. | 1 |
-| **3** | **AI understanding.** Language section in the prompt, gloss output, placeholder rule, few-shots, cache flush. | 2 |
+| **3** | **AI understanding.** Language section in the prompt, **pinned-term injection from the Stage 2 table (D2)**, gloss output, placeholder rule, few-shots, cache flush. | 2 |
 | **4** | **Verification and record.** Source text beside the English, source in history snapshots, print appendix, bilingual-officer review. | 3 |
 | **5** | **Polish.** Dictionary as a full panel, more languages, per-language few-shots, tightening a native narrative. | 4 |
 
@@ -516,3 +536,277 @@ no test class, by their own comments, and none of them was touched.
   record (Q9 — the change note) and the `₱`/`fonts.css` comment (Q11 — no font
   change; the only bundled glyph gap found was `₱` in League Spartan, which is
   not a Bisaya or Tagalog character and does not affect the printed sheet).
+
+### Stage 2 — the bilingual terminology table (2026-09-19)
+
+The station now has a table of **approved report terminology** — offence and act
+names, evidence and injury terms, and parts of the report, in Bisaya (Cebuano)
+and Tagalog — where the choice of English word changes legal meaning — together
+with an **offline lookup** so an officer can see *the word the report uses*. It
+is a terminology table and **not a translator**, and the lookup says so on
+screen. **No AI is involved in this stage**: the table is not sent to the model
+(the assembled instruction block is byte-identical to before it), nothing is
+detected, and nothing is translated. It ships with **zero approved entries**, so
+it publishes nothing until the station's records/legal officer approves terms.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `docs/bluewrite-police-terminology-glossary.md` | **§13** — the bilingual section: header text, the entry table (15 `draft` candidates, none approved) and the entry rules; **§11** gains three anti-drift rows |
+| `src/lib/narrativeTerms.js` | **new** — the one module the derivation, the drift guard and the lookup all read: parse, validate, derive (approved-only), serialise, and the offline prefix matcher |
+| `scripts/derive-narrative-terms.mjs` | **new** — the derivation CLI (`--check`, `--worksheet`); glossary first, then propagate |
+| `resources/ai/narrative_terms.json` | **new, DERIVED** — the approved-only machine-readable table (zero entries at ship) |
+| `src/components/NarrativeTermsLookup.jsx` | **new** — the offline, read-only lookup (scope text + both empty states) |
+| `src/components/AiNarrativePanel.jsx` | mounts the lookup in every mode, including `manual` (AI off); new `narrativeLanguage` prop |
+| `src/components/Reports.jsx` | passes the report's declared language to the panel |
+| `src/styles.css` | styling for the lookup |
+| `tests/rules/narrativeTerms.test.mjs` | **new** — format validation, derivation, **drift guard**, lookup matching/safety |
+| `tests/NarrativeTermsPromptGuardTest.php` | **new** — approved-only + no-prompt-leak + canonical-keys guard (standalone) |
+| `docs/phase6-stage2-review-worksheet.md` | **new** — the review worksheet for the records/legal officer |
+| `package.json` | the new `.mjs` added to the `test` script |
+
+Nothing on the §4 do-not-touch list was modified: `reportRules.js`,
+`tests/SystemInstructionTest.php`, the three prompt files, `MaskingGateway.php`,
+`NarrativeService.php`, `type_vocabulary.json` and the migrations are all
+untouched. **No migration and no database change** was made.
+
+### How each decision was realized
+
+| | Realized as |
+|---|---|
+| **D1** | Approval authority is the **records/legal officer**, stated in the §13 header and in the worksheet. An entry is `draft` or `approved`; the derivation emits approved entries only, so a draft is inert everywhere by construction. **No process sets `approved`** — validation actively *forbids* a draft carrying `approved_by`/`approved_on`, and requires both for an approved entry. |
+| **D2** | The table is **not wired into the prompt** in this stage. It lives in its own derived file, and `NarrativeTermsPromptGuardTest` fails if a bilingual term or key ever reaches the instruction block. §6/§7 of this document are updated to move pinned-term injection to Stage 3. |
+| **D3** | The glossary is the single source of truth. `scripts/derive-narrative-terms.mjs` derives `resources/ai/narrative_terms.json` from §13; the drift guard re-derives and compares byte-for-byte, so editing the glossary without re-deriving **fails the test**. |
+| **D4** | `status: draft\|approved` per entry; only approved entries reach the derived file. At ship: **15 draft, 0 approved.** |
+| **D5** | `do_not_render_as` is a field on every entry (e.g. *sakpan* → do not render as `arrested`). Validation forbids an entry listing its own `english` there, and the lookup displays the list under a clear label. |
+| **D6** | The lookup loads a bundled JSON file — no network request, no CDN, no logging of the search, no insert-into-narrative button. It is mounted in the AI panel, which renders in `manual` mode, so it works with the AI disabled or down. |
+
+### Live evidence
+
+**The instruction block is byte-identical before and after Stage 2.** Built with
+the real assembly (`GeminiNarrativeProvider::buildSystemInstruction` and
+`CachedInstructionStore::stableBlock`):
+
+| | value |
+|---|---|
+| `stableBlock()` length / SHA-256 (16) | `37851` / `52419bd15d2b0dcc` — **identical before and after** |
+| private `fingerprint()` | `a22eef983b9c02e70955351919f10e33c464926c5089ea713f1acefb369bf3b6` — unchanged |
+
+The Step 0 probe also proved, on a throwaway copy, that a **plain** top-level
+key in `type_vocabulary.json` *would* have changed the block — it appended
+`- Bilingual Glossary: prefer apprehended where applicable.` to the model's
+instructions — which is exactly why the table lives in a separate file.
+
+**Suites.** JS `node --test`: **157 pass / 0 fail** (baseline 124 — 33 new).
+PHP: **169 tests / 922 assertions / 0 failures** (baseline 164 / 879); the new
+guard alone is **5 tests / 43 assertions, OK**. The 3 PHPUnit *runner warnings*
+(`LegacyNormalizerTest`, `MaskingGatewayTest`, `MaskingRoundTripTest` — standalone
+CLI scripts with no test class) are pre-existing and untouched.
+
+**Derivation.** `node scripts/derive-narrative-terms.mjs` prints
+`0 approved, 15 draft (drafts excluded)`; `--check` reports the committed file is
+up to date, and the drift guard passes. The build (`npm run build`) is clean and
+`public/api.php` and `public/.htaccess` survived.
+
+### Deviations from the plan
+
+1. **The derived file is `resources/ai/narrative_terms.json`, not
+   `type_vocabulary.json`.** §4 of this document expected the table to fold into
+   the existing derived JSON. The Step 0 probe proved that would inject report
+   terms into the model's instruction block in a stage that is not allowed to
+   touch the model. See D2 and the corrected §4.
+2. **Statutes were not drafted.** A statutory citation (RA 9165, RA 8353 …) is
+   language-neutral, and the entry format's `language` column is `ceb`/`tl`
+   only, so a citation does not fit without a format decision. They are listed in
+   the worksheet for the officer, alongside `natulog` and `pasa`.
+3. **The sensitive-type terms were not drafted at all** (Rape / Sexual Assault,
+   Domestic Violence) — their rendering is a real harm risk if wrong, exactly as
+   the brief required.
+
+### Known limitations
+
+- **The table is inert at ship.** **Zero** entries are approved, so the officer
+  lookup shows its "not approved yet" empty state and no term is published. This
+  is the intended state: terms go live only on the records/legal officer's word.
+- **No entry has been checked by a speaker of Bisaya or Tagalog.** Every draft
+  is an AI-assisted candidate; the worksheet marks the author's confidence and
+  leaves the decision to the reviewer. A blank was preferred to a guess.
+- **The React lookup has no automated test** — this project has no React test
+  infrastructure. Its pure matching logic is covered by
+  `tests/rules/narrativeTerms.test.mjs`; the rendering (both empty states, the
+  scope text, the "do not render as" label) is a **manual procedure** and was
+  not observed in a browser by the author, who has no browser here:
+  1. open a report in the editor with the AI **disabled** → the *Report
+     terminology* block is visible above the manual-mode banner;
+  2. it shows *"No approved report terminology has been published yet…"* (the
+     `0 approved` state);
+  3. approve one entry in the glossary, re-run the derivation, reload → typing
+     its first two characters returns it with its language, official English,
+     category, `do_not_render_as` and note; typing a word not in the table shows
+     the no-match empty state; a one-character query shows the minimum-length
+     hint;
+  4. DevTools → Network stays empty while typing (no network request).
+- **An affixed form missing from `forms` will not be found.** Matching is exact
+  prefix on `term` and the listed `forms` only — no stemming, no fuzzy match.
+  This is deliberate (it is not a translator), and it is recorded so the
+  reviewer knows a gap in `forms` is a gap in the lookup.
+
+### Noticed, not changed
+
+1. **The derivation is a new mechanism; `type_vocabulary.json` still has none.**
+   This stage added a *real* derivation + drift guard for the bilingual table,
+   while the older glossary → `type_vocabulary.json` propagation remains the
+   manual four-step human procedure documented in `resources/ai/README.md`. Not
+   unified — that is a refactor of Phase 3/5 tooling, out of scope here.
+2. **The AI panel is the lookup's host because it renders with the AI off.**
+   Confirmed at `AiNarrativePanel.jsx` (`if (!reportId || !canEdit) return null;`
+   — the panel renders regardless of AI state; only Generate is hidden in
+   `manual` mode). A read-only viewer therefore does not get the lookup; that is
+   acceptable for a writing aid and is recorded rather than changed.
+3. **`docs/bluewrite-police-terminology-glossary.md` §12 is a `###` subsection
+   under §11's `##` heading.** Cosmetic numbering oddity, left alone.
+
+### Stage 3 — AI understanding and translation (2026-09-19)
+
+An officer can hand the system a Bisaya, Tagalog or mixed-language source —
+either the native text already in the narrative field ("Translate my narrative")
+or notes typed in the AI panel — and receive a **formal English narrative as a
+proposal**, plus an **"understood as" gloss in the officer's own language and in
+English**, plus an **ambiguity list** naming every unclear passage and every
+legal-weight term rendered in the least-committal way. The officer applies the
+draft; only their save, snapshot and print carry it into the record. Their
+original words are kept **verbatim** as the report's source.
+
+**Not yet cleared for real use.** The evaluation set (§8) — the only evidence
+that translation is *safe* — has **not been run**: the harness is built and its
+live run awaits the owner's approval of the call count/cost and a bilingual
+reviewer. Until then the feature is enabled in code but unreviewed.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `migrations/008_narrative_source_language.sql` | **new** — adds `narrative_source_language VARCHAR(20) NULL`, paired with the existing `narrative_source_text` |
+| `migrations/008_narrative_source_language.down.sql` | **new** — the rollback |
+| `app/ai/MaskingGateway.php` | `leakedTokensAny()` — the leak gate across every output field, not just the narrative |
+| `app/ai/AiNarrativeResult.php` | three new fields: `gloss`, `sourceGloss`, `ambiguities` |
+| `app/ai/GeminiNarrativeProvider.php` | response-schema fields + `normaliseGloss()`; the declared source language and the per-call **pinned-terms** block in the user content; `matchPinnedTerms()`, `pinnedTermsBlock()`, `foldForMatch()` |
+| `app/ai/NarrativeService.php` | source language on the masked payload; gloss/ambiguities unmask + `gateLeaks()`; the per-type kill switch (`translationDisabled()`, `translationDisabledReason()`) |
+| `app/controllers/NarrativeController.php` | Generate **no longer refused for a native source** (D4); the `source`/`notes_language`/`narrative` request fields; the kill-switch guard; the gloss, ambiguity and app-computed `pinnedTerms` in the response; `narrativeLanguageCode()` |
+| `app/controllers/ReportsController.php` | accepts the **paired** `narrative_source_text` + `narrative_source_language` on PATCH, with both-or-neither validation and explicit NULL on clear |
+| `app/config/ai.sample.php` | the `translation.disabled_incident_types` kill switch (empty by default) |
+| `resources/ai/narrative_system_prompt.txt` | **new** `SOURCE LANGUAGE AND TRANSLATION`, `PINNED TERMS` and `THE GLOSS PAIR` sections (no existing rule altered) |
+| `src/components/AiNarrativePanel.jsx` | notes box → textarea + language selector; the source choice; gloss/ambiguity/pinned-terms display; the Apply note; source-aware `onAccept` |
+| `src/components/Reports.jsx` | Generate no longer gated on language; `onAccept` stores the source pair; the read-only **Original text** view (D10) |
+| `src/styles.css`, `src/incident-report.css` | styling for the new controls and the source view |
+| `docs/bluewrite-police-terminology-glossary.md` | **§14** (the translation rules) + eight **§11** anti-drift rows |
+| `tests/SystemInstructionTest.php` | translation-section, gloss-schema and per-call-language assertions |
+| `tests/PinnedTermsTest.php`, `tests/LeakGateFieldsTest.php` | **new** — pinned-term matching and the multi-field leak gate |
+| `tests/MultilingualTest.php` | Stage 3 storage/snapshot tests; the Stage 1 AI-guard test split into tighten-only + a pure Generate decision test |
+| `scripts/eval-translation.php` | **new** — the §8 evaluation + token-measurement harness (refuses to spend calls without `--live`) |
+| `public/` | rebuilt bundle |
+
+Nothing on the do-not-touch list was modified: the **existing** prompt rules are
+unchanged (`git diff` on the prompt shows additions only), `type_vocabulary.json`,
+`reportRules.js`, the Stage 2 entries and `MaskingGateway`'s English behaviour
+are untouched.
+
+### How each decision was realized
+
+| | Realized as |
+|---|---|
+| **D1** | `narrative_source_text` (Stage 1) + new `narrative_source_language`, **paired**: `ReportsController` computes the resulting pair from the sent values and the stored row, rejects a half-set pair with 422, and writes both explicitly (NULL on clear). Validity of the pair is enforced on the row, not just the request. |
+| **D2** | Apply (editor `onAccept` with source metadata) sets `narrative` = English, `narrative_language` = `en`, and the source pair; the save carries them together. From then on the English rules run and Tighten works. |
+| **D3** | `source` = `narrative` \| `notes`, exactly one per request; the panel shows the choice and names the ignored side. On the narrative path the narrative text rides the provider's one free-text slot. |
+| **D4** | Generate is no longer refused by language (controller guard removed; `gateAiGenerate` relaxed). **Tighten keeps the refusal** (`languageRefusal()` + panel + editor). Asserted as pure logic, not over HTTP — a generate HTTP test would make a real call. |
+| **D5** | `gloss` + `sourceGloss` in the schema and result; the panel labels them *"What the system understood — check this"* and states they are not a proof. `sourceGloss` is empty for mixed/other (default rule). |
+| **D6** | `translation.disabled_incident_types` (default empty) read by `NarrativeService::translationDisabled()`; the controller refuses only a *translation* of a disabled type, and the officer can still write and file. Sensitive types enabled by default per the decision; **their eval cases are in the harness and their review awaits G4.** |
+| **D7** | `matchPinnedTerms()` — deterministic, offline whole-word matching (folded case + Latin diacritics) against `term` and `forms`, on the masked source. Injected per call in the user content, **outside the cached block**. Drafts can never appear (they are not in the derived file). Empty table → no injection. The controller returns the applied terms (app-computed) for the panel. |
+| **D8** | One model call: `gloss`, `sourceGloss` and `ambiguities` are fields in the same `responseSchema` and the same parse. |
+| **D9** | The snapshot is the whole row as JSON, so the source pair is in every Stage 3 snapshot; asserted over HTTP. |
+| **D10** | A read-only `<details>` "Original text (<language>)" under the narrative when `narrative_source_text` exists. Deliberately minimal; Stage 4 builds the side-by-side. |
+| **D11** | Tests-first (Stage 3 Step 2) were written and run before any prompt change; the masking gaps they found were fixed with the owner's G3 approval. |
+| **D12** | `app/ai/cache_cli.php invalidate` run in dev after the prompt change; the new instruction section is proven present by `SystemInstructionTest`. No non-dev flush. |
+
+### Live evidence
+
+**Migration 008**, applied to the real database after a pre-migration dump
+(`/tmp/bw-dumps/bluewrite-008-pre-*.sql`), and proven on a copy first:
+
+| Stage | rows | non-`en` | source-language set |
+|---|---|---|---|
+| before | 301 | 0 | column absent |
+| after `008` | 301 | 0 | 0 |
+
+`narrative` and `narrative_language` are unchanged; the new column is NULL for
+every existing row.
+
+**Suites.** JS `node --test`: **157 pass / 0 fail**. PHP: **208 tests / 1037
+assertions / 0 failures** (Stage 2 baseline 169 / 922); the 3 PHPUnit *runner
+warnings* are the pre-existing standalone scripts. New this stage:
+`SystemInstructionTest`, `PinnedTermsTest`, `LeakGateFieldsTest`,
+`MaskingNativeTextTest`, `NarrativeTermsPromptGuardTest`, and the Stage 3
+`MultilingualTest` cases.
+
+**The prompt guard.** `tests/SystemInstructionTest.php` now asserts the
+`SOURCE LANGUAGE AND TRANSLATION`, `PINNED TERMS` and `THE GLOSS PAIR` text, the
+gloss schema fields, and that a non-English source names its language per call
+while an English source adds no language block.
+
+**Pinned terms.** `PinnedTermsTest` proves matching by term, by `forms`, case-
+and diacritic-insensitively (*Pena* → *Peña*), no match when absent or when the
+affixed form is unlisted, the "use"/"never" rendering in the block, and that the
+**real derived table is inert at ship** (zero approved entries).
+
+**Token ceiling — NOT measured here.** The measurement needs live calls; see the
+harness note and the known limitations below.
+
+### Deviations from the plan
+
+1. **Generate is no longer refused for a native source (D4).** The Stage 1
+   server guard applied to *both* endpoints; Stage 3 removes it from Generate and
+   keeps it on Tighten. The Stage 1 test that asserted both were refused was
+   rewritten into a tighten-only HTTP test plus a pure Generate-decision test —
+   a generate over HTTP in the suite would spend a real model call.
+2. **The `leakedTokensAny()` extraction landed with the response fields**, as
+   planned for Step 4, rather than with the Step 2 masking work — the fields did
+   not exist before it.
+3. **`resources/ai/narrative_terms.json` was regenerated unchanged** (still zero
+   approved entries); no Stage 2 entry was touched.
+
+### Known limitations
+
+- **The evaluation has NOT been run.** `scripts/eval-translation.php` builds the
+  9-case set (including the two sensitive types, a legal-weight case where the
+  source does not state an arrest, placeholder-dense accounts, and a
+  test-only pinned term) and the bilingual review sheet; it refuses to spend
+  calls without `--live`. The automatic-check rates and the review sheet are
+  **pending the owner's go-ahead**. The feature is therefore **implemented but
+  not cleared for real use**.
+- **The token ceiling is NOT re-measured.** `maxOutputTokens` stays 4096 and the
+  `SystemInstructionTest` assertion is unchanged; the harness's `--token` mode is
+  the measurement, pending live calls. The new gloss fields grow the JSON
+  wrapper, so this must be done before enabling the feature for real use.
+- **Pinned terms are inert until the records/legal officer approves terms.** The
+  table has zero approved entries, so nothing is injected; the mechanism is
+  proven with test-only fixtures.
+- **An affixed form missing from `forms` does not pin** — whole-word matching,
+  no stemming, the recorded limitation.
+- **The React layer has no automated test** (no React test infra). The pure
+  logic is covered by the PHP unit tests; the panel (source choice, textarea,
+  gloss display, "Original text" view, Apply note) is a **manual procedure** and
+  was not observed in a browser by the author.
+- **The gloss is a model self-report, not a proof.** It catches a misread
+  meaning; it does not verify the translation.
+
+### Noticed, not changed
+
+1. **One live model call was spent unintentionally.** The rewritten Stage 1
+   guard test's first run called `generate` over HTTP against the dev key before
+   the test was corrected. Recorded here rather than hidden; it produced no
+   stored data (the scratch DB is wiped per test) and no report was touched.
+2. **`app/config/ai.php` holds a real API key** (gitignored, dev only). Not a
+   change — noted because it is what let the accidental call happen.
+3. **Chatty eval output.** The harness prints per-run lines; fine for a CLI
+   harness, left alone.

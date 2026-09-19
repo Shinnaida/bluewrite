@@ -761,4 +761,96 @@ final class SystemInstructionTest extends TestCase
         // Maintainer comments stripped.
         $this->assertStringNotContainsString('DERIVED FILE', $block ?? '');
     }
+
+    // ---- Phase 6 Stage 3: translation of a non-English source -------------
+
+    /**
+     * The translation contract is prompt text, and the failure mode is silent:
+     * delete the section and the model goes back to formalising native words as
+     * if they were English. Every rule the glossary's §14 claims must be
+     * present, so the guard fails if the prompt loses one.
+     */
+    public function testBaseInstructionCarriesTranslationSection(): void
+    {
+        $instruction = $this->flatten(GeminiNarrativeProvider::buildSystemInstruction('Theft'));
+
+        $this->assertStringContainsString('SOURCE LANGUAGE AND TRANSLATION', $instruction);
+        // Task and its limit.
+        $this->assertStringContainsString('TRANSLATION into formal English', $instruction);
+        // Placeholders pass byte-for-byte (Invariant 6 / §5.3).
+        $this->assertStringContainsString('BYTE-FOR-BYTE', $instruction);
+        $this->assertStringContainsString('not translated, not renumbered, not expanded', $instruction);
+        $this->assertStringContainsString('si, ni, kang, ang, ng, ug, sa', $instruction);
+        // Least-committal legal terms (Invariant 2).
+        $this->assertStringContainsString('LEAST-COMMITTAL LEGAL TERMS', $instruction);
+        $this->assertStringContainsString('never assert a legal status the source does not state', $instruction);
+        // Unclear is surfaced, never guessed (Invariant 3).
+        $this->assertStringContainsString('UNCLEAR IS SURFACED, NEVER GUESSED', $instruction);
+        // Pinned terms (D7).
+        $this->assertStringContainsString('PINNED TERMS', $instruction);
+        $this->assertStringContainsString('AUTHORITATIVE within its terms', $instruction);
+        // The gloss pair (D5).
+        $this->assertStringContainsString('THE GLOSS PAIR', $instruction);
+        $this->assertStringContainsString('self-report for the officer to CHECK', $instruction);
+        // The section is carried once.
+        $this->assertSame(1, substr_count($instruction, 'SOURCE LANGUAGE AND TRANSLATION'));
+    }
+
+    /**
+     * The response schema requests the gloss pair and the ambiguity list —
+     * REQUIRED but allowed to be empty, so "this source was clear" is an answer
+     * the model must give rather than a field it can omit.
+     */
+    public function testResponseSchemaRequestsTheGlossPair(): void
+    {
+        $body = $this->makeProvider(null)->buildRequestBody(
+            ['incident_type' => 'Theft', 'groups' => new \stdClass()],
+            []
+        );
+        $schema = $body['generationConfig']['responseSchema'];
+        $this->assertSame('string', $schema['properties']['gloss']['type']);
+        $this->assertSame('string', $schema['properties']['sourceGloss']['type']);
+        $this->assertSame('array', $schema['properties']['ambiguities']['type']);
+        $this->assertContains('gloss', $schema['required']);
+        $this->assertContains('sourceGloss', $schema['required']);
+        $this->assertContains('ambiguities', $schema['required']);
+    }
+
+    /**
+     * The gloss is one or two plain sentences, never a report field: whitespace
+     * collapsed, capped, and empty stays empty (the English-source case).
+     */
+    public function testGlossIsFlattenedCappedAndEmptyStaysEmpty(): void
+    {
+        $this->assertSame(
+            'The officer says the suspect was caught, not arrested.',
+            GeminiNarrativeProvider::normaliseGloss("  The officer says\n the suspect was caught, not arrested.  ")
+        );
+        $this->assertSame('', GeminiNarrativeProvider::normaliseGloss(''));
+        $this->assertSame('', GeminiNarrativeProvider::normaliseGloss(null));
+        $this->assertSame('', GeminiNarrativeProvider::normaliseGloss(['nope']));
+    }
+
+    /** The declared source language is named per call, with the gloss ask. */
+    public function testUserContentNamesTheSourceLanguageWhenNonEnglish(): void
+    {
+        $provider = $this->makeProvider(null);
+        $bisaya = $provider->buildRequestBody([
+            'incident_type' => 'Theft',
+            'groups' => new \stdClass(),
+            'officer_notes' => 'Nasakpan ang suspek.',
+            'source_language' => 'ceb',
+        ], []);
+        $text = $bisaya['contents'][0]['parts'][0]['text'];
+        $this->assertStringContainsString('SOURCE LANGUAGE: Bisaya (Cebuano)', $text);
+
+        // English source → no language block at all.
+        $english = $provider->buildRequestBody([
+            'incident_type' => 'Theft',
+            'groups' => new \stdClass(),
+            'officer_notes' => 'The suspect was caught.',
+            'source_language' => 'en',
+        ], []);
+        $this->assertStringNotContainsString('SOURCE LANGUAGE:', $english['contents'][0]['parts'][0]['text']);
+    }
 }

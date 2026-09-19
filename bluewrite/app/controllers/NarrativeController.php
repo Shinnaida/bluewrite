@@ -5,6 +5,7 @@ namespace App\Controllers;
 
 use App\Ai\AiProviderException;
 use App\Ai\AiUnavailableException;
+use App\Ai\GeminiNarrativeProvider;
 use App\Ai\MaskingGateway;
 use App\Ai\NarrativeService;
 use App\Core\Audit;
@@ -52,21 +53,37 @@ final class NarrativeController
         if (($report['status'] ?? '') === 'finalized') {
             Response::json(409, ['error' => 'This report is finalized and locked.']);
         }
-        // Phase 6 Stage 1 (D3) — the AI tools are English-only. The editor
-        // disables Generate and Tighten for a non-English narrative and states
-        // the reason, but a UI disable is not a guard: this is the same refusal
-        // on the server, because the request can be made directly. The English
-        // economy rules running over Bisaya text would rewrite prose in the
-        // wrong language rather than improve it, and a draft written from
-        // English must not be applied into a narrative declared otherwise.
-        // Wording matches src/lib/reportLanguages.js aiBlockedReason().
-        if (($refusal = self::languageRefusal($report['narrative_language'] ?? null)) !== null) {
-            Response::json(409, ['error' => $refusal]);
-        }
-
+        // Phase 6 Stage 3 (D4) — Generate is deliberately NO LONGER refused for
+        // a non-English narrative: translating a native narrative (or native
+        // notes) into formal English is exactly what this stage adds. Tighten
+        // keeps the Stage 1 refusal below (the English economy engine must
+        // never run over native text).
         $body = NarrativeController::jsonBody();
         $notes = trim((string) ($body['notes'] ?? ''));
         $feedback = trim((string) ($body['feedback'] ?? ''));
+        // Which text is the source: the officer's own narrative ("Translate
+        // narrative") or the notes box. Exactly one source per Apply (D3).
+        $sourceKind = (($body['source'] ?? 'notes') === 'narrative') ? 'narrative' : 'notes';
+        if ($sourceKind === 'narrative') {
+            $sourceLanguage = self::narrativeLanguageCode($report['narrative_language'] ?? 'en');
+            $sourceText = (string) (self::liveText($body, 'narrative', 20000) ?? (string) ($report['narrative'] ?? ''));
+            // On this path the narrative IS the text to translate, so it rides
+            // the one free-text slot the provider renders.
+            $notes = $sourceText;
+        } else {
+            $sourceLanguage = self::narrativeLanguageCode($body['notes_language'] ?? 'en');
+            $sourceText = $notes;
+        }
+        // D6a — the per-type kill switch. Only a TRANSLATION is refused; an
+        // English-source draft on the same type still works, and the officer
+        // can always write and file in any language.
+        if ($sourceLanguage !== 'en'
+            && NarrativeService::translationDisabled((string) ($report['incident_type'] ?? ''))) {
+            Response::json(409, [
+                'error' => NarrativeService::translationDisabledReason((string) ($report['incident_type'] ?? '')),
+                'translation_disabled' => true,
+            ]);
+        }
 
         $ts = [];
         if (!empty($report['type_specific'])) {
@@ -114,7 +131,7 @@ final class NarrativeController
 
         try {
             $svc = new NarrativeService();
-            $out = $svc->generateForReport($report, $ts, $notes, $feedback);
+            $out = $svc->generateForReport($report, $ts, $notes, $feedback, $sourceLanguage);
         } catch (AiUnavailableException $e) {
             Response::json(503, [
                 'error' => $e->getMessage(),
@@ -162,6 +179,26 @@ final class NarrativeController
             // state them. Advisory only: shown in the review panel, never
             // written into the report or the narrative.
             'addedContentWarnings' => array_values($out['addedContentWarnings'] ?? []),
+            // Phase 6 Stage 3 — the "understood as" gloss pair and the
+            // ambiguity list. Self-reports the officer checks BEFORE applying;
+            // never a proof, and never written into the report on their own.
+            'gloss' => (string) ($out['gloss'] ?? ''),
+            'sourceGloss' => (string) ($out['sourceGloss'] ?? ''),
+            'ambiguities' => array_values($out['ambiguities'] ?? []),
+            // The pinned terms that were actually applied, computed by the APP
+            // (deterministic matching, never model output) so the officer sees
+            // which approved terms shaped the draft.
+            'pinnedTerms' => array_map(
+                static fn (array $e): array => [
+                    'term' => (string) ($e['term'] ?? ''),
+                    'english' => (string) ($e['english'] ?? ''),
+                    'language' => (string) ($e['language'] ?? ''),
+                ],
+                GeminiNarrativeProvider::matchPinnedTerms($sourceText),
+            ),
+            // State what the APPLY will store, so the panel can state it plainly.
+            'sourceLanguage' => $sourceLanguage,
+            'sourceKind' => $sourceKind,
             // Phase 5 — what the deterministic economy pass merged, dropped or
             // trimmed, and which prose sentences repeat. Both are advisory and
             // are shown in the SAME review panel as the gaps above (one panel,
@@ -323,6 +360,16 @@ final class NarrativeController
         return ($language ?? 'en') === 'en'
             ? null
             : 'AI drafting and tightening currently work on English text only.';
+    }
+
+    /**
+     * Phase 6 Stage 3 — normalise a declared language code to the Stage 1 set.
+     * Unknown/absent reads as English, the same fallback the read side uses
+     * (a read has no officer to ask; a wrong guess must not pick a table).
+     */
+    public static function narrativeLanguageCode(mixed $code): string
+    {
+        return in_array($code, ['en', 'ceb', 'tl', 'mixed', 'other'], true) ? (string) $code : 'en';
     }
 
     public static function liveText(array $body, string $key, int $maxLength): ?string

@@ -288,6 +288,16 @@ for the analyser, `tests/rules/printActions.test.mjs` for the print block.
 | §9 F5 on-file note | `src/lib/printActions.js` | `printActions.test.mjs` — on-file note only when the block is empty |
 | §9 F7 filler closers | `narrative_few_shots.md` | `testFewShotsStateThatEveryDetailIsTraceable`, `testEconomyFewShotModelsOnePropositionOnePlace` |
 | §10 per-type rows | `type_vocabulary.json` | `testAllCanonicalTypesHaveVocabularyEntries`, `testTypeVocabularyIsAppendedForMatchingType`, `testSensitivityNoteAppendedOnlyForSensitiveTypes` |
+| §13 bilingual entry format / validation | `src/lib/narrativeTerms.js::validateEntries` | `tests/rules/narrativeTerms.test.mjs` — format validation cases |
+| §13 approved-only derivation | `resources/ai/narrative_terms.json` (derived) | `tests/rules/narrativeTerms.test.mjs` — derivation + drift guard |
+| §13 the table is NOT fed to the model | (deliberately absent from the instruction block) | `tests/NarrativeTermsPromptGuardTest.php` |
+| §14 translation task and its limits | prompt: SOURCE LANGUAGE AND TRANSLATION | `testBaseInstructionCarriesTranslationSection` |
+| §14 placeholders pass byte-for-byte | prompt: BRACKETED PLACEHOLDERS … BYTE-FOR-BYTE | `testBaseInstructionCarriesTranslationSection`, `MaskingNativeTextTest` |
+| §14 least-committal legal terms (Invariant 2) | prompt: LEAST-COMMITTAL LEGAL TERMS | `testBaseInstructionCarriesTranslationSection` |
+| §14 unclear is surfaced, never guessed (Invariant 3) | prompt: UNCLEAR IS SURFACED | `testBaseInstructionCarriesTranslationSection` |
+| §14 pinned terms (D7) | `GeminiNarrativeProvider::pinnedTermsBlock` + prompt: PINNED TERMS | `PinnedTermsTest` |
+| §14 the gloss pair (D5) | prompt: THE GLOSS PAIR | `testBaseInstructionCarriesTranslationSection`, `testResponseSchemaRequestsTheGlossPair` |
+| §14 every output field is leak-gated (Invariant 6) | `MaskingGateway::leakedTokensAny` + `NarrativeService::gateLeaks` | `MaskingNativeTextTest`, `LeakGateFieldsTest` |
 
 ### §12 Tighten / rewrite guards (Phase 5, 2026-09-17)
 
@@ -306,3 +316,137 @@ part that must not depend on the model's cooperation.
 | Advisories may not contradict the form | `NarrativeService::withoutWithheldFieldGaps()` | `testGapsAboutTheWithheldFieldsAreDropped`, `testGapsAboutTheNarrativeAreKeptAsRecords`, `testTheFilterToleratesPlainStringGaps` |
 | A tighten may not restructure the officer's text | `NarrativeService::TIGHTEN_FEEDBACK` | `testTheTightenInstructionForbidsRestructuringTheOfficersText` |
 | Officer-authored text is never applied without a click | `NarrativeService::tightenForReport()` (proposals only), `AiNarrativePanel` tighten result | live-verified on BW-0294; see `docs/PHASE5_AI_STRICTNESS.md` § "As built" |
+
+## §13 Bilingual report terminology (report terms, NOT a translator)
+
+Phase 6 Stage 2. A table of **approved report terminology** for Bisaya (Cebuano)
+and Tagalog domain terms — offence and act names, evidence and injury terms, and
+parts of the report — where the choice of English word changes legal meaning.
+One entry per term, giving **the official English equivalent the station
+already uses**.
+
+**What this is not.** It is **not a translator** and must never be built into
+one. There is no sentence handling, no fuzzy or semantic matching, and no
+suggestion of an English word for a term that is not in the table. A general
+bilingual dictionary read as a translator produces confident nonsense; this is
+a terminology table, and the officer-facing lookup says so on screen. A word
+**absent** from the table is simply **not covered**.
+
+**Who approves an entry (D1).** The station's **records/legal officer**. An
+entry is either `draft` or `approved`; **only `approved` entries are ever shown
+to officers or written into the derived file**. No process, script or test in
+this repository can set a status to `approved` — it is set by a human editing
+this file, with their identification in `approved_by` and the date in
+`approved_on` (written `YYYY-MM-DD`). A `draft` is inert: it appears in no
+lookup result and no file anything consumes, only in the review worksheet
+(`docs/phase6-stage2-review-worksheet.md`).
+
+**Readable here, parseable by the derivation.** The table below is the single
+source of truth; `resources/ai/narrative_terms.json` is **derived** from it by
+`scripts/derive-narrative-terms.mjs` (glossary first, then propagate — the same
+rule as `type_vocabulary.json`). `tests/rules/narrativeTerms.test.mjs` is the
+drift guard: it fails loudly if the file and this table disagree, if a draft
+appears in the derived file, or if any entry breaks a rule below.
+
+### Entry format
+
+| id | language | term | forms | category | english | do_not_render_as | note | status | approved_by | approved_on |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ceb-sakpan | ceb | sakpan | sakpan; nasakpan; gisakpan | act-or-offence | apprehended | arrested | The source says the person was caught; it does not say an arrest occurred. | draft | | |
+| ceb-pusil | ceb | pusil | pusil; gipusil | act-or-offence | shot | | Shots were fired at or struck the person; the outcome is not stated. | draft | | |
+| ceb-dunggab | ceb | dunggab | dunggab; gidunggab | act-or-offence | stabbed | | | draft | | |
+| ceb-samad | ceb | samad | samad | evidence-or-injury | wound | laceration; lacerated wound | A generic injury to the body; the wound TYPE is not stated by this word. | draft | | |
+| ceb-bun-og | ceb | bun-og | bun-og | evidence-or-injury | contusion | | A blunt-force injury to tissue. | draft | | |
+| ceb-reklamo | ceb | reklamo | reklamo | report-part | complaint | | The complaint as filed or recorded. | draft | | |
+| ceb-tubag | ceb | tubag | tubag; gitubag | report-part | response | | The party's reply as recorded. | draft | | |
+| ceb-saksi | ceb | saksi | saksi; mga saksi | report-part | witness | | A person who saw the incident. | draft | | |
+| tl-huli | tl | huli | huli; nahuli; hinuli | act-or-offence | apprehended | arrested | Same least-committal reading as `ceb-sakpan`. | draft | | |
+| tl-binaril | tl | binaril | binaril; barilin | act-or-offence | shot | | | draft | | |
+| tl-saksak | tl | saksak | saksak; sinaksak | act-or-offence | stabbed | | | draft | | |
+| tl-sugat | tl | sugat | sugat; mga sugat | evidence-or-injury | wound | laceration | A generic injury; the wound TYPE is not stated by this word. | draft | | |
+| tl-reklamo | tl | reklamo | reklamo | report-part | complaint | | | draft | | |
+| tl-sagot | tl | sagot | sagot | report-part | response | | | draft | | |
+| tl-saksi | tl | saksi | saksi; mga saksi | report-part | witness | | | draft | | |
+
+### Rules for an entry
+
+1. **`id`** — stable, unique, never reused. Lowercase letters, digits and
+   hyphens only, and it must start with the entry's `language` code
+   (`ceb-…`, `tl-…`).
+2. **`language`** — `ceb` or `tl` only, the same codes the report editor uses.
+3. **`term`** — the root/headword. **`forms`** — the known inflected or
+   affixed variants of the same root, separated by `;` (Cebuano focus affixes
+   mean one root has several written forms: *sakpan*, *nasakpan*, *gisakpan*).
+4. **`category`** — one of `act-or-offence`, `statute`, `evidence-or-injury`,
+   `report-part`, `other`.
+5. **`english`** — the official English equivalent. Required, never empty, and
+   it may **not** also appear in `do_not_render_as`.
+6. **`do_not_render_as`** — the wrong renderings that carry legal weight (for
+   *nasakpan*: `arrested` is a different legal event and is listed here).
+   Separated by `;`. May be empty, but the column is always present.
+7. **`note`** — at most one sentence of context. May not contain `|`.
+8. **`status`** — `draft` or `approved`. A `draft` must **not** carry
+   `approved_by` / `approved_on`; an `approved` entry **requires** both.
+9. **One sense per entry.** A term with two legally different senses is two
+   entries, or is flagged for the records/legal officer to decide — the author
+   of an entry never resolves a sense ambiguity. The same headword may exist in
+   both languages as two separate entries (`ceb-saksi` and `tl-saksi`).
+
+## §14 AI translation of a non-English source (Phase 6 Stage 3)
+
+When the officer's source text (the narrative, or the notes box) is declared
+Bisaya, Tagalog, mixed or other, the AI's task stops being "formalise these
+English notes" and becomes "**translate this into formal English, changing
+nothing but wording**". These are the rules, and the executable text for them is
+the prompt's `SOURCE LANGUAGE AND TRANSLATION` section (plus the per-call
+`PINNED TERMINOLOGY` block). They exist because a translator rewrites every
+word, so a mistranslation is an invented fact wearing a report's authority.
+
+**1. The no-new-information constraint still outranks everything.** Translation
+may change wording, grammar, tense and structure, and nothing else. Proper
+nouns, places, numbers, dates and times are kept exactly, never converted.
+
+**2. Placeholders pass through byte-for-byte.** `[VICTIM_1]` is not a word and
+has no translation: it is not translated, renumbered, expanded, explained, split
+or lower-cased, even beside a Bisaya/Tagalog marker (*si, ni, kang, ang, ng, ug,
+sa*). Every mangled placeholder is a leak-gate failure, so `MaskingGateway::
+leakedTokensAny()` now scans the narrative **and both glosses**, and one mangled
+token anywhere retries once then falls to manual mode.
+
+**3. Legal-weight terms are never escalated.** Where a source word could be more
+than one legal event (*nasakpan* → caught / apprehended / arrested), the model
+uses the least-committal accurate wording and names the term in `ambiguities`.
+It never asserts a legal status the source does not state.
+
+**4. Unclear is surfaced, never guessed.** An unintelligible, contradictory or
+ambiguous passage is reported in `ambiguities` and rendered only as far as the
+source supports — never silently resolved, smoothed or dropped.
+
+**5. The gloss is a self-report, not a proof.** `gloss` restates the reading in
+plain English and `sourceGloss` in the officer's own language (empty for
+mixed/other). The officer checks the READING before applying; the UI must never
+present the gloss as verification, and nothing is written into the report by
+the model.
+
+**6. Pinned terms are authoritative within their terms (plan Q7 = yes).** An
+approved §13 entry whose `term` or a `forms` variant appears in the masked
+source is injected per call (matched in code, never by the model); the model
+renders it exactly as `english`, and each `do_not_render_as` wording is
+forbidden. Draft entries are never read. An empty table injects nothing and
+everything still works. An affixed form missing from `forms` does not match —
+the recorded limitation.
+
+**7. The source language is declared, never detected.** The officer says which
+language the text is in (Stage 1), and the editor sends it with the request; the
+model is told per call. Nothing infers a language from the text.
+
+> **Enabled by decision.** Translation runs for every incident type, including
+the sensitive ones, by the owner's decision (D6). The per-type kill switch
+(`ai.php → translation.disabled_incident_types`) can refuse any one type from
+configuration alone, and the sensitive types carry mandatory evaluation cases.
+
+> **State at ship:** every entry above is a **`draft`** and **none is
+> approved**. `resources/ai/narrative_terms.json` therefore contains **zero**
+> entries, and the officer lookup shows its "no approved terminology yet"
+> empty state. Terms go live only when the records/legal officer approves them
+> here, after which the file is re-derived.

@@ -923,6 +923,29 @@
   line-height: 1.7;
 }
 
+/* Phase 6 Stage 3 (D10) — the kept ORIGINAL text, read-only, under the
+   narrative. Deliberately quiet: it is a reference, not a field. Stage 4
+   builds the full side-by-side view. */
+.ir-source {
+  margin-top: 0.5rem;
+  border: 1px solid var(--ir-line, #d9dee6);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--ir-panel, #f7f8fa);
+}
+.ir-source > summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--ir-muted, #6b7280);
+}
+.ir-source-text {
+  margin: 0.4rem 0 0;
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ir-ink, #1f2937);
+}
+
 /* ---- Panel IV: the two signature areas ---- */
 .ir-sign-grid {
   display: grid;

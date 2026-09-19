@@ -14,6 +14,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { api } from '../lib/api.js';
 import NarrativeReveal from './NarrativeReveal.jsx';
+import NarrativeTermsLookup from './NarrativeTermsLookup.jsx';
 import { useRotatingStatus, holdVerifyPhase, VERIFY_PHRASE, THINKING_PHRASES } from '../lib/useRotatingStatus.js';
 
 // AI panel resize bounds — collapse below the minimum into the rail,
@@ -104,10 +105,20 @@ export default function AiNarrativePanel({
   // and the printed sheet state the same fact in the same words rather than
   // three paraphrases drifting apart.
   languageBlocked = null,
+  // Phase 6 Stage 2 — the report's declared narrative language, so the
+  // terminology lookup opens on the language the officer is writing in when
+  // it is one the table covers. Never changes the narrative; a default only.
+  narrativeLanguage = 'en',
 }) {
   const [mode, setMode] = useState('idle'); // idle|ready|loading|done|error|manual
-  const [draft, setDraft] = useState(null); // { narrative, suggestions, possibleGaps, addedContentWarnings }
+  const [draft, setDraft] = useState(null); // { narrative, suggestions, possibleGaps, addedContentWarnings, gloss, sourceGloss, ambiguities, pinnedTerms }
   const [notes, setNotes] = useState('');
+  // Phase 6 Stage 3 — the language the NOTES are written in (declared, never
+  // detected), which source the officer wants translated, and the source text
+  // captured at generate time so Apply can state and store it.
+  const [notesLanguage, setNotesLanguage] = useState('en');
+  const [sourceChoice, setSourceChoice] = useState(null); // null = auto, 'notes' | 'narrative'
+  const [lastSource, setLastSource] = useState(null); // { kind, text, language }
   const [feedback, setFeedback] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [message, setMessage] = useState(null);
@@ -270,18 +281,13 @@ export default function AiNarrativePanel({
     window.addEventListener('mouseup', onUp);
   }
 
+  // Phase 6 Stage 3 — a non-English narrative on the form is a translatable
+  // source (D3/D4), so Generate is NOT refused by language here any more.
+  const nativeNarrative = narrativeLanguage !== 'en' && String(narrative || '').trim() !== '';
+  const effectiveSource = sourceChoice ?? (nativeNarrative ? 'narrative' : 'notes');
+
   const generate = async (feedbackText = '') => {
-    // The language guard FIRST, and it is not redundant with the disabled
-    // button: the done-state's Regenerate controls reach this function long
-    // after a draft exists, so an officer who generated in English and then
-    // declared the narrative Bisaya could otherwise ask again.
-    if (languageBlocked) {
-      setMessage(languageBlocked);
-      setMode('error');
-      setPanelOpen(true);
-      return;
-    }
-    // Gate next: a blocked generate flags the problems and never opens the
+    // Gate first: a blocked generate flags the problems and never opens the
     // loading panel — exactly like a blocked finalize.
     if (onBeforeGenerate && !onBeforeGenerate()) return;
     setMode('loading');
@@ -296,8 +302,16 @@ export default function AiNarrativePanel({
     // would reach the AI as the OLD value — and the formalised draft would
     // then overwrite the note the officer just wrote. The server prefers
     // these live values when they are present.
+    const sourceMeta = effectiveSource === 'narrative'
+      ? { kind: 'narrative', text: String(narrative || ''), language: narrativeLanguage }
+      : { kind: 'notes', text: notes, language: notesLanguage };
+    setLastSource(sourceMeta);
     const body = {
       notes,
+      notes_language: notesLanguage,
+      source: effectiveSource,
+      // On the Translate-narrative path the narrative IS the text to translate.
+      narrative: effectiveSource === 'narrative' ? String(narrative || '') : undefined,
       feedback: feedbackText || undefined,
       action_taken: String(actionTaken || ''),
       notable_findings: String(notableFindings || ''),
@@ -459,6 +473,11 @@ export default function AiNarrativePanel({
 
   return (
     <div className="ai-panel">
+      {/* Phase 6 Stage 2 — the approved-terminology lookup. Rendered in EVERY
+          mode, including 'manual' (AI disabled) and 'idle': a dictionary for
+          the officer must not depend on the model being reachable. Offline,
+          read-only, and it never touches the narrative. */}
+      <NarrativeTermsLookup reportLanguage={narrativeLanguage} />
       {mode === 'manual' && (
         <div className="alert info ai-manual-banner" role="status">
           AI assistance unavailable — manual narrative mode. {message ? `${message}` : 'Continue writing below.'}
@@ -467,12 +486,44 @@ export default function AiNarrativePanel({
 
       {mode === 'ready' && (
         <>
-          {/* D3 — the reason is stated where the controls would be, not only
-              on the disabled buttons' tooltips: a button that is off with no
-              explanation reads as a broken feature. */}
+          {/* Phase 6 Stage 3 — the reason Tighten is off is stated where the
+              control is, not only on its tooltip. Generate is NOT blocked for
+              a native source: translating it is exactly what this stage adds. */}
           {languageBlocked && (
             <div className="alert info ai-language-blocked" role="status">
-              {languageBlocked}
+              {languageBlocked} You can still generate an English draft from it — use
+              “Translate my narrative” below.
+            </div>
+          )}
+          {/* D3 — exactly ONE source per Apply. A native narrative on the form
+              is offered as the source; the officer chooses, and is told the
+              other side is ignored. */}
+          {nativeNarrative && (
+            <div className="ai-source-choice" role="radiogroup" aria-label="What should be translated?">
+              <p className="field-hint">You have a {narrativeLanguage === 'tl' ? 'Tagalog' : narrativeLanguage === 'ceb' ? 'Bisaya' : 'native-language'} narrative. What should the AI translate?</p>
+              <label>
+                <input
+                  type="radio"
+                  name="ai-source"
+                  checked={effectiveSource === 'narrative'}
+                  onChange={() => setSourceChoice('narrative')}
+                />{' '}
+                My narrative (kept as the source)
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="ai-source"
+                  checked={effectiveSource === 'notes'}
+                  onChange={() => setSourceChoice('notes')}
+                />{' '}
+                My notes below
+              </label>
+              <p className="field-hint">
+                Only one is used. {effectiveSource === 'narrative'
+                  ? 'Your notes will not be used. '
+                  : 'Your narrative will not be used. '}
+              </p>
             </div>
           )}
           <div className="ai-generate-row">
@@ -480,19 +531,31 @@ export default function AiNarrativePanel({
               type="button"
               className="side-new"
               onClick={() => generate()}
-              disabled={!!languageBlocked}
-              title={languageBlocked || undefined}
             >
-              Generate AI draft
+              {nativeNarrative && effectiveSource === 'narrative' ? 'Translate my narrative' : 'Generate AI draft'}
             </button>
-            <input
-              type="text"
-              className="ai-notes"
-              placeholder="Rough notes (optional) — the AI writes from these"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
           </div>
+          {effectiveSource === 'notes' && (
+            <div className="ai-notes-row">
+              <textarea
+                className="ai-notes"
+                rows={3}
+                placeholder="Rough notes (optional) — the AI writes from these"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+              <label className="ai-notes-lang">
+                Notes language
+                <select value={notesLanguage} onChange={(e) => setNotesLanguage(e.target.value)}>
+                  <option value="en">English</option>
+                  <option value="ceb">Bisaya (Cebuano)</option>
+                  <option value="tl">Tagalog</option>
+                  <option value="mixed">Mixed</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+            </div>
+          )}
           {/* Sits beside Generate because it is the other thing an officer can
               ask for, but on top of the narrative THEY wrote: Generate writes
               from the notes, Tighten works on the form's own narrative text.
@@ -762,6 +825,39 @@ export default function AiNarrativePanel({
                       )}
                     </div>
 
+                    {/* Phase 6 Stage 3 — the "understood as" gloss pair. A
+                        SELF-REPORT for the officer to check the READING before
+                        applying, never presented as verification. Shown only
+                        when the source was non-English. */}
+                    {(draft.gloss || draft.sourceGloss) && (
+                      <div className="ai-gloss">
+                        <h4>What the system understood — check this</h4>
+                        {draft.sourceGloss && <p className="ai-gloss-native">{draft.sourceGloss}</p>}
+                        {draft.gloss && <p>{draft.gloss}</p>}
+                        <p className="field-hint">A reading to help you check the meaning — not a proof, and not written into the report.</p>
+                      </div>
+                    )}
+                    {(draft.ambiguities?.length ?? 0) > 0 && (
+                      <div className="alert info">
+                        <h4>Unclear or least-committal ({draft.ambiguities.length})</h4>
+                        <ul>
+                          {draft.ambiguities.map((a, i) => <li key={i}>{a}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {/* Computed by the APP (deterministic matching), not the
+                        model — the approved terms that shaped this draft. */}
+                    {(draft.pinnedTerms?.length ?? 0) > 0 && (
+                      <div className="ai-pinned">
+                        <h4>Approved terms applied</h4>
+                        <ul>
+                          {draft.pinnedTerms.map((t, i) => (
+                            <li key={i}>{t.term} → <strong>{t.english}</strong> ({t.language})</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
                     {/* Tighten only, and deterministic (server side): the
                         numbers, times, dates and placeholders the rewrite
                         dropped. A "make it shorter" pass can lose a fact
@@ -769,6 +865,15 @@ export default function AiNarrativePanel({
                         to the button that would write the rewrite into the
                         record. It advises rather than blocks — this panel is a
                         review surface and the officer is the reviewer. */}
+                    {/* D2 — say plainly what Apply will store, in the words the
+                        plan approved, before the button is pressed. */}
+                    {lastSource && lastSource.language !== 'en' && !tightenDraft && (
+                      <p className="alert info ai-apply-note" role="status">
+                        Applying this replaces your narrative with the English text. Your original{' '}
+                        {lastSource.language === 'tl' ? 'Tagalog' : lastSource.language === 'ceb' ? 'Bisaya' : 'native-language'}{' '}
+                        text will be kept as this report's source, and the report will be marked as written in English.
+                      </p>
+                    )}
                     {tightenDraft && (draft.factLoss?.length ?? 0) > 0 && (
                       <div className="alert error" role="alert">
                         The rewrite no longer states:{' '}
@@ -782,14 +887,18 @@ export default function AiNarrativePanel({
                       <button
                         type="button"
                         className="primary"
-                        onClick={() => { onAccept(draft.narrative); setDraft(null); setMode('ready'); closePanel(); }}
-                        // Accept is blocked for the same reason Generate is, and
-                        // it is the reason D3 actually names FIRST: a draft
-                        // written from English must not be applied into a
-                        // narrative now declared Bisaya. The draft is not lost —
-                        // switch the language back and it is still here.
-                        disabled={!!languageBlocked || (tightenDraft && !draft.tightened)}
-                        title={languageBlocked || (tightenDraft && !draft.tightened ? 'Your wording was not changed, so there is nothing to accept.' : undefined)}
+                        onClick={() => {
+                          // Phase 6 Stage 3 (D2) — a translated draft carries the
+                          // source with it, so Apply can store the officer's
+                          // verbatim words and mark the report English.
+                          const meta = lastSource && lastSource.language !== 'en' ? lastSource : null;
+                          onAccept(draft.narrative, meta);
+                          setDraft(null);
+                          setMode('ready');
+                          closePanel();
+                        }}
+                        disabled={tightenDraft && !draft.tightened}
+                        title={tightenDraft && !draft.tightened ? 'Your wording was not changed, so there is nothing to accept.' : undefined}
                       >
                         Accept into narrative
                       </button>

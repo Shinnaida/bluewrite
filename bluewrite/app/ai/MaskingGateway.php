@@ -46,6 +46,19 @@ final class MaskingGateway
     private const NEVER_SEND = ['name', 'address', 'age', 'plate_number', 'driver_name', 'contact_number'];
 
     /**
+     * Every placeholder prefix the gateway can emit — the PERSON_GROUPS values
+     * above, plus the vehicle and location tokens. The leak gate uses these to
+     * recognise a placeholder that came back MANGLED (case-changed, spaced,
+     * expanded, or with its brackets dropped), not only an intact one. Keep in
+     * step with PERSON_GROUPS / VEHICLE_GROUP and the '[LOCATION]' token in
+     * buildMaskedPayload(). Guarded per-prefix by MaskingNativeTextTest.
+     */
+    private const PLACEHOLDER_PREFIXES = [
+        'VICTIM', 'RESPONDENT', 'WITNESS', 'MISSING_PERSON', 'LAST_SEEN_WITH',
+        'INJURED_PERSON', 'ARRESTED_PERSON', 'VEHICLE', 'LOCATION',
+    ];
+
+    /**
      * Build the pseudonymized payload plus the server-side reverse map.
      *
      * @param array $report   Full report row (structured + type_specific).
@@ -56,6 +69,10 @@ final class MaskingGateway
     public static function buildMaskedPayload(array $report, array $typeSpecific, string $notes = ''): array
     {
         $map = [];
+        // Individual person-name tokens (a first name alone, a name written
+        // without its surname), token → placeholder. Deliberately kept OUT of
+        // $map so the reverse map still restores the FULL name on unmask.
+        $tokens = [];
         $masked = [
             'incident_type' => (string) ($report['incident_type'] ?? ''),
             'when' => self::maskWhen($report['incident_datetime'] ?? null),
@@ -80,7 +97,7 @@ final class MaskingGateway
             }
             if (isset(self::PERSON_GROUPS[$groupKey])) {
                 $prefix = self::PERSON_GROUPS[$groupKey];
-                $people = self::maskPersons($items, $prefix, $map);
+                $people = self::maskPersons($items, $prefix, $map, $tokens);
                 if ($people !== []) {
                     $masked['groups']->{self::groupOutputKey($prefix)} = $people;
                 }
@@ -100,6 +117,9 @@ final class MaskingGateway
             if ($val !== '') {
                 $placeholder = "[{$prefix}_1]";
                 $map[$placeholder] = $val;
+                foreach (self::nameTokens($val) as $tok) {
+                    $tokens[$tok] = $placeholder;
+                }
                 $masked['groups']->$outputKey[] = ['ref' => $placeholder];
             }
         }
@@ -127,7 +147,7 @@ final class MaskingGateway
         }
         if ($scalars !== []) {
             $masked['scalars'] = array_map(
-                static fn (string $s): string => self::maskFreeText($s, $map),
+                static fn (string $s): string => self::maskFreeText($s, $map, $tokens),
                 $scalars
             );
         }
@@ -135,7 +155,7 @@ final class MaskingGateway
         // ---- Officer free-text notes -------------------------------------
         // Performance addendum §4: omit empty keys entirely — no "" or []
         // placeholders in the prompt.
-        $maskedNotes = self::maskFreeText($notes, $map);
+        $maskedNotes = self::maskFreeText($notes, $map, $tokens);
         if (trim($maskedNotes) !== '') {
             $masked['officer_notes'] = $maskedNotes;
         }
@@ -144,14 +164,14 @@ final class MaskingGateway
         // Part of the report's own account of the incident, so the narrative
         // may build on it (masked like any other free text). Absent on older
         // rows, in which case the key is omitted entirely.
-        $maskedAction = self::maskFreeText((string) ($report['action_taken'] ?? ''), $map);
+        $maskedAction = self::maskFreeText((string) ($report['action_taken'] ?? ''), $map, $tokens);
         if (trim($maskedAction) !== '') {
             $masked['action_taken'] = $maskedAction;
         }
         // The officer's free-text notable findings (type_specific scalar).
         // Masked like any free text; the residual-risk scan covers it too —
         // a name typed only into findings must still be surfaced.
-        $maskedFindings = self::maskFreeText((string) ($typeSpecific['notable_findings'] ?? ''), $map);
+        $maskedFindings = self::maskFreeText((string) ($typeSpecific['notable_findings'] ?? ''), $map, $tokens);
         if (trim($maskedFindings) !== '') {
             $masked['notable_findings'] = $maskedFindings;
         }
@@ -236,10 +256,73 @@ final class MaskingGateway
         if ($text === '') {
             return [];
         }
-        if (!preg_match_all('/\[[A-Z_]+[A-Z_0-9]*\]/', $text, $m)) {
-            return [];
+        $hits = [];
+
+        // (1) The original structural check — an all-caps bracket token. Kept
+        // verbatim so this can never detect LESS than it did before.
+        if (preg_match_all('/\[[A-Z_]+[A-Z_0-9]*\]/', $text, $m)) {
+            $hits = array_merge($hits, $m[0]);
         }
-        return array_values(array_unique($m[0]));
+
+        $alts = implode('|', array_map(
+            static fn (string $p): string => preg_quote($p, '/'),
+            self::PLACEHOLDER_PREFIXES,
+        ));
+
+        // (2) Any bracketed token that CONTAINS a known placeholder prefix, in
+        // any case and allowing spacing and extra text — catches [victim_1],
+        // [VICTIM 1], [VICTIM_1 (the complainant)] and [VICTIM_9].
+        if (preg_match_all(
+            '/\[[^\]\n]{0,80}?(?<![A-Za-z])(?:' . $alts . ')(?![A-Za-z])[^\]\n]{0,80}?\]/i',
+            $text,
+            $m2,
+        )) {
+            $hits = array_merge($hits, $m2[0]);
+        }
+
+        // (3) A bracket-dropped token, e.g. VICTIM_1 / victim1. The lookbehind
+        // and lookahead stop this re-matching an already-bracketed token, and
+        // the required adjacent digit keeps prose like "the witness 2" out.
+        if (preg_match_all(
+            '/(?<!\[)\b(?:' . $alts . ')_?[0-9]+\b(?!\])/i',
+            $text,
+            $m3,
+        )) {
+            $hits = array_merge($hits, $m3[0]);
+        }
+
+        return array_values(array_unique($hits));
+    }
+
+    /**
+     * Phase 6 Stage 3 (Invariant 6) — the leak gate across EVERY unmasked
+     * output field, not just the narrative. The Stage 3 response adds the
+     * English gloss, the native-language gloss and the ambiguity list, and a
+     * mangled placeholder in any of them is the same class of defect as one
+     * in the narrative. Returns only the fields that leaked, so the caller
+     * can log which field failed.
+     *
+     * Pure/static: no provider, no database, so it is unit-tested directly.
+     *
+     * @param array<string, string|array<int,string>> $texts field name => text (or list of lines)
+     * @return array<string, string[]> field name => leaked tokens
+     */
+    public static function leakedTokensAny(array $texts): array
+    {
+        $out = [];
+        foreach ($texts as $field => $value) {
+            $candidates = is_string($value) ? [$value] : (is_array($value) ? $value : []);
+            $tokens = [];
+            foreach ($candidates as $candidate) {
+                if (is_string($candidate) && $candidate !== '') {
+                    $tokens = array_merge($tokens, self::leakedTokens($candidate));
+                }
+            }
+            if ($tokens !== []) {
+                $out[(string) $field] = array_values(array_unique($tokens));
+            }
+        }
+        return $out;
     }
 
     /** Placeholder prefix → masked-payload group key (correct plurals). */
@@ -258,12 +341,33 @@ final class MaskingGateway
     }
 
     /**
+     * The individual tokens of a person's name that must mask on their own —
+     * a first name alone, or a name written without its surname ("Si Pedro ang
+     * nagsulti"). Only tokens of 3+ characters: shorter fragments collide with
+     * ordinary words too often to be worth the over-masking.
+     *
+     * @return string[]
+     */
+    private static function nameTokens(string $name): array
+    {
+        $parts = preg_split('/[^\p{L}\p{N}]+/u', $name) ?: [];
+        $out = [];
+        foreach ($parts as $part) {
+            $part = trim((string) $part);
+            if (mb_strlen($part) >= 3) {
+                $out[] = $part;
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Person group → masked records. Name/address/exact age are REPLACED
      * (never sent, not even masked-as-text); age becomes a band.
      *
      * @return array<int, array<string, mixed>>
      */
-    private static function maskPersons(array $items, string $prefix, array &$map): array
+    private static function maskPersons(array $items, string $prefix, array &$map, array &$tokens): array
     {
         $out = [];
         $n = 0;
@@ -286,6 +390,12 @@ final class MaskingGateway
             $placeholder = "[{$prefix}_{$n}]";
             if ($name !== '') {
                 $map[$placeholder] = $name;
+                // A first name alone, or the name written without its surname,
+                // must still mask. Tokens never enter $map, so unmask still
+                // restores the full name.
+                foreach (self::nameTokens($name) as $tok) {
+                    $tokens[$tok] = $placeholder;
+                }
             } else {
                 // Addendum §1.1: a party captured only by description (common
                 // for witnesses and unidentified suspects) has no name to
@@ -389,16 +499,23 @@ final class MaskingGateway
     }
 
     /** Free-text notes: swap every known real value for its placeholder. */
-    public static function maskFreeText(string $text, array $map): string
+    public static function maskFreeText(string $text, array $map, array $tokens = []): string
     {
-        if ($text === '' || $map === []) {
+        if ($text === '' || ($map === [] && $tokens === [])) {
             return $text;
         }
-        // Longest-first so "Maria Santos" is replaced before "Maria".
+        // Longest-first so "Maria Santos" is replaced before "Maria". Full
+        // names and the individual name tokens share one list, so a longer
+        // full name always wins over its own parts.
         $values = [];
         foreach ($map as $placeholder => $real) {
-            if (trim($real) !== '') {
-                $values[$real] = $placeholder;
+            if (trim((string) $real) !== '') {
+                $values[(string) $real] = $placeholder;
+            }
+        }
+        foreach ($tokens as $token => $placeholder) {
+            if (trim((string) $token) !== '') {
+                $values[(string) $token] = $placeholder;
             }
         }
         uksort($values, static fn ($a, $b) => strlen($b) <=> strlen($a));
@@ -499,27 +616,41 @@ final class MaskingGateway
      */
     public static function freeTextResidualRisk(string $maskedFreeText): array
     {
-        // Capitalised word pairs not already inside a placeholder.
         $withoutPlaceholders = preg_replace('/\[[A-Z_0-9]+\]/', ' ', $maskedFreeText) ?? '';
-        if (!preg_match_all('/\b([A-Z][a-z]{1,20})\s+([A-Z][a-z]{1,20})\b/u', $withoutPlaceholders, $m, PREG_SET_ORDER)) {
-            return [];
-        }
         // Common non-name capitalised words to ignore (sentence starters,
         // role words, place words) — they attach to the real name in the
         // regex pair, so strip them from the reported token.
         $stop = ['The', 'This', 'That', 'When', 'While', 'After', 'Before', 'Upon', 'Barangay', 'Police', 'Station', 'Officers', 'Responding', 'Bystander', 'Victim', 'Suspect', 'Driver', 'Rider', 'Owner', 'Witness', 'Vendor', 'Guard'];
         $hits = [];
-        foreach ($m as $pair) {
-            $first = in_array($pair[1], $stop, true) ? null : $pair[1];
-            $second = in_array($pair[2], $stop, true) ? null : $pair[2];
-            if ($first === null && $second === null) {
-                continue;
-            }
-            $token = trim(($first ?? '') . ' ' . ($second ?? ''));
-            if ($token !== '') {
-                $hits[] = $token;
+
+        // (1) Capitalised word pairs not already inside a placeholder.
+        if (preg_match_all('/\b([A-Z][a-z]{1,20})\s+([A-Z][a-z]{1,20})\b/u', $withoutPlaceholders, $m, PREG_SET_ORDER)) {
+            foreach ($m as $pair) {
+                $first = in_array($pair[1], $stop, true) ? null : $pair[1];
+                $second = in_array($pair[2], $stop, true) ? null : $pair[2];
+                if ($first === null && $second === null) {
+                    continue;
+                }
+                $token = trim(($first ?? '') . ' ' . ($second ?? ''));
+                if ($token !== '') {
+                    $hits[] = $token;
+                }
             }
         }
+
+        // (2) A capitalised token right after a Bisaya/Tagalog case marker.
+        // This is the shape the pair rule above misses: only one name is given,
+        // so there is no second capitalised word to form a pair ("Gikuha ni
+        // Pedro ang bag"). A high-precision nudge, not a name parser.
+        if (preg_match_all('/\b(?i:si|ni|kang|ang|ug|sa|ng)\s+([\p{Lu}][\p{L}\'-]{1,30})\b/u', $withoutPlaceholders, $markers, PREG_SET_ORDER)) {
+            foreach ($markers as $pair) {
+                $tok = trim((string) $pair[1]);
+                if ($tok !== '' && !in_array($tok, $stop, true)) {
+                    $hits[] = $tok;
+                }
+            }
+        }
+
         return array_values(array_unique($hits));
     }
 }

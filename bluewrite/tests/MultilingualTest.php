@@ -392,7 +392,17 @@ final class MultilingualTest extends BaseApiTestCase
 
     // ---- the AI guard (§7 test 6, D3) --------------------------------------
 
-    public function testGenerateAndTightenAreRefusedForANonEnglishNarrative(): void
+    /**
+     * Phase 6 Stage 3 (D4) — Tighten keeps the Stage 1 refusal for native text
+     * (the English economy engine must never rewrite it), and refuses BEFORE
+     * dispatch: this test needs no key, no network and costs nothing.
+     *
+     * GENERATE is deliberately no longer refused by language (translating a
+     * native source is what Stage 3 adds); that decision is asserted as pure
+     * logic in testGenerateIsNoLongerRefusedByLanguage() rather than over HTTP,
+     * because an HTTP generate here would make a REAL model call.
+     */
+    public function testTightenIsRefusedForANonEnglishNarrative(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');
 
@@ -403,8 +413,6 @@ final class MultilingualTest extends BaseApiTestCase
             ]);
             $id = (int) $report['id'];
 
-            // Both endpoints must refuse — and refuse BEFORE dispatch, so this
-            // test needs no key, no network and costs nothing.
             $tighten = $this->request(
                 'POST',
                 "/reports/{$id}/narrative/tighten",
@@ -414,11 +422,36 @@ final class MultilingualTest extends BaseApiTestCase
             );
             $this->assertSame(409, $tighten['status'], "{$code}: tighten must be refused");
             $this->assertSame(self::AI_REFUSAL, $tighten['body']['error'] ?? null);
-
-            $generate = $this->request('POST', "/reports/{$id}/narrative/generate", ['notes' => 'notes'], $cookie, $csrf);
-            $this->assertSame(409, $generate['status'], "{$code}: generate must be refused");
-            $this->assertSame(self::AI_REFUSAL, $generate['body']['error'] ?? null);
         }
+    }
+
+    /**
+     * Phase 6 Stage 3 (D4/D6a) — the pure decisions behind Generate's guard:
+     * a native source is no longer refused by language, the code is normalised
+     * to the Stage 1 set, and the per-type kill switch is off by default (so
+     * the sensitive types ARE translatable, by the owner's decision).
+     */
+    public function testGenerateIsNoLongerRefusedByLanguage(): void
+    {
+        require_once __DIR__ . '/../app/controllers/NarrativeController.php';
+        require_once __DIR__ . '/../app/ai/NarrativeService.php';
+        require_once __DIR__ . '/../app/ai/MaskingGateway.php';
+
+        // Every declared code round-trips; an unknown/absent code reads as English.
+        foreach (['en', 'ceb', 'tl', 'mixed', 'other'] as $code) {
+            $this->assertSame($code, \App\Controllers\NarrativeController::narrativeLanguageCode($code));
+        }
+        $this->assertSame('en', \App\Controllers\NarrativeController::narrativeLanguageCode(null));
+        $this->assertSame('en', \App\Controllers\NarrativeController::narrativeLanguageCode('klingon'));
+
+        // The kill switch ships empty: no type is disabled, INCLUDING the two
+        // sensitive types (decision D6). An operator can disable one in config.
+        $this->assertFalse(\App\Ai\NarrativeService::translationDisabled('Rape / Sexual Assault'));
+        $this->assertFalse(\App\Ai\NarrativeService::translationDisabled('Domestic Violence'));
+        $this->assertStringContainsString(
+            'switched off for this incident type',
+            \App\Ai\NarrativeService::translationDisabledReason('Domestic Violence'),
+        );
     }
 
     /**
@@ -476,5 +509,90 @@ final class MultilingualTest extends BaseApiTestCase
         $payload = $this->printPayload($cookie, (int) $report['id']);
         $this->assertSame($text, $payload['narrative']);
         $this->assertSame('en', $payload['narrative_language']);
+    }
+
+    // ---- Phase 6 Stage 3 (D1/D9): the kept source -----------------------------
+
+    /**
+     * Applying the English draft keeps the officer's ORIGINAL native text
+     * verbatim, with its language, and marks the report English — and the
+     * source is carried into the history snapshot (D9).
+     */
+    public function testOriginalSourceAndLanguageAreStoredTogether(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $report = $this->createReport($cookie, $csrf, [
+            'narrative_language' => 'ceb',
+            'narrative' => self::FIXTURES['ceb'],
+        ]);
+        $id = (int) $report['id'];
+        $english = 'The suspect was apprehended near the market.';
+
+        $res = $this->patchReport($cookie, $csrf, $id, [
+            'narrative' => $english,
+            'narrative_language' => 'en',
+            'narrative_source_text' => self::FIXTURES['ceb'],
+            'narrative_source_language' => 'ceb',
+        ]);
+        $this->assertSame(200, $res['status']);
+
+        $stmt = $this->db()->prepare(
+            'SELECT narrative, narrative_language, narrative_source_text, narrative_source_language
+             FROM bluewrite_test.reports WHERE id = ?'
+        );
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+        // The narrative is English; the source is the officer's words verbatim.
+        $this->assertSame($english, $row['narrative']);
+        $this->assertSame('en', $row['narrative_language']);
+        $this->assertSame(self::FIXTURES['ceb'], $row['narrative_source_text']);
+        $this->assertSame('ceb', $row['narrative_source_language']);
+
+        // The snapshot is the whole row, so the source is in the audit trail.
+        $snap = $this->db()->prepare(
+            'SELECT snapshot FROM bluewrite_test.report_history WHERE report_id = ? ORDER BY id DESC LIMIT 1'
+        );
+        $snap->execute([$id]);
+        $decoded = json_decode((string) $snap->fetchColumn(), true);
+        $this->assertSame('ceb', $decoded['narrative_source_language'] ?? null);
+        $this->assertSame(self::FIXTURES['ceb'], $decoded['narrative_source_text'] ?? null);
+    }
+
+    /**
+     * The pair is enforced: a PATCH that sets only one half (with no stored
+     * value to pair it with) is rejected, and clearing one clears both.
+     */
+    public function testTheSourcePairIsRejectedWhenOnlyOneHalfIsSent(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $report = $this->createReport($cookie, $csrf, ['narrative' => 'A narrative.']);
+        $id = (int) $report['id'];
+
+        $halves = [
+            ['narrative_source_text' => 'Nasakpan ang suspek.'],
+            ['narrative_source_language' => 'ceb'],
+            ['narrative_source_language' => 'klingon'],
+        ];
+        foreach ($halves as $bad) {
+            $res = $this->patchReport($cookie, $csrf, $id, $bad);
+            $this->assertSame(422, $res['status'], 'expected 422 for ' . json_encode($bad));
+        }
+
+        // Set both, then clear both in one PATCH.
+        $set = $this->patchReport($cookie, $csrf, $id, [
+            'narrative_source_text' => 'Nasakpan ang suspek.',
+            'narrative_source_language' => 'ceb',
+        ]);
+        $this->assertSame(200, $set['status']);
+        $clear = $this->patchReport($cookie, $csrf, $id, [
+            'narrative_source_text' => null,
+            'narrative_source_language' => null,
+        ]);
+        $this->assertSame(200, $clear['status']);
+        $stmt = $this->db()->prepare('SELECT narrative_source_text, narrative_source_language FROM bluewrite_test.reports WHERE id = ?');
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+        $this->assertNull($row['narrative_source_text']);
+        $this->assertNull($row['narrative_source_language']);
     }
 }

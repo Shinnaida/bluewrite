@@ -680,6 +680,37 @@ final class ReportsController
         // column a PATCH may set; the validated value is kept for the audit
         // note below.
         $narrativeLanguage = $this->narrativeLanguage($body, $v);
+        // Phase 6 Stage 3 (D1) — the kept ORIGINAL text and its language. They
+        // are PAIRED: the resulting row must hold both, or neither. A PATCH
+        // that sends one without the other (and without the stored value to
+        // pair it with) is rejected, and clearing one clears both. The Apply
+        // action sends both together; the pair rule stops any other caller
+        // from leaving a language with no text or a text with no language.
+        $sourceTouched = array_key_exists('narrative_source_text', $body)
+            || array_key_exists('narrative_source_language', $body);
+        $sourceText = null;
+        $sourceLanguage = null;
+        if ($sourceTouched) {
+            $storedText = trim((string) ($report['narrative_source_text'] ?? '')) !== ''
+                ? trim((string) $report['narrative_source_text']) : null;
+            $storedLang = (string) ($report['narrative_source_language'] ?? '') !== ''
+                ? (string) $report['narrative_source_language'] : null;
+            $sourceText = array_key_exists('narrative_source_text', $body)
+                ? (is_string($body['narrative_source_text']) && trim($body['narrative_source_text']) !== ''
+                    ? trim($body['narrative_source_text']) : null)
+                : $storedText;
+            $sourceLanguage = array_key_exists('narrative_source_language', $body)
+                ? (is_string($body['narrative_source_language']) && $body['narrative_source_language'] !== ''
+                    ? (string) $body['narrative_source_language'] : null)
+                : $storedLang;
+            if ($sourceLanguage !== null && !in_array($sourceLanguage, self::NARRATIVE_LANGUAGES, true)) {
+                $v->add('narrative_source_language', 'Original-text language must be one of '
+                    . implode(', ', self::NARRATIVE_LANGUAGES) . '.');
+            }
+            if (($sourceText === null) !== ($sourceLanguage === null)) {
+                $v->add('narrative_source_language', 'An original text and its language must be set together (or both cleared).');
+            }
+        }
         $typeSpecific = array_key_exists('type_specific', $body)
             ? $this->sanitizeTypeSpecific(
                 $body['type_specific'],
@@ -798,6 +829,15 @@ final class ReportsController
                 }
                 $params[":{$col}"] = $val;
             }
+        }
+
+        // Phase 6 Stage 3 — the paired source fields, written explicitly so a
+        // clear stores NULL rather than an empty string.
+        if ($sourceTouched) {
+            $sets[] = 'narrative_source_text = :nst';
+            $params[':nst'] = $sourceText;
+            $sets[] = 'narrative_source_language = :nsl';
+            $params[':nsl'] = $sourceLanguage;
         }
 
         // Official-document fields. A NULL here means "clear this field" when

@@ -82,6 +82,25 @@ final class NarrativeService
     }
 
     /**
+     * Phase 6 Stage 3 (D6a) — the per-type kill switch. Translation is enabled
+     * for every incident type by default; a type listed in
+     * config 'translation.disabled_incident_types' is refused without a code
+     * change, so the station can switch a sensitive type off from configuration
+     * alone. Read the same way as every other setting (aiConfig()).
+     */
+    public static function translationDisabled(string $incidentType): bool
+    {
+        $disabled = self::aiConfig()['translation']['disabled_incident_types'] ?? [];
+        return is_array($disabled) && in_array($incidentType, $disabled, true);
+    }
+
+    /** The officer-facing reason a kill-switched type cannot be translated. */
+    public static function translationDisabledReason(string $incidentType): string
+    {
+        return 'AI translation is switched off for this incident type by station configuration. You can still write and file the narrative in any language.';
+    }
+
+    /**
      * Generate for a report. Returns the AI draft payload; NEVER writes the
      * report row. On provider failure after the retry budget, records the
      * failure in ai_requests and rethrows for the controller to translate
@@ -89,9 +108,13 @@ final class NarrativeService
      *
      * @return array{narrative:string, suggestions:array, possibleGaps:array, notableFindings:string[], actionTaken:string, addedContentWarnings:string[], cached:bool, residualRisk:array, economy:array}
      */
-    public function generateForReport(array $report, array $typeSpecific, string $notes, string $feedback = ''): array
+    public function generateForReport(array $report, array $typeSpecific, string $notes, string $feedback = '', string $sourceLanguage = 'en'): array
     {
         $built = MaskingGateway::buildMaskedPayload($report, $typeSpecific, $notes);
+        // The declared source language rides ON the masked payload, so the
+        // provider names it per call (the rules are in the stable block) and
+        // the §8 cache key changes when only the language changes.
+        $built['masked']['source_language'] = $sourceLanguage;
         $maskedJson = json_encode($built['masked'], JSON_UNESCAPED_UNICODE);
         $hash = hash('sha256', $maskedJson . '|' . $feedback);
 
@@ -187,9 +210,15 @@ final class NarrativeService
         // Advisory lines are unmasked the same way, but they never touch the
         // report: they only tell the officer which details the draft withheld.
         $warnings = MaskingGateway::unmaskLines($payload['addedContentWarnings'] ?? [], $map);
+        // Phase 6 Stage 3 — the gloss pair follows the narrative's own unmask
+        // rule (hard-gated below), while the ambiguity list is an offer like
+        // the findings: a line still holding a token is DROPPED, not shown.
+        $gloss = MaskingGateway::unmask((string) ($payload['gloss'] ?? ''), $map);
+        $sourceGloss = MaskingGateway::unmask((string) ($payload['sourceGloss'] ?? ''), $map);
+        $ambiguities = MaskingGateway::unmaskLines($payload['ambiguities'] ?? [], $map);
 
-        // ---- §2 safety gate ---------------------------------------------
-        $tokens = MaskingGateway::leakedTokens($narrative);
+        // ---- §2 safety gate (every text field, Invariant 6) -------------
+        $tokens = self::gateLeaks($narrative, $gloss, $sourceGloss);
         if ($tokens !== []) {
             error_log(sprintf(
                 '[BlueWrite][ai-safety-gate] report_id=%d leaked_tokens=%s masked_len=%d unmasked_len=%d — retrying once',
@@ -213,7 +242,10 @@ final class NarrativeService
                 $findings = MaskingGateway::unmaskLines($retryPayload['notableFindings'] ?? [], $map);
                 $disposition = self::unmaskDisposition($retryPayload['actionTaken'] ?? '', $map);
                 $warnings = MaskingGateway::unmaskLines($retryPayload['addedContentWarnings'] ?? [], $map);
-                $tokens = MaskingGateway::leakedTokens($narrative);
+                $gloss = MaskingGateway::unmask((string) ($retryPayload['gloss'] ?? ''), $map);
+                $sourceGloss = MaskingGateway::unmask((string) ($retryPayload['sourceGloss'] ?? ''), $map);
+                $ambiguities = MaskingGateway::unmaskLines($retryPayload['ambiguities'] ?? [], $map);
+                $tokens = self::gateLeaks($narrative, $gloss, $sourceGloss);
             } catch (\Throwable) {
                 // Retry transport failure falls through to the gate result.
             }
@@ -283,6 +315,10 @@ final class NarrativeService
             'notableFindings' => $findings,
             'actionTaken' => $disposition,
             'addedContentWarnings' => $warnings,
+            // Phase 6 Stage 3 — the gloss pair and the ambiguity list.
+            'gloss' => $gloss,
+            'sourceGloss' => $sourceGloss,
+            'ambiguities' => $ambiguities,
             'cached' => $cached,
             'residualRisk' => $residualRisk,
             'economy' => [
@@ -672,6 +708,28 @@ final class NarrativeService
      * current codebase, and an invented reference number in a legal
      * document is worse than none. If/when they land, inject them here.
      */
+    /**
+     * Phase 6 Stage 3 (Invariant 6) — the leaked-token gate across EVERY text
+     * field of the response, not just the narrative. The narrative and both
+     * glosses are hard-gated: a mangled placeholder in any of them is the same
+     * defect, and the caller retries once then falls back to manual mode.
+     *
+     * @return string[] leaked tokens (deduplicated)
+     */
+    private static function gateLeaks(string $narrative, string $gloss, string $sourceGloss): array
+    {
+        $leaks = MaskingGateway::leakedTokensAny([
+            'narrative' => $narrative,
+            'gloss' => $gloss,
+            'sourceGloss' => $sourceGloss,
+        ]);
+        $tokens = [];
+        foreach ($leaks as $fieldTokens) {
+            $tokens = array_merge($tokens, $fieldTokens);
+        }
+        return array_values(array_unique($tokens));
+    }
+
     /**
      * Unmask one provider line (the formalised ACTION TAKEN / STATUS): the
      * shared line rule applies, so a value still holding an unregistered

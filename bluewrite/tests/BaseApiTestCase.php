@@ -56,6 +56,10 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // every report insert, so the scratch DB must carry the column or
         // every create 500s.
         $this->runSqlFile(__DIR__ . '/../migrations/007_narrative_language.sql');
+        // 008 adds narrative_source_language (the DECLARED language of the
+        // kept source text, nullable, paired with narrative_source_text). The
+        // API writes it from Stage 3 on, so the scratch DB must carry it.
+        $this->runSqlFile(__DIR__ . '/../migrations/008_narrative_source_language.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         $hash = password_hash('Passw0rd!23', PASSWORD_BCRYPT);

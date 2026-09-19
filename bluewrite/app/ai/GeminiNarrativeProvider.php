@@ -131,6 +131,11 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             self::normaliseFindings($parsed['notableFindings'] ?? []),
             self::normaliseDisposition($parsed['actionTaken'] ?? ''),
             self::normaliseWarnings($parsed['addedContentWarnings'] ?? []),
+            // Phase 6 Stage 3 — the gloss pair (empty for an English source)
+            // and the ambiguity list. Self-reports shown to the officer.
+            self::normaliseGloss($parsed['gloss'] ?? ''),
+            self::normaliseGloss($parsed['sourceGloss'] ?? ''),
+            self::normaliseWarnings($parsed['ambiguities'] ?? []),
         );
     }
 
@@ -313,9 +318,37 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
                     'type' => 'array',
                     'items' => ['type' => 'string'],
                 ],
+                // Phase 6 Stage 3 — the "understood as" gloss pair. `gloss`
+                // restates in plain English what the model read the officer to
+                // have said; `sourceGloss` says the same in the officer's own
+                // language. Both EMPTY for an English source. A self-report,
+                // not a back-translation.
+                'gloss' => ['type' => 'string'],
+                'sourceGloss' => ['type' => 'string'],
+                // Passages the model found unclear/contradictory, and each
+                // legal-weight term it rendered in the least-committal way.
+                // Required but allowed to be EMPTY.
+                'ambiguities' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string'],
+                ],
             ],
-            'required' => ['narrative', 'suggestions', 'possibleGaps', 'notableFindings', 'actionTaken', 'addedContentWarnings'],
+            'required' => ['narrative', 'suggestions', 'possibleGaps', 'notableFindings', 'actionTaken', 'addedContentWarnings', 'gloss', 'sourceGloss', 'ambiguities'],
         ];
+    }
+
+    /**
+     * A gloss is one or two short paragraphs of plain prose, never a report
+     * field. Whitespace-collapsed and capped so a runaway answer cannot bloat
+     * the response; empty stays empty (the English-source case).
+     */
+    public static function normaliseGloss(mixed $raw): string
+    {
+        if (!is_string($raw)) {
+            return '';
+        }
+        $text = (string) preg_replace('/\s+/u', ' ', $raw);
+        return mb_substr(trim($text), 0, 1200);
     }
 
     private static function buildUserContent(array $masked, array $options): string
@@ -376,9 +409,162 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             $lines[] = 'OFFICER NOTES:';
             $lines[] = $officerNotes;
         }
+        // Phase 6 Stage 3 — the DECLARED source language (set by the caller on
+        // the masked payload; absent for an English source). It switches the
+        // task from "formalise these English notes" to "translate this into
+        // formal English", and asks for the gloss pair. The RULES for that task
+        // are in the stable instruction block (the language section of
+        // narrative_system_prompt.txt); this only names the language per call.
+        $sourceLanguage = trim((string) ($masked['source_language'] ?? ''));
+        if ($sourceLanguage !== '' && $sourceLanguage !== 'en') {
+            $lines[] = '';
+            $lines[] = 'SOURCE LANGUAGE: ' . self::languageLabel($sourceLanguage)
+                . ' (the officer wrote the text below in this language — translate it into formal English, never answer in it).';
+            $lines[] = 'Return `gloss` as a plain-English restatement of what you understood, and `sourceGloss` as the same reading in '
+                . self::languageLabel($sourceLanguage) . '. List every unclear passage and every legal-weight term you rendered with least-committal wording in `ambiguities`.';
+        }
+        // D7 — pinned terms, matched deterministically in code against the
+        // masked source and injected per call. Deliberately OUTSIDE the cached
+        // instruction block (a term only pins when it is actually in this
+        // source), and empty when nothing matches or the table is empty.
+        $pinned = self::pinnedTermsBlock($masked);
+        if ($pinned !== '') {
+            $lines[] = '';
+            $lines[] = $pinned;
+        }
         if (!empty($options['feedback'])) {
             $lines[] = '';
             $lines[] = 'REVISION FEEDBACK: ' . (string) $options['feedback'];
+        }
+        return implode("\n", $lines);
+    }
+
+    /** Plain-words label for a declared language code (Stage 1's code set). */
+    public static function languageLabel(string $code): string
+    {
+        return match ($code) {
+            'ceb' => 'Bisaya (Cebuano)',
+            'tl' => 'Tagalog',
+            'mixed' => 'a mix of Bisaya and/or Tagalog and English',
+            'other' => 'another language',
+            default => 'English',
+        };
+    }
+
+    /**
+     * Fold text for MATCHING only: lowercase and strip the common Latin
+     * diacritics (the glossary has `ñ`). The stored/displayed text is never
+     * altered — this is the same rule the officer lookup uses, so a term pins
+     * exactly when the lookup would find it.
+     */
+    public static function foldForMatch(string $text): string
+    {
+        $map = [
+            'á'=>'a','à'=>'a','â'=>'a','ä'=>'a','ã'=>'a','å'=>'a',
+            'é'=>'e','è'=>'e','ê'=>'e','ë'=>'e',
+            'í'=>'i','ì'=>'i','î'=>'i','ï'=>'i',
+            'ó'=>'o','ò'=>'o','ô'=>'o','ö'=>'o','õ'=>'o',
+            'ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u',
+            'ñ'=>'n','ç'=>'c','ý'=>'y','ÿ'=>'y',
+        ];
+        $lower = mb_strtolower($text);
+        return strtr($lower, $map);
+    }
+
+    /**
+     * The masked source text a pinned term is matched against: the officer's
+     * free text (notes, recorded action, notable findings) and the scalar
+     * fields. Placeholders are irrelevant — a term never contains one.
+     */
+    private static function maskedSourceText(array $masked): string
+    {
+        $parts = [
+            (string) ($masked['officer_notes'] ?? ''),
+            (string) ($masked['action_taken'] ?? ''),
+            (string) ($masked['notable_findings'] ?? ''),
+        ];
+        if (is_array($masked['scalars'] ?? null)) {
+            foreach ($masked['scalars'] as $v) {
+                if (is_string($v)) {
+                    $parts[] = $v;
+                }
+            }
+        }
+        return implode("\n", $parts);
+    }
+
+    /** @return array<int, array<string,mixed>> the approved terms from the derived table */
+    private static function approvedTerms(): array
+    {
+        $file = dirname(__DIR__, 2) . '/resources/ai/narrative_terms.json';
+        if (!is_file($file)) {
+            return [];
+        }
+        $decoded = json_decode((string) file_get_contents($file), true);
+        $entries = is_array($decoded) ? ($decoded['entries'] ?? null) : null;
+        if (!is_array($entries)) {
+            return [];
+        }
+        return array_values(array_filter($entries, 'is_array'));
+    }
+
+    /**
+     * D7 — the approved terms whose `term` or a `forms` entry appears, as a
+     * whole word, in the masked source text. Exact, deterministic, offline:
+     * matching is by whitespace/punctuation-delimited token, folded for case
+     * and the common Latin diacritics only. An affixed form that is not listed
+     * in `forms` therefore does NOT match — the recorded, accepted limitation.
+     * Drafts never reach the derived table, so they can never appear here.
+     *
+     * @return array<int, array<string,mixed>> the applied entries, capped
+     */
+    public static function matchPinnedTerms(string $source, ?array $entries = null): array
+    {
+        $entries ??= self::approvedTerms();
+        if ($entries === [] || trim($source) === '') {
+            return [];
+        }
+        $tokens = [];
+        foreach (preg_split('/[^\p{L}\p{N}]+/u', self::foldForMatch($source)) ?: [] as $tok) {
+            if ($tok !== '') {
+                $tokens[$tok] = true;
+            }
+        }
+        $applied = [];
+        foreach ($entries as $e) {
+            $needles = array_merge([(string) ($e['term'] ?? '')], is_array($e['forms'] ?? null) ? $e['forms'] : []);
+            foreach ($needles as $needle) {
+                $folded = self::foldForMatch((string) $needle);
+                if ($folded !== '' && isset($tokens[$folded])) {
+                    $applied[] = $e;
+                    break;
+                }
+            }
+        }
+        return array_slice($applied, 0, 25);
+    }
+
+    /**
+     * The pinned-terms instruction, or '' when nothing matches / the table is
+     * empty. The table is authoritative WITHIN its terms (plan Q7 = yes): a
+     * matched term is rendered exactly as `english`, and each
+     * `do_not_render_as` rendering is forbidden. Outside the table the model
+     * chooses as it does today.
+     */
+    public static function pinnedTermsBlock(array $masked, ?array $entries = null): string
+    {
+        $applied = self::matchPinnedTerms(self::maskedSourceText($masked), $entries);
+        if ($applied === []) {
+            return '';
+        }
+        $lines = ['PINNED TERMINOLOGY (approved by the station records/legal officer — render each term below EXACTLY as its "use" wording, and NEVER as any "never" wording):'];
+        foreach ($applied as $e) {
+            $line = '- "' . (string) ($e['term'] ?? '') . '" (' . (string) ($e['language'] ?? '') . ') use: ' . (string) ($e['english'] ?? '');
+            $forbidden = is_array($e['do_not_render_as'] ?? null) ? $e['do_not_render_as'] : [];
+            if ($forbidden !== []) {
+                $line .= '; never: ' . implode(', ', array_map('strval', $forbidden));
+            }
+            $lines[] = $line;
         }
         return implode("\n", $lines);
     }

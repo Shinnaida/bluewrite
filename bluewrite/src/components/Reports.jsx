@@ -2175,15 +2175,12 @@ export function ReportEditor({
   // AI draft, so the same banner + jump-to-field runs before any request.
   // Only the narrative is exempt — that is what the AI is there to write.
   function gateAiGenerate() {
-    // D3 — refused one layer in as well as in the panel's own buttons. The AI
-    // tools are English-only: the economy rules running over a Bisaya
-    // narrative would rewrite prose in the wrong language rather than improve
-    // it, and a draft in English could be applied into a field labelled Bisaya.
-    const blocked = aiBlockedReason(draft?.narrative_language);
-    if (blocked) {
-      setError(blocked);
-      return false;
-    }
+    // Phase 6 Stage 3 (D4) — Generate is deliberately NO LONGER refused for a
+    // non-English narrative: translating a Bisaya/Tagalog narrative (or notes)
+    // into formal English is exactly what this stage adds, and Apply sets the
+    // report back to English. Tighten keeps the Stage 1 refusal (see the panel
+    // and the server guard), because the English economy engine must never
+    // rewrite native text.
     const ok = checkFullRules({ ignorePaths: ['narrative'] });
     if (ok) setError(null); // a previous failed attempt's banner must not linger
     return ok;
@@ -2451,12 +2448,23 @@ export function ReportEditor({
       // D3 — the panel disables Generate and Tighten and states the reason,
       // rather than offering a control whose only possible answer is no.
       languageBlocked={aiBlockedReason(languageCode)}
-      onAccept={(aiText) => {
+      // Phase 6 Stage 2 — opens the terminology lookup on the language the
+      // officer is writing in. A default only; it never edits the narrative.
+      narrativeLanguage={languageCode}
+      onAccept={(aiText, sourceMeta) => {
         // Human-in-the-loop: the officer explicitly copies the AI
         // draft in; it stays fully editable afterwards. The source
         // tag lands in report_history via the next save/finalize.
         set('narrative', aiText);
         narrativeSourceRef.current = 'ai-assisted';
+        // Phase 6 Stage 3 (D2) — a TRANSLATED draft stores the officer's
+        // verbatim source and its declared language, and marks the report
+        // English, in the same save. The pair travels together.
+        if (sourceMeta && sourceMeta.language && sourceMeta.language !== 'en') {
+          set('narrative_language', 'en');
+          set('narrative_source_text', sourceMeta.text ?? '');
+          set('narrative_source_language', sourceMeta.language);
+        }
       }}
       // Generating the report IS the action for the findings: the
       // drafted lines replace the Notable Findings field outright
@@ -3000,6 +3008,21 @@ export function ReportEditor({
                 placeholder="Describe the incident in chronological order. Include suspect description, witness information, and any property damage or injuries."
               />
               {errors.narrative && <div className="error">{errors.narrative}</div>}
+              {/* Phase 6 Stage 3 (D10) — the kept original text, read-only. After
+                  Apply the native words are no longer in the narrative field, so
+                  the officer must still be able to see what was translated.
+                  Deliberately minimal; Stage 4 builds the side-by-side. */}
+              {draft.narrative_source_text && (
+                <details className="ir-source" open>
+                  <summary>
+                    Original text ({draft.narrative_source_language === 'ceb' ? 'Bisaya (Cebuano)'
+                      : draft.narrative_source_language === 'tl' ? 'Tagalog'
+                      : draft.narrative_source_language === 'mixed' ? 'Mixed'
+                      : draft.narrative_source_language === 'other' ? 'Other' : 'Unknown'}) — kept as the source
+                  </summary>
+                  <p className="ir-source-text">{draft.narrative_source_text}</p>
+                </details>
+              )}
               {/* ON THE DESK, NOT ON THE PAGE: in the sheet format this card is
                   the paper itself, so the selector renders under the sheet
                   instead (the other home, after </form>). */}
