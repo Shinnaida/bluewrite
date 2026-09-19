@@ -1,6 +1,10 @@
 # Phase 6 — Multilingual input (Bisaya / Tagalog → formal English report)
 
-Status: **Stage 5 in progress — Tracks A, B and C shipped; Track D held.**
+Status: **Stage 5 code-complete — Tracks A, B and C shipped (committed as
+`c26977d`); Track D held.** The G4 audit was run against that commit: every
+checklist item carries command output, and it caught one hard-coded language
+list that Step 0's sweep had missed (`UsersController::validateLanguages()`, now
+a registry read — Track A, deviation 4).
 Stages 1–4 have shipped in code (they were committed as `a9adc4f`, `968c85e`,
 `4374308` and `68b91a2`). Stage 5 is four independent
 tracks (§7): **A — more languages** (the registry, shipped below), **B — the
@@ -1176,6 +1180,13 @@ diverge from the ones the prompt names, or if a marker the prompt lists is
    guard is exercised through the documented registry test seam; the HTTP leg
    needs a server started with `BLUEWRITE_LANGUAGE_REGISTRY` pointing at a
    modified file, which this suite does not spin up.
+4. **Step 0's sweep missed one hard-coded language list, and the G4 audit found
+   it.** `UsersController::validateLanguages()` (the Stage 4 `languages_read`
+   verifier field) still held the literal `['en','ceb','tl','mixed','other']`.
+   It is now a `LanguageRegistry::codes()` read, so the sweep's claim -- every
+   hard-coded list replaced -- is true rather than nearly true. Recorded because
+   the audit exists to catch exactly this, and a DoD item that passes only
+   because nobody re-checked is not evidence.
 
 ### Known limitations
 
@@ -1429,3 +1440,44 @@ refused without moving the state.
    guided save cannot ride on an older autosave body. The consequence is a
    possible extra `PATCH` when an autosave is in flight at that moment; harmless,
    and noted rather than optimised.
+
+---
+
+### Stage 5 — G4 audit (against commit `c26977d`)
+
+**Track D is held and NOT built.** It was held at G2 because it cannot start
+without two things the software cannot supply: real anonymized officer notes, and
+a bilingual reviewer. Nothing was prepared for it — no example drafted, no line
+added to `narrative_few_shots.md`, no live model call spent, no registry evidence
+recorded. The one investigation fact its design needs is recorded here: few-shot
+selection today takes **only the incident type** (`GeminiNarrativeProvider::fewShotBlock(string $incidentType)`, called at line 154 and defined at line 653), so "per-language few-shots" needs a language dimension added to that selection — an owner decision, not a data edit.
+
+The harness's real cost, from its own dry run: **9 fixtures = 9 calls**; at
+Stage 3's repetition count (`--runs=5`) that is **45 calls per run, 90 for a
+before/after pair**.
+
+**The audit's one finding.** `UsersController::validateLanguages()` still held a
+literal language list. Fixed in that same pass (Track A, deviation 4), which is
+why the audit was worth running rather than declaring the checklist met.
+
+**Evidence run at G4** (all of it real command output):
+
+| Check | Result |
+|---|---|
+| Hard-coded language lists remaining in shipping code | none (`'ceb'`/`'tl'` appear only in comments and the harness's fixtures; `NARRATIVE_LANGUAGES`/`TERM_LANGUAGES` are gone) |
+| A writer for enablement or evidence | none; `override()`/`reset()` are documented test seams and are called nowhere outside tests |
+| The disabled-language sentence | exactly `Saved as written. AI translation isn't available for this language yet.` |
+| Track B makes a network request | none — no `api`/`fetch`/`XHR`/`axios` in the panel; its only import of data is the bundled derived table |
+| Approved terminology published | `0 approved, 15 draft (drafts excluded)` — the panel ships inert, which is correct |
+| Assembled instruction block | `41284` bytes / `dcbb175570b50904` — **identical to the value Track A recorded**, so B and C changed no prompt input |
+| Do-not-touch list (prompt, few-shots, `type_vocabulary.json`, `MaskingGateway.php`, `SystemInstructionTest.php`, `reportRules.js`) | `git diff 68b91a2` over all six is **empty** |
+| English print | `git diff 68b91a2 -- ReportPrint.jsx` is **empty** |
+| Suites | PHP **235 / 1301 / 0 failures** (same 3 pre-existing runner warnings); JS **196 / 0**; build clean |
+| Runbook | `docs/ADDING_A_LANGUAGE.md`, 184 lines |
+
+**What G4 does not cover, and will not pretend to:** the rendered Track B panel
+and the rendered Track C flow have **no automated test** (this project has no
+React/DOM harness). Their pure rules are tested; their rendering rests on the
+written manual procedures in the Track B and Track C records above, which the
+author could not observe (no browser). Those, plus the Stage 3 bilingual review
+and the Stage 4 UI/print and legal read, remain human gates before real use.

@@ -6,6 +6,7 @@ namespace App\Controllers;
 use App\Core\Audit;
 use App\Core\Auth;
 use App\Core\Database;
+use App\Core\LanguageRegistry;
 use App\Core\Response;
 use App\Core\Validator;
 use PDO;
@@ -237,7 +238,12 @@ final class UsersController
             $v->add('languages_read', 'Languages read must be text.');
             return null;
         }
-        $allowed = ['en', 'ceb', 'tl', 'mixed', 'other'];
+        // Phase 6 Stage 5 (Track A) — the allowed codes come from the registry,
+        // not a literal. This list was the one hard-coded language list Step 0's
+        // sweep missed (it lives in the Stage 4 verifier field, not in the
+        // narrative path), so a language added to the registry can be recorded
+        // against a verifier without touching this file.
+        $allowed = LanguageRegistry::codes();
         $codes = array_values(array_filter(
             array_map(static fn ($c) => strtolower(trim($c)), explode(',', $value)),
             static fn ($c) => $c !== ''
