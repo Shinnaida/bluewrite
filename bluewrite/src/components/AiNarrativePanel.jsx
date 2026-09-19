@@ -16,6 +16,22 @@ import { api } from '../lib/api.js';
 import NarrativeReveal from './NarrativeReveal.jsx';
 import NarrativeTermsLookup from './NarrativeTermsLookup.jsx';
 import { useRotatingStatus, holdVerifyPhase, VERIFY_PHRASE, THINKING_PHRASES } from '../lib/useRotatingStatus.js';
+// Phase 6 Stage 4/5 — the language vocabulary all comes from the registry
+// (never a list held here), and the one wording for a language whose AI
+// translation is switched off.
+import { languageLabel, narrativeLanguageOptions } from '../lib/reportLanguages.js';
+import { translationEnabled, translationDisabledNotice } from '../lib/languageRegistry.js';
+// Phase 6 Stage 5 (Track C) — the guided "Translate & tighten" flow. The rule
+// is a pure state machine (src/lib/guidedFlow.js) and this component only ever
+// drives it, so "tighten before the officer reviewed and applied the
+// translation" cannot be expressed here at all.
+import {
+  GUIDED_IDLE,
+  guidedFlowReduce,
+  guidedIsReviewing,
+  guidedIsTerminal,
+  guidedStepLabel,
+} from '../lib/guidedFlow.js';
 
 // AI panel resize bounds — collapse below the minimum into the rail,
 // mirroring the sidebar's SIDEBAR_MIN/COLLAPSE_BELOW pattern.
@@ -88,6 +104,12 @@ export default function AiNarrativePanel({
   // the officer knows it is what the AI formalises into the draft.
   notableFindings = '',
   onAccept,
+  // Phase 6 Stage 5 (Track C) — Apply for the guided flow's step 1: the editor
+  // applies the translation to the form AND saves it, because the second step
+  // is refused by the server while the STORED report still declares a
+  // non-English narrative (that guard is deliberately not weakened). Falls back
+  // to onAccept when the editor does not provide it.
+  onApplyGuided,
   // Called automatically with the drafted NOTABLE FINDINGS lines as soon as
   // a draft lands — no second button: generating the report IS the action.
   // The editor writes them into the form field (the record the sheet prints
@@ -113,6 +135,9 @@ export default function AiNarrativePanel({
   const [mode, setMode] = useState('idle'); // idle|ready|loading|done|error|manual
   const [draft, setDraft] = useState(null); // { narrative, suggestions, possibleGaps, addedContentWarnings, gloss, sourceGloss, ambiguities, pinnedTerms }
   const [notes, setNotes] = useState('');
+  // Phase 6 Stage 5 (Track C) — the guided flow's current step, or null when
+  // no guided flow is running. Every move goes through moveGuided().
+  const [guided, setGuided] = useState(GUIDED_IDLE);
   // Phase 6 Stage 3 — the language the NOTES are written in (declared, never
   // detected), which source the officer wants translated, and the source text
   // captured at generate time so Apply can state and store it.
@@ -285,11 +310,37 @@ export default function AiNarrativePanel({
   // source (D3/D4), so Generate is NOT refused by language here any more.
   const nativeNarrative = narrativeLanguage !== 'en' && String(narrative || '').trim() !== '';
   const effectiveSource = sourceChoice ?? (nativeNarrative ? 'narrative' : 'notes');
+  // Phase 6 Stage 5 (Track A, D4) — the language actually being translated for
+  // this request. When its registry entry has translation_enabled=false, no
+  // model call is made for it: the officer is told plainly and can still write
+  // and file. The server enforces this too; the disable is so the officer is
+  // not offered a control whose only answer would be no.
+  const translationSourceLanguage = effectiveSource === 'narrative' ? narrativeLanguage : notesLanguage;
+  const translationOff = String(translationSourceLanguage) !== 'en'
+    && !translationEnabled(translationSourceLanguage);
 
-  const generate = async (feedbackText = '') => {
+  // Phase 6 Stage 5 (Track C) — every guided transition goes through the pure
+  // machine, and an event the machine REFUSES is dropped rather than applied by
+  // hand. The ref mirrors the state so a handler can act on the machine's
+  // answer immediately (and so two moves in one tick stay consistent) instead
+  // of guessing what React's next render will hold.
+  const guidedRef = useRef(GUIDED_IDLE);
+  guidedRef.current = guided;
+  const moveGuided = (event) => {
+    const next = guidedFlowReduce(guidedRef.current, event);
+    if (!next.ok) return next;
+    guidedRef.current = next.state;
+    setGuided(next.state);
+    return next;
+  };
+
+  const generate = async (feedbackText = '', asGuidedStep = false) => {
     // Gate first: a blocked generate flags the problems and never opens the
     // loading panel — exactly like a blocked finalize.
-    if (onBeforeGenerate && !onBeforeGenerate()) return;
+    if (onBeforeGenerate && !onBeforeGenerate()) {
+      if (asGuidedStep) moveGuided('cancel');
+      return;
+    }
     setMode('loading');
     setThinkPhase('waiting'); // Phase A: rotating thinking phrases
     setMessage(null);
@@ -333,6 +384,11 @@ export default function AiNarrativePanel({
         setThinkPhase('verifying');
         await holdVerifyPhase();
         setDraft(out);
+        // Track C — the translation landed: the flow is now in the REVIEW step,
+        // where nothing is applied until the officer presses the guided apply
+        // button. Marked before the draft paints so no frame shows the plain
+        // (non-guided) accept button on a guided translation.
+        if (asGuidedStep) moveGuided('translation-ok');
         setResidual(out.residualRisk ?? []);
         // Auto-apply the formalised findings to the report's own field: one
         // action (this generation) produces the whole draft, and the field —
@@ -364,6 +420,10 @@ export default function AiNarrativePanel({
           setMessage(null);
           continue;
         }
+        // Track C — a failed translation ends the guided flow (the officer is
+        // back where they started and can still file). It never advances to
+        // the tighten step: there is no applied English text to tighten.
+        if (asGuidedStep) moveGuided('translation-failed');
         if (err.status === 503 || err.manual_mode) {
           setMode('manual');
           setMessage(err.message);
@@ -382,14 +442,21 @@ export default function AiNarrativePanel({
   // tightening the prose helps), and NOTHING is applied when it lands — this
   // call edits the officer's own words, so the merged findings and trimmed
   // status come back as proposals with their own buttons.
-  const tighten = async () => {
-    if (languageBlocked) {
+  // `overrideText` is the guided flow's second step: it tightens the English
+  // text the officer just applied, which may not be in the `narrative` prop yet
+  // in this render. `opts.guided` skips the languageBlocked refusal for exactly
+  // that case — the text handed to the economy engine is the English
+  // translation, so the Stage 1 rule (never run the engine on native text) is
+  // kept, and the SERVER still enforces it against the saved record.
+  const tighten = async (overrideText = null, opts = {}) => {
+    const guidedStep = opts.guided === true;
+    if (!guidedStep && languageBlocked) {
       setMessage(languageBlocked);
       setMode('error');
       setPanelOpen(true);
       return;
     }
-    const text = String(narrative || '').trim();
+    const text = String((overrideText ?? narrative) || '').trim();
     if (!text) {
       setMessage('Write the narrative first — there is nothing to tighten yet.');
       setMode('error');
@@ -417,6 +484,7 @@ export default function AiNarrativePanel({
       setThinkPhase('verifying');
       await holdVerifyPhase();
       setDraft({ ...out, tighten: true });
+      moveGuided('tighten-ok');
       setResidual(out.residualRisk ?? []);
       setRevealDone(false);
       setMode('done');
@@ -428,6 +496,10 @@ export default function AiNarrativePanel({
     } catch (err) {
       setThinkPhase('waiting');
       setRevealOn(false);
+      // Track C — a failed tighten step ends the flow with the translation
+      // already applied and saved: nothing is half-done, and the officer can
+      // still file. (moveGuided is a no-op for a plain, non-guided tighten.)
+      moveGuided('tighten-failed');
       if (err.status === 503 || err.manual_mode) {
         setMode('manual');
         setMessage(err.message);
@@ -436,6 +508,65 @@ export default function AiNarrativePanel({
         setMessage(err.message || 'The draft could not be tightened.');
       }
     }
+  };
+
+  // ---- Track C — the guided "Translate & tighten" flow --------------------
+  // startGuided() starts step 1 (the translation). The officer then reads the
+  // English draft and both glosses in the review state; applyTranslation() is
+  // the officer's apply, and it applies AND saves the text. Only after that
+  // does tighten() run — over the applied English — and its result is a
+  // proposal with its own accept button, exactly like today's Tighten.
+  const startGuided = () => {
+    if (translationOff || !guidedIsTerminal(guided)) return;
+    if (!moveGuided('start').ok) return;
+    generate('', true);
+  };
+
+  const applyTranslation = async () => {
+    const meta = lastSource && lastSource.language !== 'en' ? lastSource : null;
+    const text = String(draft?.narrative || '').trim();
+    if (!text) return;
+    // Advance only if the machine allows it; the apply is guarded by the same
+    // check, so a forbidden call (e.g. from a stale handler) changes nothing.
+    if (!moveGuided('apply').ok) return;
+    setDraft(null);
+    try {
+      // The editor applies it to the form AND saves it, so the record the
+      // server holds is English before the economy engine is asked to run.
+      if (onApplyGuided) await onApplyGuided(draft.narrative, meta);
+      else onAccept(draft.narrative, meta);
+    } catch (err) {
+      // The translation IS in the form (that is what the officer clicked) but
+      // the save did not land, so the tighten step cannot run against an
+      // English record. The flow ends; the officer can edit, save and file.
+      moveGuided('cancel');
+      setMode('error');
+      setMessage(err.message || 'The translation was applied in the form but could not be saved, so tightening was not run. Your report is otherwise unchanged.');
+      return;
+    }
+    await tighten(draft.narrative, { guided: true });
+  };
+
+  const acceptTightened = () => {
+    if (!moveGuided('accept').ok) return;
+    onAccept(draft.narrative, null);
+    setDraft(null);
+    setMode('ready');
+    closePanel();
+  };
+
+  const keepTranslation = () => {
+    moveGuided('cancel');
+    setDraft(null);
+    setMode('ready');
+    setMessage(null);
+  };
+
+  const cancelGuided = () => {
+    moveGuided('cancel');
+    setDraft(null);
+    setMode('ready');
+    setMessage(null);
   };
 
   if (!reportId || !canEdit) return null;
@@ -500,7 +631,7 @@ export default function AiNarrativePanel({
               other side is ignored. */}
           {nativeNarrative && (
             <div className="ai-source-choice" role="radiogroup" aria-label="What should be translated?">
-              <p className="field-hint">You have a {narrativeLanguage === 'tl' ? 'Tagalog' : narrativeLanguage === 'ceb' ? 'Bisaya' : 'native-language'} narrative. What should the AI translate?</p>
+              <p className="field-hint">You have a {languageLabel(narrativeLanguage)} narrative. What should the AI translate?</p>
               <label>
                 <input
                   type="radio"
@@ -526,15 +657,47 @@ export default function AiNarrativePanel({
               </p>
             </div>
           )}
+          {/* D4 — a language the system cannot translate yet says so here, in
+              the approved words, and the control below is disabled. The text is
+              still saved and filed exactly as written. */}
+          {translationOff && (
+            <div className="alert info ai-language-blocked" role="status">
+              {translationDisabledNotice()}
+            </div>
+          )}
           <div className="ai-generate-row">
             <button
               type="button"
               className="side-new"
               onClick={() => generate()}
+              disabled={translationOff}
             >
               {nativeNarrative && effectiveSource === 'narrative' ? 'Translate my narrative' : 'Generate AI draft'}
             </button>
           </div>
+          {/* Phase 6 Stage 5 (Track C) — the guided flow's ONE entry point. It
+              is offered only where it applies (a native narrative being
+              translated) and it says plainly that this is two steps with a
+              review between them (D2). Tighten is not chained onto the
+              translation: the officer applies the English first. */}
+          {nativeNarrative && effectiveSource === 'narrative' && (
+            <div className="ai-guided-row">
+              <button
+                type="button"
+                className="ai-guided-start"
+                onClick={startGuided}
+                disabled={translationOff || !guidedIsTerminal(guided)}
+                title="Step 1 translates your narrative. You read it and apply it. Only then is Step 2 — tightening that English text — offered, and its result is a proposal too."
+              >
+                Translate &amp; tighten (2 steps — you review between them)
+              </button>
+              <p className="field-hint">
+                Step 1 translates your narrative into formal English; you check it against
+                the glosses and apply it. Step 2 then offers a tightened version of that
+                English text as a proposal — nothing is written into the report until you click.
+              </p>
+            </div>
+          )}
           {effectiveSource === 'notes' && (
             <div className="ai-notes-row">
               <textarea
@@ -547,11 +710,11 @@ export default function AiNarrativePanel({
               <label className="ai-notes-lang">
                 Notes language
                 <select value={notesLanguage} onChange={(e) => setNotesLanguage(e.target.value)}>
-                  <option value="en">English</option>
-                  <option value="ceb">Bisaya (Cebuano)</option>
-                  <option value="tl">Tagalog</option>
-                  <option value="mixed">Mixed</option>
-                  <option value="other">Other</option>
+                  {/* Phase 6 Stage 5 (Track A) — from the registry, so a new
+                      language appears here with no client change. */}
+                  {narrativeLanguageOptions().map((l) => (
+                    <option key={l.code} value={l.code}>{l.label}</option>
+                  ))}
                 </select>
               </label>
             </div>
@@ -565,7 +728,7 @@ export default function AiNarrativePanel({
             <button
               type="button"
               className="ai-tighten"
-              onClick={tighten}
+              onClick={() => tighten()}
               disabled={!!languageBlocked || !String(narrative || '').trim()}
               title="Runs the economy rules over your own narrative: repeated propositions merged, padding and closing formulas removed. Nothing is written into the report until you click."
             >
@@ -712,6 +875,23 @@ export default function AiNarrativePanel({
               </button>
             ) : (
               <div className="ai-side-body">
+                {/* Track C — the guided flow's step, always visible while the
+                    officer holds a decision. The cancel control is offered in
+                    the two states where a click still changes something; during
+                    the working states the loading text carries the step. */}
+                {(guided === 'review' || guided === 'tighten-review') && (
+                  <div className="ai-guided-banner" role="status">
+                    <strong>Translate &amp; tighten</strong>
+                    <p className="field-hint">{guidedStepLabel(guided)}</p>
+                    <button
+                      type="button"
+                      className="ai-guided-cancel"
+                      onClick={guided === 'tighten-review' ? keepTranslation : cancelGuided}
+                    >
+                      {guided === 'tighten-review' ? 'Keep my translation — don\u2019t tighten' : 'Stop the guided flow'}
+                    </button>
+                  </div>
+                )}
                 {mode === 'loading' && (
                   <div className="ai-loading" role="status" aria-live="polite">
                     {/* §5: the live region announces "Generating draft"
@@ -741,6 +921,11 @@ export default function AiNarrativePanel({
                       <p className="ai-loading-sub">This can take up to 45 seconds</p>
                     )}
                     {message && <p className="ai-loading-sub">{message}</p>}
+                    {/* Track C — which guided step is running, so the two-
+                        step shape is legible during the wait too. */}
+                    {!guidedIsTerminal(guided) && (
+                      <p className="ai-loading-sub">{guidedStepLabel(guided)}</p>
+                    )}
                     <div className="ai-loading-bar" aria-hidden="true">
                       <div className="ai-loading-bar-fill" />
                     </div>
@@ -870,7 +1055,7 @@ export default function AiNarrativePanel({
                     {lastSource && lastSource.language !== 'en' && !tightenDraft && (
                       <p className="alert info ai-apply-note" role="status">
                         Applying this replaces your narrative with the English text. Your original{' '}
-                        {lastSource.language === 'tl' ? 'Tagalog' : lastSource.language === 'ceb' ? 'Bisaya' : 'native-language'}{' '}
+                        {languageLabel(lastSource.language)}{' '}
                         text will be kept as this report's source, and the report will be marked as written in English.
                       </p>
                     )}
@@ -884,39 +1069,79 @@ export default function AiNarrativePanel({
                     )}
 
                     <div className="ai-actions">
-                      <button
-                        type="button"
-                        className="primary"
-                        onClick={() => {
-                          // Phase 6 Stage 3 (D2) — a translated draft carries the
-                          // source with it, so Apply can store the officer's
-                          // verbatim words and mark the report English.
-                          const meta = lastSource && lastSource.language !== 'en' ? lastSource : null;
-                          onAccept(draft.narrative, meta);
-                          setDraft(null);
-                          setMode('ready');
-                          closePanel();
-                        }}
-                        disabled={tightenDraft && !draft.tightened}
-                        title={tightenDraft && !draft.tightened ? 'Your wording was not changed, so there is nothing to accept.' : undefined}
-                      >
-                        Accept into narrative
-                      </button>
-                      {/* Each result offers to repeat ITSELF: a generated draft
-                          regenerates from the notes, a tightened draft is
-                          tightened again. Offering "Regenerate" on a tighten
-                          result would swap the officer's own prose for an
-                          AI-written one under a button they did not mean to
-                          press. */}
-                      {tightenDraft ? (
-                        <button type="button" onClick={tighten}>Tighten again</button>
+                      {guided === 'review' ? (
+                        /* Track C, step 1 — the REVIEW state. The only forward
+                           control is the one that applies the text the officer
+                           has just read; nothing here reaches the tighten step
+                           without it, so the review cannot be skipped. */
+                        <>
+                          <button
+                            type="button"
+                            className="primary"
+                            onClick={applyTranslation}
+                            title="Applies this English text to the report (keeping your original as its source) and saves it. The tighten step is offered only after this."
+                          >
+                            Use this translation — continue to tighten
+                          </button>
+                          <button type="button" onClick={() => setShowFeedback((v) => !v)}>Regenerate…</button>
+                          <button type="button" onClick={cancelGuided}>Cancel</button>
+                        </>
+                      ) : guided === 'tighten-review' ? (
+                        /* Track C, step 2 — a proposal, exactly like today's
+                           Tighten: it is never applied without this click. */
+                        <>
+                          <button
+                            type="button"
+                            className="primary"
+                            onClick={acceptTightened}
+                            disabled={!draft.tightened}
+                            title={!draft.tightened ? 'Your wording was not changed, so there is nothing to accept.' : undefined}
+                          >
+                            Accept tightened text
+                          </button>
+                          <button type="button" onClick={() => tighten(draft.narrative, { guided: true })}>Tighten again</button>
+                          <button type="button" onClick={keepTranslation}>Keep my translation — don&apos;t tighten</button>
+                        </>
                       ) : (
-                        <button type="button" onClick={() => setShowFeedback((v) => !v)}>Regenerate…</button>
+                        <>
+                          <button
+                            type="button"
+                            className="primary"
+                            onClick={() => {
+                              // Phase 6 Stage 3 (D2) — a translated draft carries the
+                              // source with it, so Apply can store the officer's
+                              // verbatim words and mark the report English.
+                              const meta = lastSource && lastSource.language !== 'en' ? lastSource : null;
+                              onAccept(draft.narrative, meta);
+                              setDraft(null);
+                              setMode('ready');
+                              closePanel();
+                            }}
+                            disabled={tightenDraft && !draft.tightened}
+                            title={tightenDraft && !draft.tightened ? 'Your wording was not changed, so there is nothing to accept.' : undefined}
+                          >
+                            Accept into narrative
+                          </button>
+                          {/* Each result offers to repeat ITSELF: a generated draft
+                              regenerates from the notes, a tightened draft is
+                              tightened again. Offering "Regenerate" on a tighten
+                              result would swap the officer's own prose for an
+                              AI-written one under a button they did not mean to
+                              press. */}
+                          {tightenDraft ? (
+                            <button type="button" onClick={() => tighten()}>Tighten again</button>
+                          ) : (
+                            <button type="button" onClick={() => setShowFeedback((v) => !v)}>Regenerate…</button>
+                          )}
+                          <button type="button" onClick={closePanel}>Close</button>
+                        </>
                       )}
-                      <button type="button" onClick={closePanel}>Close</button>
                     </div>
 
-                    {showFeedback && (
+                    {/* Not offered in the tighten-review state: there is no
+                        translation to regenerate there, and the machine refuses
+                        the event, so the button could only do nothing. */}
+                    {showFeedback && guided !== 'tighten-review' && (
                       <div className="ai-feedback">
                         <input
                           type="text"
@@ -928,7 +1153,10 @@ export default function AiNarrativePanel({
                           type="button"
                           onClick={() => {
                             setShowFeedback(false);
-                            generate(feedback);
+                            // Track C — regenerating inside the guided review is
+                            // still step 1, so it lands back in the review state.
+                            if (guidedIsReviewing(guided)) moveGuided('regenerate');
+                            generate(feedback, guidedIsReviewing(guided) || guided === 'translating');
                           }}
                         >
                           Regenerate

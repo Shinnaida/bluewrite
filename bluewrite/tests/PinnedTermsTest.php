@@ -98,6 +98,31 @@ final class PinnedTermsTest extends TestCase
         $this->assertSame([], GeminiNarrativeProvider::matchPinnedTerms('Nasakpan.', []));
     }
 
+    /**
+     * Phase 6 Stage 5, Track B — PARITY with the officer's full terminology
+     * panel. "Terms found in your text" runs the SAME rule on the client
+     * (src/lib/narrativeTerms.js `termsInText`), because the panel must not
+     * promise a matching the translation would not perform. These exact
+     * expectations are duplicated in tests/rules/narrativeTerms.test.mjs —
+     * if either implementation drifts, one of the two fails.
+     */
+    public function testClientPanelParityFixtures(): void
+    {
+        $f = $this->fixture();
+        $ids = static fn (array $rows): array => array_map(static fn ($r) => $r['id'], $rows);
+
+        // By root term and by a listed affixed form.
+        $this->assertSame(['ceb-test'], $ids(GeminiNarrativeProvider::matchPinnedTerms('sakpan siya', $f)));
+        $this->assertSame(['ceb-test'], $ids(GeminiNarrativeProvider::matchPinnedTerms('Nasakpan ang suspek.', $f)));
+        // Case-insensitive, and diacritic-insensitive with the display unchanged.
+        $this->assertSame(['ceb-test'], $ids(GeminiNarrativeProvider::matchPinnedTerms('SAKPAN!', $f)));
+        $this->assertSame(['ceb-pena'], $ids(GeminiNarrativeProvider::matchPinnedTerms('Naa sa Pena Street.', $f)));
+        // Punctuation and a newline are token boundaries, as on the client.
+        $this->assertSame(['ceb-test'], $ids(GeminiNarrativeProvider::matchPinnedTerms("sakpan,\nsa wakas", $f)));
+        // WHOLE-TOKEN, not a substring: an unlisted affix does not match.
+        $this->assertSame([], GeminiNarrativeProvider::matchPinnedTerms('Ang nahulian sa bagyo.', $f));
+    }
+
     /** The real derived table ships with zero approved entries (see §13). */
     public function testRealDerivedTableIsInertAtShip(): void
     {

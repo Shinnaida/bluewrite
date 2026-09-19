@@ -101,6 +101,19 @@ final class NarrativeService
     }
 
     /**
+     * Phase 6 Stage 5 (Track A, D4) — the officer-facing reason a LANGUAGE
+     * cannot be translated yet. The wording is the plan's, approved at G2:
+     * it says what did happen (the text is saved as written) before it says
+     * what will not (no AI translation for this language yet), and it names no
+     * fault. The language is still selectable, storable, printable and
+     * fileable — only the AI half is switched off.
+     */
+    public static function translationLanguageReason(string $languageCode): string
+    {
+        return 'Saved as written. AI translation isn\'t available for this language yet.';
+    }
+
+    /**
      * Generate for a report. Returns the AI draft payload; NEVER writes the
      * report row. On provider failure after the retry budget, records the
      * failure in ai_requests and rethrows for the controller to translate

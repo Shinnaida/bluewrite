@@ -64,6 +64,10 @@ import AiNarrativePanel from './AiNarrativePanel.jsx';
 // dispute form. Same component for the editor and the reviewing officer, since
 // a verifier opens the report read-only through the same screen.
 import ReportVerificationPanel from './ReportVerificationPanel.jsx';
+// Phase 6 Stage 5 Track B — the terminology table as a full panel: browse,
+// search, and the approved terms the officer's own text already uses. Offline,
+// read-only, and mounted in the editor so it works with the AI switched off.
+import NarrativeTermsPanel from './NarrativeTermsPanel.jsx';
 // The official-document stylesheet: the navy top bar, page head, card panels,
 // field labels and signature blocks. Shared by every screen now that the whole
 // application uses this look (the tokens themselves live in styles.css).
@@ -79,7 +83,7 @@ import {
 // finalize warning and the printed line, so the editor and the sheet cannot
 // disagree about what a code means.
 import {
-  NARRATIVE_LANGUAGES,
+  narrativeLanguageOptions,
   DEFAULT_LANGUAGE,
   languageHint,
   languageLabel,
@@ -2055,6 +2059,51 @@ export function ReportEditor({
     setErrors((e) => (e.incident_type ? { ...e, incident_type: undefined } : e));
   }
 
+  // Phase 6 Stage 3/5 — what "Apply" does to the FORM. A translated draft
+  // carries its source with it, so applying it stores the officer's verbatim
+  // words, its declared language, and marks the report English in the same save.
+  // Shared by the plain accept path and Track C's guided step 1.
+  function applyAiNarrative(aiText, sourceMeta) {
+    set('narrative', aiText);
+    narrativeSourceRef.current = 'ai-assisted';
+    if (sourceMeta && sourceMeta.language && sourceMeta.language !== 'en') {
+      set('narrative_language', 'en');
+      set('narrative_source_text', sourceMeta.text ?? '');
+      set('narrative_source_language', sourceMeta.language);
+    }
+  }
+
+  // Phase 6 Stage 5 (Track C) — the guided flow's step 1: apply the reviewed
+  // translation AND save it. The save is not decoration: the tighten endpoint
+  // refuses while the STORED report still declares a non-English narrative
+  // (NarrativeController::tighten), and that guard is deliberately not weakened
+  // to spare the client a round trip. The body is built from draftRef — the
+  // same latest-values ref the autosave uses — so it saves exactly the report
+  // the officer is looking at, with the English text and its source pair on it.
+  async function applyGuidedTranslation(aiText, sourceMeta) {
+    const hadSource = !!(sourceMeta && sourceMeta.language && sourceMeta.language !== 'en');
+    applyAiNarrative(aiText, sourceMeta);
+    const current = draftRef.current ?? {};
+    if (!current.incident_type) {
+      throw new Error('Choose the incident type first — the report cannot be saved without it.');
+    }
+    const next = hadSource
+      ? {
+        ...current,
+        narrative: aiText,
+        narrative_language: 'en',
+        narrative_source_text: sourceMeta.text ?? '',
+        narrative_source_language: sourceMeta.language,
+      }
+      : { ...current, narrative: aiText };
+    const body = { ...next, status: 'draft', narrative_source: 'ai-assisted' };
+    const id = idRef.current
+      ? await api(`/reports/${idRef.current}`, { method: 'PATCH', body }).then(() => idRef.current)
+      : await api('/reports', { method: 'POST', body }).then((created) => created.report.id);
+    adoptSavedId(id);
+    dirtyRef.current = false;
+  }
+
   async function saveDraft() {
     const errs = validate(draft);
     setErrors(errs);
@@ -2438,7 +2487,7 @@ export function ReportEditor({
         onChange={(e) => set('narrative_language', e.target.value)}
         disabled={!canEdit}
       >
-        {NARRATIVE_LANGUAGES.map((l) => (
+        {narrativeLanguageOptions().map((l) => (
           <option key={l.code} value={l.code}>
             {l.label}
           </option>
@@ -2452,6 +2501,21 @@ export function ReportEditor({
       )}
     </div>
   );
+
+  // Track B — the officer's dictionary. Read-only and offline; it never
+  // inserts a term anywhere. Kept beside the writing (the narrative card, and
+  // on the desk under a blank sheet) rather than inside the AI panel, because
+  // it is useful whether or not the model is available.
+  const termsPanel = canEdit ? (
+    <NarrativeTermsPanel
+      reportLanguage={languageCode}
+      texts={[
+        draft?.narrative || '',
+        draft?.action_taken || '',
+        draft?.type_specific?.notable_findings || '',
+      ]}
+    />
+  ) : null;
 
   const aiPanel = canEdit ? (
     <AiNarrativePanel
@@ -2474,21 +2538,14 @@ export function ReportEditor({
       // Phase 6 Stage 2 — opens the terminology lookup on the language the
       // officer is writing in. A default only; it never edits the narrative.
       narrativeLanguage={languageCode}
-      onAccept={(aiText, sourceMeta) => {
-        // Human-in-the-loop: the officer explicitly copies the AI
-        // draft in; it stays fully editable afterwards. The source
-        // tag lands in report_history via the next save/finalize.
-        set('narrative', aiText);
-        narrativeSourceRef.current = 'ai-assisted';
-        // Phase 6 Stage 3 (D2) — a TRANSLATED draft stores the officer's
-        // verbatim source and its declared language, and marks the report
-        // English, in the same save. The pair travels together.
-        if (sourceMeta && sourceMeta.language && sourceMeta.language !== 'en') {
-          set('narrative_language', 'en');
-          set('narrative_source_text', sourceMeta.text ?? '');
-          set('narrative_source_language', sourceMeta.language);
-        }
-      }}
+      // Human-in-the-loop: the officer explicitly copies the AI draft in; it
+      // stays fully editable afterwards. The source tag lands in report_history
+      // via the next save/finalize.
+      onAccept={applyAiNarrative}
+      // Phase 6 Stage 5 (Track C) — step 1 of the guided "Translate & tighten"
+      // flow: apply AND save the reviewed translation, so step 2 can run against
+      // a record the server already knows is English.
+      onApplyGuided={applyGuidedTranslation}
       // Generating the report IS the action for the findings: the
       // drafted lines replace the Notable Findings field outright
       // (one printed line per finding), because that field is what
@@ -3058,6 +3115,8 @@ export function ReportEditor({
                   the paper itself, so the selector renders under the sheet
                   instead (the other home, after </form>). */}
               {!sheet && languagePicker}
+              {/* Track B — the full terminology panel, beside the writing. */}
+              {!sheet && termsPanel}
             </div>
             {/* Where the AI panel lives is settled PER FORMAT — one home each,
                 never two, because the panel owns the slide-in side panel and the
@@ -3443,6 +3502,10 @@ export function ReportEditor({
       {sheet && <div className="ir-sheet-language">{languagePicker}</div>}
 
       {sheet && canEdit && <div className="ir-sheet-ai">{aiPanel}</div>}
+      {/* Track B — the same panel on the desk under a blank sheet, never on the
+          paper: a dictionary printed at the foot of a page would be part of the
+          report. */}
+      {sheet && canEdit && <div className="ir-sheet-terms">{termsPanel}</div>}
 
       {/* ...and the action row, under it. The sheet format's whole point is that
           the report's FORM is one click away, not that its controls are: Save

@@ -13,9 +13,28 @@
 // by the derivation script (Node), the drift guard (node:test) and the officer
 // lookup (browser), so none of the three can disagree about what an entry means
 // or which entries are publishable.
+//
+// The covered languages come from the language registry (Phase 6 Stage 5,
+// Track A): the Node entry points must install it once with
+// setLanguageRegistry() before validating — see scripts/derive-narrative-terms.mjs.
+import { glossaryCodes } from './languageRegistry.js';
+import { languageLabel } from './reportLanguages.js';
 
-/** The languages this table covers. Bisaya (cebuano) and Tagalog only. */
-export const TERM_LANGUAGES = ['ceb', 'tl'];
+/**
+ * The languages this table covers — Bisaya (Cebuano) and Tagalog today.
+ *
+ * Phase 6 Stage 5 (Track A, D3): read from the LANGUAGE REGISTRY's
+ * `glossary_supported` flag, not held here. The flag is deliberately narrower
+ * than the narrative language list: `en`, `mixed` and `other` are storable
+ * narrative languages but can never carry a glossary entry (there is no single
+ * source language to translate a term FROM). A language becomes covered here
+ * only when the owner marks it `glossary_supported` in the registry.
+ *
+ * @returns {string[]}
+ */
+export function termLanguages() {
+  return glossaryCodes();
+}
 
 /** The fixed category set. A value outside this set is a validation error. */
 export const TERM_CATEGORIES = [
@@ -184,8 +203,8 @@ export function validateEntries(entries) {
       }
     }
 
-    if (!TERM_LANGUAGES.includes(e.language)) {
-      errors.push(where(`language must be one of ${TERM_LANGUAGES.join(', ')}`));
+    if (!termLanguages().includes(e.language)) {
+      errors.push(where(`language must be one of ${termLanguages().join(', ')}`));
     } else if (e.id && !e.id.startsWith(`${e.language}-`)) {
       errors.push(where(`id must start with "${e.language}-"`));
     }
@@ -337,14 +356,122 @@ export function searchTerms(entries, query, language = 'all') {
 }
 
 /**
- * The languages offered in the lookup's filter. 'all' first, then the two the
- * table covers, with the same plain-words labels the report editor uses.
+ * The languages offered in the lookup's filter. 'all' first, then the ones the
+ * table covers, with the same plain-words labels the report editor uses — both
+ * read from the registry, so the filter cannot offer a language the server
+ * would reject an entry for.
+ *
+ * @returns {Array<{code: string, label: string}>}
  */
-export const LOOKUP_LANGUAGES = [
-  { code: 'all', label: 'All languages' },
-  { code: 'ceb', label: 'Bisaya (Cebuano)' },
-  { code: 'tl', label: 'Tagalog' },
-];
+export function lookupLanguages() {
+  return [
+    { code: 'all', label: 'All languages' },
+    ...termLanguages().map((code) => ({ code, label: languageLabel(code) })),
+  ];
+}
+
+/**
+ * The filter the lookup opens on: the report's own language when it is one the
+ * table covers, otherwise "all languages". A suggestion, always changeable.
+ *
+ * @param {unknown} reportLanguage
+ * @returns {string}
+ */
+/**
+ * The plain-words name of a category, for the full panel's browse control. The
+ * stored category codes (act-or-offence, …) mean nothing to a desk officer.
+ */
+export const TERM_CATEGORY_LABELS = {
+  'act-or-offence': 'Act or offence',
+  statute: 'Statute',
+  'evidence-or-injury': 'Evidence or injury',
+  'report-part': 'Part of the report',
+  other: 'Other',
+};
+
+/** @param {unknown} code @returns {string} */
+export function categoryLabel(code) {
+  return TERM_CATEGORY_LABELS[code] ?? String(code ?? '');
+}
+
+/**
+ * The approved entries grouped for browsing, in the fixed category order and
+ * omitting categories with no entries (so an empty table shows no headings).
+ *
+ * @param {Array<object>} entries approved entries
+ * @returns {Array<{code: string, label: string, entries: Array<object>}>}
+ */
+export function groupByCategory(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  return TERM_CATEGORIES
+    .filter((c) => list.some((e) => e.category === c))
+    .map((c) => ({
+      code: c,
+      label: categoryLabel(c),
+      entries: list.filter((e) => e.category === c),
+    }));
+}
+
+/**
+ * The tokens of a text, folded — the unit `termsInText` matches against.
+ * Splits on anything that is not a letter or a digit, exactly as the server's
+ * pinned-term matcher does (GeminiNarrativeProvider::matchPinnedTerms).
+ *
+ * @param {string} text
+ * @returns {Set<string>}
+ */
+function tokenSet(text) {
+  const tokens = new Set();
+  for (const tok of foldForSearch(text).split(/[^\p{L}\p{N}]+/u)) {
+    if (tok !== '') tokens.add(tok);
+  }
+  return tokens;
+}
+
+/**
+ * "Terms found in your text" — the approved terms whose `term` or a `forms`
+ * entry appears, as a WHOLE token, in what the officer has written.
+ *
+ * This is the Stage 3 pinned-term matching, run on the client for the officer
+ * to see: deterministic, offline, no model. It has to be the same rule the
+ * server uses to pin terms, or the panel would promise something the
+ * translation does not do. Two things it is NOT: it is not fuzzy (an affixed
+ * form missing from `forms` does not match — the recorded limitation), and it
+ * is not a suggestion to put anything into the narrative. The panel copies
+ * nothing on its own.
+ *
+ * The client folds with NFD (foldForSearch) where the server folds with a
+ * fixed Latin map; the two agree on the fixture set the tests pin, and a
+ * difference could only change what is DISPLAYED here, never the model's
+ * instruction.
+ *
+ * @param {Array<object>} entries approved entries (the derived table)
+ * @param {string|Array<string>} texts the officer's own text(s)
+ * @param {number} [limit] the same cap the server applies
+ * @returns {Array<object>} the matched entries
+ */
+export function termsInText(entries, texts, limit = 25) {
+  const list = Array.isArray(entries) ? entries : [];
+  const parts = (Array.isArray(texts) ? texts : [texts]).filter(
+    (t) => typeof t === 'string' && t !== '',
+  );
+  const joined = parts.join('\n');
+  if (list.length === 0 || joined.trim() === '') return [];
+
+  const tokens = tokenSet(joined);
+  const found = [];
+  for (const e of list) {
+    const needles = [e?.term, ...(Array.isArray(e?.forms) ? e.forms : [])];
+    for (const needle of needles) {
+      const folded = foldForSearch(needle);
+      if (folded !== '' && tokens.has(folded)) {
+        found.push(e);
+        break;
+      }
+    }
+  }
+  return found.slice(0, limit);
+}
 
 /**
  * The filter the lookup opens on: the report's own language when it is one the
@@ -354,5 +481,5 @@ export const LOOKUP_LANGUAGES = [
  * @returns {string}
  */
 export function defaultLookupLanguage(reportLanguage) {
-  return TERM_LANGUAGES.includes(reportLanguage) ? reportLanguage : 'all';
+  return termLanguages().includes(reportLanguage) ? reportLanguage : 'all';
 }

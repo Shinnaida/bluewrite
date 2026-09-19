@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { api, classifyError, isUnreachable } from './lib/api.js';
 import { useTheme } from './lib/theme.js';
 import { useDensity } from './lib/density.js';
+import { setLanguageRegistry } from './lib/languageRegistry.js';
 import Login from './components/Login.jsx';
 import Shell from './components/Shell.jsx';
 
@@ -42,6 +43,10 @@ export default function App() {
   useEffect(() => {
     api('/me')
       .then((u) => {
+        // Phase 6 Stage 5 (Track A) — install the language registry from the
+        // bootstrap read BEFORE the workspace can render, so no screen ever
+        // shows a report's language from a list that has not landed.
+        setLanguageRegistry(u.languages);
         setUser(u);
         setBoot({ conn: 'ok' });
       })

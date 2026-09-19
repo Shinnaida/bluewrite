@@ -1,0 +1,70 @@
+{
+  "_comment": "MANUAL DATA FILE — the single source of truth for the languages this system accepts, and for whether AI translation is enabled for each. Edit it by hand; no code path writes, enables or approves anything here (Phase 6 Stage 5, decisions D3/D4/D9). Adding a language is a data change plus the steps in docs/ADDING_A_LANGUAGE.md — and a NEW language must start with translation_enabled=false until the owner records evidence and enables it. See app/core/LanguageRegistry.php (server reader) and src/lib/languageRegistry.js (client holder).",
+  "_fields": {
+    "code": "the stored value (reports.narrative_language / narrative_source_language)",
+    "label": "the plain-words name an officer reads in the selector",
+    "short": "the compact name for printed lines, so it does not read 'Bisaya (Cebuano) (not translated)'",
+    "provider_label": "how the language is DESCRIBED to the model in the per-call SOURCE LANGUAGE line",
+    "native_gloss": "whether the gloss pair includes sourceGloss in this language (Bisaya/Tagalog do; mixed/other return it empty)",
+    "glossary_supported": "whether the bilingual terminology table may carry entries in this language",
+    "translation_enabled": "whether AI GENERATE may translate a source in this language; Tighten is governed separately",
+    "evidence": "recorded by the OWNER when a bilingual reviewer has passed an evaluation run — never by code"
+  },
+  "languages": [
+    {
+      "code": "en",
+      "label": "English",
+      "short": "English",
+      "provider_label": "English",
+      "native_gloss": false,
+      "glossary_supported": false,
+      "translation_enabled": false,
+      "evidence": { "reviewer": null, "evaluation_run": null, "reviewed_on": null },
+      "_note": "English is never a SOURCE: there is nothing to translate into English. It is listed so the selector and the allowlist have one source."
+    },
+    {
+      "code": "ceb",
+      "label": "Bisaya (Cebuano)",
+      "short": "Bisaya",
+      "provider_label": "Bisaya (Cebuano)",
+      "native_gloss": true,
+      "glossary_supported": true,
+      "translation_enabled": true,
+      "evidence": { "reviewer": null, "evaluation_run": null, "reviewed_on": null },
+      "_note": "Enabled by the owner's Stage 3 decision (the feature shipped with Bisaya and Tagalog translatable). The evidence fields are EMPTY until the G4 bilingual review of docs/phase6-stage3-eval-review-sheet.md is recorded here — enablement and evidence are separate facts."
+    },
+    {
+      "code": "tl",
+      "label": "Tagalog",
+      "short": "Tagalog",
+      "provider_label": "Tagalog",
+      "native_gloss": true,
+      "glossary_supported": true,
+      "translation_enabled": true,
+      "evidence": { "reviewer": null, "evaluation_run": null, "reviewed_on": null },
+      "_note": "As ceb: enabled by the Stage 3 decision, evidence pending the G4 review."
+    },
+    {
+      "code": "mixed",
+      "label": "Mixed",
+      "short": "Mixed",
+      "provider_label": "a mix of Bisaya and/or Tagalog and English",
+      "native_gloss": false,
+      "glossary_supported": false,
+      "translation_enabled": true,
+      "evidence": { "reviewer": null, "evaluation_run": null, "reviewed_on": null },
+      "_note": "Translatable, with an EMPTY sourceGloss (the source has no single language). Unchanged from Stage 3."
+    },
+    {
+      "code": "other",
+      "label": "Other",
+      "short": "Other",
+      "provider_label": "another language",
+      "native_gloss": false,
+      "glossary_supported": false,
+      "translation_enabled": true,
+      "evidence": { "reviewer": null, "evaluation_run": null, "reviewed_on": null },
+      "_note": "Translatable, with an EMPTY sourceGloss. Unchanged from Stage 3."
+    }
+  ]
+}

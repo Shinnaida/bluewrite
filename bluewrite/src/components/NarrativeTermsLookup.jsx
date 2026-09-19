@@ -16,16 +16,16 @@ import React, { useMemo, useState } from 'react';
 import termsData from '../../resources/ai/narrative_terms.json';
 import {
   SCOPE_TEXT,
-  LOOKUP_LANGUAGES,
+  lookupLanguages,
   MIN_QUERY_LENGTH,
   searchTerms,
   defaultLookupLanguage,
 } from '../lib/narrativeTerms.js';
+import { languageLabel } from '../lib/reportLanguages.js';
 
-/** The plain-words language name for a result row. */
+/** The plain-words language name for a result row (from the registry). */
 function languageName(code) {
-  const found = LOOKUP_LANGUAGES.find((l) => l.code === code);
-  return found ? found.label : code;
+  return languageLabel(code);
 }
 
 const EMPTY_STATE_NOT_PUBLISHED =
@@ -73,7 +73,7 @@ export default function NarrativeTermsLookup({ reportLanguage = 'en' }) {
                 onChange={(e) => setLanguage(e.target.value)}
                 aria-label="Filter terminology by language"
               >
-                {LOOKUP_LANGUAGES.map((l) => (
+                {lookupLanguages().map((l) => (
                   <option key={l.code} value={l.code}>{l.label}</option>
                 ))}
               </select>

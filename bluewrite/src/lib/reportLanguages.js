@@ -1,8 +1,9 @@
 // BlueWrite — the language an officer DECLARES for the narrative.
-// Phase 6 Stage 1 (docs/PHASE6_MULTILINGUAL.md §5.4). Pure functions, no React,
-// no DOM — covered by node:test.
+// Phase 6 Stage 1 (docs/PHASE6_MULTILINGUAL.md §5.4); Stage 5 Track A (D3) made
+// the language SET a registry read rather than a list held here.
+// Pure functions, no React, no DOM — covered by node:test.
 //
-// Three things about this module are deliberate and worth not "fixing":
+// Things about this module that are deliberate and worth not "fixing":
 //
 //   * The language is DECLARED, never detected. §8 Q2 of the plan settles it:
 //     detection by function words is unreliable — ang, sa and nga are shared
@@ -18,64 +19,80 @@
 //     re-processes a single character of the narrative — so the officer's words
 //     survive a change of mind about what they were written in.
 //
-// Stored codes mirror ReportsController::NARRATIVE_LANGUAGES and migration 007.
-// Keep the two lists in step, the way REPORTER_FIELDS mirrors
-// ReportRules::validateReporterParty().
+//   * THE LIST IS NOT HERE ANY MORE (Stage 5, Track A). The codes, labels and
+//     printed short forms come from src/lib/languageRegistry.js, whose content
+//     is the server's resources/ai/language_registry.json. Adding a language is
+//     a data change on the server; this module needs no edit for it. The one
+//     thing that stays local is the DEGRADED reading (see normaliseLanguage).
+//
+// Stored codes mirror the registry; the server is what rejects an unknown code
+// with a 422.
 
-/**
- * The five declarations, in the order the selector offers them.
- *
- * `label` is what an officer reads in the selector — plain words, because
- * "ceb" tells a desk officer nothing. `short` is for printed lines, where
- * "Bisaya (Cebuano)" would sit inside D6's own parentheses and read as
- * "Bisaya (Cebuano) (not translated)".
- */
-export const NARRATIVE_LANGUAGES = [
-  { code: 'en', label: 'English', short: 'English' },
-  { code: 'ceb', label: 'Bisaya (Cebuano)', short: 'Bisaya' },
-  { code: 'tl', label: 'Tagalog', short: 'Tagalog' },
-  { code: 'mixed', label: 'Mixed', short: 'Mixed' },
-  { code: 'other', label: 'Other', short: 'Other' },
-];
+import { findLanguage, getLanguageRegistry } from './languageRegistry.js';
 
 /** English: the stored default, and what an absent value means. */
 export const DEFAULT_LANGUAGE = 'en';
 
-/** The server's Cebuano/Tagalog label for the "not in English" note. */
-const BY_CODE = new Map(NARRATIVE_LANGUAGES.map((l) => [l.code, l]));
+/** The label shown when nothing better is known — the default language's name. */
+const DEFAULT_LABEL = 'English';
 
 /**
- * Is this one of the five codes?
+ * The languages the selector offers, in the registry's order.
  *
- * The column is a VARCHAR, so it can hold anything — the API is what rejects
- * an unknown code. This function exists because a value can also arrive from
+ * Reads the live registry, so a language the server added appears on the next
+ * sign-in with no client change. Returns `{ code, label, short }` — the same
+ * shape this module used to hard-code.
+ *
+ * @returns {Array<{code: string, label: string, short: string}>}
+ */
+export function narrativeLanguageOptions() {
+  return getLanguageRegistry().map((l) => ({
+    code: l.code,
+    label: l.label,
+    short: l.short,
+  }));
+}
+
+/**
+ * Is this one of the registry's codes?
+ *
+ * The column is a VARCHAR, so it can hold anything — the API is what rejects an
+ * unknown code. This function exists because a value can also arrive from
  * outside the API: a stored report read back, a restored draft in
- * sessionStorage, an old row. Anything unrecognised is treated as English
- * (see normaliseLanguage) rather than being shown as a language.
+ * sessionStorage, an old row.
  *
  * @param {unknown} code
  * @returns {boolean}
  */
 export function isKnownLanguage(code) {
-  return typeof code === 'string' && BY_CODE.has(code);
+  return typeof code === 'string' && findLanguage(code) !== null;
 }
 
 /**
- * A usable code from anything: a known code passes through, everything else
- * becomes 'en'.
+ * A usable code from anything.
  *
- * This is the READ-side guard, and it is not the same job as the API's
+ * With the registry loaded, a known code passes through and everything else
+ * becomes 'en' — the read-side guard, and NOT the same job as the API's
  * validation. The API REJECTS an unknown code from a client (422, never
  * coerced) because a wrong declaration is the officer's to fix. A READ has no
- * officer to ask, so it falls back to the only safe reading — the one that
- * prints an English report rather than claiming a language the station has
- * never heard of.
+ * officer to ask, so it falls back to the only safe reading.
+ *
+ * BEFORE THE REGISTRY LANDS the rule is deliberately different: an unknown
+ * string is passed through unchanged rather than called English. Calling a
+ * stored 'ceb' English would mislabel a Bisaya narrative as an English one —
+ * exactly the fact Stage 1 exists to state — and a brief window (the bootstrap
+ * read) is not worth that risk. The name is then missing, which is honest; the
+ * language is never wrong.
  *
  * @param {unknown} code
  * @returns {string}
  */
 export function normaliseLanguage(code) {
-  return isKnownLanguage(code) ? code : DEFAULT_LANGUAGE;
+  if (isKnownLanguage(code)) return code;
+  if (getLanguageRegistry().length === 0 && typeof code === 'string' && code !== '') {
+    return code;
+  }
+  return DEFAULT_LANGUAGE;
 }
 
 /**
@@ -84,7 +101,20 @@ export function normaliseLanguage(code) {
  * @returns {string}
  */
 export function languageLabel(code) {
-  return (BY_CODE.get(normaliseLanguage(code)) ?? BY_CODE.get(DEFAULT_LANGUAGE)).label;
+  const entry = findLanguage(normaliseLanguage(code));
+  return entry?.label ?? DEFAULT_LABEL;
+}
+
+/**
+ * The compact name for printed lines, so a line does not read
+ * "Bisaya (Cebuano) (not translated)".
+ * @param {unknown} code
+ * @returns {string}
+ */
+export function languageShort(code) {
+  const normalised = normaliseLanguage(code);
+  const entry = findLanguage(normalised);
+  return entry?.short ?? entry?.label ?? normalised;
 }
 
 /**
@@ -158,7 +188,7 @@ export function finalizeLanguageWarning(code) {
  */
 export function printLanguageLine(code) {
   if (!isUntranslated(code)) return null;
-  return `Narrative language: ${(BY_CODE.get(normaliseLanguage(code)) ?? BY_CODE.get(DEFAULT_LANGUAGE)).short} (not translated)`;
+  return `Narrative language: ${languageShort(code)} (not translated)`;
 }
 
 /**

@@ -17,6 +17,10 @@ require __DIR__ . '/../app/core/Validator.php';
 require __DIR__ . '/../app/core/LegacyNormalizer.php';
 require __DIR__ . '/../app/core/Station.php';
 require __DIR__ . '/../app/core/ReportVerification.php';
+// Phase 6 Stage 5 (Track A) — the language registry reader. Required here
+// because this project has no autoloader: every class the request path can
+// reach is required explicitly (see the rest of this list).
+require __DIR__ . '/../app/core/LanguageRegistry.php';
 require __DIR__ . '/../app/rules/report_rules.php';
 require __DIR__ . '/../app/ai/AiProviderException.php';
 require __DIR__ . '/../app/ai/AiUnavailableException.php';

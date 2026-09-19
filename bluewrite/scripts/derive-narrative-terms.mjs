@@ -25,11 +25,18 @@ import {
   serialiseDerived,
   GLOSSARY_SECTION_HEADING,
 } from '../src/lib/narrativeTerms.js';
+import { setLanguageRegistry } from '../src/lib/languageRegistry.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const glossaryPath = resolve(root, 'docs/bluewrite-police-terminology-glossary.md');
 const derivedPath = resolve(root, 'resources/ai/narrative_terms.json');
 const worksheetPath = resolve(root, 'docs/phase6-stage2-review-worksheet.md');
+const registryPath = resolve(root, 'resources/ai/language_registry.json');
+
+// Phase 6 Stage 5 (Track A, D3) — the languages the table covers come from the
+// language registry. Install it ONCE here: this script runs in Node, outside
+// the app's bootstrap, so nothing else would have set it.
+setLanguageRegistry(JSON.parse(readFileSync(registryPath, 'utf8')).languages);
 
 const args = new Set(process.argv.slice(2));
 

@@ -16,10 +16,14 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { validateReport } from '../../src/lib/reportRules.js';
+import { setLanguageRegistry } from '../../src/lib/languageRegistry.js';
 import {
-  NARRATIVE_LANGUAGES,
+  narrativeLanguageOptions,
   DEFAULT_LANGUAGE,
   isKnownLanguage,
   normaliseLanguage,
@@ -33,6 +37,16 @@ import {
   languageHint,
 } from '../../src/lib/reportLanguages.js';
 
+// Phase 6 Stage 5 (Track A) — the language SET now comes from the registry, so
+// every read in this file depends on it being installed. In the app that is the
+// POST /login or GET /me bootstrap; here it is the committed data file, read
+// directly. The five shipped languages are what the assertions below expect,
+// which is the behaviour-preserving proof for Stage 1's module.
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+setLanguageRegistry(
+  JSON.parse(readFileSync(resolve(root, 'resources/ai/language_registry.json'), 'utf8')).languages,
+);
+
 // ---- fixtures (§7 of the Stage 1 brief) ------------------------------------
 
 const BISAYA = 'Gidala sa ospital ang biktima. Nasakpan ang suspek sa mga pulis.';
@@ -45,19 +59,19 @@ const NON_ENGLISH = ['ceb', 'tl', 'mixed', 'other'];
 
 test('the five declarations are offered, English first, in plain words', () => {
   assert.deepEqual(
-    NARRATIVE_LANGUAGES.map((l) => l.code),
+    narrativeLanguageOptions().map((l) => l.code),
     ['en', 'ceb', 'tl', 'mixed', 'other'],
   );
-  assert.equal(NARRATIVE_LANGUAGES[0].code, DEFAULT_LANGUAGE);
+  assert.equal(narrativeLanguageOptions()[0].code, DEFAULT_LANGUAGE);
   // No bare codes in the selector: "ceb" means nothing to a desk officer.
-  for (const l of NARRATIVE_LANGUAGES) {
+  for (const l of narrativeLanguageOptions()) {
     assert.ok(l.label.length > 2, `${l.code} needs a readable label`);
     assert.ok(!/^[a-z]{2,5}$/.test(l.label), `${l.label} looks like a code, not a label`);
   }
 });
 
 test('a printed line has a short name, so D6 does not nest parentheses', () => {
-  const ceb = NARRATIVE_LANGUAGES.find((l) => l.code === 'ceb');
+  const ceb = narrativeLanguageOptions().find((l) => l.code === 'ceb');
   assert.notEqual(ceb.short, ceb.label);
   assert.ok(!ceb.short.includes('('), 'the short form must not carry its own parentheses');
   assert.match(printLanguageLine('ceb'), /\(not translated\)$/);

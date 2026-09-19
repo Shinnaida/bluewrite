@@ -6,6 +6,7 @@ namespace App\Controllers;
 use App\Core\Audit;
 use App\Core\Auth;
 use App\Core\Database;
+use App\Core\LanguageRegistry;
 use App\Core\ReportVerification;
 use App\Core\Response;
 use App\Core\Station;
@@ -25,10 +26,11 @@ final class ReportsController
      * are shared between Tagalog and Cebuano) and a wrong guess would silently
      * apply the wrong terminology table in Stage 2.
      *
-     * Mirrored in src/lib/reportLanguages.js — keep the two lists in step, the
-     * way REPORTER_FIELDS mirrors ReportRules::validateReporterParty().
+     * Phase 6 Stage 5 (Track A, D3) — the allowlist is read from the LANGUAGE
+     * REGISTRY, not held here. resources/ai/language_registry.json is the single
+     * source of truth shared with the client (via GET /me) and with the prompt's
+     * per-call language line. No list is duplicated in this file any more.
      */
-    private const NARRATIVE_LANGUAGES = ['en', 'ceb', 'tl', 'mixed', 'other'];
 
     /**
      * Every person a report can name, as [group path, name path] inside its
@@ -94,7 +96,7 @@ final class ReportsController
         }
         // $v->in() rejects a non-string as well as an unknown code, so both
         // misuses produce one clear message rather than a silent default.
-        $v->in('narrative_language', $body['narrative_language'], self::NARRATIVE_LANGUAGES, 'Narrative language');
+        $v->in('narrative_language', $body['narrative_language'], LanguageRegistry::codes(), 'Narrative language');
         return is_string($body['narrative_language']) ? $body['narrative_language'] : null;
     }
 
@@ -765,9 +767,9 @@ final class ReportsController
                 ? (is_string($body['narrative_source_language']) && $body['narrative_source_language'] !== ''
                     ? (string) $body['narrative_source_language'] : null)
                 : $storedLang;
-            if ($sourceLanguage !== null && !in_array($sourceLanguage, self::NARRATIVE_LANGUAGES, true)) {
+            if ($sourceLanguage !== null && !LanguageRegistry::isKnown($sourceLanguage)) {
                 $v->add('narrative_source_language', 'Original-text language must be one of '
-                    . implode(', ', self::NARRATIVE_LANGUAGES) . '.');
+                    . implode(', ', LanguageRegistry::codes()) . '.');
             }
             if (($sourceText === null) !== ($sourceLanguage === null)) {
                 $v->add('narrative_source_language', 'An original text and its language must be set together (or both cleared).');

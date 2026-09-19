@@ -22,10 +22,15 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { setLanguageRegistry } from '../../src/lib/languageRegistry.js';
 import {
   GLOSSARY_SECTION_HEADING,
   TERM_CATEGORIES,
-  TERM_LANGUAGES,
+  TERM_CATEGORY_LABELS,
+  termLanguages,
+  categoryLabel,
+  groupByCategory,
+  termsInText,
   MIN_QUERY_LENGTH,
   parseGlossaryTerms,
   validateEntries,
@@ -39,6 +44,12 @@ import {
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const glossaryPath = resolve(root, 'docs/bluewrite-police-terminology-glossary.md');
 const derivedPath = resolve(root, 'resources/ai/narrative_terms.json');
+
+// Phase 6 Stage 5 (Track A) — the covered languages come from the language
+// registry's glossary_supported flag, so install it before validating.
+setLanguageRegistry(
+  JSON.parse(readFileSync(resolve(root, 'resources/ai/language_registry.json'), 'utf8')).languages,
+);
 
 // ---- fixtures ---------------------------------------------------------------
 
@@ -135,8 +146,88 @@ test('an unknown category is rejected, and the fixed set is what we think it is'
 });
 
 test('an unknown language is rejected, and only ceb/tl are covered', () => {
-  assert.deepEqual(TERM_LANGUAGES, ['ceb', 'tl']);
-  assert.ok(validateEntries([approvedEntry({ language: 'en' })]).some((e) => e.includes('language must be')));
+  // Registry-derived: the glossary_supported flag is deliberately narrower than
+  // the narrative languages, so en/mixed/other can never carry a term.
+  assert.deepEqual(termLanguages(), ['ceb', 'tl']);
+  for (const code of ['en', 'mixed', 'other']) {
+    assert.ok(
+      validateEntries([approvedEntry({ language: code, id: `${code}-x` })]).some((e) => e.includes('language must be')),
+      `${code} must not be an allowed terminology language`,
+    );
+  }
+});
+
+// ---- Track B: the full panel's browse and "found in your text" ------------
+
+test('browsing groups by category in the fixed order, and omits empty ones', () => {
+  const a = approvedEntry({ id: 'ceb-saksi', term: 'saksi', category: 'report-part' });
+  const b = approvedEntry({ id: 'ceb-sakpan', category: 'act-or-offence' });
+  const groups = groupByCategory([a, b]);
+  assert.deepEqual(groups.map((g) => g.code), ['act-or-offence', 'report-part']);
+  assert.deepEqual(groups.map((g) => g.label), ['Act or offence', 'Part of the report']);
+  assert.deepEqual(groups[1].entries.map((e) => e.id), ['ceb-saksi']);
+  // An empty table produces no headings at all.
+  assert.deepEqual(groupByCategory([]), []);
+  assert.deepEqual(groupByCategory(null), []);
+});
+
+test('a category renders in plain words, and never as a bare code', () => {
+  assert.deepEqual(Object.keys(TERM_CATEGORY_LABELS), TERM_CATEGORIES);
+  for (const c of TERM_CATEGORIES) {
+    assert.ok(categoryLabel(c).length > 2, `${c} needs a readable label`);
+    assert.ok(!categoryLabel(c).includes('-'), `${c} must not surface its spelling`);
+  }
+  assert.equal(categoryLabel('unknown-thing'), 'unknown-thing');
+});
+
+test('"terms found in your text" matches a term, a form, and folds diacritics', () => {
+  const entries = [
+    approvedEntry({ id: 'ceb-sakpan', term: 'sakpan', forms: ['sakpan', 'nasakpan'] }),
+    approvedEntry({ id: 'ceb-saksi', term: 'saksi', forms: ['saksi', 'mga saksi'], category: 'report-part' }),
+    approvedEntry({ id: 'tl-pena', language: 'tl', id: 'tl-pena', term: 'Peña', forms: ['peña'], english: 'pena' }),
+  ];
+  // The plain term, and an inflected form.
+  assert.deepEqual(termsInText(entries, 'Nasakpan ang suspek.').map((e) => e.id), ['ceb-sakpan']);
+  assert.deepEqual(termsInText(entries, 'Sakpan siya.').map((e) => e.id), ['ceb-sakpan']);
+  // A diacritic on both sides folds the same way.
+  assert.deepEqual(termsInText(entries, 'Naa sa Pena Street.').map((e) => e.id), ['tl-pena']);
+  // Several terms, and one entry is reported once however many forms hit.
+  assert.deepEqual(
+    termsInText(entries, 'Nasakpan siya; duha ka saksi.').map((e) => e.id),
+    ['ceb-sakpan', 'ceb-saksi'],
+  );
+});
+
+test('"terms found in your text" is WHOLE-TOKEN, not a substring search', () => {
+  // This is the recorded limitation, asserted rather than assumed: an affixed
+  // form that is not in `forms` does NOT match.
+  const entries = [approvedEntry({ id: 'ceb-huli', term: 'huli', forms: ['huli', 'nahuli'] })];
+  assert.deepEqual(termsInText(entries, 'Ang nahulian sa bagyo.'), []);
+  assert.deepEqual(termsInText(entries, 'Nahuli ang suspek.').map((e) => e.id), ['ceb-huli']);
+  // Punctuation and line breaks are token boundaries, as on the server.
+  assert.deepEqual(termsInText(entries, 'huli,\nsa wakas').map((e) => e.id), ['ceb-huli']);
+});
+
+test('"terms found in your text" is empty when there is nothing to match', () => {
+  const entries = [approvedEntry({ id: 'ceb-huli', term: 'huli', forms: ['huli', 'nahuli'] })];
+  assert.deepEqual(termsInText([], 'huli'), []);
+  assert.deepEqual(termsInText(entries, ''), []);
+  assert.deepEqual(termsInText(entries, '   '), []);
+  assert.deepEqual(termsInText(entries, null), []);
+  assert.deepEqual(termsInText(entries, ['', undefined, 'Walay labot.']), []);
+  // An array of the officer's texts is joined, so a term in any of them counts.
+  assert.deepEqual(
+    termsInText(entries, ['Walay labot.', 'Nahuli siya.']).map((e) => e.id),
+    ['ceb-huli'],
+  );
+});
+
+test('"terms found in your text" applies the server\'s cap', () => {
+  const entries = Array.from({ length: 40 }, (_, i) =>
+    approvedEntry({ id: `ceb-w${String(i).padStart(2, '0')}`, term: `word${i}` }),
+  );
+  const text = entries.map((e) => e.term).join(' ');
+  assert.equal(termsInText(entries, text).length, 25);
 });
 
 test('an id must start with the entry language', () => {
@@ -219,7 +310,7 @@ test('the derived file is valid JSON and holds only fully-formed entries', () =>
   assert.ok(Array.isArray(parsed.entries));
   for (const e of parsed.entries) {
     assert.ok(e.id && e.language && e.term && e.english, `entry ${e.id} is missing a required field`);
-    assert.ok(TERM_LANGUAGES.includes(e.language), `entry ${e.id} has an unknown language`);
+    assert.ok(termLanguages().includes(e.language), `entry ${e.id} has an unknown language`);
     assert.ok(TERM_CATEGORIES.includes(e.category), `entry ${e.id} has an unknown category`);
     assert.ok(Array.isArray(e.forms) && Array.isArray(e.do_not_render_as));
   }

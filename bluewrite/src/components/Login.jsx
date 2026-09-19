@@ -26,6 +26,7 @@ import React, { useEffect, useState } from 'react';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
 import { useResolvedTheme, useThemeSpread } from '../lib/theme.js';
 import { AI_ADVISORY, APP_VERSION } from '../lib/appInfo.js';
+import { setLanguageRegistry } from '../lib/languageRegistry.js';
 import { MoonIcon, SunIcon } from './ThemeIcons.jsx';
 // The navy master artwork, not the knockout: this screen is light, so the mark
 // is navy ink on the page. The navy bar above it shows the knockout variant,
@@ -198,6 +199,9 @@ export default function Login({ onLogin, theme, onTheme, boot }) {
         body: { username: username.trim(), password },
       });
       setPassword('');
+      // Phase 6 Stage 5 (Track A) — the login response carries the language
+      // registry, so the workspace has it before the first report renders.
+      setLanguageRegistry(res.languages);
       // Pass the user object (not the whole response wrapper) plus the
       // server-provided idle deadline so Shell's countdown starts honest.
       onLogin({ ...res.user, expires_at: res.expires_at });

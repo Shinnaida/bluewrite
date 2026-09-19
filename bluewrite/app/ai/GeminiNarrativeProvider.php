@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace App\Ai;
 
+use App\Core\LanguageRegistry;
+
 /**
  * Phase 3 §3.1 — Google Gemini provider over the REST generateContent
  * endpoint (PHP cURL, no SDK), matching the existing stack.
@@ -439,16 +441,17 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
         return implode("\n", $lines);
     }
 
-    /** Plain-words label for a declared language code (Stage 1's code set). */
+    /**
+     * How a declared language code is DESCRIBED to the model in the per-call
+     * SOURCE LANGUAGE line. Phase 6 Stage 5 (Track A, D3): read from the
+     * language registry, so this class holds no language list of its own. The
+     * registry's `provider_label` reproduces this method's previous strings
+     * exactly (including "a mix of Bisaya and/or Tagalog and English" and
+     * "another language"), which ReportLanguagesTest/LanguageRegistryTest assert.
+     */
     public static function languageLabel(string $code): string
     {
-        return match ($code) {
-            'ceb' => 'Bisaya (Cebuano)',
-            'tl' => 'Tagalog',
-            'mixed' => 'a mix of Bisaya and/or Tagalog and English',
-            'other' => 'another language',
-            default => 'English',
-        };
+        return LanguageRegistry::providerLabel($code);
     }
 
     /**

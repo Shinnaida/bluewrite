@@ -1053,6 +1053,63 @@
 .rv-notice { margin-top: 0.4rem; font-size: 0.8rem; color: #166534; }
 .rv-form-actions { margin-top: 0.5rem; display: flex; justify-content: flex-end; }
 
+/* ---- Phase 6 Stage 5, Track B — the full terminology panel ---------------
+   The officer's dictionary, on the light document page beside the narrative.
+   Its own namespace (`term-panel-*`) so it does not inherit the dark AI side
+   panel's palette; it uses the same --ir-* tokens as the rest of the form, so
+   it follows the dark theme with everything else. */
+.term-panel {
+  margin-top: 0.75rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--ir-soft);
+}
+.term-panel-title { margin: 0; font-size: 0.85rem; letter-spacing: 0.02em; }
+.term-panel-scope { margin: 0.25rem 0 0; font-size: 0.76rem; color: var(--ir-muted); }
+.term-panel-subtitle {
+  margin: 0.6rem 0 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+}
+.term-panel-empty { margin: 0.4rem 0 0; font-size: 0.76rem; color: var(--ir-muted); }
+.term-panel-hint { margin: 0.4rem 0 0; font-size: 0.76rem; color: var(--ir-muted); }
+.term-panel-controls { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-top: 0.5rem; }
+.term-panel-search { flex: 1; min-width: 9rem; }
+.term-panel-list { list-style: none; margin: 0.35rem 0 0; padding: 0; display: grid; gap: 0.5rem; }
+.term-panel-row { border-top: 1px solid var(--ir-border); padding-top: 0.4rem; }
+.term-panel-row-head { display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
+.term-panel-term { font-weight: 700; font-size: 0.88rem; }
+.term-panel-lang { font-size: 0.72rem; color: var(--ir-muted); }
+.term-panel-english {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.15rem;
+  font-size: 0.84rem;
+}
+.term-panel-copy {
+  font-size: 0.7rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--ir-border);
+  background: transparent;
+  cursor: pointer;
+}
+.term-panel-category {
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ir-muted);
+}
+.term-panel-not { margin-top: 0.15rem; font-size: 0.76rem; color: #b91c1c; }
+.term-panel-note { margin-top: 0.15rem; font-size: 0.76rem; color: var(--ir-muted); }
+
 /* ---- Panel IV: the two signature areas ---- */
 .ir-sign-grid {
   display: grid;

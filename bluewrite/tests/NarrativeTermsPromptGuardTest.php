@@ -70,10 +70,13 @@ final class NarrativeTermsPromptGuardTest extends TestCase
         $this->assertStringContainsString('DERIVED FILE', (string) $decoded['_comment']);
         $this->assertStringContainsString('NOT a translator', (string) $decoded['_comment']);
 
+        // Phase 6 Stage 5 (Track A) — the covered languages come from the
+        // language registry's glossary_supported flag, not a constant here.
+        $allowed = \App\Core\LanguageRegistry::glossaryCodes();
         foreach ($decoded['entries'] as $entry) {
             $id = (string) ($entry['id'] ?? '?');
             $this->assertNotSame('', $id);
-            $this->assertContains($entry['language'] ?? null, ['ceb', 'tl'], "entry {$id} language");
+            $this->assertContains($entry['language'] ?? null, $allowed, "entry {$id} language");
             $this->assertNotSame('', (string) ($entry['english'] ?? ''), "entry {$id} needs english");
             $this->assertNotSame('', (string) ($entry['term'] ?? ''), "entry {$id} needs a term");
             // The published shape carries no approval machinery, so a draft

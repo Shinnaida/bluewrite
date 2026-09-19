@@ -1273,6 +1273,50 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 }
 .ai-tighten-result { margin-bottom: 0.7rem; }
 .ai-tighten-result .field-hint { margin: 0 0 0.5rem; }
+
+/* ---- Phase 6 Stage 5 (Track C): the guided "Translate & tighten" flow ----
+   One entry point, two steps, a review between them. Styled as its own action
+   rather than a second primary button, because it wraps Generate and Tighten
+   instead of competing with them. */
+.ai-guided-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.ai-guided-start {
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--cyan);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--cyan);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+.ai-guided-start:hover:not(:disabled) { background: var(--cyan); color: var(--ink, #0b1220); }
+.ai-guided-start:disabled { opacity: 0.5; cursor: not-allowed; }
+.ai-guided-row .field-hint { flex: 1; min-width: 14rem; margin: 0; }
+
+/* The step the officer is on, shown while a decision is theirs. */
+.ai-guided-banner {
+  border: 1px solid var(--line-bright);
+  border-left: 3px solid var(--cyan);
+  border-radius: 3px;
+  padding: 0.55rem 0.7rem;
+  margin-bottom: 0.7rem;
+}
+.ai-guided-banner strong { font-size: 0.85rem; }
+.ai-guided-banner .field-hint { margin: 0.25rem 0 0.5rem; }
+.ai-guided-cancel {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--paper);
+  font-size: 0.78rem;
+}
+.ai-guided-cancel:hover { border-color: var(--cyan); color: var(--cyan); }
 .ai-manual-banner { border-color: var(--amber); background: var(--amber-bg); color: var(--steel); }
 
 /* ---- Phase 6 Stage 2: approved report terminology (offline lookup) ----

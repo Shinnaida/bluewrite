@@ -11,6 +11,7 @@ use App\Ai\NarrativeService;
 use App\Core\Audit;
 use App\Core\Auth;
 use App\Core\Database;
+use App\Core\LanguageRegistry;
 use App\Core\Response;
 use PDO;
 
@@ -81,6 +82,20 @@ final class NarrativeController
             && NarrativeService::translationDisabled((string) ($report['incident_type'] ?? ''))) {
             Response::json(409, [
                 'error' => NarrativeService::translationDisabledReason((string) ($report['incident_type'] ?? '')),
+                'translation_disabled' => true,
+            ]);
+        }
+        // Phase 6 Stage 5 (Track A, D4) — the LANGUAGE half of the same guard,
+        // and a separate one: a source language whose registry entry has
+        // translation_enabled=false is stored, selectable, printable and
+        // fileable exactly as before, but no model call is made for it. A new
+        // language starts here (disabled) until the owner records evidence and
+        // enables it. The two refusals stay distinct because the officer's next
+        // step differs: one is a station policy on the incident type, the other
+        // is a language the system cannot translate yet.
+        if ($sourceLanguage !== 'en' && !LanguageRegistry::translationEnabled($sourceLanguage)) {
+            Response::json(409, [
+                'error' => NarrativeService::translationLanguageReason($sourceLanguage),
                 'translation_disabled' => true,
             ]);
         }
@@ -369,7 +384,9 @@ final class NarrativeController
      */
     public static function narrativeLanguageCode(mixed $code): string
     {
-        return in_array($code, ['en', 'ceb', 'tl', 'mixed', 'other'], true) ? (string) $code : 'en';
+        // Phase 6 Stage 5 (Track A, D3) — the known set is read from the
+        // language registry, so adding a language is a data change here too.
+        return is_string($code) && LanguageRegistry::isKnown($code) ? $code : 'en';
     }
 
     public static function liveText(array $body, string $key, int $maxLength): ?string

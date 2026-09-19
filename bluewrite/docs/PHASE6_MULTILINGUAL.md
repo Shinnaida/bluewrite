@@ -1,7 +1,18 @@
 # Phase 6 — Multilingual input (Bisaya / Tagalog → formal English report)
 
-Status: **Stage 4 implemented; Stage 5 remains planned.** Stages 1–4 have
-shipped in code. Stage 4 — *verification and the record* — makes the bilingual
+Status: **Stage 5 in progress — Tracks A, B and C shipped; Track D held.**
+Stages 1–4 have shipped in code (they were committed as `a9adc4f`, `968c85e`,
+`4374308` and `68b91a2`). Stage 5 is four independent
+tracks (§7): **A — more languages** (the registry, shipped below), **B — the
+dictionary as a full panel** (shipped below), **C — Translate & tighten as a
+guided flow** (shipped below — two steps with the officer's review between
+them), and **D — per-language few-shots** (held: it
+cannot start without real anonymized officer notes and a bilingual reviewer, and
+it spends live model calls). None of
+the tracks may weaken anything Stages 1–4 established, and every one of them is
+independently switchable off.
+
+Stage 4 — *verification and the record* — makes the bilingual
 record honest and checkable after the translation exists: the officer's original
 text is shown beside the English, the printed sheet carries it as an appendix,
 and a **second officer who reads the source language** may record that they
@@ -25,9 +36,11 @@ the officer's words verbatim, skips English-only checks rather than guessing,
 and never blocks filing. Stage 2 — *the bilingual terminology table* — adds an
 approved-only glossary of report terms and an offline lookup for the officer;
 it does not touch the model, and the assembled instruction block is
-byte-identical to before it. The as-built records for all four stages are at the
-end under **§10 Implemented**, in the style of `docs/PHASE5_AI_STRICTNESS.md`.
-There is still **no language detection** anywhere in the system, and the
+byte-identical to before it. The as-built records for every shipped stage are at
+the end under **§10 Implemented**, in the style of
+`docs/PHASE5_AI_STRICTNESS.md`. The runbook for adding a language is
+`docs/ADDING_A_LANGUAGE.md`. There is still **no language detection** anywhere in
+the system, and the
 terminology table ships with **zero approved entries**, so it publishes nothing
 until the station's records/legal officer approves terms.
 
@@ -348,14 +361,16 @@ Each stage ships on its own and leaves the app working.
 | **2** | **Terminology glossary.** Bilingual entries in the glossary doc → derived JSON → officer-facing lookup → prompt injection. Guards in place. | 1 |
 | **3** | **AI understanding.** Language section in the prompt, **pinned-term injection from the Stage 2 table (D2)**, gloss output, placeholder rule, few-shots, cache flush. | 2 |
 | **4** | **Verification and record.** Source text beside the English, source in history snapshots, print appendix, bilingual-officer review. **Implemented** — see §10. | 3 |
-| **5** | **Polish.** Dictionary as a full panel, more languages, per-language few-shots, tightening a native narrative. | 4 |
+| **5** | **Polish — four independent tracks** (Stage 5 brief §3, D1): **A** more languages (**shipped** — a data-driven registry, `docs/ADDING_A_LANGUAGE.md`); **B** the dictionary as a full panel (**shipped**); **C** Translate & tighten as a guided flow (**shipped** — translate, review and apply, then tighten); **D** per-language few-shots (**held**). | 4 |
 
 Stage 1 is the one with most of the user-visible benefit and no AI risk. If the
 phase has to stop early, that is where it should stop.
 
-Stages 1–4 have shipped. Stage 5 remains planned and nothing in it is prepared
-for here (no required-verification mode, no notifications, no competency test,
-no additional languages).
+Stages 1–4 have shipped, and Stage 5 Tracks A, B and C are shipped. Track D is
+approved and pending; Track D is held. Nothing deferred is prepared for
+anywhere: no required-verification mode, no notifications, no competency test,
+and no language has been added (the registry exists so that adding one is a
+controlled, evidence-gated data change — see `docs/ADDING_A_LANGUAGE.md`).
 
 ---
 
@@ -377,9 +392,13 @@ guess would silently apply the wrong terminology table. Let the officer say, and
 offer a suggested default from the last report.
 
 **Q3. What happens to Tighten on a native-language narrative?**
-*Recommendation:* offer it as "translate, then tighten" in one action, and say
-so on the button ("Translate & tighten"). The economy engine is English and stays
-English; it must never run on the native text.
+*Answered in Stage 5, Track C (D2):* offered as a **guided flow**, not one
+action — "Translate & tighten", two steps with the officer's review between
+them. Step 1 translates and the officer reads it and applies it; only then is
+step 2's tighten proposal produced, over the **applied English text**, and it is
+never auto-applied. The economy engine is English and stays English; it never
+runs on the native text. (Stage 5's original recommendation of a single chained
+action was superseded by the owner's D2.)
 
 **Q4. Where does the source live?**
 *Recommendation:* columns on `reports` — a language code and the source text.
@@ -1058,3 +1077,355 @@ cases.
 3. **No `users` admin UI change beyond one text field.** `languages_read` is
    entered as a comma-separated list; a picker would be nicer, but nothing in
    this stage needs it and the validation lives with the rest of the user rules.
+
+---
+
+## Stage 5 — polish
+
+Four independent tracks (§7, D1). **A, B and C shipped; D held.** Each ends at
+its own gate.
+
+### Stage 5, Track A — more languages (the registry) — 2026-09-20
+
+Adding a language is now a **data change**, not a code change, and a new
+language is **safe by construction**: it is stored, selectable, printable and
+fileable the moment its registry entry exists, and it can never be
+machine-translated until a person who reads it has reviewed the model's output
+and the owner has recorded that and enabled it.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `resources/ai/language_registry.json` | **new** — the single source of truth: per language, `code`, `label`, `short`, `provider_label`, `native_gloss`, `glossary_supported`, `translation_enabled`, `evidence` |
+| `app/core/LanguageRegistry.php` | **new** — the one server reader (pure, static, no DB); **no method writes** enablement or evidence |
+| `src/lib/languageRegistry.js` | **new** — the client holder, installed from `POST /login` / `GET /me` |
+| `app/controllers/AuthController.php` | both bootstrap reads carry `languages` (one helper); the owner's evidence fields are deliberately NOT sent |
+| `app/controllers/ReportsController.php` | the allowlist constant is deleted; validation reads `LanguageRegistry` |
+| `app/controllers/NarrativeController.php` | the code normaliser reads the registry; a **new, distinct refusal** for a language whose `translation_enabled` is false |
+| `app/ai/NarrativeService.php` | `translationLanguageReason()` — the approved D4 sentence |
+| `app/ai/GeminiNarrativeProvider.php` | the model-facing language label reads the registry; this class holds no list |
+| `src/lib/reportLanguages.js` | the hard-coded list is deleted; every read goes through the registry |
+| `src/lib/narrativeTerms.js` | the covered terminology languages read `glossary_supported` |
+| `src/components/AiNarrativePanel.jsx` | the notes-language options read the registry; the disabled-language notice and disabled control |
+| `src/components/NarrativeTermsLookup.jsx`, `src/components/Reports.jsx`, `src/App.jsx`, `src/components/Login.jsx` | registry reads / bootstrap install |
+| `scripts/derive-narrative-terms.mjs` | installs the registry before validating |
+| `api/index.php` | requires the new class (no autoloader in this project) |
+| `tests/LanguageRegistryTest.php` | **new** — behaviour-preserving proof, no-enablement proof, the disabled-language guard, and the prompt/registry binding |
+| `tests/rules/languageRegistry.test.mjs` | **new** — the same proofs client-side |
+| `tests/rules/reportLanguages.test.mjs`, `tests/rules/narrativeTerms.test.mjs`, `tests/NarrativeTermsPromptGuardTest.php` | read the registry instead of a constant |
+| `docs/ADDING_A_LANGUAGE.md` | **new** — the eight-step runbook |
+
+### How each decision was realized
+
+| | Realized as |
+|---|---|
+| **D3** | One JSON data file is the source for codes, labels, printed shorts, the model-facing description, `native_gloss`, the terminology coverage and `translation_enabled`. Every list found in Step 0 is now a registry read — except the prompt's own prose, for the reason in the deviations. |
+| **D4** | A language with `translation_enabled: false` is stored, selectable, printed and fileable exactly as before, and Generate is refused with the approved sentence *"Saved as written. AI translation isn't available for this language yet."* — on the server (409) and in the UI (disabled control plus the same sentence). |
+| **D9** | The evidence fields are in the registry and **no code path writes them**: `LanguageRegistryTest` fails the build if the reader grows a setter. Enablement is the owner's edit, recorded with reviewer, run and date. |
+| **D5** | No language was named, so no language was added. The registry ships the five shipped languages unchanged, and the runbook is written for the day one is. |
+
+### Live evidence
+
+**Behaviour-preserving — this is the whole safety argument for replacing a
+constant with a data file.** For the five shipped languages the registry derives
+the previous constants exactly: `['en','ceb','tl','mixed','other']` (codes), the
+label map, the short map, the model-facing descriptions (including *"a mix of
+Bisaya and/or Tagalog and English"* and *"another language"*), the terminology
+coverage `['ceb','tl']`, the native-gloss flags (`ceb`/`tl` only), and
+translatability (`en` off; `ceb`/`tl`/`mixed`/`other` on). Asserted in
+`tests/LanguageRegistryTest.php` (13 tests / 155 assertions) and
+`tests/rules/languageRegistry.test.mjs`.
+
+**Nothing in code can enable a language.** The reader's public surface is
+asserted read-only by reflection (no `setTranslationEnabled`, `setEvidence`,
+`enable`, `approve`, `update`, `save`, `write`). The only mutation is the
+documented test seam, which replaces the list in memory and writes nothing.
+
+**The assembled instruction block is unchanged.** The three prompt inputs
+(`narrative_system_prompt.txt`, `narrative_few_shots.md`, `type_vocabulary.json`)
+are **untouched** by this track (`git status` is empty for all three), so the
+block is necessarily identical; measured at `41284` bytes /
+`dcbb175570b50904`, consistent with Stage 2's `37851` plus Stage 3's 55-line
+addition. `SystemInstructionTest` is green at 42 tests / 262 assertions.
+
+**Suites.** PHP **234 tests / 1295 assertions / 0 failures** (baseline 221 /
+1140 — the 13 new guard tests). JS `node --test` **179 pass / 0 fail**
+(baseline 168 — 11 new). The derivation still reports `0 approved, 15 draft`
+and `--check` passes. The three PHPUnit *runner warnings* are the pre-existing
+standalone CLI scripts.
+
+### Deviations from the plan
+
+1. **The prompt's prose is NOT generated from the registry.** D3 asked that a
+   provider language list be replaced; the registry does hold the
+   model-facing description and the provider reads it, but the **prompt file's
+   own sentences** (the gloss rule naming Bisaya/Tagalog, and the marker list)
+   are left byte-identical. Templating them would mean **rewording an existing
+   prompt rule**, which Stage 5 invariant 4 forbids. Instead a test binds the
+   two: `LanguageRegistryTest` fails if the registry's `native_gloss` languages
+diverge from the ones the prompt names, or if a marker the prompt lists is
+   unknown to the masking gateway.
+2. **A degraded-client rule was added to `normaliseLanguage`.** Before the
+   bootstrap lands the registry is empty; rather than read a stored `ceb` as
+   English — mislabelling exactly the fact Stage 1 exists to state — the code is
+   passed through unnamed. With the registry loaded (the normal case) behaviour
+   is exactly as before, which the existing assertions still cover.
+3. **The disabled-language refusal is unit-tested, not HTTP-tested.** No shipped
+   language is disabled, and disabling one would change existing behaviour. The
+   guard is exercised through the documented registry test seam; the HTTP leg
+   needs a server started with `BLUEWRITE_LANGUAGE_REGISTRY` pointing at a
+   modified file, which this suite does not spin up.
+
+### Known limitations
+
+- **No language has been added.** The registry ships the five that already
+existed. Adding one is the runbook's job, and steps 4–8 of it require people the
+software cannot supply — a records/legal officer, a native speaker, a bilingual
+reviewer, and real anonymized officer notes.
+- **"Reviewed" and "reads the language" are recorded human statements**, not
+tests the software administers (unchanged from Stage 4).
+- **The `hil` code in the tests is a fixture**, not a supported language: it
+exists only inside the registry override to prove a disabled language is refused.
+- **A malformed registry fails loud** (a 500 on the request path) rather than
+falling back to a built-in list. That is deliberate — a silently-wrong language
+list is worse than a loud error on a hand-edited config file — but it does mean
+a bad edit is an outage until it is fixed.
+- **The client reads the registry at sign-in.** A language added on the server
+appears after the next sign-in, not instantly.
+
+### Noticed, not changed
+
+1. **`src/lib/reportRules.js` still takes the language as an argument** and is
+   otherwise untouched; it reads `normaliseLanguage` as before.
+2. **The `/login` response now carries `languages` as well as `/me`.** Both call
+   the same helper; the duplication is one array on a payload that already
+   carried the user, rather than a second request on the sign-in path.3. **The registry is not versioned in the derived-file sense.** Unlike
+   `narrative_terms.json` it is hand-edited (it is the *source*, not a
+   derivation), so it has no drift guard — the shape guard in
+   `LanguageRegistryTest` is what protects it.
+
+---
+
+### Stage 5, Track B — the terminology table as a full panel — 2026-09-20
+
+The Stage 2 lookup answered "what does this word mean". The panel answers the two
+questions an officer actually has while writing: **which approved terms do my own
+words already contain**, and **what is the official English for this term** —
+without leaving the report, and without the model.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `src/components/NarrativeTermsPanel.jsx` | **new** — the panel: browse by category, search, "terms found in your text", copy control, both empty states |
+| `src/lib/narrativeTerms.js` | `termsInText()` (the Stage 3 matching rule, client-side), `groupByCategory()`, `categoryLabel()`, `TERM_CATEGORY_LABELS` |
+| `src/components/Reports.jsx` | mounts the panel beside the narrative, and on the desk under a blank sheet |
+| `src/incident-report.css` | the `term-panel-*` styles (the form's own tokens, so it follows the dark theme) |
+| `tests/rules/narrativeTerms.test.mjs` | 5 new tests: grouping, labels, whole-token matching, empty inputs, the server's cap |
+| `tests/PinnedTermsTest.php` | a **parity** test: the same fixtures, asserted on the server matcher |
+
+### How each decision was realized
+
+| | Realized as |
+|---|---|
+| **D6** | Read-only, offline and AI-independent. The derived table is **bundled at build time** (`import termsData from '../../resources/ai/narrative_terms.json'`); the component imports no `api`, so there is no network call to make. It renders in every format, with the AI off, and with **zero** approved entries. The only write is `navigator.clipboard.writeText` on the official English term — nothing is inserted into a field. |
+| **Scope statement** | `SCOPE_TEXT` (*"Approved report terminology — not a translator. A word not listed here is not covered."*) is rendered at the top of the panel in every state, including the empty one. |
+| **Approved entries only** | The panel reads the same derived file the model is pinned with, which by construction carries approved entries only — asserted by the existing drift guard (`no draft id appears anywhere in the derived file`). |
+| **Placement** | Beside the narrative in the editor, and on the **desk under the paper** in the sheet format — never on the page, because anything inside the sheet's card *is* the report. |
+
+### Live evidence
+
+**Matching is the Stage 3 rule, and the two implementations are pinned together.**
+`termsInText()` tokenizes on non-letter/non-digit characters and matches
+whole tokens, folded for case and diacritics — the algorithm in
+`GeminiNarrativeProvider::matchPinnedTerms()`, including its 25-entry cap. The
+**same fixtures** are asserted on both sides: `tests/rules/narrativeTerms.test.mjs`
+(client) and `PinnedTermsTest::testClientPanelParityFixtures()` (server). If
+either drifts, one of the two fails.
+
+**Whole-token, not substring** is asserted as the recorded limitation, not
+assumed: with `huli` in the table, `nahulian` does **not** match and `nahuli`
+does.
+
+**Suites.** PHP **235 tests / 1301 assertions / 0 failures** (baseline 234 /
+1295 — the parity test). JS `node --test` **185 pass / 0 fail** (baseline 179 —
+5 new matching/browse tests, and one corrected fixture). Build clean.
+
+### Deviations from the plan
+
+1. **Its own CSS namespace (`term-panel-*`).** The Stage 2 lookup's classes
+   (`narrative-terms-*`) are styled for the dark AI side panel; this panel sits
+   on the light document page. Sharing names would have dragged the console
+   palette onto the paper, so the new panel is styled with the form's own tokens.
+2. **Mounted only when the officer can edit.** Same rule the AI panel follows;
+   a read-only viewer keeps the compact lookup inside the panel they can see.
+
+### Known limitations
+
+- **The panel is inert at ship.** Zero of the fifteen drafted terms are approved,
+  so what an officer sees today is the *"No approved report terminology has been
+  published yet"* state — which is the correct state, not a bug.
+- **The rendered panel has no automated test.** This project has no React/DOM
+  test infrastructure, so the pure logic (grouping, labels, matching, cap,
+  empty inputs) is covered by `node:test`, and the rendering is a **manual
+  procedure** not observed by the author, who has no browser here:
+  1. open a report in the editor with the AI **disabled** → *Report
+     terminology* is visible beside the narrative;
+  2. it shows the **not-published** empty state (0 approved entries) and the
+     scope sentence;
+  3. approve one entry in the glossary, re-run the derivation, rebuild, reload →
+     the term appears under its category and in *Terms found in your text* when
+     the narrative uses it;
+  4. **DevTools → Network stays empty** while typing and browsing;
+  5. **Copy** puts the official English term on the clipboard and changes nothing
+     in the narrative.
+- **An affixed form missing from `forms` is not found** — the same recorded
+  limitation the server matcher has, and the parity test asserts it rather than
+  hiding it.
+
+### Noticed, not changed
+
+1. **The Stage 2 compact lookup remains in the AI panel.** The two panels now
+   cover different jobs (a quick lookup while drafting, and a full reference
+   while writing); neither was removed, and the plan's "dictionary as a full
+   panel" item is satisfied by the new one.
+2. **`TERM_CATEGORY_LABELS` duplicates the category codes** already in
+   `TERM_CATEGORIES`; they are asserted to be the same set, since a category
+   with no label would surface as a bare code on the page.
+
+---
+
+### Stage 5, Track C — Translate & tighten as a guided flow — 2026-09-20
+
+A native narrative can now reach a tightened English one in **two steps with the
+officer's review between them**, which is the shape the owner chose (D2) and the
+answer to **Q3**. One entry point starts the translation; the officer reads the
+English draft **and both glosses** and applies it; **only then** is the tighten
+step offered, over the **applied English text**, and its result is a proposal
+with its own accept button — exactly like the Tighten that existed before.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `src/lib/guidedFlow.js` | **new** — the flow as a **pure state machine** (`guidedFlowReduce`, `guidedCanTighten`, `guidedIsReviewing`, `guidedIsTerminal`, `guidedStepLabel`). A forbidden (state, event) pair is refused, never coerced. |
+| `src/components/AiNarrativePanel.jsx` | the entry point, the guided step banner, the two guided action rows, `moveGuided()`; `generate()` takes an `asGuidedStep` flag and `tighten()` an override text + a `guided` option; the tighten-again/regenerate buttons no longer pass the click event as the text |
+| `src/components/Reports.jsx` | `applyAiNarrative()` (the shared local apply) + **`applyGuidedTranslation()`** — the guided apply, which applies *and saves*; wired as `onApplyGuided` |
+| `src/styles.css` | `ai-guided-row`, `ai-guided-start`, `ai-guided-banner`, `ai-guided-cancel` |
+| `tests/rules/guidedFlow.test.mjs` | **new** — 11 tests for the machine |
+| `package.json` | the new `.mjs` added to the `test` script |
+
+### How each decision was realized
+
+| | Realized as |
+|---|---|
+| **D2** (guided, not chained) | The entry point's own label says *"Translate &amp; tighten (2 steps — you review between them)"*, and the panel's step banner repeats which step the officer is on. Tighten is **not** called from the translation's success path anywhere; it is called by `applyTranslation()`, i.e. by the officer's apply click. |
+| **D2** (review and both glosses) | The review state is the ordinary `mode === 'done'` draft view, so the English draft, the *"What the system understood — check this"* gloss pair, the ambiguities, the pinned terms and the D2 "what Apply stores" note are all on screen. The only forward control is **Use this translation — continue to tighten**. |
+| **D2** (Tighten unchanged) | The engine, its rules, its endpoint and its never-auto-apply behaviour are untouched. The guided step passes the same request body the plain Tighten does; only the text handed to it differs (the applied English, not the form's native text). |
+| **Invariant 6** (engine never on native text) | The guided step is unreachable except through `review:apply` — asserted for **every** (state, event) pair in `guidedFlow.test.mjs`. The panel also skips its own `languageBlocked` refusal for that one call (the text is the English translation), and the **server guard is not weakened**: `NarrativeController::tighten` still refuses on the stored `narrative_language`. |
+| **Invariant 4** (no AI write into the report) | Two explicit clicks are needed for two AI outputs: one to apply the translation, one to accept the tightened text. Declining the tighten leaves the applied translation in place. |
+| **Invariant 2** (nothing blocks filing) | Cancel is legal from every live step and always returns to idle (**asserted**); a failed translation and a failed tighten step both end the flow (**asserted**); a failed step-2 save leaves the officer with the translation in the form, unsaved and editable. |
+| **D9 / no new writer** | No registry, no evidence and no verification field is touched by this track. |
+
+### Why the guided apply also SAVES
+
+This is the one place where Track C had to do something the plan did not name, so
+it is recorded rather than buried. The tighten endpoint refuses while the
+**stored** report still declares a non-English narrative
+(`NarrativeController::tighten`, the Stage 1 guard). Writing the English into the
+form alone would have made the guided step fail on every report that is not yet
+autosaved — or, worse, tempted a fix that let the client assert the language and
+weaken that guard. Instead the guided apply calls
+`Reports.applyGuidedTranslation()`, which applies the translation to the form
+**and** PATCHes it (from `draftRef`, the same latest-values ref the autosave
+uses) with the language pair on the same body — so the record the server holds is
+English *before* the economy engine is asked to run over it. The guard is
+untouched and the invariant holds on the server, not on the client's word.
+
+### The "no shortcut past the review" check
+
+D2 requires that nothing make "advance" the path of least resistance. Checked
+three ways:
+
+1. **The machine** — no (state, event) pair goes `review → tighten-review`
+   directly; only `review:apply` enters the tighten step (asserted for every
+   pair).
+2. **No default focus** — `grep -rn "autoFocus" src/` finds exactly one hit, in
+   `src/components/Users.jsx` (unrelated). The guided apply button never takes
+   focus on its own, so it is never one Enter away from the officer's last
+   keystroke.
+3. **No key advances the flow** — the panel's only keyboard handlers are
+   `Ctrl`/`Cmd`+`J` and `Escape` (panel visibility) and the resizer's arrow/Home/
+   End keys (panel width). None of them fires a flow event, and no flow event is
+   bound to a key.
+
+### Live evidence
+
+**Suites.** PHP **235 tests / 1301 assertions / 0 failures** (unchanged from
+Track B; Track C changes **no** PHP file, and the suite runs against the real API
+over HTTP). JS `node --test`
+**196 pass / 0 fail** (baseline 185 — 11 new tests for the machine). Build clean.
+
+**The state machine, exhaustively.** `guidedFlow.test.mjs` walks the happy path;
+asserts that the review step cannot be skipped; asserts that the tighten step is
+reachable **only** through `apply` and only from `review`; asserts that cancel is
+legal from every state and always terminal; asserts that a failed translation and
+a failed tighten step both end the flow; asserts that `regenerate` repeats step
+1 rather than skipping it; and asserts **twelve** specific forbidden pairs are
+refused without moving the state.
+
+### Deviations from the plan
+
+1. **The guided apply saves the report** (above). Named as the deviation because
+   it is a write the brief did not ask for; it is the minimum honest way to keep
+   the server guard intact.
+2. **`tighten()` grew two optional parameters** (`overrideText`, `{guided}`)
+   instead of gaining a parallel guided-tighten function. One code path means the
+   guided step cannot drift from the plain one. Caught while doing this: both
+   `Tighten again` buttons previously passed React's click event straight into
+   `tighten()` — harmless while it took no arguments, a bug the moment it took
+   text. Both are now explicit calls.
+3. **The guided flow is offered only for a native narrative being translated**
+   (`nativeNarrative && effectiveSource === 'narrative'`). There is nothing to
+   translate otherwise, so the entry point is not rendered — a control whose only
+   answer would be no.
+
+### Known limitations
+
+- **The rendered flow has no automated test.** This project has no React/DOM
+  harness. The rule is covered by `node:test` on the pure machine; the rendering
+  is a **manual procedure** not observed by the author, who has no browser here:
+  1. write a Bisaya narrative on a report with an incident type, choose *My
+     narrative* as the source, and click **Translate &amp; tighten (2 steps — you
+     review between them)**;
+  2. step 1 lands on the English draft with the gloss pair and the step banner
+     reading *Step 1 of 2* — **nothing is in the form yet**;
+  3. press **Use this translation — continue to tighten** → the form's narrative
+     becomes the English text and the report's language flips to English
+     (step 2 runs — DevTools → Network shows a `PATCH` before the `tighten`
+     request, which is the guard being satisfied honestly);
+  4. **Accept tightened text** writes it in; **Keep my translation** leaves the
+     translation untouched and ends the flow;
+  5. close the panel mid-flow and reopen it → the banner is still on the right
+     step;
+  6. with the AI off (manual mode) the entry point is absent and the report is
+     still fully saveable, printable and finalizable.
+- **A failed tighten step is silent about its cause beyond the panel's error
+  text.** The translation is already applied and saved, so the report is
+  consistent; the officer can re-run Tighten from the normal control.
+- **Nothing is aborted server-side.** Cancelling during the working states is not
+  offered (the request is already in flight); the flow simply ends when it lands.
+
+### Noticed, not changed
+
+1. **The plain "Translate my narrative" button and the guided entry point now sit
+   near each other**, and the first is a one-step path with no tighten at all.
+   Both are legitimate (an officer may only want the translation), but they are
+   two entry points for adjacent jobs — worth watching for confusion at G4.
+2. **`moveGuided` returns the machine's answer** and callers check `.ok` before
+   acting; the panel never assumes a transition happened.
+3. **`applyGuidedTranslation` bypasses `writeDraft`'s in-flight join** so the
+   guided save cannot ride on an older autosave body. The consequence is a
+   possible extra `PATCH` when an autosave is in flight at that moment; harmless,
+   and noted rather than optimised.

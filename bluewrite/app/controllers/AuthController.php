@@ -7,6 +7,7 @@ use App\Core\Audit;
 use App\Core\Auth;
 use App\Core\Config;
 use App\Core\Database;
+use App\Core\LanguageRegistry;
 use App\Core\Response;
 use PDO;
 use PDOException;
@@ -94,6 +95,11 @@ final class AuthController
                 'username' => $user['username'],
                 'role' => $user['role'],
             ],
+            // Phase 6 Stage 5 (Track A, D3) — the registry also rides the
+            // login response, because the client establishes its session from
+            // here and would otherwise have no language list until a later
+            // /me. Same payload, one helper.
+            'languages' => self::languageRegistryPayload(),
             'csrf_token' => \App\Core\Csrf::token(),
             // Item 5: idle-timeout deadline for the client countdown.
             'expires_at' => time() + (int) Config::get('app.session_idle_minutes', 30) * 60,
@@ -120,11 +126,33 @@ final class AuthController
             'badge_number' => $user['badge_number'],
             'username' => $user['username'],
             'role' => $user['role'],
+            'languages' => self::languageRegistryPayload(),
             'csrf_token' => \App\Core\Csrf::token(),
             // Item 5: real idle-timeout deadline (server clock) so the client
             // countdown reflects actual remaining time across reloads.
             'expires_at' => time() + (int) Config::get('app.session_idle_minutes', 30) * 60,
         ]);
+    }
+
+    /**
+     * Phase 6 Stage 5 (Track A, D3) — the language registry as the CLIENT needs
+     * it. The server keeps the authority: this tells the UI which codes exist,
+     * what to call them, and which are translatable. The owner's evidence
+     * fields are deliberately NOT sent — the client has no use for them, and an
+     * approval must never be displayable as if it were a quality claim.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private static function languageRegistryPayload(): array
+    {
+        return array_map(static fn (array $l): array => [
+            'code' => (string) $l['code'],
+            'label' => (string) ($l['label'] ?? $l['code']),
+            'short' => (string) ($l['short'] ?? $l['label'] ?? $l['code']),
+            'native_gloss' => (bool) ($l['native_gloss'] ?? false),
+            'glossary_supported' => (bool) ($l['glossary_supported'] ?? false),
+            'translation_enabled' => (bool) ($l['translation_enabled'] ?? false),
+        ], LanguageRegistry::all());
     }
 
     /** @return array<string, mixed> */
