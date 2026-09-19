@@ -400,7 +400,19 @@ action, which always carries white) — dark needs a blue that lifts off
   Never give a mark a white chip again, and never put the navy artwork on a
   navy bar. If the artwork is ever replaced, re-derive the knockout by luminance
   rather than recolouring by hand. This replaced the old hand-drawn `Logo.jsx`
-  SVG, which is deleted. The printables keep their own official seals
+  SVG, which is deleted — along with the last copies of that old artwork
+  (`src/logo.svg`, `src/logo-lockup.svg`, both unreferenced).
+* **The README lockups are generated from that artwork, never drawn again.**
+  `docs/logo-lockup.svg` (dark) and `docs/logo-lockup-light.svg` (light) are
+  written by `node docs/build-logo-lockups.mjs`, which **embeds the two PNGs as
+  data URIs** so the GitHub front page cannot show a mark the product doesn't.
+  A data URI is the only reference that works there: GitHub renders a README SVG
+  as an `<img>`, and an `<img>`-loaded SVG may not fetch anything external — a
+  relative path to `src/assets/*.png` renders nothing, silently. Colours are the
+  app's tokens (light: `--hero-ink` / `--accent-fill` / `--steel`; dark: the
+  accent **ink** `#6FA8FF`, because the accent's surface blue is unreadable as
+  text on a near-black page). Re-run the script after replacing the artwork.
+* The printables keep their own official seals
   (`assets/pnp-logo.png`, `assets/city-of-naga-seal.png`) — those are government
   insignia, not branding, and must stay.
 * `login-theme.css` wears the workspace's palette from the shared tokens rather
