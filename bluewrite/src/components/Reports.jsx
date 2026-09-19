@@ -10,7 +10,14 @@ import React, {
 // register's own scroll box would otherwise clip it.
 import { createPortal } from 'react-dom';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
+import { AI_ADVISORY } from '../lib/appInfo.js';
 import ReportPrint from './ReportPrint.jsx';
+// The two station seals, for the sheet format's page. The same files the printed
+// sheet sets in its header band — already in the bundle, since ReportPrint is
+// imported above — so the page and the print-out carry the same marks. See
+// ReportPrint's own header for the print side.
+import pnpSeal from '../assets/pnp-logo.png';
+import citySeal from '../assets/city-of-naga-seal.png';
 import ConnectionNotice from './ConnectionNotice.jsx';
 import {
   INCIDENT_TYPES,
@@ -28,6 +35,10 @@ import {
   hasGroupRows,
 } from '../lib/reportRules.js';
 import { normalizeLegacyTypeSpecific, hasLegacyShape } from '../lib/normalizeLegacy.js';
+// The station's letterhead, for the sheet format's page. Same module the printed
+// sheet reads its header through, so the page you write on and the page that
+// prints carry the same lines.
+import { resolveHeader } from '../lib/stationSettings.js';
 // The path → control-id scheme, shared with the review step's second copy of a
 // field (see the module: two mounted copies per field is the whole reason it
 // exists). REVIEW_FIELD_PREFIX is the string those copies carry.
@@ -84,6 +95,11 @@ const EMPTY = {
   type_specific: {},
 };
 
+// The built-in 14, used when the station has not configured its own list (or
+// when the read failed). The station's list arrives as the `incidentTypes` prop
+// and wins when it has entries: the server validates a submitted type against
+// that same setting (Station::incidentTypes), so a form still offering a type
+// the station no longer records produces a report the API refuses to accept.
 const TYPES = INCIDENT_TYPES;
 
 // Human date: “Sep 11, 2026 · 23:00” — shorter and friendlier than raw ISO.
@@ -268,10 +284,19 @@ function IrCard({
   onFocus,
   onBlur,
   hidden,
+  // This is the card the SHEET format draws as the page itself — the writing
+  // surface the format opens on. One card carries it (the narrative), and the
+  // blank state keys its "hide everything else" rule on the marker rather than
+  // on a step number or a title, so moving the writing area would move the
+  // marker with it instead of silently leaving the page blank for the wrong
+  // card. See the sheet section in incident-report.css.
+  sheetPage,
 }) {
   return (
     <section
-      className={`ir-card${wide ? ' ir-card--wide' : ''}${current ? ' ir-card--current' : ''}`}
+      className={`ir-card${wide ? ' ir-card--wide' : ''}${current ? ' ir-card--current' : ''}${
+        sheetPage ? ' ir-card--sheet-page' : ''
+      }`}
       data-ir-step={step}
       /* The card you are on is the one your step owns — readable to assistive
          tech, not only to the eye. */
@@ -846,7 +871,7 @@ const REVIEW_INPUTS = {
  * `reviewEdit` in ReportEditor for what it carries and why.
  */
 function ReviewFieldEditor({ rowPath, label, edit }) {
-  const { draft, errors, set, changeType, setNarrative, setActionTaken, endEdit } = edit;
+  const { draft, errors, set, changeType, setNarrative, setActionTaken, endEdit, types = TYPES } = edit;
   const id = reviewFieldId(rowPath);
   const ref = useRef(null);
 
@@ -901,7 +926,7 @@ function ReviewFieldEditor({ rowPath, label, edit }) {
           aria-invalid={!!errors.incident_type}
         >
           <option value="">Select type…</option>
-          {TYPES.map((t) => (
+          {types.map((t) => (
             <option key={t}>{t}</option>
           ))}
         </select>
@@ -1364,9 +1389,11 @@ export function ReportWelcome({ user, onNew, onOpenReport, onMyReports, reports,
   // left-aligned `ir-page-head` + `ir-status` grammar.
   //
   // The Report Intake card was removed by request, so the primary action now
-  // stands on its own under the masthead and the register tail closes the page.
-  // Its "View All My Reports" button went with it: the top bar already has that
-  // destination, so the card was the second route to a screen one click away.
+  // stands on its own under the masthead — built as an object in its own right
+  // (see the note on it below) with one line of its own copy beneath — and the
+  // register tail closes the page. Its "View All My Reports" button went with
+  // it: the top bar already has that destination, so the card was the second
+  // route to a screen one click away.
   //
   // The tail is `headless` by request as well: its "I. Recent Reports" bar was
   // a second label for rows that already say what they are (number, type, date,
@@ -1387,12 +1414,54 @@ export function ReportWelcome({ user, onNew, onOpenReport, onMyReports, reports,
         <p className="ir-hero-kicker">Incident documentation workspace</p>
       </section>
 
-      {/* The page's one action. */}
+      {/* The page's one action, and it is built as an object rather than as a
+          form button: a plate carrying the page glyph the app already uses for
+          a report (the review stepper's), the label, and the same arrow the
+          gate's primary action wears — so the two loudest buttons in the
+          product step the same way.
+
+          The mono line under it is the reassurance a FIRST-TIME officer wants
+          before the press, not after: the form is long, and knowing it is kept
+          as a draft (rather than submitted by being opened) is the difference
+          between starting it and putting it off. */}
       <div className="ir-actions-row ir-home-actions">
         <button type="button" className="ir-submit ir-home-cta" onClick={onNew}>
-          Start a New Report
+          <span className="ir-home-cta-glyph" aria-hidden="true">
+            <svg
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M6.5 3.5h7.5l4.5 4.5v12.5h-12z" />
+              <path d="M14 3.5V8h4.5" />
+              <path d="M12 11.5v5M9.5 14h5" />
+            </svg>
+          </span>
+          <span className="ir-home-cta-text">Start a New Report</span>
+          <svg
+            className="ir-home-cta-arrow"
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
         </button>
       </div>
+      <p className="ir-home-cta-note">
+        Opens a blank incident form. It stays a draft until you submit it.
+      </p>
 
       <section className="ir-recent">
         <IrCard headless>
@@ -1437,13 +1506,28 @@ export function ReportEditor({
   onMutated,
   onClosed,
   onConnError,
-  // How to draw the same form (Profile ▸ Preferences ▸ Form format):
-  // 'document' is the continuous document, 'steps' shows one panel per step.
+  // How to draw the same form (Profile ▸ Preferences ▸ Form format). Three
+  // values — 'document', 'sheet', 'steps' — defined once in lib/formFormat.js,
+  // because the menu that sets it and this component that answers it must not
+  // each keep their own idea of the set. Only the two format-specific answers
+  // are asked below; everything else about the editor is format-agnostic.
   formFormat = 'document',
-  // Shell hands this down so a sign-out can save the open draft first — see
-  // the registration effect below, and Shell.flushPending.
+  // Shell hands these down so a sign-out can save the open draft first (see the
+  // registration effect below and Shell.flushPending) and so Ctrl+S reaches
+  // whichever copy of the editor is on screen.
   onRegisterFlush,
+  onRegisterSave,
+  // The station's own incident-type list (Station settings), or null when it has
+  // not been read — see TYPES above for why this is not always the built-in 14.
+  incidentTypes = null,
+  // The station's letterhead, from the same /station read (Shell owns it). Used
+  // by ONE format: the sheet draws these lines at the head of its page, so the
+  // officer writes on the station's own paper rather than on a blank anonymous
+  // rectangle. Null falls back to the built-in lines — see resolveHeader.
+  stationHeader = null,
 }) {
+  const typeOptions = incidentTypes && incidentTypes.length > 0 ? incidentTypes : TYPES;
+  const letterhead = resolveHeader(stationHeader);
   // For a new report, start with the empty form immediately; for an existing
   // one, null until fetched. (Starting null for BOTH would crash the first
   // render — effects run after render, so the new-report path must be ready.)
@@ -1520,6 +1604,24 @@ export function ReportEditor({
   // before focusing. `steppedEnteredRef` marks that the officer has been placed
   // once, so the panel never moves under their hands afterwards.
   const stepped = formFormat === 'steps';
+  // ---- The sheet form format (Profile ▸ Preferences) ----------------------
+  // The THIRD format, and deliberately not a third tree: it renders exactly what
+  // the document format renders — every panel, nothing hidden, no stepper-driven
+  // navigation — and differs only in the class on the form, which re-dresses
+  // cards as a page and fields as blanks to write on. One tree means a field, a
+  // rule, an error jump or a group can never work in two of the three formats
+  // and not the third, which is the failure a second layout would eventually
+  // have. `stepped` stays false for it on purpose: the stepper's one-panel rule
+  // is the thing this format exists to avoid.
+  const sheet = formFormat === 'sheet';
+  // Whether the sheet format is showing the rest of the report. False is the
+  // format's whole promise: it opens as a blank page — no labels, no boxes, no
+  // placeholders, nothing to read — and the report's structured fields arrive
+  // when the officer asks for them (see `sheetBar` below). Component state, not
+  // a stored preference, and NOT part of the editor's key: it is a view of one
+  // report, so it resets with the report and never re-lays-out a draft.
+  const [sheetFields, setSheetFields] = useState(false);
+  const sheetBlank = sheet && !sheetFields;
   const [activeStep, setActiveStep] = useState(0);
   const steppedEnteredRef = useRef(false);
   useEffect(() => {
@@ -1819,6 +1921,20 @@ export function ReportEditor({
     return () => onRegisterFlush(null);
   }, [onRegisterFlush, flushDraft]);
 
+  // The same hand-off for Ctrl+S. `saveDraft` is a plain function, redefined
+  // every render, so it goes through a ref and the registration depends on a
+  // stable wrapper: registering the function itself would re-run this effect on
+  // every keystroke. Registered only while the officer may edit — a read-only
+  // report has no Save Draft button, so its chord does nothing either.
+  const saveRef = useRef(saveDraft);
+  saveRef.current = saveDraft;
+  const saveFromChord = useCallback(() => saveRef.current(), []);
+  useEffect(() => {
+    if (!onRegisterSave) return undefined;
+    onRegisterSave(canEdit ? saveFromChord : null);
+    return () => onRegisterSave(null);
+  }, [onRegisterSave, saveFromChord, canEdit]);
+
   function set(field, value) {
     dirtyRef.current = true;
     setDraft((d) => ({ ...d, [field]: value }));
@@ -1932,6 +2048,18 @@ export function ReportEditor({
 
   /** Land an error jump on a field: reveal its step first when there is one. */
   function jumpTo(path) {
+    // The sheet format's blank state keeps the report's fields off screen, so a
+    // jump into one of them has to open the sheet's own control first — the same
+    // move the stepped format makes when it reveals the owning step, and for the
+    // same reason: a field that is not laid out can be neither focused nor
+    // scrolled to. The narrative is the exception, because on the blank page it
+    // IS what is on screen; revealing the whole report to focus the page would
+    // be throwing the format away to answer a question about the page.
+    if (sheetBlank && path !== 'narrative') {
+      setSheetFields(true);
+      window.setTimeout(() => focusField(path), 60);
+      return;
+    }
     if (stepped) {
       // Already reading the report back? Then the fix happens HERE: the review
       // carries its own copy of the field, so a blocked Submit opens the row in
@@ -2305,7 +2433,74 @@ export function ReportEditor({
     changeType,
     setNarrative,
     setActionTaken,
+    // Handed to the review's type editor so the report can be re-typed from the
+    // read-back against the SAME list the form offers.
+    types: typeOptions,
   };
+
+  // The action row — Save Draft and the rest of the secondary row, then the one
+  // full-width Submit — plus the advisory footer that goes with it. Extracted so
+  // the sheet format can put it BELOW the paper instead of inside it: everything
+  // within `.ir-form--sheet` is the page, and an officer who asked for a blank
+  // sheet should not find the report's commit row printed at the foot of it.
+  //
+  // One element, rendered in one of two places depending on the format (see
+  // below): the sheet branch and the in-form branch are mutually exclusive, so
+  // there is never a second copy of these controls on screen — the same rule the
+  // AI panel follows, and for a stronger reason: two Save buttons is a class of
+  // bug this codebase has no room for.
+  const actionsCluster = (
+    <>
+      <div className="ir-actions">
+        <div className="ir-actions-row">
+          {/* `type="button"` stated rather than inherited: the sheet format
+              renders this row OUTSIDE the form, where the default submit type
+              has no form to submit — and the two formats should carry identical
+              markup in a row that is moved between them. */}
+          {canEdit && (
+            <button type="button" onClick={saveDraft}>
+              Save Draft
+            </button>
+          )}
+          {draft.id && (
+            <>
+              <button type="button" onClick={openHistory}>History</button>
+              <button type="button" onClick={() => setPrinting(true)}>Print</button>
+            </>
+          )}
+          {draft.id && canEdit && (
+            <button type="button" className="danger" onClick={askArchive}>
+              Archive
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClosed}
+          >
+            Close
+          </button>
+        </div>
+        <button
+          type="button"
+          className="ir-submit"
+          onClick={finalize}
+          disabled={!canEdit || !canFinalize}
+          title={
+            canFinalize
+              ? 'Validate and submit this report for the record'
+              : 'Your role does not have permission to submit reports'
+          }
+        >
+          Submit Official Report
+        </button>
+      </div>
+
+      {/* Footer (spec §5): the system's real writing-assistance advisory —
+          no placeholder phone number, since the station has not supplied
+          a support line. */}
+      <p className="ir-footer">{AI_ADVISORY}</p>
+    </>
+  );
 
   return (
     <>
@@ -2337,20 +2532,35 @@ export function ReportEditor({
       {/* Progress stepper, below the status row and above the error banner:
           the officer's position in the document, read out of the same rules
           the banner uses. It only navigates (never locks or edits), so it is
-          safe on a locked report too. */}
-      <ReportProgressStepper
-        complete={stepProgress.complete}
-        current={stepProgress.current}
-        onJump={goToStep}
-        // The review node exists only where it can be reached: the stepped
-        // format. It is the one dot whose face is never filled.
-        withReview={stepped}
-        // Where the officer is standing, which is what the emphasis and the
-        // count above it both follow in the stepped format. In the document
-        // format there are no steps, so the emphasis falls back to the first
-        // open section (`current`).
-        here={stepped ? activeStep : null}
-      />
+          safe on a locked report too.
+
+          NOT rendered in the sheet format. The stepper is an instrument of the
+          form's own structure — a dot per panel, and in the stepped format the
+          thing that decides which panel is on screen — while the sheet's whole
+          point is that the panels are not what you are looking at: it is one
+          page you read and write on, with no position to report. Left in, it
+          would be a progress meter sitting above a sheet of lined paper.
+
+          Nothing the sheet needs is lost with it: the review step it could
+          navigate to is itself stepped-only (see the review card below), and
+          every other section is already on the page. This is a display choice
+          like the format itself — switching back to Document or Steps brings the
+          stepper straight back. */}
+      {!sheet && (
+        <ReportProgressStepper
+          complete={stepProgress.complete}
+          current={stepProgress.current}
+          onJump={goToStep}
+          // The review node exists only where it can be reached: the stepped
+          // format. It is the one dot whose face is never filled.
+          withReview={stepped}
+          // Where the officer is standing, which is what the emphasis and the
+          // count above it both follow in the stepped format. In the document
+          // format there are no steps, so the emphasis falls back to the first
+          // open section (`current`).
+          here={stepped ? activeStep : null}
+        />
+      )}
 
       {error && (
         <div
@@ -2389,13 +2599,51 @@ export function ReportEditor({
         </div>
       )}
 
-      <p className="ir-required-note">
-        <span className="req">*</span> Required before the report can be submitted.
-      </p>
+      {/* The asterisk key. Not shown on the blank page: it explains a marker
+          that is not on screen, since every field carrying one is behind the
+          sheet's control. */}
+      {!sheetBlank && (
+        <p className="ir-required-note">
+          <span className="req">*</span> Required before the report can be submitted.
+        </p>
+      )}
+
+      {/* The sheet format's ONE control, and the only thing it adds to the
+          screen. It sits OUTSIDE the sheet deliberately: the format's promise is
+          a page with nothing on it, so the control that reveals the rest of the
+          report cannot itself be printed on the page it is describing.
+
+          What it reveals is the whole report — every panel, every group, and the
+          action row. That row goes behind this control too, and the trade is
+          worth stating: from the blank page an officer cannot click Save Draft
+          or Submit. Neither can lose work — the draft autosaves, flushes on exit
+          and mirrors in sessionStorage, and Ctrl+S still works from the blank
+          page (it is a chord, not a button, so it never needed the row).
+          Submitting the report is a deliberate act on the whole document, and
+          the page you submit is the one this control opens. */}
+      {sheet && (
+        <div className="ir-sheet-bar">
+          <button
+            type="button"
+            className="ir-sheet-toggle"
+            aria-expanded={sheetFields}
+            onClick={() => setSheetFields((v) => !v)}
+          >
+            {sheetFields ? 'Hide the report fields' : 'Show the report fields'}
+          </button>
+          <span className="ir-sheet-hint">
+            {sheetFields
+              ? 'The page is your account of the incident; the rest is the report it is filed as.'
+              : 'Write on the page. Dates, parties, items and everything else the report needs are one click away — and Ctrl+S saves your draft without leaving it.'}
+          </span>
+        </div>
+      )}
 
       <form
         onSubmit={(e) => e.preventDefault()}
-        className={stepped ? 'ir-form ir-form--stepped' : 'ir-form'}
+        className={`ir-form${stepped ? ' ir-form--stepped' : ''}${sheet ? ' ir-form--sheet' : ''}${
+          sheetBlank ? ' ir-form--blank' : ''
+        }`}
       >
         {/* The spec's four panels, 2x2 on desktop. Panels I and II carry the
             screen's own fields; Panel III is the narrative the AI drafts and
@@ -2501,7 +2749,7 @@ export function ReportEditor({
                   aria-invalid={!!errors.incident_type}
                 >
                   <option value="">Select type…</option>
-                  {TYPES.map((t) => (
+                  {typeOptions.map((t) => (
                     <option key={t}>{t}</option>
                   ))}
                 </select>
@@ -2602,7 +2850,58 @@ export function ReportEditor({
             step={2}
             current={currentSection === 2}
             hidden={panelHidden(2)}
+            // The sheet format draws THIS card as the page (see IrCard).
+            sheetPage
           >
+            {/* The station's letterhead, on the sheet format's page only. It is
+                the same seven lines the printed sheet carries (see
+                ReportPrint), read from the same place (Station settings), so
+                the page an officer writes on and the page that comes out of the
+                printer cannot disagree about whose report this is.
+
+                Outside the blank state's hiding rules deliberately: the
+                letterhead is not the form — it is the PAPER, and a stationery
+                sheet has it before anyone writes on it. */ }
+            {sheet && (
+              <header className="ir-sheet-head">
+                {/* The printed sheet's header band, to the letter: the PNP seal
+                    upper LEFT (square, so it never distorts), the organisation
+                    block centered, the station's own seal upper RIGHT. The seals
+                    carry the same alt text as the print sheet's — they are marks
+                    of office, not decoration. */}
+                <img className="ir-sheet-seal ir-sheet-seal--code" src={pnpSeal} alt="PNP seal" />
+                <div className="ir-sheet-head-lines">
+                  <div>{letterhead.agency}</div>
+                  <div>{letterhead.commission}</div>
+                  <div className="ir-sheet-head-strong">{letterhead.regional_office}</div>
+                  <div className="ir-sheet-head-strong">{letterhead.provincial_office}</div>
+                  <div className="ir-sheet-head-strong">{letterhead.station_name}</div>
+                  <div>{letterhead.station_location}</div>
+                </div>
+                <img
+                  className="ir-sheet-seal ir-sheet-seal--station"
+                  src={citySeal}
+                  alt="City of Naga Police Station seal"
+                />
+              </header>
+            )}
+            {/* The meta row under the band: the office code holding the left
+                margin, the report date on the right with its "Date" caption
+                beneath — the printed sheet's .pr-code-date, line for line.
+
+                The date is the one the report is DATED with, not today's,
+                resolved by reportDateValue (report date → created → incident
+                → today, in that order), so a reopened report shows the date it
+                will print with. */}
+            {sheet && (
+              <div className="ir-sheet-head-meta">
+                <span className="ir-sheet-head-code">{letterhead.office_code}</span>
+                <span className="ir-sheet-date">
+                  {specDate(reportDateValue(draft, new Date().toISOString().slice(0, 10)))}
+                  <span className="ir-sheet-date-label">Date</span>
+                </span>
+              </div>
+            )}
             <div className="ir-field ir-narrative">
               <IrLabel htmlFor="r-narr" icon="lines" required>
                 Detailed Description of Events
@@ -2618,23 +2917,33 @@ export function ReportEditor({
               />
               {errors.narrative && <div className="error">{errors.narrative}</div>}
             </div>
-            {/* The AI panel is deliberately NOT on this step in the stepped
-                format: the officer writes here and generates on the REVIEW
-                step (the AI assistance card at the end), so one flow never
-                offers the same Generate row twice. The hint below says where
-                it went, so the control's absence reads as a move rather than
-                as the feature being gone. The document format has no review
-                step, so there the panel stays here, under the narrative field,
-                where the writing happens. */}
-            {stepped ? (
+            {/* Where the AI panel lives is settled PER FORMAT — one home each,
+                never two, because the panel owns the slide-in side panel and the
+                body class that reserves its space, so two live copies would
+                fight over both.
+
+                  stepped   — on the REVIEW step (the AI assistance card at the
+                              end). The hint below says where it went, so the
+                              control's absence reads as a move rather than as
+                              the feature being gone.
+                  document  — here, under the narrative field, where the
+                              writing happens. It has no review step.
+                  sheet     — BELOW the paper (see the block after </form>).
+                              This card IS the sheet's page, so a Generate row
+                              inside it would be printed on the page; the panel
+                              is a control, and controls sit on the desk.
+
+                On the blank page that placement is also what keeps the format
+                usable: the writing assistant stays on screen while the report's
+                fields do not. */}
+            {stepped && (
               <p className="section-hint">
                 Writing assistance — Generate AI draft, or Tighten this narrative — is on the
                 last step, Review, where the report reads back in one piece. The stepper above
                 jumps straight there.
               </p>
-            ) : (
-              aiPanel
             )}
+            {!stepped && !sheet && aiPanel}
           </IrCard>
 
           <IrCard
@@ -2966,56 +3275,32 @@ export function ReportEditor({
             LAST step, which is the review: every earlier step is its own
             panel, and committing the report is the end of the flow, not
             something offered while the officer is still on the first panel —
-            nor before they have read the report back in one piece. */}
-        {(!stepped || activeStep === STEP_COUNT - 1) && (
-          <>
-            <div className="ir-actions">
-              <div className="ir-actions-row">
-                {canEdit && <button onClick={saveDraft}>Save Draft</button>}
-                {draft.id && (
-                  <>
-                    <button type="button" onClick={openHistory}>History</button>
-                    <button type="button" onClick={() => setPrinting(true)}>Print</button>
-                  </>
-                )}
-                {draft.id && canEdit && (
-                  <button type="button" className="danger" onClick={askArchive}>
-                    Archive
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={onClosed}
-                >
-                  Close
-                </button>
-              </div>
-              <button
-                type="button"
-                className="ir-submit"
-                onClick={finalize}
-                disabled={!canEdit || !canFinalize}
-                title={
-                  canFinalize
-                    ? 'Validate and submit this report for the record'
-                    : 'Your role does not have permission to submit reports'
-                }
-              >
-                Submit Official Report
-              </button>
-            </div>
+            nor before they have read the report back in one piece.
 
-            {/* Footer (spec §5): the system's real writing-assistance advisory —
-                no placeholder phone number, since the station has not supplied
-                a support line. */}
-            <p className="ir-footer">
-              AI-generated suggestions are provided as writing assistance only.
-              The reporting officer remains responsible for reviewing and
-              verifying all report content.
-            </p>
-          </>
-        )}
+            NOT in the sheet format, where it goes below the paper instead — see
+            the block after </form>. That is why the `!sheet` sits beside the
+            step condition rather than inside it: the two answers are "this
+            format's position" and "the sheet's position", and only one of them
+            can apply. */}
+        {(!stepped || activeStep === STEP_COUNT - 1) && !sheet && actionsCluster}
       </form>
+
+      {/* The sheet format's home for the AI panel: below the paper, on the
+          workspace — the desk the page lies on. One instance, like every other
+          format (see the note in Panel III), and the same one in both of the
+          sheet's states, so revealing the report's fields never makes the
+          writing assistant move.
+
+          Outside the form on purpose: everything inside `.ir-form--sheet` is the
+          page, and an officer who asked for a blank sheet of paper should not
+          find a toolbar printed at the foot of it. */}
+      {sheet && canEdit && <div className="ir-sheet-ai">{aiPanel}</div>}
+
+      {/* ...and the action row, under it. The sheet format's whole point is that
+          the report's FORM is one click away, not that its controls are: Save
+          Draft and Submit stay in view in both of the sheet's states, so the
+          blank page is a way to write rather than a locked room. */}
+      {sheet && <div className="ir-sheet-actions">{actionsCluster}</div>}
 
       {printing && (
         <ReportPrint
@@ -3297,8 +3582,15 @@ export function ReportsTable({
   initialStatus,
   formFormat = 'document',
   // Forwarded to the editor this list opens, for the same reason formFormat is
-  // (see Shell): a sign-out must save the open draft however it was opened.
+  // (see Shell): a sign-out must save the open draft however it was opened, and
+  // Ctrl+S must reach a report opened from the list as well as one opened from
+  // Write Report.
   onRegisterFlush,
+  onRegisterSave,
+  // ...and the station's letterhead, for the same reason again: a report opened
+  // from the register gets the sheet format's page exactly as one opened from
+  // Write Report does.
+  stationHeader = null,
   // Tells the shell whether this list is showing its own editor panel. The
   // panel replaces the list WITHOUT changing `view.kind` (that is how the
   // list's search, filters and page survive closing a report), so the top bar
@@ -3309,7 +3601,12 @@ export function ReportsTable({
   // report is open here has to land on the LIST: the route was already 'table',
   // so without this the click did nothing at all.
   panelResetSignal = 0,
+  // The station's incident-type list, for the type filter's own dropdown — the
+  // same list the form offers, since filtering by a type the station no longer
+  // records is a filter over an empty set. See TYPES above.
+  incidentTypes = null,
 }) {
+  const typeOptions = incidentTypes && incidentTypes.length > 0 ? incidentTypes : TYPES;
   const [reports, setReports] = useState(null);
   const [error, setError] = useState(null);
   const [conn, setConn] = useState(null);
@@ -3568,7 +3865,13 @@ export function ReportsTable({
         // from Home or a new report — one report, one layout, however it was
         // opened.
         formFormat={formFormat}
+        // ...and the same type list, for the same reason: a report opened from
+        // the register must offer what the station actually records, not what
+        // the bundle was built with.
+        incidentTypes={incidentTypes}
+        stationHeader={stationHeader}
         onRegisterFlush={onRegisterFlush}
+        onRegisterSave={onRegisterSave}
       />
     );
   }
@@ -3690,7 +3993,7 @@ export function ReportsTable({
                 onChange={(e) => setQuery((q) => ({ ...q, type: e.target.value, page: 1 }))}
               >
                 <option value="">All types</option>
-                {TYPES.map((t) => (
+                {typeOptions.map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>

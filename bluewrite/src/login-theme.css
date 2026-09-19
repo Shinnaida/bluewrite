@@ -131,10 +131,15 @@
 /* The Light / Dark / Auto segmented group lived HERE. It was removed by
    request: a three-way theme picker on a sign-in screen reads as a settings
    screen rather than a gate, and the gate's job is one thing — get the officer
-   in. Appearance still exists, one menu deeper, in Profile ▸ Preferences ▸
-   Appearance, and the stored preference is applied before the bundle loads
-   (index.html) so the gate still OPENS in whichever theme the workstation
-   chose. Do not add the picker back to this bar. */
+   in. The segmented group is not coming back to this bar.
+
+   The gate's appearance switch is a single sun/moon button in the page's
+   bottom-right corner instead — section 6 below — because
+   that is the corner such a control lives in everywhere else, and because a
+   corner button asks one question instead of three. Appearance in full (with
+   'system') is still one menu deeper, in Profile ▸ Preferences ▸ Appearance,
+   and the stored preference is applied before the bundle loads (index.html) so
+   the gate still OPENS in whichever theme the workstation chose. */
 
 /* ============================================================
    2. Page body — a centred two-column spread on the light page
@@ -189,9 +194,16 @@
 }
 .la-doc-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
+/* The wordmark is the thing an officer recognises on a screen they do not use
+   every day, so it is sized as the loudest element on the page rather than as
+   a heading that happens to sit above a form: ~64px on a 1366px workstation,
+   and 68px is the ceiling, which keeps BLUEWRITE inside the left column at
+   every width the two-column spread is used at. The step down in the short-
+   viewport query at the foot of this file is deliberately shallow — see the
+   note there. */
 .la-hero {
   margin: 0;
-  font-size: clamp(1.75rem, 1.15rem + 2.4vw, 2.9rem);
+  font-size: clamp(2rem, 1.3rem + 3.2vw, 4.25rem);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.05;
@@ -457,7 +469,74 @@
    ============================================================ */
 
 /* ============================================================
-   6. Small screens / short viewports
+   6. Appearance switch — floating, page bottom-right
+
+   One button, one binary question: light or dark — and the same control the
+   workspace's Profile ▸ Preferences carries. This section is only WHERE this
+   home sits and how big it is. The two drawings (SunIcon/MoonIcon), the
+   cross-fade between them, and the way a press is animated — the wave that
+   spreads the new mode out of the button — are stated once in styles.css, so
+   the gate and the menu cannot drift into different suns. useThemeSpread in
+   lib/theme.js owns the behaviour; ThemeToggle in Login.jsx owns this button.
+
+   Why a corner button at all, rather than a row on the navy bar: section 1
+   above says what was wrong with the segmented group that used to live there.
+   ============================================================ */
+
+/* Fixed, not placed inside the scrolling column: the gate's body (.la-content)
+   scrolls under its own overflow, so a corner control has to be pinned to the
+   VIEWPORT or it scrolls away on a short window or a long page. z-index clears
+   the navy bar (20) and the content (10) — the switch is the last thing on this
+   screen and nothing sits on top of it. 44px keeps it a full touch target. */
+.la-theme-toggle {
+  position: fixed;
+  right: clamp(0.9rem, 2.4vw, 1.5rem);
+  bottom: clamp(0.9rem, 2.4vw, 1.5rem);
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--steel);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: color 200ms ease, border-color 200ms ease, background-color 200ms ease,
+    box-shadow 200ms ease, transform 120ms ease;
+}
+.la-theme-toggle:hover {
+  color: var(--cyan);
+  border-color: var(--line-bright);
+  background: var(--panel-raised);
+  box-shadow: var(--shadow-md);
+}
+.la-theme-toggle:active { transform: scale(0.94); }
+
+/* Everything this section used to state about the animation — the cross-fade
+   that browsers without view transitions get, the clip that spreads the new
+   mode out of the button, the reduced-motion answer to both — now lives in
+   styles.css under "The appearance switch", because the Profile menu's switch
+   needs every word of it.
+
+   One thing that does NOT move: `theme-control` is on this button's className
+   (see Login.jsx). It is the marker the shared fade rule looks for, which is
+   how the icons' own transition survives a press instead of being replaced by
+   the page's colour transition mid-swap. */
+
+/* On a phone the switch floats over the stacked layout's last card, so the
+   scroll area gets a strip of clearance to match it — the page can always be
+   scrolled clear of the button. The extra class in the selector is deliberate:
+   section 7's short-viewport rule resets this element's padding shorthand
+   further down the file, and this one has to survive it. */
+@media (max-width: 640px) {
+  .la-page .la-content-inner { padding-bottom: 4.75rem; }
+}
+
+/* ============================================================
+   7. Small screens / short viewports
    ============================================================ */
 
 /* Under the two-column breakpoint the spread stacks, and the ORDER matters:
@@ -488,7 +567,7 @@
 }
 
 @media (max-width: 640px) {
-  .la-hero { font-size: clamp(1.5rem, 8vw, 2rem); }
+  .la-hero { font-size: clamp(1.75rem, 9vw, 2.75rem); }
   .la-panel { padding: 1.4rem; }
 }
 @media (max-height: 700px) {
@@ -501,6 +580,12 @@
   .la-panel { padding: 1.4rem; }
   .la-panel-head { margin-bottom: 1rem; padding-bottom: 0.7rem; }
   .la-footer { margin-top: 1rem; padding: 0.7rem; }
-  .la-hero { font-size: 1.5rem; }
+  /* The one step the wordmark takes on a short window, and it is shallow on
+     purpose. This query fires on the common workstation — 1366×768 less the
+     browser chrome is under 700px of page — so whatever it says here is what
+     most officers actually see, and it previously said 1.5rem: the hero was
+     pinned at 24px on exactly the screens it needed to carry. Only the
+     peripheral things around it compact now; the brand keeps its size. */
+  .la-hero { font-size: clamp(1.9rem, 1.15rem + 3vw, 3.5rem); }
   .la-tagline { font-size: 0.62rem; }
 }

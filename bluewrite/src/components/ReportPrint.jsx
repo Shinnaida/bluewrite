@@ -3,6 +3,9 @@ import { createPortal } from 'react-dom';
 import { api } from '../lib/api.js';
 import { normalizeLegacyTypeSpecific } from '../lib/normalizeLegacy.js';
 import { buildActionBlock } from '../lib/printActions.js';
+// The letterhead's fixed lines: the station's own where it has configured them,
+// the built-in defaults where it has not.
+import { resolveHeader } from '../lib/stationSettings.js';
 // Station seals: bundled by Vite (src/assets) so they survive the offline
 // build — the sheet must print with the logos even without network access.
 import pnpLogo from '../assets/pnp-logo.png';
@@ -451,6 +454,10 @@ const NOTED_BY_NAME = 'DEXTER MALEZA CALACAR';
 export default function ReportPrint({ reportId, onClose, autoPrint = true, footer = null, report: initialReport = null, recordedBy = null }) {
   const [report, setReport] = useState(initialReport);
   const [error, setError] = useState(null);
+  // The station's letterhead — the fixed lines at the head of every sheet. It
+  // is deployment data (Station settings), not part of a report, which is why it
+  // travels beside the report rather than inside it.
+  const [stationHeader, setStationHeader] = useState(null);
 
   useEffect(() => {
     document.body.classList.add('print-sheet-open');
@@ -464,6 +471,9 @@ export default function ReportPrint({ reportId, onClose, autoPrint = true, foote
       .then((data) => {
         if (!alive) return;
         setReport(data.report);
+        // Sent with the report precisely so the sheet needs no second request
+        // (see ReportsController::printData).
+        setStationHeader(data.station ?? null);
         if (autoPrint) {
           // Give the layout a tick to paint before opening the dialog.
           setTimeout(() => window.print(), 150);
@@ -474,6 +484,26 @@ export default function ReportPrint({ reportId, onClose, autoPrint = true, foote
       alive = false;
     };
   }, [reportId, autoPrint, initialReport]);
+
+  // The finalize review passes the report in memory (including unsaved edits)
+  // and so skips the print endpoint — but the letterhead still has to be the
+  // station's, or a sheet printed from the review would carry different lines
+  // from the same sheet printed a moment later. One small read, and the
+  // built-in letterhead stands if it fails.
+  useEffect(() => {
+    if (!initialReport) return undefined;
+    let alive = true;
+    api('/station')
+      .then((d) => {
+        if (alive) setStationHeader(d.header ?? null);
+      })
+      .catch(() => {
+        // Best-effort: resolveHeader falls back to the built-in lines below.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [initialReport]);
 
   // type_specific (groups + per-type fields), normalized to v3 group shape.
   const ts = useMemo(() => {
@@ -512,6 +542,10 @@ export default function ReportPrint({ reportId, onClose, autoPrint = true, foote
   const finalized = report.status === 'finalized';
   // A not-yet-saved report has no id — the sheet still needs a number for the
   // certification line; the placeholder is replaced on the first save.
+  // Every key present: the station's stored lines where there are any, the
+  // built-in Naga defaults where the read failed or has not landed yet. A sheet
+  // must never print blank where the Republic's name belongs.
+  const head = resolveHeader(stationHeader);
   const reportNo = report.id ? `BW-${String(report.id).padStart(4, '0')}` : 'BW-____';
   const facts = buildTypeFacts(report.incident_type, { report, ts });
   const findings = buildFindings(ts);
@@ -558,17 +592,17 @@ export default function ReportPrint({ reportId, onClose, autoPrint = true, foote
             <img className="pr-code-logo" src={pnpLogo} alt="PNP seal" />
           </div>
           <div className="pr-org">
-            Republic of the Philippines
+            {head.agency}
             <br />
-            National Police Commission
+            {head.commission}
             <br />
-            <strong>PHILIPPINE NATIONAL POLICE, POLICE REGIONAL OFFICE 7</strong>
+            <strong>{head.regional_office}</strong>
             <br />
-            <strong>CEBU POLICE PROVINCIAL OFFICE</strong>
+            <strong>{head.provincial_office}</strong>
             <br />
-            <strong>CITY of NAGA POLICE STATION</strong>
+            <strong>{head.station_name}</strong>
             <br />
-            City of Naga, Cebu
+            {head.station_location}
           </div>
           <img
             className="pr-seal"
@@ -581,7 +615,7 @@ export default function ReportPrint({ reportId, onClose, autoPrint = true, foote
              code at the left margin and the report date at the right —
              the two sit on the same line, as on the scanned sheet. ---- */}
         <div className="pr-code-date">
-          <span className="pr-office-code">NCPS – INVEST</span>
+          <span className="pr-office-code">{head.office_code}</span>
           <span className="pr-date">
             {fmtLong(report.report_date || new Date())}
             <span className="pr-date-label">Date</span>

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { api } from './lib/api.js';
+import { api, classifyError, isUnreachable } from './lib/api.js';
 import { useTheme } from './lib/theme.js';
+import { useDensity } from './lib/density.js';
 import Login from './components/Login.jsx';
 import Shell from './components/Shell.jsx';
 
@@ -11,9 +12,22 @@ export default function App() {
   // owned by Shell: ONE source of truth, so the control that sets it and the
   // screens that live under it can never disagree. App holds it because
   // `useTheme` applies it to <html> for the whole document — the gate included,
-  // which renders outside the Shell and has no controls of its own. The only
-  // menu that CHANGES it is Profile ▸ Preferences, inside the workspace.
+  // which renders outside the Shell and so cannot reach this state any other
+  // way. Two controls CHANGE it: the sun/moon switch in the gate's bottom-right
+  // corner (binary — light or dark), and Profile ▸ Preferences inside the
+  // workspace (three-way, including 'system'). They write the same key, so
+  // whichever is used last is what the next load opens in.
   const [theme, setTheme] = useTheme();
+  // The second display preference, owned here for the same reason: the control
+  // that sets density lives in the workspace's profile menu, and the workspace
+  // is what it re-lays-out. It is not the gate's business — the gate has one
+  // layout and no long form to fit on a laptop screen.
+  const [density, setDensity] = useDensity();
+  // What the boot probe below learned about the SERVER (not the session), so
+  // the gate opens already knowing it. Without this the gate repeats the same
+  // request and the browser logs a second red 401 on every signed-out load.
+  // null = not probed yet (only true after a logout, see onLogout).
+  const [boot, setBoot] = useState(null);
 
   const notify = useCallback((msg) => {
     setToast({ msg, id: Date.now() });
@@ -27,11 +41,23 @@ export default function App() {
 
   useEffect(() => {
     api('/me')
-      .then(setUser)
-      .catch(() => setUser(null));
+      .then((u) => {
+        setUser(u);
+        setBoot({ conn: 'ok' });
+      })
+      .catch((err) => {
+        // A 401 here is an ANSWER, not a fault: the server is up and the
+        // session is simply over — which is the ordinary state on a cold load.
+        // Only an infrastructure failure is worth carrying into the gate.
+        setBoot({ conn: isUnreachable(err) ? classifyError(err) : 'ok' });
+        setUser(null);
+      });
   }, []);
 
   const onLogout = useCallback(() => {
+    // Drop the boot reading rather than reuse it: the workspace was live, so
+    // minutes have passed since it was taken and it is worth re-taking.
+    setBoot(null);
     setUser(null);
   }, []);
 
@@ -46,7 +72,9 @@ export default function App() {
   }
 
   if (user === null) {
-    return <Login onLogin={setUser} notify={notify} />;
+    return (
+      <Login onLogin={setUser} notify={notify} theme={theme} onTheme={setTheme} boot={boot} />
+    );
   }
 
   return (
@@ -57,6 +85,8 @@ export default function App() {
         notify={notify}
         theme={theme}
         onTheme={setTheme}
+        density={density}
+        onDensity={setDensity}
       />
       {toast && (
         <div className="toast" role="status">

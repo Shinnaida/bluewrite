@@ -248,12 +248,153 @@ select option {
   color: var(--paper);
 }
 
-.field { margin-bottom: 1rem; }
+.field { margin-bottom: var(--density-field-gap); }
 .field .error {
   color: var(--red-text);
   font-size: 0.82rem;
   margin-top: 0.25rem;
   font-family: var(--font-hud);
+}
+
+/* ===========================================================================
+   The appearance switch — one vocabulary, two homes
+
+   The sun/moon button exists twice: the circular one in the sign-in gate's
+   bottom-right corner and the one in Profile ▸ Preferences. The drawings, the
+   cross-fade between them and the way a press is animated all live HERE, in
+   the app-wide palette file, so the two homes only ever say where the button
+   sits and how big it is — they cannot drift into different suns.
+
+   Stated once, for both: light is the sun, dark is the crescent moon, and the
+   icon shows the mode in force rather than the one a press would take. The
+   button's own title says what the press does, so neither has to be inferred
+   from the other.
+   =========================================================================== */
+
+/* One grid cell, two icons: stacked on the same spot rather than laid out side
+   by side, so the swap happens in place and reflows nothing. */
+.theme-icons {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+}
+.theme-icon {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  transition: opacity 220ms ease, transform 420ms cubic-bezier(0.34, 1.32, 0.64, 1);
+}
+
+/* The icon out of play is rotated away and shrunk behind the one in play, on
+   transform/opacity only (neither can trigger layout), so the mode turns over
+   rather than one drawing being swapped for another. Keyed off the same
+   data-theme attribute the palette hangs on, so the two cannot disagree: the
+   icon animates exactly when the colours move. */
+.theme-icon-moon { opacity: 0; transform: rotate(-80deg) scale(0.35); }
+:root[data-theme='dark'] .theme-icon-sun { opacity: 0; transform: rotate(80deg) scale(0.35); }
+:root[data-theme='dark'] .theme-icon-moon { opacity: 1; transform: none; }
+
+/* ---- The pace of the wave, declared once ----
+   Named because two rules are timed off it: the clip below, and the hold that
+   keeps the icons from turning while the snapshots are still up. Retuning the
+   pace is then one number instead of two that drift apart. It is sized by eye
+   rather than by budget — a full-viewport reveal at anything under about ¾s
+   reads as a flash rather than as something spreading — and the ease-in-out
+   start is the other half of that: it stops the circle racing away while the
+   eye is still on the button it came from. */
+:root { --bw-spread-duration: 900ms; }
+
+/* While the wave is up, the icons' own turn is held back. Their transition is
+   keyed off data-theme like everything else, so it would otherwise start at
+   the same instant — and the snapshots the wave is built from are still images
+   of the moment the change happened, so the turn would run behind them and
+   show up as a jump the moment they lift. Held back, it plays after the wave
+   has landed, which reads as the wave arriving and THEN the mode turning over.
+   The hold is a delay on an existing transition, not a second animation, so it
+   costs nothing when there is no wave. */
+:root.bw-theme-spread .theme-icon {
+  transition-delay: calc(var(--bw-spread-duration) - 80ms);
+}
+
+/* ---- Fallback: the switch cross-fades; it does not blink ----
+   Every colour in the app is a token, so a theme change repaints the whole
+   screen inside one frame — which the eye reads as a flash. This is the plain
+   version of the effect, for browsers with no view-transition support (and for
+   anyone who has asked for less motion); the wave below is what Chromium gets.
+
+   For the length of a press, useThemeSpread puts `bw-theme-fade` on <html> and
+   takes it back off, and this is what that class is for: the surfaces then
+   carry a short colour transition and the new palette animates into place. It
+   is a class rather than a permanent rule so that nothing in the app holds a
+   colour transition the rest of the time — hover behaviour is untouched.
+
+   The switch is excluded by name, via the `theme-control` marker both homes
+   carry. Its icons are mid-swap at this exact moment, and this rule's
+   `transition` shorthand would replace theirs and stop both dead. */
+:root.bw-theme-fade body,
+:root.bw-theme-fade body *:not(.theme-control):not(.theme-control *) {
+  transition: background-color 320ms ease, border-color 320ms ease, color 320ms ease,
+    box-shadow 320ms ease;
+}
+
+/* ---- …and where the browser can shape it, the mode SPREADS from the switch
+   Chromium snapshots the page before and after the change and hands the two
+   frames to the ::view-transition-* pseudo-elements, which is exactly the pair
+   this effect needs. The circle is a clip on the NEW frame, so the wave
+   reveals the real page — the bar, the cards, every label arriving in the new
+   palette as the edge passes over it — instead of a flat colour wiping across
+   the screen.
+
+   useThemeSpread sets --bw-reveal-x/-y to the switch's centre immediately
+   before starting a transition. They fall back to the bottom-right corner, so
+   a transition started from somewhere else still wipes in from the right
+   place.
+
+   None of this can be scoped to one home: ::view-transition-old(root) names
+   the document's own snapshot pair and takes no ancestor selector. That is
+   fine while the appearance switch is the only thing in the app that starts a
+   view transition — a second one would have to opt out with its own
+   `view-transition-name`, or these rules would shape that too. */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  /* The default treatment is a cross-fade, which is not this effect: blending
+     the two frames would turn the wave into a dissolve. */
+  animation: none;
+  mix-blend-mode: normal;
+}
+/* Old underneath, new on top — that is what makes the circle a reveal. */
+::view-transition-old(root) { z-index: 1; }
+::view-transition-new(root) {
+  z-index: 2;
+  animation: la-theme-spread var(--bw-spread-duration) cubic-bezier(0.65, 0, 0.35, 1)
+    forwards;
+}
+
+/* Out of the button's own size, so the wave reads as having left the switch
+   rather than started on top of it, and out to 150vmax — past the far corner
+   at any viewport shape, however the two dimensions are proportioned. */
+@keyframes la-theme-spread {
+  from { clip-path: circle(22px at var(--bw-reveal-x, 100%) var(--bw-reveal-y, 100%)); }
+  to { clip-path: circle(150vmax at var(--bw-reveal-x, 100%) var(--bw-reveal-y, 100%)); }
+}
+
+/* ---- Less motion, same states ----
+   A colour move is still motion, so under the reduced-motion preference the
+   palette changes in one step and the icons simply appear, with no travel.
+   (styles.css already carries the app-wide reduced-motion switch; this is the
+   half of it that belongs to the appearance switch. useThemeSpread declines to
+   start a view transition at all when this preference is set — the clip below
+   is here so the CSS is honest on its own, for a transition started some other
+   way.) */
+@media (prefers-reduced-motion: reduce) {
+  :root.bw-theme-fade body,
+  :root.bw-theme-fade body *:not(.theme-control):not(.theme-control *) {
+    transition: none;
+  }
+  .theme-icon { transition: none; }
+  ::view-transition-new(root) { animation: none; }
 }
 
 /* ---- App shell ---- */
@@ -834,6 +975,28 @@ button.brand.brand-home:focus-visible {
 .badge.active { background: var(--green-bg); color: var(--green-ok); border-color: var(--green-line); }
 .badge.inactive { background: var(--red-bg); color: var(--red-text); border-color: var(--red-line); }
 
+/* ---- Density (Profile ▸ Preferences ▸ Spacing) ----
+   Two answers, and neither of them is "smaller type": the type scale does not
+   move at all. What moves is the air around it, which is the part that decides
+   how much of a long incident form fits on the screen it is being typed on.
+
+   Stated as custom properties because that is the whole mechanism — the rules
+   that answer to density read a token instead of a number, so a third density
+   would be a block like this one and nothing else. See lib/density.js for the
+   preference itself, and the `data-density` attribute it writes. */
+:root {
+  --density-row-y: 0.6rem; /* table / list row height */
+  --density-row-x: 0.75rem;
+  --density-field-gap: 1rem; /* between form fields */
+  --density-doc-gap: 0.9rem; /* between fields in the report document */
+}
+:root[data-density='compact'] {
+  --density-row-y: 0.4rem;
+  --density-row-x: 0.6rem;
+  --density-field-gap: 0.7rem;
+  --density-doc-gap: 0.6rem;
+}
+
 /* ---- Tables: ruled HUD style ---- */
 /* Wide tables scroll inside their own container on narrow screens instead
    of stretching the whole page sideways. */
@@ -841,7 +1004,7 @@ button.brand.brand-home:focus-visible {
 table { width: 100%; min-width: 46rem; border-collapse: collapse; }
 th, td {
   text-align: left;
-  padding: 0.6rem 0.75rem;
+  padding: var(--density-row-y) var(--density-row-x);
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
 }
@@ -1506,7 +1669,7 @@ body.ai-panel-open .main {
   grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
   gap: 0 1.25rem;
 }
-.type-specific-grid .field { margin-bottom: 1rem; }
+.type-specific-grid .field { margin-bottom: var(--density-field-gap); }
 .type-specific-grid .span-2 { grid-column: 1 / -1; }
 
 /* ---- Alerts ---- */
@@ -1536,6 +1699,51 @@ body.ai-panel-open .main {
   border-color: var(--cyan);
   background: var(--cyan-bg);
   color: var(--steel);
+}
+
+/* ---- The idle warning (see Shell) ----
+   The one thing that has to be on screen BEFORE a session ends by itself: an
+   officer reading a long report back, or on the phone to the station, does not
+   touch anything for minutes at a time — which is exactly the state the idle
+   timeout ends. It sits in flow above the page, so it can never cover the field
+   being typed in, and it is amber rather than red: nothing is wrong yet. */
+.idle-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--amber-line);
+  border-left-width: 3px;
+  border-radius: 3px;
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+.idle-warning svg { flex: none; }
+.idle-warning p {
+  flex: 1;
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--paper);
+}
+.idle-warning strong {
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+.idle-warning button {
+  flex: none;
+  padding: 0.3rem 0.7rem;
+  border-color: var(--amber-line);
+  background: transparent;
+  color: var(--amber);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.idle-warning button:hover {
+  border-color: var(--amber);
+  background: transparent;
+  color: var(--amber);
 }
 
 /* ---- Connection states (offline / DB down) ----
@@ -1643,6 +1851,77 @@ body.ai-panel-open .main {
   padding: 0.4rem 0.7rem;
   border-left: 3px solid var(--amber-line);
   font-size: 0.8rem;
+  color: var(--steel);
+}
+
+/* ---- Keyboard shortcuts sheet (Shell: Profile ▸ Keyboard shortcuts, ?) ----
+   Renders lib/shortcuts.js, which is also what the listener acts on. The keys
+   hold the left column so the sheet can be scanned by key the way a keyboard
+   is, rather than read as a list of sentences. */
+.dialog.shortcuts { max-width: min(560px, 100%); }
+.shortcuts-lead {
+  margin: 0 0 1.1rem;
+  font-size: 0.85rem;
+}
+
+.shortcuts-group + .shortcuts-group { margin-top: 1.1rem; }
+.shortcuts-group h3 {
+  margin: 0 0 0.45rem;
+  font-family: var(--font-hud);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+}
+.shortcuts-list { margin: 0; }
+
+.shortcut {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.shortcut:last-child { border-bottom: 0; }
+
+.keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+/* A cap, not a box: the two-pixel bottom border is the front edge of a key.
+   It is the only reason the row reads as "press this" rather than as a label. */
+.keys kbd {
+  min-width: 1.6rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--line-bright);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: var(--panel-raised);
+  color: var(--paper);
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+.keys-plus {
+  color: var(--cyan-dim);
+  font-size: 0.72rem;
+}
+
+.shortcut dd { margin: 0; }
+.shortcut-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--paper);
+}
+.shortcut-hint {
+  display: block;
+  font-size: 0.76rem;
+  line-height: 1.45;
   color: var(--steel);
 }
 

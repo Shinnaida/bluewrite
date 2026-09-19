@@ -3,6 +3,7 @@ import { api, classifyError, isUnreachable } from '../lib/api.js';
 import Users from './Users.jsx';
 import Audits from './Audits.jsx';
 import Dashboard from './Dashboard.jsx';
+import StationSettings from './StationSettings.jsx';
 import AppTopBar from './AppTopBar.jsx';
 import { ConnectionBanner } from './ConnectionNotice.jsx';
 import {
@@ -10,8 +11,13 @@ import {
   ReportEditor,
   ReportWelcome,
 } from './Reports.jsx';
-
-const IDLE_LIMIT_MIN = 30;
+// The idle limit, its warning threshold and the poll interval live in
+// lib/session.js: the profile menu states the same limit to the officer, and a
+// number typed out twice is a number that disagrees with itself once.
+import { formatCountdown, IDLE_LIMIT_MIN, IDLE_POLL_MS, IDLE_WARNING_SEC } from '../lib/session.js';
+import { isSaveChord, isTypingTarget, modalOpen, plainLetter } from '../lib/shortcuts.js';
+import { FORM_FORMAT_KEY, readFormFormat } from '../lib/formFormat.js';
+import KeyboardShortcuts from './KeyboardShortcuts.jsx';
 
 // ---------------------------------------------------------------------------
 // Display preferences (Profile ▸ Preferences)
@@ -21,24 +27,20 @@ const IDLE_LIMIT_MIN = 30;
 // report's own unsaved work is the thing that belongs to a tab (sessionStorage),
 // not this. One key per preference, `bw-` prefixed, like the AI panel's width.
 //
-// `formformat` picks how Write Report is drawn:
-//   'document' (default) — the continuous document, one long scroll
-//   'steps'              — one panel per step, navigated by the progress stepper
+// Three preferences live behind that menu, and where each one is OWNED is the
+// deliberate part:
 //
-// The OTHER display preference — light / dark / auto (Profile ▸ Appearance) —
-// lives in lib/theme.js and is owned by App, not by this component: the gate
-// needs it too, and the gate renders outside the Shell. It arrives here only
-// to be handed to the top bar's menu.
+//   form format — here, because only Write Report answers to it (see
+//                 lib/formFormat.js for the three values);
+//   density     — App, with the theme, because the whole workspace re-lays-out;
+//   theme       — App, because the SIGN-IN GATE re-lays-out too, and the gate
+//                 renders outside this component and so cannot reach state kept
+//                 here.
+//
+// `readFormFormat` is imported rather than written here so the value set has one
+// definition: the menu that sets it, the editor that answers it, and the
+// validator that rejects a junk stored value all read the same three names.
 // ---------------------------------------------------------------------------
-const FORM_FORMAT_KEY = 'bw-form-format';
-
-function readFormFormat() {
-  try {
-    return window.localStorage.getItem(FORM_FORMAT_KEY) === 'steps' ? 'steps' : 'document';
-  } catch {
-    return 'document'; // storage unavailable (private mode) — keep the default
-  }
-}
 
 /**
  * Shell — the application frame.
@@ -51,11 +53,11 @@ function readFormFormat() {
  * those actions came back on the register's own rows: right-click one for Open
  * / History / Print / Archive, or double-click it to open.
  */
-export default function Shell({ user, onLogout, notify, theme, onTheme }) {
+export default function Shell({ user, onLogout, notify, theme, onTheme, density, onDensity }) {
   // View model: { kind: 'welcome' } | { kind: 'report', id } |
   // { kind: 'new' } | { kind: 'table' } | { kind: 'users' } | { kind: 'dashboard' }
-  // | { kind: 'audits' } — status pre-fills the reports filter when arriving
-  // from a dashboard KPI click.
+  // | { kind: 'audits' } | { kind: 'station' } — status pre-fills the reports
+  // filter when arriving from a dashboard KPI click.
   // Admins land on the Dashboard (their home base); Officer/Staff start on Home.
   const [view, setView] = useState(
     user.role === 'Admin' ? { kind: 'dashboard' } : { kind: 'welcome' }
@@ -83,6 +85,15 @@ export default function Shell({ user, onLogout, notify, theme, onTheme }) {
   // write needs, so a save after the logout call would 401 and the officer's
   // last few minutes of typing would leave with the session. A ref, not state:
   // registering must never cause a render.
+  // The editor's Save Draft, handed up the same way — the SHORTCUT belongs to
+  // the workspace (one listener, one place to notice a conflict) while the save
+  // belongs to the open report. Null when no report is open, which is how the
+  // chord knows to do nothing.
+  const saveRef = useRef(null);
+  const registerSave = useCallback((fn) => {
+    saveRef.current = fn;
+  }, []);
+
   const flushRef = useRef(null);
   const registerFlush = useCallback((fn) => {
     flushRef.current = fn;
@@ -114,6 +125,45 @@ export default function Shell({ user, onLogout, notify, theme, onTheme }) {
   const [listVersion, setListVersion] = useState(0);
   const [recentReports, setRecentReports] = useState(null);
   const bumpList = useCallback(() => setListVersion((v) => v + 1), []);
+
+  // The station's deployment data, read here ONCE for the whole workspace. Two
+  // things consume it and they are both reasons it is shared rather than fetched
+  // per screen:
+  //
+  //   incident_types — the two screens that offer types (the report form and the
+  //     register's filter) must agree with each other AND with the server, which
+  //     validates a submitted type against this same setting. A form offering a
+  //     type the station no longer records produces a report the API refuses.
+  //
+  //   header — the letterhead that prints on every sheet, and the lines the
+  //     sheet FORM FORMAT draws at the head of its own page so it reads as the
+  //     station's paper before anything is written on it. Same source as the
+  //     printed sheet, so the page and the print-out cannot disagree.
+  //
+  // Null until it has been read; the consumers fall back to the built-in 14 and
+  // the built-in letterhead.
+  const [station, setStation] = useState(null);
+  const [stationVersion, setStationVersion] = useState(0);
+  const bumpStation = useCallback(() => setStationVersion((v) => v + 1), []);
+  useEffect(() => {
+    let alive = true;
+    api('/station')
+      .then((d) => {
+        if (!alive) return;
+        setStation(d);
+      })
+      .catch((err) => {
+        // A failure here must not stop anyone working: the fallback list is the
+        // one the station has unless an admin has changed it. Only a genuinely
+        // unreachable server is worth the shared banner.
+        if (alive && isUnreachable(err)) setConnState(classifyError(err));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [stationVersion]);
+  const stationTypes = station && Array.isArray(station.incident_types) ? station.incident_types : null;
+  const stationHeader = station && station.header ? station.header : null;
 
   // Shared workspace connection state: any child that hits an unreachable
   // server calls reportConn(classified) instead of rendering its own raw
@@ -158,9 +208,19 @@ export default function Shell({ user, onLogout, notify, theme, onTheme }) {
       ? user.expires_at * 1000 - IDLE_LIMIT_MIN * 60000
       : Date.now()
   );
+  // Seconds left while the session is inside its warning window, else null.
+  const [idleLeft, setIdleLeft] = useState(null);
+  // The shortcut sheet (Profile ▸ Keyboard shortcuts, or ?).
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useEffect(() => {
-    const bump = () => setLastActivity(Date.now());
+    const bump = () => {
+      setLastActivity(Date.now());
+      // Clearing here rather than waiting for the next tick is what makes the
+      // warning honest: an officer who has just moved the mouse should not keep
+      // reading a countdown for the next five seconds.
+      setIdleLeft(null);
+    };
     window.addEventListener('click', bump);
     window.addEventListener('keydown', bump);
     return () => {
@@ -171,7 +231,8 @@ export default function Shell({ user, onLogout, notify, theme, onTheme }) {
 
   useEffect(() => {
     const iv = setInterval(async () => {
-      if (Date.now() - lastActivity > IDLE_LIMIT_MIN * 60000) {
+      const left = lastActivity + IDLE_LIMIT_MIN * 60000 - Date.now();
+      if (left <= 0) {
         // The officer may have walked away mid-sentence: the timed-out session
         // is exactly when a draft in the editor would otherwise be stranded,
         // so it is saved while the session can still authorise the write.
@@ -182,8 +243,15 @@ export default function Shell({ user, onLogout, notify, theme, onTheme }) {
           // ignore network errors on the way out
         }
         onLogout();
+        return;
       }
-    }, 5000);
+      // The warning appears only inside its last minutes, and only then does
+      // this tick re-render: outside the window `setIdleLeft(null)` is the same
+      // value every time, which React bails out of. The countdown therefore
+      // costs a render every 5s for the two minutes it is on screen, not one
+      // every 5s for the whole session.
+      setIdleLeft(left <= IDLE_WARNING_SEC * 1000 ? Math.ceil(left / 1000) : null);
+    }, IDLE_POLL_MS);
     return () => clearInterval(iv);
   }, [lastActivity, onLogout, flushPending]);
 
@@ -194,6 +262,7 @@ export default function Shell({ user, onLogout, notify, theme, onTheme }) {
       case 'users':
       case 'dashboard':
       case 'audits':
+      case 'station':
         setView({ kind });
         break;
       case 'table':
@@ -213,6 +282,67 @@ export default function Shell({ user, onLogout, notify, theme, onTheme }) {
         break;
     }
   }
+
+  // The keyboard. ONE listener for the whole workspace, declared here so that
+  // every key that changes a screen goes through navigate() like every click
+  // does — the alternative was duplicating the routes into the handler, which
+  // is how two answers to "where does this go" start. It re-attaches whenever
+  // Shell re-renders, which is cheap: Shell renders on navigation, not on every
+  // keystroke (typing happens inside the editor's own state).
+  //
+  // The list itself is lib/shortcuts.js, which the sheet in the profile menu
+  // also renders — a key that is handled is documented by construction.
+  useEffect(() => {
+    function onKey(e) {
+      // `?` is checked before the modal guard, because it also CLOSES the sheet
+      // it opens, and that sheet is itself a modal. Still refused mid-typing:
+      // a question mark in a narrative is a question mark.
+      if (e.key === '?' && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        setShortcutsOpen((v) => !v);
+        return;
+      }
+      // Behind a dialog a shortcut must never fire: `h` while the logout
+      // confirmation is up would move the workspace under the officer's answer.
+      if (modalOpen()) return;
+      if (isTypingTarget(e.target)) return;
+
+      if (isSaveChord(e)) {
+        // Only when a report is open — saveRef holds nothing otherwise — but
+        // always preventDefault, so the browser's own "save this page" never
+        // appears over the top of an unsaved incident report.
+        e.preventDefault();
+        saveRef.current?.();
+        return;
+      }
+
+      if (e.key === '/') {
+        e.preventDefault();
+        const box = document.querySelector('.reports-search input');
+        if (box) {
+          box.focus();
+          return;
+        }
+        // Not on the register: go there and look again next frame, when the
+        // toolbar exists. Best-effort by design — a second retry loop would be
+        // more machinery than a focus deserves.
+        navigate('table');
+        requestAnimationFrame(() => document.querySelector('.reports-search input')?.focus());
+        return;
+      }
+
+      const letter = plainLetter(e);
+      if (letter === 'h') navigate('welcome');
+      else if (letter === 'm') navigate('table');
+      else if (letter === 'n') navigate('new');
+      else if (letter === 'd' && isAdmin) navigate('dashboard');
+      else return;
+      e.preventDefault();
+    }
+
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isAdmin, navigate]);
 
   // Shared by every role: ask before signing out, save the open draft, then
   // hit the API and hand control back to the login screen.
@@ -247,10 +377,35 @@ export default function Shell({ user, onLogout, notify, theme, onTheme }) {
         onFormFormat={chooseFormFormat}
         theme={theme}
         onTheme={onTheme}
+        density={density}
+        onDensity={onDensity}
+        // The sheet has two doorways — this menu row and the `?` key — and they
+        // have to be the same sheet, so its state lives here, next to the
+        // listener, rather than in the menu that only shows one of them.
+        onShortcuts={() => setShortcutsOpen(true)}
       />
 
       <main className="main ir-body">
         <ConnectionBanner state={connState} onRetry={retryConn} />
+        {/* The idle warning: the one place the seconds matter, and the reason
+            the menu states the rule instead of counting down. It appears in flow
+            above the screen rather than floating over it, so it can never cover
+            the field an officer is typing in. */}
+        {idleLeft !== null && (
+          <div className="idle-warning" role="status">
+            <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9.5" />
+              <path d="M12 7.5V12l3.2 2" />
+            </svg>
+            <p>
+              Signing out in <strong>{formatCountdown(idleLeft)}</strong> if this screen
+              stays idle. An open draft is saved first.
+            </p>
+            <button type="button" onClick={() => setLastActivity(Date.now())}>
+              Stay signed in
+            </button>
+          </div>
+        )}
         {view.kind === 'welcome' && (
           <ReportWelcome
             user={user}
@@ -275,7 +430,10 @@ export default function Shell({ user, onLogout, notify, theme, onTheme }) {
             // Display-only, and deliberately NOT part of the editor's `key`:
             // changing the format mid-report re-lays-out the same draft.
             formFormat={formFormat}
+            incidentTypes={stationTypes}
+            stationHeader={stationHeader}
             onRegisterFlush={registerFlush}
+            onRegisterSave={registerSave}
           />
         )}
         {view.kind === 'dashboard' && isAdmin && (
@@ -299,7 +457,10 @@ export default function Shell({ user, onLogout, notify, theme, onTheme }) {
             // editor fell back to the document format, and a report opened
             // from the list quietly ignored the step-format preference.
             formFormat={formFormat}
+            incidentTypes={stationTypes}
+            stationHeader={stationHeader}
             onRegisterFlush={registerFlush}
+            onRegisterSave={registerSave}
             onReportOpenChange={setListReportOpen}
             panelResetSignal={listNav}
           />
@@ -308,7 +469,17 @@ export default function Shell({ user, onLogout, notify, theme, onTheme }) {
           <Audits notify={notify} onConnError={reportConn} />
         )}
         {view.kind === 'users' && isAdmin && <Users notify={notify} onConnError={reportConn} />}
+        {view.kind === 'station' && isAdmin && (
+          <StationSettings notify={notify} onConnError={reportConn} onSaved={bumpStation} />
+        )}
       </main>
+
+      {/* The shortcut sheet. Rendered by Shell because Shell owns the keyboard
+          that opens it with `?` — the menu row is the other doorway, and both
+          arrive at this one piece of state. */}
+      {shortcutsOpen && (
+        <KeyboardShortcuts isAdmin={isAdmin} onClose={() => setShortcutsOpen(false)} />
+      )}
 
       {/* Logout confirmation — rendered for every role; the Profile menu is
           shared, so one dialog covers Admin, Officer and Staff. */}

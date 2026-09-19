@@ -815,7 +815,7 @@
 
 /* ---- Field with an icon beside its label ---- */
 .ir-field {
-  margin-bottom: 0.9rem;
+  margin-bottom: var(--density-doc-gap);
 }
 .ir-field:last-child {
   margin-bottom: 0;
@@ -1226,12 +1226,121 @@
   color: var(--ir-text);
 }
 
-/* The submit bar is full-width on the report screen; on the landing card it
-   is one action among a row. */
+/* The submit bar is full-width on the report screen; on Home it is THE page's
+   one action, and it is built as an object rather than as a form button: a
+   plate carrying the page glyph, the label in the app's heavy tracked caps,
+   and an arrow that steps aside when the pointer arrives.
+
+   It is allowed to be the loudest control on the screen — wider and taller
+   than a button needs to be, lifted off the page with the same shadow the
+   raised panels use — because there is nothing to compete with it. Everything
+   is scoped to `.ir-home-cta`, which no other screen renders: `.ir-submit`
+   underneath it is still the plain full-width commit bar on the report
+   screen, and the two must not be confused. */
 .ir-home-cta {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
   width: auto;
+  min-width: min(19rem, 100%);
+  max-width: 100%;
   flex: 0 0 auto;
-  padding: 0.75rem 1.5rem;
+  padding: 0.8rem 1.35rem;
+  /* 4px, like the submit bar it extends and the cards it sits above — the
+     document grammar has no rounder corner than this. */
+  border-radius: 4px;
+  box-shadow: var(--shadow-sm);
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease,
+    transform 120ms ease;
+}
+
+/* The glyph gets a plate of its own so it reads as a mark rather than as
+   another letter in front of the label. The plate is the label's own ink at
+   low alpha, so it needs no second colour to stay in step with the button. */
+.ir-home-cta-glyph {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  transition: background 160ms ease;
+}
+
+.ir-home-cta-text {
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ir-home-cta:hover:not(:disabled) {
+  box-shadow: var(--shadow-md);
+}
+.ir-home-cta:hover:not(:disabled) .ir-home-cta-glyph {
+  background: rgba(255, 255, 255, 0.24);
+}
+.ir-home-cta:active:not(:disabled) {
+  box-shadow: var(--shadow-xs);
+}
+
+/* The line under the button. It is page copy, not part of the control — the
+   button says what happens, this says what it costs — so it wears the quiet
+   register the rest of the app's supporting sentences use, and the measure
+   that keeps it to one comfortable line. */
+.ir-home-cta-note {
+  max-width: 30rem;
+  margin: 0.7rem auto 0;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  color: var(--ir-muted);
+}
+
+/* The two moving parts — the lift, the arrow's step, and the single sheen
+   across the face — are opt-in on motion being welcome, the same way the
+   dashboard's settle animation is. A colour change is not motion; a band of
+   light crossing a button is, so it simply does not happen for an officer who
+   has asked the workstation for less.
+
+   The sheen is painted from a pseudo-element rather than a background so it
+   cannot end up under the label, and it is kept at a low alpha: at full white
+   it reads as a loading state rather than as light crossing a surface. */
+@media (prefers-reduced-motion: no-preference) {
+  .ir-home-cta:hover:not(:disabled) { transform: translateY(-1px); }
+  .ir-home-cta-arrow {
+    transition: transform 180ms cubic-bezier(0.34, 1.32, 0.64, 1);
+  }
+  .ir-home-cta:hover:not(:disabled) .ir-home-cta-arrow { transform: translateX(4px); }
+
+  .ir-home-cta::after {
+    content: '';
+    position: absolute;
+    top: -20%;
+    bottom: -20%;
+    left: 0;
+    width: 38%;
+    background: linear-gradient(
+      100deg,
+      transparent,
+      rgba(255, 255, 255, 0.24),
+      transparent
+    );
+    transform: translateX(-150%) skewX(-18deg);
+    pointer-events: none;
+  }
+  .ir-home-cta:hover:not(:disabled)::after { animation: ir-cta-sheen 720ms ease-out; }
+}
+
+@keyframes ir-cta-sheen {
+  from { transform: translateX(-150%) skewX(-18deg); }
+  to { transform: translateX(330%) skewX(-18deg); }
 }
 
 
@@ -1241,41 +1350,58 @@
   padding: 0;
 }
 
+/* ONE list, not five boxes. Each row used to be its own bordered plate with a
+   gap under it, which stacked five pieces of chrome inside one card and made
+   the register read as the heaviest thing on a page whose action is above it.
+   A hairline between rows says the same thing once: these are consecutive
+   records. The columns are a grid rather than a flex row with a gap, so the
+   number, the type, the date and the status line up down the list instead of
+   drifting with the width of whatever is in front of them. */
 .ir-home-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.7rem;
   width: 100%;
-  margin-bottom: 0.45rem;
-  padding: 0.6rem 0.7rem;
-  background: var(--ir-card);
-  border: 1px solid var(--ir-border);
-  border-radius: 3px;
+  margin: 0;
+  padding: var(--density-row-y) 0.4rem;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--ir-border);
+  border-radius: 0;
   text-align: left;
+  transition: background 120ms ease;
 }
-.ir-home-item:hover {
-  border-color: var(--ir-blue);
-  background: var(--ir-card);
-}
+/* Keyed on the list item, not the button: the button is the only child of its
+   <li>, so `:last-child` would match every row and the rules would cancel out. */
+.ir-home-list li:last-child .ir-home-item { border-bottom: 0; }
+.ir-home-item:hover { background: var(--ir-row-hover); }
+
+/* The number is the record's index, not its content — a step smaller than the
+   incident type beside it, which is what the officer is actually scanning for,
+   and tracked so the digits read as a code rather than as a word. Tabular
+   figures (here and on the date) are what hold the columns in line down the
+   list; without them four rows of dates jitter by a pixel or two. */
 .ir-home-no {
-  flex: none;
+  font-size: 0.74rem;
   font-weight: 700;
-  font-size: 0.82rem;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
   color: var(--ir-blue);
   white-space: nowrap;
 }
 .ir-home-type {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--ir-text);
 }
 .ir-home-when {
-  flex: none;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
   color: var(--ir-muted);
   white-space: nowrap;
 }
@@ -1345,12 +1471,15 @@
   margin-top: clamp(0.5rem, 2vw, 1.25rem);
 }
 
-/* 46rem = 690px at the app's 15px root: wide enough that a report row (no. ·
-   type · date · status) never ellipses its incident type, narrow enough to
-   read as a deliberate centred block rather than a full-bleed table. */
+/* 38rem = 570px at the app's 15px root. It was 46rem, which made the register
+   the widest thing on the page — wider than the action it sits under, and wide
+   enough that four short columns drifted apart. At 38rem the same row still
+   holds the longest incident type on one line (that is what sets the floor
+   here), and the card reads as a column of records under the button rather
+   than as a table that happens to be centred. */
 .ir-home .ir-recent {
-  max-width: 46rem;
-  margin: clamp(1.75rem, 5vw, 3.25rem) auto 0;
+  max-width: 38rem;
+  margin: clamp(1.5rem, 4vw, 2.5rem) auto 0;
 }
 
 .ir-home .ir-card-body {
@@ -1524,29 +1653,141 @@
   color: var(--ir-red);
 }
 
+/* The key cap on the menu row that opens the shortcut sheet. It is the whole
+   discovery story for the shortcuts — nobody hunts for a sheet they have never
+   heard of — so it is a visible cap pushed to the row's right edge, in the same
+   shape as the caps on the sheet itself. */
+.ir-item-keys {
+  margin-left: auto;
+  min-width: 1.4rem;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--ir-border);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  color: var(--ir-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* A sentence the menu states about itself, as opposed to a control in it: the
+   same quiet register as the hint lines above, wrapped to the menu's width
+   rather than pinned to one line. It exists for the idle timeout — the rule is
+   stated here, the running countdown is Shell's banner. */
+.ir-menu-note {
+  margin: 0;
+  padding: 0.1rem 0.6rem 0.6rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--ir-muted);
+}
+
 /* ---- Preferences — display choices, not report data ----------------------
    They sit between the identity block and Log out, so the menu reads
    top-to-bottom: who you are → how the workspace is drawn → the one
-   destructive action. */
+   destructive action.
+
+   The heading is a BUTTON — the section folds, see AppTopBar — so it carries
+   the chrome of a row rather than of a label, but stays typographically the
+   quiet micro-label it was: it names a region of the menu, it is not another
+   destination in it. It is deliberately NOT styled like `.ir-profile-item`
+   below, which is how the menu says "this one is an action". */
 .ir-profile-prefs {
-  padding: 0.15rem 0.35rem 0.55rem;
+  padding: 0.15rem 0.35rem 0.35rem;
+}
+
+.ir-pref-disclosure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  color: var(--ir-muted);
+  text-align: left;
+}
+/* Both colours are restated because the element-level `button:hover` in
+   styles.css would otherwise paint a near-white plate and the accent ink
+   behind a section label — the same clash the bar's brand button has. */
+.ir-pref-disclosure:hover {
+  background: var(--panel-raised);
+  border-color: transparent;
+  color: var(--ir-text);
 }
 
 .ir-pref-title {
-  padding: 0 0.25rem 0.4rem;
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ir-muted);
+  color: inherit;
+  transition: color 140ms ease;
 }
 
+/* The caret is the whole affordance: it points down when the section is shut
+   and turns over when it is open, so the fold reads as a state rather than as
+   something the label happens to do. */
+.ir-pref-caret {
+  flex: none;
+  color: var(--ir-muted);
+  transition: transform 200ms cubic-bezier(0.34, 1.32, 0.64, 1), color 140ms ease;
+}
+.ir-pref-disclosure[aria-expanded='true'] .ir-pref-caret {
+  color: var(--ir-text);
+  transform: rotate(180deg);
+}
+
+/* The fold itself: an outer grid whose single row goes 0fr → 1fr, and an inner
+   block that clips it. That is what animates a height nobody has to measure —
+   the rows can be any height and the panel still opens the right amount, which
+   `max-height` (the usual trick) only fakes at a guessed value.
+
+   visibility, not display: the collapsed rows have to leave the accessibility
+   tree, and visibility is the one discrete property a transition delays to the
+   end rather than cutting off — so the panel stays visible for the whole close
+   and is properly hidden the moment it finishes. */
+.ir-pref-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows 220ms ease, visibility 220ms;
+}
+.ir-pref-panel[data-open='true'] {
+  grid-template-rows: 1fr;
+  visibility: visible;
+}
+.ir-pref-panel-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ir-pref-panel,
+  .ir-pref-caret {
+    transition: none;
+  }
+}
+
+/* The two rows are INDENTED under the section's own label, which is what makes
+   them read as the contents of Preferences rather than as two more of the
+   menu's destinations — the fold alone says it while it is moving, and nothing
+   at all once it has settled.
+
+   The left inset is 0.75rem past the label and the right inset matches the
+   caret's, so the switches line up in the same column as the chevron. The
+   indent lives on the ROWS, not on the panel or its clipping inner: a padding
+   on the element that collapses keeps a strip of height of its own when the
+   track goes to 0fr, which would leave the shut section visibly open by a few
+   pixels. Down here it is inside the clip, where it costs nothing. */
 .ir-pref-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.9rem;
-  padding: 0.15rem 0.25rem;
+  padding: 0.15rem 0.6rem 0.15rem 1.35rem;
 }
 
 .ir-pref-text {
@@ -1559,8 +1800,9 @@
   font-weight: 600;
   color: var(--ir-text);
 }
-/* The hint IS the value: it says which format is currently on, so a single
-   switch needs no second control to explain itself. */
+/* The hint IS the value: it says which of a row's answers is currently on, and
+   what that answer does. It is not a second control explaining the first — the
+   row states its value here and sets it on the right. */
 .ir-pref-hint {
   max-width: 11.5rem;
   font-size: 0.72rem;
@@ -1607,6 +1849,67 @@
 }
 .ir-switch[aria-checked='true'] .ir-switch-knob {
   transform: translateX(18px);
+}
+
+/* A row whose control does not fit beside the text: the label and the hint on
+   one line, the control on the next, full width. Only the form-format row needs
+   it — three words will not sit in the space one switch occupies — and it is a
+   modifier rather than a change to `.ir-pref-row` so the switch rows keep the
+   label-and-control-on-one-line shape they were drawn for. */
+.ir-pref-row--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+}
+.ir-pref-row--stack .ir-pref-hint {
+  max-width: none;
+}
+
+/* The segmented group the form-format row carries, where the switch above is no
+   longer honest: a switch has two ends, and "off" could not mean both Sheet and
+   Steps at once. Three answers need three positions, so this states them and
+   marks which one is on. */
+.ir-pref-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--ir-border);
+  border-radius: 999px;
+  background: var(--ir-page);
+}
+
+.ir-pref-seg-btn {
+  flex: 1;
+  padding: 0.24rem 0.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ir-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
+}
+/* Both colours restated, like the disclosure above: styles.css has an
+   element-level `button:hover` that would paint a near-white plate and the
+   accent ink behind these. */
+.ir-pref-seg-btn:hover {
+  background: var(--panel-raised);
+  color: var(--ir-text);
+}
+.ir-pref-seg-btn.on {
+  background: var(--ir-blue);
+  color: var(--on-accent);
+}
+.ir-pref-seg-btn.on:hover {
+  background: var(--ir-blue-hi);
+  color: var(--on-accent);
+}
+.ir-pref-seg-btn:focus-visible {
+  outline: 2px solid var(--ir-blue);
+  outline-offset: 1px;
 }
 
 /* ===========================================================================
@@ -1664,70 +1967,756 @@
 }
 
 /* ===========================================================================
+   8b. About this system (Profile ▸ About)
+
+   A dialog, and deliberately not a panel inside the menu: it is the one entry
+   there that answers a question instead of setting something, so it opens the
+   app's standard confirmation plate (styles.css) and borrows its shape — a
+   hairline, a title, an action row.
+
+   The facts are a description list laid out as label/value rows rather than as
+   prose, because that is what gets read down a phone line: "what version?" is
+   answered by finding the label, not by parsing a sentence. The one paragraph
+   in here is the advisory, which is prose on purpose.
+   =========================================================================== */
+.dialog.about {
+  max-width: min(520px, 100%);
+}
+.about-lead {
+  margin: 0 0 1rem;
+  font-weight: 600;
+  color: var(--paper);
+}
+.about-lead em {
+  font-style: normal;
+  color: var(--cyan);
+}
+
+.about-facts {
+  margin: 0;
+  padding: 0.6rem 0 0.2rem;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+/* Two columns, the label fixed: a value that moved around with the length of
+   the word beside it would be harder to read down than to scan across. */
+.about-fact {
+  display: grid;
+  grid-template-columns: 9.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+  padding: 0.28rem 0;
+}
+.about-fact dt {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+  padding-top: 0.1rem;
+}
+.about-fact dd {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--paper);
+  overflow-wrap: anywhere;
+}
+
+.about-note {
+  margin: 1rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--steel);
+}
+
+/* ===========================================================================
    9. Appearance (Profile ▸ Preferences)
 
-   Form format is a boolean and wears the switch above. Appearance is not:
-   light, dark and follow-the-workstation are three different answers, so a
-   switch would have to lie about the third one. A segmented control states all
-   three at once and shows which is on — which is also what lets it read
-   without a legend, and why it does not need the switch's hint line to
-   explain the value it is currently set to.
+   The switch the sign-in gate carries, in the menu: light is the sun, dark is
+   the crescent. Both drawings, the cross-fade between them, and the wave a
+   press sends across the page are defined once in styles.css — this section is
+   only the size and the ring, because this one sits inside a menu row while
+   the gate's floats in a corner.
 
-   It is stacked under its label rather than sitting beside it: three segments
-   plus a name do not fit the 16rem menu on one line, and squashing them is the
-   one way this control stops being readable.
+   This row USED to be a three-way Light / Dark / Auto segmented control, on
+   the argument that a switch cannot honestly represent three answers. That
+   argument still holds, and it is why this is not the boolean switch the row
+   above uses either: what is missing here is not the "off" end, it is the
+   third answer, which now has nowhere to sit. The row was made binary by
+   request — AppTopBar's note says what that does to an already-stored
+   'system'.
+
+   Circular where the row above is a pill, because it carries artwork rather
+   than a knob. Neutral in both states on purpose: which mode is on is already
+   said by which drawing is showing, so a second "on" treatment would be
+   saying it twice.
    =========================================================================== */
-.ir-pref-stack {
+.ir-theme-toggle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--ir-border);
+  border-radius: 50%;
+  background: var(--ir-page);
+  color: var(--ir-text);
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease,
+    transform 120ms ease;
+}
+.ir-theme-toggle:hover {
+  color: var(--ir-blue);
+  border-color: var(--ir-blue);
+  background: var(--ir-page);
+}
+.ir-theme-toggle:active { transform: scale(0.94); }
+
+/* ===========================================================================
+   10. Station settings (Admin)
+
+   The deployment-data screen: the letterhead that prints on every sheet, the
+   incident types the form offers, and — read-only — who may sign a report.
+
+   Three blocks rather than one long form, because they are three separate
+   commits: the letterhead is one PATCH and the type list is another, so a
+   half-finished edit to one can never ride along with the other. The personnel
+   block has no commit at all, and reads as the note it is.
+
+   The letterhead block carries a PROOF: the seven lines set as the sheet sets
+   them. It is the whole reason the form exists — an Admin editing a line of the
+   Republic's letterhead should see it before it goes out on paper — so it is
+   drawn in the sheet's own grammar (centered, bold, one line each) rather than
+   as a second list of labels.
+   =========================================================================== */
+.st-stack {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.15rem 0.25rem 0.15rem;
-}
-.ir-pref-stack .ir-pref-text {
-  padding: 0 0.05rem;
+  gap: 1.5rem;
+  max-width: 46rem;
 }
 
-.ir-seg {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 2px;
+.st-block {
+  padding: 1.1rem 1.25rem 1.25rem;
   border: 1px solid var(--ir-border);
   border-radius: 4px;
+  background: var(--ir-card);
+}
+
+.st-block-head h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ir-head-ink);
+}
+
+.st-lead {
+  margin: 0.35rem 0 1rem;
+  max-width: 44ch;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--ir-muted);
+}
+
+/* The form grid's own gap is the density token (see .field in styles.css), so
+   a compact station gets a compact settings form for free. */
+
+/* ---- The proof: the letterhead as the sheet draws it ---- */
+.st-proof {
+  margin: 0.25rem 0 1rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--ir-border);
+  border-left: 3px solid var(--ir-blue);
+  border-radius: 3px;
+  background: var(--ir-raised);
+}
+
+.st-proof-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+}
+
+.st-proof-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  text-align: center;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: var(--ir-text);
+}
+
+.st-proof-strong {
+  font-weight: 700;
+}
+
+/* The office code prints at the sheet's left margin, under the seals — not
+   centered with the org block, so it is not centered here either. */
+.st-proof-code {
+  align-self: flex-start;
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--ir-muted);
+}
+
+/* ---- The type list ---- */
+.st-types {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--ir-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.st-type {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--ir-border);
   background: var(--ir-page);
 }
 
-/* A segment is not a button in the document grammar — no border, no plate of
-   its own — so it is opted out of `button:hover` by carrying its own hover at
-   a higher specificity (0,2,0 beats 0,1,1) and never painting a border. */
-.ir-seg-btn {
-  border: 0;
-  border-radius: 3px;
-  background: transparent;
+.st-type:last-child {
+  border-bottom: 0;
+}
+
+/* A type that is switched off stays LEGIBLE and recedes: the admin needs to
+   read it to decide whether to switch it back on. */
+.st-type.off {
   color: var(--ir-muted);
-  font-family: var(--font-family);
+}
+
+.st-type label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  font-size: 0.86rem;
+}
+
+.st-type input[type='checkbox'] {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--ir-blue);
+  cursor: pointer;
+}
+
+.st-type-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-type-state {
+  flex: none;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+}
+
+.st-type:not(.off) .st-type-state {
+  color: var(--ir-blue);
+}
+
+.st-count {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--ir-text);
+}
+
+/* ---- Shared bits ---- */
+.st-problem {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--ir-danger-ink);
+}
+
+.st-quiet {
+  font-size: 0.78rem;
+  color: var(--ir-muted);
+}
+
+.st-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+/* ===========================================================================
+   11. The sheet format (Profile ▸ Preferences ▸ Form format)
+
+   The third way to draw Write Report: the same panels, the same fields, the
+   same rules — on one sheet of paper. Nothing is hidden, nothing is added, and
+   no field is drawn by different code. What changes is the DRESSING.
+
+   Implemented by token inversion, which is the trick section 2 documents: the
+   editor's components already style themselves from the --ir-* custom
+   properties, so the form restates them as PAPER and every descendant follows
+   without one rule being rewritten — cards, fields, sub-grids, repeatable
+   groups, hints, errors.
+
+   Custom properties INHERIT, so a declaration here beats the one
+   dark-theme.css puts on :root for every element inside the form, without a
+   specificity fight and without dark-theme.css needing to know this exists.
+
+   White paper in BOTH themes, for the same reason the print sheet is (see
+   dark-theme.css §2): a sheet of paper is the station's paper, not a
+   preference. An officer who set the workspace to dark asked for the WORKSPACE
+   to be dark; a document you are writing on is the document.
+
+   One column, one measure, a margin's worth of chrome removed: a page has no
+   2x2 grid, so the panels become sections of a continuous document and the
+   fields become blanks to write on rather than boxes to fill in.
+   =========================================================================== */
+.ir-form--sheet {
+  /* --- The sheet of paper --- */
+  --ir-page: #ffffff;
+  --ir-card: #ffffff;
+  --ir-raised: #f6f8fb;
+  --ir-border: #c9d1dd;
+  --ir-text: #131922;
+  --ir-muted: #5c6675;
+  --ir-head-ink: #131922;
+  --ir-icon: #5c6675;
+  --ir-placeholder: #9aa4b2;
+  --ir-row-hover: #f1f5fa;
+  --ir-focus-ring: rgba(31, 95, 208, 0.16);
+  --ir-blue: #1f5fd0;
+  --ir-blue-hi: #1a53b7;
+  --ir-red: #b3261e;
+  --ir-danger-ink: #b3261e;
+  /* A blank to write on, not a filled input: the field's own background is
+     cleared so the paper shows through. */
+  --ir-input: transparent;
+
+  /* SHORT BOND, 8.5 x 11 in — the station's paper, at its real size. The width
+     is fixed and the height is a MINIMUM, so the page is a page: it holds the
+     sheet's own measure however much is written on it, and grows past a page
+     only when there is genuinely more than a page to write (the printed sheet
+     would run to a second leaf at the same point). `max-width: 100%` is the one
+     concession: a phone cannot show 8.5 inches of anything, so the paper narrows
+     there and the margins clamp with it — see the padding below, which is a full
+     inch only where there is room for one. */
+  width: 8.5in;
+  max-width: 100%;
+  min-height: 11in;
+  margin: 0 auto;
+  padding: clamp(1rem, 5vw, 1in) clamp(0.9rem, 5vw, 1in) clamp(1.2rem, 6vw, 1in);
+  background: #ffffff;
+  color: var(--ir-text);
+  border-radius: 2px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 14px 32px rgba(16, 24, 40, 0.1);
+}
+
+/* One measure. The panels stop being a 2x2 of plates and become the sections
+   of one document, which is the whole point of the format. */
+.ir-form--sheet .ir-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+.ir-form--sheet .ir-card--wide {
+  margin-top: 1.6rem;
+}
+
+/* Cards stop being boxes: no fill, no border, no lift. Space and a heading
+   separate the sections, the way they do on a page. */
+.ir-form--sheet .ir-card {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.ir-form--sheet .ir-card-head {
+  background: none;
+  padding: 0;
+  margin-bottom: 0.85rem;
+  /* Sentence case, no tracking, and NO RULE under it. That hairline was the
+     last thing still printing like a form: a full-measure line under every
+     heading is a header bar seen from a distance, and on paper the heading's
+     own weight is what separates one section from the next. */
+  border-bottom: 0;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-size: 0.92rem;
+}
+
+/* The numeral keeps its place in the heading and loses its accent: a blue
+   ordinal is a UI cue — "you are on section two" — and a page does not tell you
+   where you are. Same ink as the words it numbers, like any numbered heading. */
+.ir-form--sheet .ir-card-head .ir-card-num {
+  color: inherit;
+  font-weight: inherit;
+}
+
+/* The document format marks the card the officer is "on" with a filled header
+   bar. A page has no current position — you are wherever you are reading — so
+   the fill is dropped and every section heading carries the same weight. */
+.ir-form--sheet .ir-card--current > .ir-card-head {
+  background: none;
+  color: var(--ir-text);
+}
+.ir-form--sheet .ir-card--current > .ir-card-head > .ir-card-num {
+  color: inherit;
+}
+
+.ir-form--sheet .ir-card-body {
+  padding: 0 0 1.5rem;
+}
+
+/* ---- Fields become blanks ---- */
+
+/* Labels stop being micro-labels. They were uppercase, tracked, 700-weight and
+   carried a small icon — four signals, all of them chrome, none of them paper.
+   On the sheet a label is just the words naming the blank beneath it, so it
+   keeps the muted ink and drops the rest. The icon goes entirely: a person
+   outline and a telephone outline are decorative shorthand for a form's scanned
+   eye, and there is no scanning to do on a blank page. */
+.ir-form--sheet .ir-label {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  font-size: 0.78rem;
+  margin-bottom: 0.2rem;
+}
+.ir-form--sheet .ir-label svg {
+  display: none;
+}
+/* The required marker is the one thing on the label that survives untouched:
+   it is not decoration, it is the sheet's own grammar (see .ir-body .req), and
+   only the four chrome signals above are being dropped here. */
+
+/* Sub-labels — a repeatable group's field names and the per-type block's
+   headings — are the same micro-label treatment one level down, so they get the
+   same answer: the words, not the styling. */
+.ir-form--sheet .ir-sub-label {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+/* A rule under the writing line instead of a box around it, and the label keeps
+   its own row above it — which is how a printed form is laid out and the reason
+   this needs no change to the markup at all. */
+.ir-form--sheet .ir-field input,
+.ir-form--sheet .ir-field select {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ir-border);
+  border-radius: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+.ir-form--sheet .ir-field input:focus,
+.ir-form--sheet .ir-field select:focus {
+  border-bottom-color: var(--ir-blue);
+  box-shadow: none;
+}
+.ir-form--sheet .ir-field input[aria-invalid='true'] {
+  border-bottom-color: var(--ir-red);
+}
+
+/* A paragraph is not a fill-in-the-blank, so the narrative areas lose their
+   rule entirely and are set as prose on the page. */
+.ir-form--sheet .ir-field textarea {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0.15rem 0;
+  min-height: 7rem;
+  line-height: 1.65;
+  resize: vertical;
+}
+.ir-form--sheet .ir-field textarea:focus {
+  box-shadow: none;
+  border-bottom-color: transparent;
+}
+.ir-form--sheet .ir-field textarea[aria-invalid='true'] {
+  border-bottom-color: transparent;
+  outline: 1px solid var(--ir-red);
+  outline-offset: 2px;
+}
+
+/* ---- The blank page -------------------------------------------------------
+   The format's opening state, and the reason it exists: ONE card is the page
+   (the writing surface) and everything else — every panel, every group, the
+   action row, the advisory footer — is off screen until the officer asks for it
+   with the control above the sheet.
+
+   Hidden, never unmounted, like the stepped format's panels and for the same
+   reason: the rules engine, the error jumps and the save path all resolve
+   against the DOM, and a field that is removed from the tree is a field the
+   officer cannot be sent to. So a jump into a hidden field has to OPEN this
+   state first — jumpTo does exactly that, the way it reveals the owning step in
+   the stepped format. */
+/* Only the cards need hiding, and only the cards CAN be hidden here: the action
+   row, the advisory footer and the step navigation are not rendered inside this
+   form at all in the sheet format — the first two are moved below the paper (see
+   ReportEditor) and the third is stepped-only. */
+.ir-form--blank .ir-card:not(.ir-card--sheet-page) {
+  display: none;
+}
+
+/* Inside the page card, only the writing area survives. The heading and the
+   label are the two things that would print on the paper, and the placeholder is
+   a sentence the officer did not write.
+
+   The station's LETTERHEAD is not in this list, and its absence is the point:
+   the letterhead is not the form, it is the paper — see .ir-sheet-head below.
+   The AI panel is not in the list either, but only because it is no longer
+   inside this card at all: the sheet format mounts it below the page, so there
+   is nothing here to hide. */
+.ir-form--blank .ir-card--sheet-page > .ir-card-body {
+  padding: 0;
+}
+.ir-form--blank .ir-card--sheet-page .ir-card-head,
+.ir-form--blank .ir-card--sheet-page .ir-label,
+.ir-form--blank .ir-card--sheet-page .section-hint,
+.ir-form--blank .ir-card--sheet-page .error {
+  display: none;
+}
+/* `color: transparent` rather than removing the attribute: the text is still in
+   the DOM for a screen reader to announce as guidance, it just never shows on
+   paper the officer did not write on. */
+.ir-form--blank .ir-card--sheet-page textarea::placeholder {
+  color: transparent;
+}
+
+/* With the report's fields open, the writing area is simply given a generous
+   height: the page is taller than a page anyway, so there is nothing for it to
+   fill. (The blank page's rule is below, and it is the opposite approach — there
+   the area FILLS the leaf.) */
+.ir-form--sheet .ir-card--sheet-page .ir-narrative textarea {
+  min-height: min(9in, 60vh);
+}
+
+/* ---- The blank page fills its leaf ----------------------------------------
+   A blank sheet of short bond is 11 inches tall whatever is on it, and the only
+   thing on it is the letterhead and the writing area. So rather than give the
+   textarea a height of its own and hope it adds up to a page, the paper is a
+   column: the letterhead takes what it needs, and the writing area takes the
+   REST — 9 inches of it at full size, since the sheet's margins are on the form.
+
+   Arithmetic would be the alternative (11in - 2in of margin - the letterhead's
+   height), and it would be wrong: the letterhead's own line-height and gaps are
+   in rem and clamp, so the figure would drift with the viewport and the page
+   would stop being exactly one sheet. */
+.ir-form--blank {
+  display: flex;
+  flex-direction: column;
+}
+/* Through the grid: the page card is Panel III, so it sits INSIDE `.ir-grid` and
+   the column has to be handed down a level. In this state the grid holds one
+   visible child (the rest are `display: none`, so they take no space), which
+   makes the two equivalent — but only one of them is the real parent chain. */
+.ir-form--blank .ir-grid {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.ir-form--blank .ir-card--sheet-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.ir-form--blank .ir-card--sheet-page > .ir-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.ir-form--blank .ir-card--sheet-page .ir-narrative {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+/* `min-height` stays as a floor for the one case flex cannot cover: a viewport
+   shorter than the sheet, where the page scrolls and the writing area should
+   still be worth scrolling to rather than a sliver. */
+.ir-form--blank .ir-card--sheet-page .ir-narrative textarea {
+  flex: 1;
+  min-height: 4in;
+}
+
+/* ---- The station's letterhead, on the page ---- */
+/* The printed sheet's header band, at screen scale: the PNP seal upper LEFT,
+   the seven organisation lines from Station settings centered between them, the
+   station's own seal upper RIGHT, and the office code holding the left margin
+   underneath. Same data, same arrangement, same two seal files — only the
+   typeface differs, because the print sheet matches the station's scanned
+   reference paper (Verdana) while this is a screen and uses the app's own face.
+
+   Shown in BOTH of the sheet's states, and that is deliberate: a pad of the
+   station's letterhead is letterhead before anyone writes on it. The blank page
+   would not read as official paper without these lines and marks. */
+.ir-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  /* No space below: the meta row belongs to the band, not to the writing area.
+     The gap before the paper's first line is on the meta row instead. */
+  margin-bottom: 0;
+}
+
+/* Both seals are flex-none so the organisation block takes the space they
+   leave. Sizes are in `clamp` rather than fixed inches because the sheet is
+   8.5in wide on a workstation and far narrower on a phone, and two seals at
+   print size would leave the letterhead a column of four words. */
+.ir-sheet-seal {
+  flex: none;
+  object-fit: contain;
+}
+
+/* Upper left, and SQUARE: the printed sheet's own note is that this seal never
+   distorts on paper, so it is given a box rather than a width. */
+.ir-sheet-seal--code {
+  width: clamp(0.58in, 13vw, 0.85in);
+  height: clamp(0.58in, 13vw, 0.85in);
+}
+
+/* Upper right: height-led, as on the print sheet. */
+.ir-sheet-seal--station {
+  height: clamp(0.55in, 12vw, 0.8in);
+  width: auto;
+}
+
+.ir-sheet-head-lines {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  text-align: center;
+  font-size: 0.74rem;
+  line-height: 1.32;
+  color: var(--ir-text);
+}
+
+.ir-sheet-head-strong {
+  font-weight: 700;
+}
+
+/* The meta row under the band: the office code at the left margin, the report
+   date at the right, the two on ONE baseline — the print sheet's .pr-code-date,
+   at screen scale. Bold, like the print row, because it is the same row of the
+   same document; only the "Date" caption underneath drops to normal weight. */
+.ir-sheet-head-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 0.35rem;
+  /* The one gap under the letterhead, before the page's writing area. */
+  margin-bottom: 1.1rem;
   font-size: 0.72rem;
   font-weight: 700;
+  color: var(--ir-text);
+}
+
+.ir-sheet-head-code {
   letter-spacing: 0.04em;
-  padding: 0.3rem 0.2rem;
+}
+
+/* Centred on its own text rather than stretched: the date and its caption are
+   one block, and `space-between` is what puts it at the right margin. */
+.ir-sheet-date {
+  display: inline-block;
+  text-align: center;
+}
+
+.ir-sheet-date-label {
+  display: block;
+  font-size: 0.64rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--ir-muted);
+}
+
+/* ---- The AI panel: below the paper, on the desk ---- */
+/* In the page's column so the two line up, and OUTSIDE `.ir-form--sheet` so it
+   is not printed on the page (see ReportEditor). */
+.ir-sheet-ai {
+  max-width: 8.5in;
+  margin: 1rem auto 0;
+}
+
+/* The action row below the sheet: same column as the page, and no top margin of
+   its own — `.ir-actions` already carries one, so adding a second here would
+   leave a gap half again as tall as the one under the AI panel. */
+.ir-sheet-actions {
+  max-width: 8.5in;
+  margin: 0 auto;
+}
+
+/* ---- The reveal control ---- */
+/* Outside the sheet on purpose: the control that opens the rest of the report
+   must not itself be printed on the page it is describing. Centred with the
+   paper so the two share a column. */
+.ir-sheet-bar {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  max-width: 8.5in;
+  margin: 0 auto 0.75rem;
+}
+
+.ir-sheet-toggle {
+  flex: none;
+  padding: 0.38rem 0.7rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 4px;
+  background: var(--ir-card);
+  color: var(--ir-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition: color 140ms ease, border-color 140ms ease;
 }
-.ir-seg-btn:hover {
-  background: var(--panel-raised);
-  border-color: transparent;
-  color: var(--paper);
+/* The background is restated because styles.css has an element-level
+   `button:hover` — the same clash the profile menu's controls restate theirs
+   for. This is a quiet control beside a sheet of paper, not a primary action. */
+.ir-sheet-toggle:hover {
+  background: var(--ir-card);
+  border-color: var(--ir-blue);
+  color: var(--ir-blue);
 }
-/* The chosen segment is the app's filled primary: the accent SURFACE with ink
-   on top, the same trade `button.primary` makes. */
-.ir-seg-btn[aria-checked='true'] {
-  background: var(--accent-fill);
-  color: var(--on-accent);
+
+.ir-sheet-hint {
+  flex: 1;
+  min-width: 15rem;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--ir-muted);
 }
-.ir-seg-btn[aria-checked='true']:hover {
-  background: var(--accent-fill-hover);
-  color: var(--on-accent);
-}
-.ir-seg-btn:focus-visible {
-  outline: 2px solid var(--accent-fill);
-  outline-offset: 1px;
+
+/* Disabled and locked fields: on paper a locked report is a print-out, and
+   greying every line would read as scribble. The lock is already stated by the
+   status row above the sheet. */
+.ir-form--sheet .ir-field input:disabled,
+.ir-form--sheet .ir-field select:disabled,
+.ir-form--sheet .ir-field textarea:disabled {
+  background: transparent;
+  color: var(--ir-text);
 }

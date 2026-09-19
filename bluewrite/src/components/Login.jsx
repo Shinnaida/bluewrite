@@ -12,15 +12,21 @@
 // heading ink (navy on the light page, near-white on the dark one), WRITE in
 // the brand blue. No animation touches it.
 //
-// The appearance control (Light / Dark / Auto) was removed from the bar by
-// request — a three-way theme picker on a sign-in screen reads as a settings
-// screen, not a gate. Appearance still lives in Profile ▸ Preferences once
-// signed in, and the stored preference is still applied before the bundle
-// loads (index.html), so a dark workstation stays dark at the gate; it just
-// cannot be CHANGED from it. Do not put the picker back on this bar.
+// The appearance control is the sun/moon switch in the page's bottom-right
+// corner (ThemeToggle below) — one button, one binary question, in the corner
+// every OS puts it in. The three-way Light / Dark / Auto SEGMENTED group that
+// used to sit in the navy bar was removed by request and stays removed: a
+// settings row on a sign-in screen reads as a settings screen, not a gate, and
+// the bar has no room for one. Do not put THAT back on this bar. The full
+// choice still lives in Profile ▸ Preferences once signed in, and the stored
+// preference is still applied before the bundle loads (index.html), so a dark
+// workstation stays dark at the gate.
 
 import React, { useEffect, useState } from 'react';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
+import { useResolvedTheme, useThemeSpread } from '../lib/theme.js';
+import { AI_ADVISORY, APP_VERSION } from '../lib/appInfo.js';
+import { MoonIcon, SunIcon } from './ThemeIcons.jsx';
 // The navy master artwork, not the knockout: this screen is light, so the mark
 // is navy ink on the page. The navy bar above it shows the knockout variant,
 // exactly as the workspace's top bar does.
@@ -71,10 +77,12 @@ function TopStatusBar({ connState }) {
         <span>{time}</span>
       </p>
 
-      {/* The bar's right-hand end is the system readout, and nothing else:
-          no controls live on the gate at all now that the appearance picker
-          is gone. `title` is the one place a connection problem is explained
-          before a submit attempt — the notice inside the panel follows. */}
+      {/* The bar's right-hand end is the system readout, and nothing else: the
+          gate's one control — the appearance switch — deliberately lives in
+          the page's bottom-right corner instead, so the bar keeps its
+          three-part shape at every width. `title` is the one place a connection
+          problem is explained before a submit attempt — the notice inside the
+          panel follows. */}
       <div className="la-topmeta">
         <span title={down ? CONNECTION_MESSAGES[connState] : undefined}>
           SYS_STATUS:{' '}
@@ -89,10 +97,50 @@ function TopStatusBar({ connState }) {
   );
 }
 
+// ThemeToggle — the gate's appearance switch, floating in the page's
+// bottom-right corner.
+//
+// Almost none of it is the gate's own. The drawings are the shared pair
+// (SunIcon/MoonIcon) and the behaviour is the shared hook (useThemeSpread):
+// light is the sun, dark is the crescent, the icon shows the mode the officer
+// is IN, and a press spreads the new mode out of the button across the page.
+// What belongs to this screen is the position — the corner every OS puts such
+// a switch in — and the `theme-control` marker class, which is how the icons'
+// own swap survives the cross-fade a press starts.
+//
+// A button, not the three-way Light / Dark / Auto segmented group that used to
+// sit in the navy bar: that one stays gone, for the reason at the top of this
+// file. The same switch now also sits in Profile ▸ Preferences, so the two
+// screens offer the same control in the same corner of the app.
+function ThemeToggle({ mode, onToggle }) {
+  const dark = mode === 'dark';
+  const [originRef, commit] = useThemeSpread(onToggle);
+
+  return (
+    <button
+      ref={originRef}
+      type="button"
+      className="la-theme-toggle theme-control"
+      onClick={() => commit(dark ? 'light' : 'dark')}
+      aria-pressed={dark}
+      aria-label="Dark mode"
+      title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      <span className="theme-icons">
+        <SunIcon />
+        <MoonIcon />
+      </span>
+    </button>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // LoginPage
 // ---------------------------------------------------------------------------
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, theme, onTheme, boot }) {
+  // The switch draws the mode in force, not the stored preference — 'system'
+  // has no icon of its own, so it resolves to whichever of the two is on.
+  const mode = useResolvedTheme(theme);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -102,12 +150,19 @@ export default function Login({ onLogin }) {
   // or database unreachable). They render differently on purpose — an
   // officer must never read a DB outage as a wrong-password typo.
   const [error, setError] = useState('');
-  const [conn, setConn] = useState('ok'); // 'ok' | 'offline' | 'database' | 'server'
+  // 'ok' | 'offline' | 'database' | 'server'. Seeded from App's boot probe
+  // where there was one: by the time this gate renders the server's health is
+  // already known, and asking again would fire a duplicate /me — one more red
+  // 401 in the console for a signed-out load that is behaving perfectly.
+  // `boot` is null only after a logout, where the reading has gone stale.
+  const [conn, setConn] = useState(boot?.conn ?? 'ok');
 
 
   // Probe the backend so SYS_STATUS and the inline notice reflect reality
-  // even before the first submit attempt.
+  // even before the first submit attempt. Skipped when App's boot probe
+  // already answered it, which is every load except one right after a logout.
   useEffect(() => {
+    if (boot) return;
     let alive = true;
     api('/me')
       .catch((err) => {
@@ -116,7 +171,7 @@ export default function Login({ onLogin }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [boot]);
 
 
   async function retryConnection() {
@@ -159,6 +214,7 @@ export default function Login({ onLogin }) {
   return (
     <main className="la-page">
       <TopStatusBar connState={conn} />
+      <ThemeToggle mode={mode} onToggle={onTheme} />
 
       <div className="la-content">
         <div className="la-content-inner">
@@ -176,7 +232,9 @@ export default function Login({ onLogin }) {
                   BLUE<em>WRITE</em>
                 </h1>
                 <div className="la-tagline">AI-Assisted Police Incident Reporting</div>
-                <p className="la-version">Secure Incident Documentation System v2.4.1</p>
+                <p className="la-version">
+                  Secure Incident Documentation System v{APP_VERSION}
+                </p>
               </div>
 
               <div className="la-cards">
@@ -198,11 +256,9 @@ export default function Login({ onLogin }) {
                     </svg>
                     <h3>System Advisory</h3>
                   </div>
-                  <p>
-                    AI-generated suggestions are provided as writing assistance only. The
-                    reporting officer remains responsible for reviewing and verifying all
-                    report content.
-                  </p>
+                  {/* The one wording of the writing-assistance advisory, shared with
+                      the report footer and About — see lib/appInfo.js. */}
+                  <p>{AI_ADVISORY}</p>
                 </div>
               </div>
             </section>
