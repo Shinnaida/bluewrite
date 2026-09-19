@@ -20,8 +20,13 @@ final class ReportsListTest extends BaseApiTestCase
             'location' => 'Crossing Lutac, Naga City',
             'narrative' => 'Suspect took a mobile phone from the complainant.',
         ]);
+        // Canonical type name, not the legacy 'Physical Injury' alias: the
+        // fixture carries v3 party GROUPS, and ReportRules::groupsFor() is
+        // keyed by canonical name, so a legacy name with groups is rejected
+        // ("type_specific.complainant must be a scalar value"). A real legacy
+        // client sends flat scalars, never groups — this is only a fixture.
         $this->createReport($officerCookie, $officerCsrf, [
-            'incident_type' => 'Physical Injury',
+            'incident_type' => 'Assault / Physical Injury',
             'incident_datetime' => '2026-03-05T06:45',
             'location' => 'National Highway, Naga City',
             'narrative' => 'Respondent punched complainant near a videoke bar.',
@@ -64,6 +69,104 @@ final class ReportsListTest extends BaseApiTestCase
         $res = $this->request('GET', '/reports?q=zzznomatch', null, $cookie);
         $this->assertSame(0, $res['body']['pagination']['total']);
         $this->assertSame([], $res['body']['reports']);
+    }
+
+    /**
+     * Every person a report names has to be findable — the party groups, the
+     * representative who files for an organization, and the reporting party
+     * that lives on the report row itself. A name that is on the report but
+     * not in the search is a report the officer cannot find.
+     */
+    public function testKeywordSearchFindsEveryPersonNamedOnAReport(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $this->createReport($cookie, $csrf, [
+            'reporter_name' => 'Bituin, Clara',
+            'type_specific' => [
+                'item_stolen' => 'One shoulder bag containing cash',
+                'owner_of_property' => 'Reyes, Ana M.',
+                'complainant' => [[
+                    'name' => 'Reyes, Ana M.',
+                    'victim_type' => 'Organization',
+                    'representative_name' => 'Villamor, Nestor',
+                ]],
+                'respondent' => [['name' => 'Bautista, Lito', 'suspect_status' => 'Identified']],
+                'witness' => [['name' => 'Marasigan, Fely']],
+            ],
+        ]);
+
+        // Victim, suspect and witness live only in the type_specific groups.
+        foreach (['Reyes', 'Bautista', 'Marasigan'] as $party) {
+            $res = $this->request('GET', '/reports?q=' . urlencode($party), null, $cookie);
+            $this->assertSame(1, $res['body']['pagination']['total'], "{$party} should be findable");
+        }
+
+        // The representative who reports for an organization is a person too.
+        $res = $this->request('GET', '/reports?q=Villamor', null, $cookie);
+        $this->assertSame(1, $res['body']['pagination']['total']);
+
+        // …and the reporting party is named on the report ROW, not in a group.
+        $res = $this->request('GET', '/reports?q=Bituin', null, $cookie);
+        $this->assertSame(1, $res['body']['pagination']['total']);
+
+        // A name nobody carries is still no match.
+        $res = $this->request('GET', '/reports?q=Zzzznobody', null, $cookie);
+        $this->assertSame(0, $res['body']['pagination']['total']);
+    }
+
+    /**
+     * The search takes the words an officer types, not the stored spelling.
+     * Parties are recorded "Last Name, First Name, M.I." (the form placeholders
+     * say so), so "Ana Reyes" — how the name is said — used to match nothing
+     * while "Reyes, Ana" did.
+     */
+    public function testKeywordSearchMatchesANameInNaturalOrder(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $this->createReport($cookie, $csrf, [
+            'type_specific' => [
+                'item_stolen' => 'One shoulder bag containing cash',
+                'complainant' => [['name' => 'Reyes, Ana M.']],
+            ],
+        ]);
+
+        $res = $this->request('GET', '/reports?q=' . urlencode('Ana Reyes'), null, $cookie);
+        $this->assertSame(1, $res['body']['pagination']['total']);
+
+        // The stored order keeps working, phrase included.
+        $res = $this->request('GET', '/reports?q=' . urlencode('Reyes, Ana'), null, $cookie);
+        $this->assertSame(1, $res['body']['pagination']['total']);
+
+        // Every word still has to match: one word nothing carries is no match.
+        $res = $this->request('GET', '/reports?q=' . urlencode('Ana Zzzznobody'), null, $cookie);
+        $this->assertSame(0, $res['body']['pagination']['total']);
+
+        // …including a word that belongs to a DIFFERENT report.
+        $this->createReport($cookie, $csrf, [
+            'type_specific' => [
+                'item_stolen' => 'One bicycle',
+                'complainant' => [['name' => 'Bautista, Ana']],
+            ],
+        ]);
+        $res = $this->request('GET', '/reports?q=' . urlencode('Ana Reyes'), null, $cookie);
+        $this->assertSame(1, $res['body']['pagination']['total']);
+        $res = $this->request('GET', '/reports?q=' . urlencode('Ana Bautista'), null, $cookie);
+        $this->assertSame(1, $res['body']['pagination']['total']);
+    }
+
+    /** A pasted paragraph must not compile a statement with hundreds of terms. */
+    public function testKeywordSearchRejectsAnAbsurdNumberOfWords(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $this->seedReports();
+
+        $res = $this->request('GET', '/reports?q=' . urlencode(implode(' ', array_fill(0, 13, 'word'))), null, $cookie);
+        $this->assertSame(422, $res['status']);
+
+        // Twelve is still a search, and still answers (nothing carries them).
+        $res = $this->request('GET', '/reports?q=' . urlencode(implode(' ', array_fill(0, 12, 'zzword'))), null, $cookie);
+        $this->assertSame(200, $res['status']);
+        $this->assertSame(0, $res['body']['pagination']['total']);
     }
 
     public function testTypeFilter(): void
@@ -123,9 +226,9 @@ final class ReportsListTest extends BaseApiTestCase
         [$cookie, $csrf] = $this->login('t.officer');
         $this->seedReports();
 
-        // Ascending by type puts "Physical Injury" first.
+        // Ascending by type puts "Assault / Physical Injury" first.
         $res = $this->request('GET', '/reports?sort=incident_type&dir=asc', null, $cookie);
-        $this->assertSame('Physical Injury', $res['body']['reports'][0]['incident_type']);
+        $this->assertSame('Assault / Physical Injury', $res['body']['reports'][0]['incident_type']);
 
         // SQL-injection-ish values must be rejected, never interpolated.
         $res = $this->request('GET', '/reports?sort=narrative;DROP%20TABLE%20users', null, $cookie);

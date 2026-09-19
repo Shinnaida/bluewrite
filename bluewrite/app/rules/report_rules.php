@@ -11,6 +11,12 @@ use App\Core\Response;
  * and each item's field rules. Single source of truth lives in the JS
  * module (docs: rules:export will generate JSON later — for now the two
  * are kept in lockstep by review, covered by the scenario tests).
+ *
+ * It also owns the PHP half of `mirrorOf` (see MIRRORS + applyMirrors): the
+ * flat scalars a v3 group superseded are DERIVED from the group on every
+ * write, so a report sent by any client — the form, curl, an older build — is
+ * stored with the values the printed sheet and the AI context read, instead of
+ * asking the officer the same question twice.
  */
 final class ReportRules
 {
@@ -85,6 +91,229 @@ final class ReportRules
         'clothing_last_seen' => ['text', false, null, null],
         'circumstances' => ['text', false, null, null],
     ];
+
+    /**
+     * Per-type scalar requirements: what the incident's OWN kind must record
+     * before the report can be submitted. Mirrors `required: true` on TYPE_FIELDS
+     * in src/lib/incidentTypes.js — that metadata is the source of truth and this
+     * table is its only mirror, kept in lockstep by review: the JS list is pinned
+     * by tests/rules/reportRules.test.mjs and this one is exercised over HTTP by
+     * tests/ReportsTest.php.
+     *
+     * The bar for an entry here: a fact that ALWAYS exists for this type of
+     * incident, that the officer can answer at the time of filing, and without
+     * which the report fails its legal purpose. Everything merely useful is not
+     * listed and is not validated at either level.
+     */
+    private const TYPE_RULES = [
+        // Owner of Property is not listed: it is DERIVED from the Victims row
+        // that has to carry a name (GROUP_ROW_RULES['complainant']), so the
+        // requirement lives with the record instead of being asked twice.
+        'Theft' => ['item_stolen', 'how_property_was_taken'],
+        'Robbery' => ['property_taken', 'method_used', 'weapon_involved'],
+        'Assault / Physical Injury' => ['type_of_injury', 'body_part_injured', 'cause_of_injury'],
+        'Traffic Accident' => ['accident_type', 'suspected_cause'],
+        'Rape / Sexual Assault' => ['relationship_to_victim', 'medical_examination'],
+        'Domestic Violence' => ['relationship_between_parties', 'type_of_abuse', 'children_involved'],
+        // Physical Description is not listed either: it is DERIVED from the
+        // Missing Persons row, and that row must carry it.
+        'Missing Person' => ['date_last_seen', 'location_last_seen'],
+        'Lost Property' => ['property_type', 'property_description', 'circumstances_of_loss'],
+        'Fraud / Estafa' => ['transaction_date', 'amount_involved', 'promised_service_or_item'],
+        'Property Damage / Malicious Mischief' => ['damaged_property', 'type_of_damage', 'cause_of_damage'],
+        'Fire Incident' => ['type_of_property', 'possible_cause', 'extent_of_damage'],
+        'Drug-Related Incident' => ['incident_classification', 'items_seized', 'evidence_turnover'],
+        'Burglary / Break-In' => ['establishment_or_residence', 'entry_point', 'signs_of_forced_entry'],
+        'Other Incident' => ['incident_category', 'additional_information'],
+    ];
+
+    /**
+     * The conditional requirements: required only while the field that controls
+     * them holds one of these values. Mirrors `requireWhenShown` + `showIf` on
+     * the field metadata — a weapon means the weapon has to be described, and
+     * answering "No" releases it again.
+     *
+     * @var array<string, array<string, array{0:string,1:string[]}>>
+     */
+    private const TYPE_CONDITIONAL = [
+        'Theft' => ['cctv_description' => ['cctv_available', ['Yes']]],
+        'Robbery' => ['weapon_description' => ['weapon_involved', ['Yes']]],
+        'Burglary / Break-In' => ['cctv_description' => ['cctv_available', ['Yes']]],
+    ];
+
+    /**
+     * What every RECORDED row of a group must carry, by role. Mirrors
+     * GROUP_ROW_RULES in src/lib/incidentTypes.js. The count floors prove rows
+     * exist; these are what make a row a record — a victim with no name, or a
+     * suspect with neither name nor description, is a placeholder.
+     *
+     * `requireAny` is how an UNIDENTIFIED suspect stays recordable: a
+     * description, no name.
+     */
+    private const GROUP_ROW_RULES = [
+        'complainant' => ['require' => ['name'], 'requireAny' => []],
+        'respondent' => ['require' => [], 'requireAny' => [['name', 'suspect_description']]],
+        'witness' => ['require' => ['name'], 'requireAny' => []],
+        'injured_persons' => ['require' => ['name'], 'requireAny' => []],
+        'arrested_persons' => ['require' => ['name'], 'requireAny' => []],
+        'person_last_seen_with' => ['require' => ['name'], 'requireAny' => []],
+        // A missing-person row has to describe the person: a name alone does
+        // not tell anyone who to look for.
+        'missing_person' => ['require' => ['name', 'physical_description'], 'requireAny' => []],
+        'stolen_items' => ['require' => ['item_description'], 'requireAny' => []],
+    ];
+
+    /**
+     * Scalars DERIVED from the v3 groups — the PHP side of `mirrorOf` on
+     * TYPE_FIELDS in src/lib/incidentTypes.js. Keyed by incident type, then by
+     * the scalar being filled. A spec is one of:
+     *
+     *   ['row',     $group, $key, $index]  → that field of that row (index 0)
+     *   ['length',  $group]                → how many rows the group holds
+     *   ['injury',  $group, $status]       → rows carrying that Injury Status
+     *   ['injured', $group]                → rows hurt (any status but Uninjured)
+     *
+     * Consulted by applyMirrors() on every write, so no client has to know the
+     * flat shape exists. Keep in lockstep with TYPE_FIELDS' mirrorOf and with
+     * deriveMirrors() in src/lib/reportRules.js.
+     *
+     * @var array<string, array<string, array<int, string>>>
+     */
+    private const MIRRORS = [
+        'Theft' => [
+            'item_stolen' => ['row', 'stolen_items', 'item_description'],
+            'item_description' => ['row', 'stolen_items', 'item_description'],
+            'quantity' => ['row', 'stolen_items', 'quantity'],
+            'estimated_value' => ['row', 'stolen_items', 'estimated_value'],
+            'owner_of_property' => ['row', 'complainant', 'name'],
+        ],
+        'Robbery' => [
+            'victim_injury' => ['row', 'complainant', 'injury_status'],
+            'property_taken' => ['row', 'stolen_items', 'item_description'],
+            'property_description' => ['row', 'stolen_items', 'item_description'],
+            'estimated_value' => ['row', 'stolen_items', 'estimated_value'],
+        ],
+        'Burglary / Break-In' => [
+            'property_stolen' => ['row', 'stolen_items', 'item_description'],
+            'property_description' => ['row', 'stolen_items', 'item_description'],
+            'estimated_value' => ['row', 'stolen_items', 'estimated_value'],
+        ],
+        'Lost Property' => [
+            'property_description' => ['row', 'stolen_items', 'item_description'],
+            'quantity' => ['row', 'stolen_items', 'quantity'],
+            'estimated_value' => ['row', 'stolen_items', 'estimated_value'],
+        ],
+        'Traffic Accident' => [
+            'number_of_vehicles' => ['length', 'vehicles'],
+            'vehicle_1_type' => ['row', 'vehicles', 'make_model', '0'],
+            'vehicle_1_plate_number' => ['row', 'vehicles', 'plate_number', '0'],
+            'vehicle_1_driver' => ['row', 'vehicles', 'driver_name', '0'],
+            'vehicle_1_damage' => ['row', 'vehicles', 'damage_description', '0'],
+            'vehicle_2_type' => ['row', 'vehicles', 'make_model', '1'],
+            'vehicle_2_plate_number' => ['row', 'vehicles', 'plate_number', '1'],
+            'vehicle_2_driver' => ['row', 'vehicles', 'driver_name', '1'],
+            'vehicle_2_damage' => ['row', 'vehicles', 'damage_description', '1'],
+            'fatalities' => ['injury', 'injured_persons', 'Deceased'],
+        ],
+        'Missing Person' => [
+            'missing_person_name' => ['row', 'missing_person', 'name'],
+            'age' => ['row', 'missing_person', 'age'],
+            'sex' => ['row', 'missing_person', 'sex'],
+            'address' => ['row', 'missing_person', 'address'],
+            'physical_description' => ['row', 'missing_person', 'physical_description'],
+            'clothing_last_seen' => ['row', 'missing_person', 'clothing_last_seen'],
+        ],
+        'Fire Incident' => [
+            'injuries' => ['injured', 'injured_persons'],
+            'fatalities' => ['injury', 'injured_persons', 'Deceased'],
+        ],
+        'Drug-Related Incident' => [
+            'vehicle_involved' => ['row', 'vehicles', 'plate_number'],
+        ],
+        'Rape / Sexual Assault' => [
+            'suspect_status' => ['row', 'respondent', 'suspect_status'],
+        ],
+    ];
+
+    /**
+     * Fill in the scalars the groups superseded. Pure: the input is not
+     * mutated, a copy is returned.
+     *
+     * Two rules, both mirrored from deriveMirrors() in src/lib/reportRules.js,
+     * and both there to protect reports rather than the schema:
+     *   - a group speaks only when it HOLDS a row. A blank row is not a record,
+     *     and an empty group never blanks a scalar — a report filed before the
+     *     groups existed keeps exactly what it was filed with.
+     *   - an empty derivation is never written at all, for the same reason.
+     *
+     * @param array<string, mixed> $ts parsed type_specific
+     * @param string $incidentType canonical type
+     * @return array<string, mixed> a copy with the derivable scalars written in
+     */
+    public static function applyMirrors(array $ts, string $incidentType): array
+    {
+        $specs = self::MIRRORS[$incidentType] ?? null;
+        if ($specs === null) {
+            return $ts;
+        }
+        foreach ($specs as $key => $spec) {
+            $rows = self::meaningfulRows($ts[$spec[1]] ?? null);
+            if ($rows === []) {
+                continue;
+            }
+            $value = match ($spec[0]) {
+                'length' => (string) count($rows),
+                'injury' => (string) count(array_filter(
+                    $rows,
+                    static fn (array $r): bool => trim((string) ($r['injury_status'] ?? '')) === $spec[2],
+                )),
+                'injured' => (string) count(array_filter(
+                    $rows,
+                    static function (array $r): bool {
+                        $status = trim((string) ($r['injury_status'] ?? ''));
+                        return $status !== '' && $status !== 'Uninjured';
+                    },
+                )),
+                default => trim((string) ($rows[(int) ($spec[3] ?? '0')][$spec[2]] ?? '')),
+            };
+            if ($value !== '') {
+                $ts[$key] = $value;
+            }
+        }
+        return $ts;
+    }
+
+    /**
+     * Rows that carry at least one non-empty value — the same "is this a
+     * record or a leftover?" test validateTypeSpecific() uses.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private static function meaningfulRows(mixed $raw): array
+    {
+        if (!is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        foreach ($raw as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            foreach ($row as $v) {
+                if (is_string($v) && trim($v) !== '') {
+                    $out[] = $row;
+                    break;
+                }
+            }
+        }
+        return $out;
+    }
+
+    /** "estimated_value" -> "Estimated value", for a message a human reads. */
+    private static function humanise(string $key): string
+    {
+        return ucfirst(str_replace('_', ' ', $key));
+    }
 
     /** @return array<string, mixed>|null group config for a type */
     public static function groupsFor(string $incidentType): ?array
@@ -174,8 +403,9 @@ final class ReportRules
     }
 
     /**
-     * Validate a type_specific payload that may contain group arrays.
-     * Mirrors reportRules.validateGroups (Gate 2 semantics).
+     * Validate a type_specific payload: the incident's own scalar fields plus
+     * every configured group array. Mirrors reportRules.validateTypeFields and
+     * reportRules.validateGroups together (Gate 2 semantics).
      *
      * @param array $ts parsed type_specific
      * @param string $incidentType canonical type
@@ -185,6 +415,41 @@ final class ReportRules
     public static function validateTypeSpecific(array $ts, string $incidentType, bool $finalizing): array
     {
         $errors = [];
+
+        // The incident's own fields, before the groups: a report of this KIND
+        // has to say these things. Gate 1 leaves them alone — a draft is
+        // allowed to be half-written, which is what a draft is for.
+        if ($finalizing) {
+            foreach ((self::TYPE_RULES[$incidentType] ?? []) as $key) {
+                // A scalar the groups auto-fill is the ROW's business once the
+                // group holds a row: the row rules report it per item, which is
+                // where the officer can actually fix it. Mirrors the same skip
+                // in reportRules.validateTypeFields, so both engines name one
+                // problem for one missing fact.
+                $mirror = self::MIRRORS[$incidentType][$key] ?? null;
+                if ($mirror !== null && self::meaningfulRows($ts[$mirror[1]] ?? null) !== []) {
+                    continue;
+                }
+                if (array_key_exists($key, $ts) && is_array($ts[$key])) {
+                    $errors[] = "type_specific.{$key} must be a scalar value.";
+                    continue;
+                }
+                if (trim((string) ($ts[$key] ?? '')) === '') {
+                    $errors[] = 'type_specific.' . $key . ': ' . self::humanise($key) . ' is required.';
+                }
+            }
+            foreach ((self::TYPE_CONDITIONAL[$incidentType] ?? []) as $key => [$controller, $values]) {
+                if (!in_array(trim((string) ($ts[$controller] ?? '')), $values, true)) {
+                    continue;
+                }
+                if (trim((string) ($ts[$key] ?? '')) === '') {
+                    $errors[] = 'type_specific.' . $key . ': ' . self::humanise($key)
+                        . ' is required when ' . self::humanise($controller)
+                        . ' is ' . implode(' or ', $values) . '.';
+                }
+            }
+        }
+
         $groups = self::groupsFor($incidentType);
         if ($groups === null) {
             return $errors;
@@ -237,15 +502,110 @@ final class ReportRules
                     }
                     $str = trim((string) ($val ?? ''));
                     if ($str === '') {
-                        continue; // schema-level required comes via minCount/cross-checks
+                        // Blank. Content is normally demanded by the count floors
+                        // and the group row rules below — but a schema field
+                        // marked `required` (mirroring fld.required in
+                        // incidentTypes.js) has to be present like any other.
+                        if ($required === true) {
+                            $errors[] = "type_specific.{$groupKey}[{$i}].{$fieldKey} is required.";
+                        }
+                        continue;
                     }
                     $msg = self::checkValue($type, $str, $min, $max);
                     if ($msg !== null) {
                         $errors[] = "type_specific.{$groupKey}[{$i}].{$fieldKey} {$msg}";
                     }
                 }
+
+                // What this group's ROW must carry, by role.
+                $rowRules = self::GROUP_ROW_RULES[$groupKey] ?? null;
+                if ($rowRules !== null) {
+                    foreach ($rowRules['require'] as $key) {
+                        if (trim((string) ($item[$key] ?? '')) === '') {
+                            $errors[] = "{$cfg['label']} " . ($i + 1) . ': '
+                                . self::humanise($key) . ' required.';
+                        }
+                    }
+                    foreach ($rowRules['requireAny'] as $options) {
+                        $filled = false;
+                        foreach ($options as $candidate) {
+                            if (trim((string) ($item[$candidate] ?? '')) !== '') {
+                                $filled = true;
+                                break;
+                            }
+                        }
+                        if (!$filled) {
+                            $errors[] = "{$cfg['label']} " . ($i + 1) . ': '
+                                . implode(' or ', array_map(
+                                    static fn (string $k): string => self::humanise($k),
+                                    $options,
+                                ))
+                                . ' required.';
+                        }
+                    }
+                }
             }
         }
+
+        if ($finalizing) {
+            $errors = array_merge($errors, self::crossCheckErrors($ts, $incidentType));
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Cross-field checks — the ERROR halves of CROSS_CHECKS in reportRules.js.
+     * They used to live only in the browser, which meant a direct API call could
+     * finalize what the form refused: a touched vehicle with no plate, or a
+     * missing person with no circumstances. A third check on the client side
+     * (casualties with no medical mention) is a WARNING and stays there, because
+     * this function has no warning channel and warnings never block.
+     *
+     * @return string[]
+     */
+    private static function crossCheckErrors(array $ts, string $incidentType): array
+    {
+        $errors = [];
+
+        if (in_array($incidentType, ['Traffic Accident', 'Drug-Related Incident'], true)) {
+            foreach ((array) ($ts['vehicles'] ?? []) as $i => $vehicle) {
+                if (!is_array($vehicle)) {
+                    continue;
+                }
+                $touched = false;
+                foreach ($vehicle as $v) {
+                    if (is_string($v) && trim($v) !== '') {
+                        $touched = true;
+                        break;
+                    }
+                }
+                if (!$touched) {
+                    continue; // a fully blank row is dropped, not blocked
+                }
+                if (trim((string) ($vehicle['plate_number'] ?? '')) === '') {
+                    $errors[] = 'type_specific.vehicles[' . $i . '].plate_number: Vehicle '
+                        . ($i + 1) . ': plate number required.';
+                }
+                if (trim((string) ($vehicle['driver_name'] ?? '')) === '') {
+                    $errors[] = 'type_specific.vehicles[' . $i . '].driver_name: Vehicle '
+                        . ($i + 1) . ': driver required.';
+                }
+            }
+        }
+
+        if ($incidentType === 'Missing Person') {
+            foreach ((array) ($ts['missing_person'] ?? []) as $i => $person) {
+                if (!is_array($person)) {
+                    continue;
+                }
+                if (trim((string) ($person['circumstances'] ?? '')) === '') {
+                    $errors[] = 'type_specific.missing_person[' . $i . '].circumstances: Missing person '
+                        . ($i + 1) . ': circumstances of disappearance required.';
+                }
+            }
+        }
+
         return $errors;
     }
 

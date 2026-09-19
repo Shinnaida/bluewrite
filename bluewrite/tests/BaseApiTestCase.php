@@ -172,6 +172,16 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
             // only PATCH status=finalized still pass the completeness gate.
             'action_taken' => 'Subject turned over to the station for proper disposition.',
             'ioc_name' => 'Sgt. Test Investigator',
+            // A Theft report that is complete for its own type
+            // (ReportRules::TYPE_RULES + the complainant group floor), so the
+            // fixtures below represent a report an officer could really submit.
+            // Tests that care about type_specific pass their own.
+            'type_specific' => [
+                'item_stolen' => 'One shoulder bag containing cash',
+                'owner_of_property' => 'Test Complainant',
+                'how_property_was_taken' => 'Snatched by a passer-by on a motorcycle',
+                'complainant' => [['name' => 'Test Complainant']],
+            ],
             'status' => 'draft',
         ], $overrides);
         $res = $this->request('POST', '/reports', $payload, $cookie, $csrf);

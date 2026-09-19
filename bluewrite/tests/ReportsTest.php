@@ -96,6 +96,131 @@ final class ReportsTest extends BaseApiTestCase
         $this->assertSame(200, $ok['status']);
     }
 
+    /**
+     * The incident's OWN kind has to be recorded before it can be submitted.
+     * ReportRules::TYPE_RULES mirrors `required` on TYPE_FIELDS in
+     * src/lib/incidentTypes.js — the shape of the list is pinned there by
+     * tests/rules/reportRules.test.mjs, and this proves the API enforces it too:
+     * the form is only the first gate.
+     */
+    public function testFinalizeRequiresTheIncidentTypesOwnFields(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $report = $this->createReport($cookie, $csrf, [
+            'type_specific' => ['complainant' => [['name' => 'Ana Cruz']]],
+        ]);
+        $id = (int) $report['id'];
+
+        // Gate 1 is untouched: the same half-written blob saves without complaint.
+        $saved = $this->patchReport($cookie, $csrf, $id, ['location' => 'Somewhere else']);
+        $this->assertSame(200, $saved['status'], json_encode($saved['body']));
+
+        $res = $this->patchReport($cookie, $csrf, $id, ['status' => 'finalized']);
+        $this->assertSame(422, $res['status']);
+        $details = implode(' | ', (array) ($res['body']['details'] ?? []));
+        $this->assertStringContainsString('item_stolen', $details, $details);
+        $this->assertStringContainsString('how_property_was_taken', $details, $details);
+        // Owner of Property is NOT one of the things demanded here: the Victims
+        // row the officer already recorded carries it (it is derived from
+        // complainant[0].name — see ReportRules::MIRRORS), so the report cannot
+        // be told to say the same thing twice.
+        $this->assertStringNotContainsString('owner_of_property', $details, $details);
+
+        // Supplying them in the same PATCH finalizes cleanly — and the owner is
+        // still on the record, because the victim's name fills it in.
+        $ok = $this->patchReport($cookie, $csrf, $id, [
+            'status' => 'finalized',
+            'type_specific' => [
+                'item_stolen' => 'One shoulder bag containing cash',
+                'how_property_was_taken' => 'Snatched by a passer-by on a motorcycle',
+                'complainant' => [['name' => 'Ana Cruz']],
+            ],
+        ]);
+        $this->assertSame(200, $ok['status'], json_encode($ok['body']));
+
+        $raw = $this->db()->query("SELECT type_specific FROM bluewrite_test.reports WHERE id = {$id}")->fetchColumn();
+        $stored = json_decode((string) $raw, true);
+        $this->assertSame('Ana Cruz', $stored['owner_of_property'] ?? null, 'the victim fills Owner of Property');
+    }
+
+    /**
+     * The flat scalars the v3 groups superseded are DERIVED on write, so a
+     * client that sends only the group rows still produces a report the printed
+     * sheet can read — and the officer is never asked the same question twice.
+     * Mirrors `mirrorOf` in src/lib/incidentTypes.js and ReportRules::MIRRORS.
+     */
+    public function testGroupRowsFillTheFlatScalarsTheSheetReads(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $report = $this->createReport($cookie, $csrf, [
+            'type_specific' => [
+                'how_property_was_taken' => 'The padlock was cut at the bicycle rack',
+                'complainant' => [['name' => 'Ana Cruz']],
+                'stolen_items' => [
+                    ['item_description' => 'Copper wire', 'quantity' => '128m', 'estimated_value' => '8500'],
+                    ['item_description' => 'Assorted tools'],
+                ],
+            ],
+        ]);
+        $id = (int) $report['id'];
+
+        $raw = $this->db()->query("SELECT type_specific FROM bluewrite_test.reports WHERE id = {$id}")->fetchColumn();
+        $ts = json_decode((string) $raw, true);
+
+        $this->assertSame('Copper wire', $ts['item_stolen'] ?? null, 'Item mirrors the first Stolen Items row');
+        $this->assertSame('Copper wire', $ts['item_description'] ?? null);
+        $this->assertSame('128m', $ts['quantity'] ?? null);
+        $this->assertSame('8500', $ts['estimated_value'] ?? null);
+        $this->assertSame('Ana Cruz', $ts['owner_of_property'] ?? null);
+        // The rows themselves are untouched: the mirror is an addition.
+        $this->assertCount(2, $ts['stolen_items']);
+
+        // A report with NO item rows keeps whatever it was filed with — an
+        // empty group must never blank a scalar.
+        $legacy = $this->createReport($cookie, $csrf, [
+            'type_specific' => [
+                'item_stolen' => 'One shoulder bag',
+                'owner_of_property' => 'Ana Lopez',
+                'how_property_was_taken' => 'Snatched on the street',
+                'complainant' => [['name' => 'Ana Lopez']],
+            ],
+        ]);
+        $legacyRaw = $this->db()->query(
+            "SELECT type_specific FROM bluewrite_test.reports WHERE id = " . (int) $legacy['id']
+        )->fetchColumn();
+        $legacyTs = json_decode((string) $legacyRaw, true);
+        $this->assertSame('One shoulder bag', $legacyTs['item_stolen'] ?? null);
+        $this->assertSame('Ana Lopez', $legacyTs['owner_of_property'] ?? null);
+
+        // And it still finalizes cleanly: the Item field, not a row, is the
+        // record when nothing was taken.
+        $finalized = $this->patchReport($cookie, $csrf, (int) $legacy['id'], ['status' => 'finalized']);
+        $this->assertSame(200, $finalized['status'], json_encode($finalized['body']));
+    }
+
+    /**
+     * A row in a group is a record, not a placeholder: a victim with no name is
+     * caught (and an UNIDENTIFIED suspect stays recordable by description —
+     * covered on the JS side, where the shapes are pinned).
+     */
+    public function testARecordedGroupRowMustBeARecord(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $report = $this->createReport($cookie, $csrf, [
+            'type_specific' => [
+                'item_stolen' => 'One shoulder bag',
+                'owner_of_property' => 'Ana Cruz',
+                'how_property_was_taken' => 'Snatched on the street',
+                'complainant' => [['address' => 'Poblacion, City of Naga']],
+            ],
+        ]);
+
+        $res = $this->patchReport($cookie, $csrf, (int) $report['id'], ['status' => 'finalized']);
+        $this->assertSame(422, $res['status']);
+        $details = implode(' | ', (array) ($res['body']['details'] ?? []));
+        $this->assertStringContainsStringIgnoringCase('name required', $details, $details);
+    }
+
     public function testArchiveIsSoftDeleteOnly(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');

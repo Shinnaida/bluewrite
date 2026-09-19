@@ -25,6 +25,12 @@ export default function RepeatableGroup({
   groupError,    // message for the group as a whole (e.g. minCount unmet)
   softWarnAt = DEFAULT_SOFT_WARN_AT,
   blankItem,     // () => ({}) factory
+  // Put in front of every id this component builds. The review step renders a
+  // SECOND copy of a group beside the form's (which stays mounted but hidden),
+  // and two copies sharing an id would send every error jump and every label to
+  // whichever came first in the document — the hidden one. See
+  // src/lib/reviewFields.js, which owns the scheme.
+  idPrefix = '',
 }) {
   const list = Array.isArray(items) ? items : [];
 
@@ -47,7 +53,7 @@ export default function RepeatableGroup({
   return (
     // id/anchor used by the editor's error-summary jump links (focusField)
     // to land on the whole group when the group itself is the problem.
-    <div className="rep-group" data-group={groupKey} id={`g-${groupKey}`}>
+    <div className="rep-group" data-group={groupKey} id={`${idPrefix}g-${groupKey}`}>
       <div className="rep-group-head">
         <label>{label}</label>
       </div>
@@ -82,7 +88,7 @@ export default function RepeatableGroup({
           </legend>
           <div className="form-grid">
             {itemSchema.map((fld) => {
-              const id = `${groupKey}-${i}-${fld.key}`;
+              const id = `${idPrefix}${groupKey}-${i}-${fld.key}`;
               const fieldErr = errors?.[`${groupKey}[${i}].${fld.key}`];
               const control = fld.select ? (
                 <select id={id} value={item?.[fld.key] ?? ''} onChange={(e) => setItemField(i, fld.key, e.target.value)}>

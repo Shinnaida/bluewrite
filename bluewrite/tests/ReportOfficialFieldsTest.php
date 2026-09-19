@@ -371,7 +371,12 @@ final class ReportOfficialFieldsTest extends BaseApiTestCase
             'narrative' => 'A sufficiently long narrative describing what happened at the scene for the report.',
             'action_taken' => 'Subject turned over to the station for proper disposition.',
             'ioc_name' => 'Sgt. Test Investigator',
+            // Complete for the incident's OWN type too (ReportRules::TYPE_RULES),
+            // since both of these tests finalize the report.
             'type_specific' => [
+                'item_stolen' => 'One shoulder bag containing cash',
+                'owner_of_property' => 'Ana Cruz',
+                'how_property_was_taken' => 'Snatched by a passer-by on a motorcycle',
                 'complainant' => [['name' => 'Ana Cruz', 'victim_type' => 'Individual']],
             ],
         ], $cookie, $csrf);
@@ -468,7 +473,12 @@ final class ReportOfficialFieldsTest extends BaseApiTestCase
             'action_taken' => 'Subject turned over to the station for proper disposition.',
             'ioc_name' => 'Sgt. Test Investigator',
             'reporter_name' => 'Nita B. Ramos',
+            // Complete for the incident's OWN type too (ReportRules::TYPE_RULES),
+            // since both of these tests finalize the report.
             'type_specific' => [
+                'item_stolen' => 'One shoulder bag containing cash',
+                'owner_of_property' => 'Ana Cruz',
+                'how_property_was_taken' => 'Snatched by a passer-by on a motorcycle',
                 'complainant' => [['name' => 'Ana Cruz', 'victim_type' => 'Individual']],
             ],
         ], $cookie, $csrf);

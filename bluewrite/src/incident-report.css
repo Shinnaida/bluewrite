@@ -23,14 +23,36 @@
   --ir-navy-hi: #26406c;
   --ir-page: var(--void);
   --ir-card: var(--panel);
-  --ir-card-head: #eceef2;
+  --ir-card-head: var(--card-head);
   --ir-border: var(--line);
   --ir-text: var(--paper);
   --ir-muted: var(--steel);
-  --ir-blue: var(--cyan);
-  --ir-blue-hi: #17489f;
+  /* Blue, the fill half: the submit bar, the primary button, the switch. It
+     always carries white, so it follows the app's accent SURFACE rather than
+     its accent ink — a blue bright enough to read on a near-black page is too
+     bright to hold a white label. */
+  --ir-blue: var(--accent-fill);
+  --ir-blue-hi: var(--accent-fill-hover);
   --ir-amber: var(--amber);
   --ir-red: var(--red);
+
+  /* The document layer's own inks and surfaces, each 1:1 with a role token in
+     styles.css. They are named here because this file reads them by role
+     ("the ink on a header bar", "the placeholder in a field") and a rule in
+     this file should not have to know which palette slot that is today. */
+  --ir-head-ink: var(--head-ink);
+  --ir-icon: var(--icon-dim);
+  --ir-placeholder: var(--placeholder);
+  --ir-hero-ink: var(--hero-ink);
+  --ir-info-ink: var(--info-ink);
+  --ir-danger-ink: var(--danger-ink);
+  --ir-input: var(--input-bg);
+  --ir-raised: var(--panel-raised);
+  --ir-soft: var(--panel-soft);
+  --ir-row-hover: var(--panel-sunken);
+  --ir-btn: var(--panel);
+  --ir-btn-ink: var(--ink-dim);
+  --ir-focus-ring: var(--focus-ring);
 }
 
 /* ===========================================================================
@@ -193,6 +215,496 @@
   color: var(--ir-red);
 }
 
+/* ---- Progress stepper (Write Report) -------------------------------------
+   The officer's position in the document: one hairline track behind five
+   dots, filled up to the current section, with a label under each dot. A
+   read-out and a jump-nav, not a wizard — the form stays one long scroll, so
+   this is content, never a second sticky bar.
+
+   Colours are named with the palette tokens directly (this file's --ir-*
+   aliases resolve to exactly these); the dot size and the label width are
+   variables here so a narrow viewport can shrink both in one place. */
+.ir-stepper {
+  --ir-stepper-dot-size: 24px;
+  --ir-stepper-label-w: 9.5rem;
+  margin: 0 0 1.1rem;
+}
+
+.ir-stepper-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.7rem;
+}
+
+/* The caption wears the page title's treatment — same face, same ink — at
+   caption size. (The spec called for the old Georgia serif; like .ir-title,
+   it is the one project typeface now, because the serif is gone app-wide.) */
+.ir-stepper-caption {
+  font-family: var(--font-family);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--paper);
+}
+
+.ir-stepper-count {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+
+/* The rail carries the track that runs behind the dots. */
+.ir-stepper-rail {
+  position: relative;
+}
+
+/* Inset by half a column (--ir-stepper-inset, set by the component) so the
+   line starts and ends at the centre of the first and last dot. The fill is
+   the same fraction of the FOUR gaps between the dots, so it lands exactly on
+   the current dot at every step. */
+.ir-stepper-track {
+  position: absolute;
+  left: var(--ir-stepper-inset, 10%);
+  right: var(--ir-stepper-inset, 10%);
+  top: calc(var(--ir-stepper-dot-size) / 2);
+  height: 1px;
+  background: var(--line);
+}
+.ir-stepper-track-fill {
+  display: block;
+  height: 100%;
+  width: var(--ir-stepper-fill, 0%);
+  background: var(--violet);
+  transition: width 0.35s ease;
+}
+
+.ir-stepper-steps {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--ir-stepper-dots, 5), minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ir-stepper-step {
+  min-width: 0;
+}
+
+/* Dot + label are ONE button, so the whole step is the hit target. Excluded
+   from the .ir-body button rules (section 4) — the dot carries the fill and
+   the border, never the button. */
+.ir-stepper-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+.ir-stepper-node:hover {
+  border: 0;
+  background: transparent;
+}
+
+/* Lifted over the track, which is positioned and would otherwise paint on
+   top of the dots. */
+.ir-stepper-dot {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: var(--ir-stepper-dot-size);
+  height: var(--ir-stepper-dot-size);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--steel);
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* TWO faces, one rule: filled or not.
+     white inside + violet ring  → not finished
+     all violet + white tick     → that section is filled in
+   A dot's face is never influenced by position, so "is this step done?" is
+   answered by the fill alone and never competes with "you are here". The
+   violet is the rail's own accent (--violet): its number and its ring carry
+   it, and the line it sits on fills with it. */
+.ir-stepper-dot--pending {
+  border-color: var(--violet);
+  color: var(--violet);
+}
+.ir-stepper-dot--done {
+  border-color: var(--violet);
+  background: var(--violet);
+  color: var(--panel);
+}
+
+/* The node the officer is STANDING ON in the stepped format — or, in the
+   document format where there are no steps, the first section still open.
+   This is the only thing that moves with position: an empty dot thickens to a
+   2px ring (its number is already the accent), while a finished dot cannot
+   thicken — it has no ring to thicken — so it wears the ring as a halo
+   instead. Form separates "here" from "elsewhere" in both cases; the hue is
+   the same on every dot, so it can never be mistaken for a third state. */
+.ir-stepper-node--here .ir-stepper-dot {
+  border-width: 2px;
+  color: var(--violet);
+}
+.ir-stepper-node--here .ir-stepper-dot--done {
+  border-width: 1px;
+  color: var(--panel);
+  outline: 2px solid var(--violet);
+  outline-offset: 2px;
+}
+
+/* A fixed width per label, so a longer name wraps instead of shifting the
+   row it sits in. */
+.ir-stepper-label {
+  width: var(--ir-stepper-label-w);
+  max-width: 100%;
+  /* The root is 15px, so this is the spec's 10.5–11px label. */
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+.ir-stepper-label--done {
+  color: var(--paper);
+}
+/* The here node's label wins over --done's ink by specificity (0,2,0 > 0,1,0),
+   so a finished section you are standing on still reads as the position. */
+.ir-stepper-node--here .ir-stepper-label {
+  color: var(--violet);
+}
+/* Hover is the whole affordance: these dots navigate, they do not submit. */
+.ir-stepper-node:hover .ir-stepper-label {
+  color: var(--violet);
+}
+
+/* ---- Step navigation (stepped form format only) --------------------------
+   A straight Previous/Next along the same five sections, for reading the
+   report in order. The stepper above stays the direct route to any step. */
+.ir-step-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  /* Previous/Next sit at the END of the panel — where the officer finishes
+     reading it — so the space belongs above the row. */
+  margin: 1.25rem 0 0.25rem;
+}
+.ir-step-nav button:disabled {
+  opacity: 0.45;
+}
+/* Position, not progress: the stepper's caption says where the WORK is, this
+   says which panel is on screen. */
+.ir-step-nav-where {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+
+/* ---- The review step (stepped format only) -------------------------------
+   The whole report read back as one document: label over value, the way the
+   form lays its own fields out, with the controls taken away. Nothing here is
+   editable, so none of it carries an input, focus or invalid state — the one
+   clickable thing is the "Needs attention" flag, which navigates. */
+/* No max-width here, deliberately. This block used to be capped at 60rem on
+   the theory that a document reads down a narrower measure than a form does —
+   but the review is a read-back OF the form, and the form is full-bleed, so the
+   cap made step 6 the one screen with a third of its card empty. The measure
+   that actually matters is already carried by the two-column grid below
+   (label/value pairs get ~30rem each), and the narrative is typed and read in a
+   full-width field back in step 3, so capping it here would make the read-back
+   narrower than the place it was written. Add a cap to a specific value if a
+   field ever earns one; do not put one back on the block.
+
+   The one declaration left is the overflow guard, not a measure: it stops a
+   long unbroken token in a value from pushing the block wider than its card if
+   this ever ends up inside a flex or grid parent. */
+.ir-review {
+  min-width: 0;
+}
+.ir-review-note {
+  margin: 0 0 1.1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-raised);
+  font-size: 0.82rem;
+  color: var(--steel);
+}
+
+.ir-review-section {
+  padding-bottom: 1.05rem;
+  margin-bottom: 1.05rem;
+  border-bottom: 1px solid var(--line);
+}
+.ir-review-section:last-child {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: 0;
+}
+.ir-review-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+.ir-review-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--panel);
+  font-size: 0.63rem;
+  font-weight: 700;
+}
+.ir-review-title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--paper);
+}
+/* The flag is the review's only control, and it moves the officer rather than
+   changing anything: amber because it is the "before you submit" note the
+   amber Draft badge already uses, never the red of a blocked field. */
+.ir-review-flag {
+  margin-left: auto;
+  padding: 0.16rem 0.52rem;
+  border: 1px solid var(--amber);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--amber);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.ir-review-flag:hover {
+  background: var(--amber-bg);
+}
+
+.ir-review-rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1.4rem;
+}
+.ir-review-row {
+  min-width: 0;
+}
+.ir-review-row--wide,
+.ir-review-block {
+  grid-column: 1 / -1;
+}
+.ir-review-key {
+  margin-bottom: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+.ir-review-value {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--paper);
+  /* The narrative and Action Taken are typed in lines: keep them. */
+  white-space: pre-wrap;
+}
+.ir-review-value--empty {
+  color: var(--steel);
+  font-style: italic;
+}
+/* Blank AND required — the reason the report cannot be submitted yet, so it
+   reads as a to-do rather than as an omission. Amber, like the Draft badge:
+   "before you submit", never the red of a field that is wrong. */
+.ir-review-value--missing {
+  color: var(--amber);
+  font-weight: 600;
+}
+
+/* An editable row's value: the same line of text the read-back always showed,
+   now a button, so it can be opened by pointer AND by keyboard. The box that
+   says so appears on hover/focus only, which is what keeps the review reading
+   as a document rather than as a form — and since it is a transparent border
+   with no padding, opening a row does not shift the lines around it. */
+.ir-review-value--editable {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  /* No colour of its own: the value classes above (including the amber of a
+     missing required value) decide it, and a colour here would win on source
+     order because both are single-class rules. */
+  font: inherit;
+  text-align: left;
+  cursor: text;
+}
+.ir-review-value--editable:hover {
+  border-color: var(--line);
+  background: var(--panel-raised);
+}
+.ir-review-value--editable:focus-visible {
+  outline: none;
+  border-color: var(--ir-blue);
+  box-shadow: 0 0 0 3px var(--ir-focus-ring);
+}
+
+/* The one-time hint under the review's summary line: said once, rather than
+   hinted at on every row. */
+.ir-review-hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.74rem;
+  color: var(--steel);
+}
+
+/* The open row's editor: the same controls the form uses, in the same order,
+   so only the wrapping div is new. The error line under a control reuses the
+   app's .error, exactly like the form's inline errors. */
+.ir-review-editor {
+  min-width: 0;
+}
+
+/* The mouse-reachable way out of an open row. A blur deliberately does NOT
+   close one (see ReviewFieldEditor): closing re-flows the document under the
+   pointer, and a click aimed at Submit can land on whatever moved into its
+   place. So the row is closed by Escape, by this, by another row, or by
+   leaving the Review step — and this is the one that needs no keyboard. */
+.ir-review-done {
+  display: inline-block;
+  margin-top: 0.4rem;
+  padding: 0.12rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--steel);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.ir-review-done:hover {
+  border-color: var(--ir-blue);
+  color: var(--ir-blue);
+}
+/* The advisory line: what is still blank and merely worth recording. It can
+   never block a submission. */
+.ir-review-advisory {
+  /* It sits inside .ir-review-rows, which is a grid: without this it would
+     occupy one column and read as if it belonged to the field beside it. */
+  grid-column: 1 / -1;
+  margin: 0.7rem 0 0;
+  font-size: 0.78rem;
+  color: var(--steel);
+}
+.ir-review-advisory-label {
+  font-weight: 600;
+  color: var(--paper);
+}
+
+/* A repeatable group inside the review: its name and how many rows, then one
+   line per record. */
+.ir-review-block {
+  min-width: 0;
+}
+.ir-review-block + .ir-review-block {
+  margin-top: 0.2rem;
+}
+.ir-review-block-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--paper);
+}
+.ir-review-count {
+  padding: 0.04rem 0.42rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--steel);
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+}
+.ir-review-count--required {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+.ir-review-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.32rem 0;
+}
+.ir-review-item + .ir-review-item {
+  border-top: 1px dashed var(--line);
+}
+.ir-review-item-n {
+  flex: none;
+  width: 1.05rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: right;
+  color: var(--steel);
+}
+.ir-review-item-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.9rem;
+  min-width: 0;
+}
+.ir-review-pair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.ir-review-pair-k {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+.ir-review-pair-v {
+  font-size: 0.9rem;
+  color: var(--paper);
+}
+
 /* ===========================================================================
    3. Four panels, 2x2 on desktop
    =========================================================================== */
@@ -207,11 +719,24 @@
   align-items: start;
 }
 
+/* ---- The stepped format (Profile ▸ Preferences ▸ Form format) -------------
+   One panel per step instead of one long scroll. Every card stays MOUNTED —
+   `hidden` only takes it off screen — because the error jumps resolve by
+   element id and a field that is outside the DOM can neither be focused nor
+   scrolled to (ReportEditor.jumpTo reveals the owning step first). The grid
+   drops to a single column so the visible panel gets the full measure. */
+.ir-form--stepped .ir-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.ir-form--stepped [hidden] {
+  display: none;
+}
+
 .ir-card {
   background: var(--ir-card);
   border: 1px solid var(--ir-border);
   border-radius: 4px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow-xs);
   overflow: hidden;
   margin: 0;
 }
@@ -230,13 +755,41 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #2b3547;
+  color: var(--ir-head-ink);
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 .ir-card-head .ir-card-num {
   color: var(--ir-blue);
+}
+
+/* The cards of the step the officer is on — the WHOLE header bar goes --indigo,
+   the rail's emphasis repeated in the body, because a step is one card or
+   several (step 4 is Parties Involved AND the per-type block; step 5 is three
+   cards) and nothing else on the page says which cards belong together.
+
+   Three deliberate choices:
+     · it is a DIRECT-child selector, so a RepeatableGroup's own header inside a
+       current card is never repainted by it;
+     · it is a modifier, not a change to --ir-card-head, which also backs table
+       headers — recolouring that token would tint every table in the document;
+     · the bar's own hairline goes indigo too, so no grey line cuts across the
+       filled colour, and nothing moves: same padding, same label position.
+   The ink is white, which is the trade a filled header asks for — white on
+   #6F79E8 is 3.8:1, under AA for the 12px label (see the token for the one-line
+   fix if that ever needs to change). Read-out only: a card that is not current
+   stays fully editable. */
+.ir-card--current > .ir-card-head {
+  background: var(--indigo);
+  border-bottom-color: var(--indigo);
+  color: #fff;
+}
+/* The numeral keeps a step of hierarchy on the filled bar — softer than the
+   title, but white rather than the blue it wears on a grey header, which would
+   all but disappear here. */
+.ir-card--current > .ir-card-head > .ir-card-num {
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .ir-card-body {
@@ -253,12 +806,28 @@
   grid-column: 1 / -1;
 }
 
+/* Panel II's first row stays the plain two equal columns of .ir-sub above, and
+   the gap in the middle of it is deliberate: the type select is capped (see
+   .ir-field--narrow) so it stops filling its own column, and the date/time pair
+   keeps the RIGHT column — which also keeps the two pickers at a sensible width
+   instead of letting them stretch into the freed space. The row reads as a
+   short field, then the pair, not as three controls packed edge to edge. */
+
 /* ---- Field with an icon beside its label ---- */
 .ir-field {
   margin-bottom: 0.9rem;
 }
 .ir-field:last-child {
   margin-bottom: 0;
+}
+
+/* A field whose control does not need the column's full width. The incident
+   type is the case: its 14 names are the longest thing it ever renders and they
+   still fit well inside 20rem, so a full-column select was mostly empty box.
+   Raise this number if a longer type name is ever added — it is the only place
+   the width is stated. */
+.ir-field--narrow select {
+  max-width: 20rem;
 }
 
 .ir-label {
@@ -274,13 +843,13 @@
 }
 .ir-label svg {
   flex: none;
-  color: #8b95a7;
+  color: var(--ir-icon);
 }
 
 .ir-body input,
 .ir-body select,
 .ir-body textarea {
-  background: #fff;
+  background: var(--ir-input);
   border: 1px solid var(--ir-border);
   border-radius: 3px;
   color: var(--ir-text);
@@ -288,10 +857,10 @@
 }
 .ir-body input::placeholder,
 .ir-body textarea::placeholder {
-  color: #9aa3b2;
+  color: var(--ir-placeholder);
 }
 .ir-body select option {
-  background: #fff;
+  background: var(--ir-input);
   color: var(--ir-text);
 }
 .ir-body input:focus,
@@ -299,12 +868,12 @@
 .ir-body textarea:focus {
   outline: none;
   border-color: var(--ir-blue);
-  box-shadow: 0 0 0 3px rgba(31, 95, 208, 0.18);
+  box-shadow: 0 0 0 3px var(--ir-focus-ring);
 }
 .ir-body input:disabled,
 .ir-body select:disabled,
 .ir-body textarea:disabled {
-  background: #f4f6fa;
+  background: var(--ir-raised);
 }
 .ir-body input[aria-invalid='true'],
 .ir-body textarea[aria-invalid='true'] {
@@ -326,7 +895,7 @@
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #7c8697;
+  color: var(--ir-muted);
   margin-bottom: 0.2rem;
 }
 
@@ -364,7 +933,7 @@
 .ir-sign-box {
   border: 1px solid var(--ir-border);
   border-radius: 3px;
-  background: #fbfcfe;
+  background: var(--ir-soft);
   padding: 0.75rem 0.8rem;
   display: flex;
   flex-direction: column;
@@ -394,7 +963,7 @@
 }
 
 .ir-sign-empty {
-  color: #9aa3b2;
+  color: var(--ir-placeholder);
   font-family: var(--font-body);
   font-size: 0.8rem;
   font-style: italic;
@@ -444,24 +1013,43 @@
   margin-top: 0.7rem;
 }
 
-.ir-body button:not(.ir-submit):not(.ir-nav-link) {
-  background: #fff;
-  border: 1px solid var(--ir-border);
-  color: #33405a;
+/* The report's secondary actions now sit ABOVE the commit button — Save Draft
+   has to come before the irreversible one — so the 0.7rem that used to open
+   the row moves to the button beneath it. Written as a sibling selector and
+   not on .ir-submit itself: Home's own action row holds its Submit INSIDE it,
+   so this cannot reach that screen. */
+.ir-actions-row + .ir-submit {
+  margin-top: 0.7rem;
 }
-.ir-body button:not(.ir-submit):not(.ir-nav-link):hover {
+
+/* .ir-stepper-node is excluded for the same reason .ir-submit is: it is not
+   a button in the document grammar, it is a dot + label that happens to be
+   clickable. .ir-review-flag is the same case one step further on — a chip
+   that names a section, not a control that does something. And
+   .ir-review-value--editable is that case the furthest of all: it is the
+   read-back VALUE itself, which happens to be openable; .ir-review-done is the
+   same kind of thing, a way OUT of an open row rather than an action on the
+   report. .th-sort is the register's sortable heading: it must read as the table
+   heading it is, so it too is excluded here and styled where the table lives
+   (styles.css). */
+.ir-body button:not(.ir-submit):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort) {
+  background: var(--ir-btn);
+  border: 1px solid var(--ir-border);
+  color: var(--ir-btn-ink);
+}
+.ir-body button:not(.ir-submit):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):hover {
   border-color: var(--ir-blue);
   color: var(--ir-blue);
-  background: #fff;
+  background: var(--ir-btn);
 }
 .ir-body button.danger {
-  border-color: rgba(179, 38, 30, 0.4);
+  border-color: var(--red-line);
   color: var(--ir-red);
-  background: #fff;
+  background: var(--ir-btn);
 }
 .ir-body button.danger:hover {
   border-color: var(--ir-red);
-  background: rgba(179, 38, 30, 0.06);
+  background: var(--red-bg);
   color: var(--ir-red);
 }
 .ir-body button.primary {
@@ -492,7 +1080,7 @@
 .ir-body .section,
 .ir-body .rep-group,
 .ir-body .rep-item {
-  background: #fff;
+  background: var(--ir-card);
   border-color: var(--ir-border);
 }
 
@@ -509,14 +1097,14 @@
   border-radius: 4px;
 }
 .ir-body .alert.error {
-  background: rgba(179, 38, 30, 0.07);
-  border-color: rgba(179, 38, 30, 0.4);
-  color: #7f1d16;
+  background: var(--red-bg);
+  border-color: var(--red-line);
+  color: var(--ir-danger-ink);
 }
 .ir-body .alert.info {
-  background: rgba(31, 95, 208, 0.07);
-  border-color: rgba(31, 95, 208, 0.3);
-  color: #1b3f7a;
+  background: var(--cyan-bg);
+  border-color: var(--cyan-bg-strong);
+  color: var(--ir-info-ink);
 }
 
 .ir-body label {
@@ -525,15 +1113,15 @@
 }
 
 .ir-body .badge.draft {
-  background: rgba(178, 106, 0, 0.12);
+  background: var(--amber-bg);
   color: var(--ir-amber);
-  border-color: rgba(178, 106, 0, 0.45);
+  border-color: var(--amber-line);
 }
 .ir-body .badge.finalized,
 .ir-body .badge.active {
-  background: rgba(21, 128, 61, 0.12);
-  color: #15803d;
-  border-color: rgba(21, 128, 61, 0.4);
+  background: var(--green-bg);
+  color: var(--green-ok);
+  border-color: var(--green-line);
 }
 
 .ir-body .field .error,
@@ -550,7 +1138,7 @@
   padding: 0.45rem 0.7rem;
   border: 1px dashed var(--ir-border);
   border-radius: 3px;
-  background: #f4f6fa;
+  background: var(--ir-raised);
   color: var(--ir-text);
   font-size: 0.9rem;
 }
@@ -600,25 +1188,25 @@
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.06em;
-  background: #fff;
+  background: var(--ir-btn);
   border: 1px solid var(--ir-border);
-  color: #33405a;
+  color: var(--ir-btn-ink);
   text-decoration: none;
 }
 .ir-card-head-actions button:hover,
 .ir-card-head-actions .button-link:hover {
   border-color: var(--ir-blue);
   color: var(--ir-blue);
-  background: #fff;
+  background: var(--ir-btn);
 }
 
 .ir-body table th {
   background: var(--ir-card-head);
-  color: #2b3547;
+  color: var(--ir-head-ink);
   border-bottom: 1px solid var(--ir-border);
 }
 .ir-body tbody tr:hover {
-  background: #f7f9fc;
+  background: var(--ir-row-hover);
   border-left-color: var(--ir-blue);
 }
 .ir-body .reports-toolbar {
@@ -646,6 +1234,7 @@
   padding: 0.75rem 1.5rem;
 }
 
+
 .ir-home-list {
   list-style: none;
   margin: 0;
@@ -659,14 +1248,14 @@
   width: 100%;
   margin-bottom: 0.45rem;
   padding: 0.6rem 0.7rem;
-  background: #fff;
+  background: var(--ir-card);
   border: 1px solid var(--ir-border);
   border-radius: 3px;
   text-align: left;
 }
 .ir-home-item:hover {
   border-color: var(--ir-blue);
-  background: #fff;
+  background: var(--ir-card);
 }
 .ir-home-no {
   flex: none;
@@ -710,7 +1299,7 @@
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.05;
-  color: var(--ir-navy);
+  color: var(--ir-hero-ink);
 }
 .ir-hero-wordmark em {
   font-style: normal;
@@ -732,14 +1321,17 @@
    Scoped to `.ir-home`, which ONLY the Home screen renders, so the centring
    never reaches the report editor, the register, the admin screens or the
    print sheet. On Home everything is centred: the masthead wordmark and its
-   kicker, the card head, the body copy and the action button.
+   kicker, the body copy and the action button.
 
    The page is now three stacked blocks — masthead, the one action, then the
    register tail — because the Report Intake card was removed on request. The
    register is no longer half of a two-column row, so it gets its own measure
    and sits centred at the bottom instead of being sized by a grid column.
 
-   One deliberate exception to the centring: the Recent Reports rows stay
+   The tail card is headless (no "I. Recent Reports" bar), so it has no
+   `.ir-card-head` to centre here — the body holds the only content.
+
+   One deliberate exception to the centring: the register rows stay
    left-aligned — that block is a record (no. · type · date · status) meant to
    be read across, not centred.
    =========================================================================== */
@@ -759,10 +1351,6 @@
 .ir-home .ir-recent {
   max-width: 46rem;
   margin: clamp(1.75rem, 5vw, 3.25rem) auto 0;
-}
-
-.ir-home .ir-card-head {
-  justify-content: center;
 }
 
 .ir-home .ir-card-body {
@@ -785,6 +1373,18 @@
 /* ===========================================================================
    7. Profile — the identity + sign-out control that replaced the nav's Logout
    =========================================================================== */
+/* The bar's brand is a BUTTON (it goes home) wearing no button chrome, so its
+   hover state has to be re-stated or the element-level `button:hover` in
+   styles.css repaints it: that rule sets `background: var(--panel-raised)`,
+   which drops a near-white plate behind the wordmark on the navy bar, and
+   `color: var(--cyan)`, which repaints both lines. Same reason, same fix as
+   .ir-nav-link:hover: a class plus :hover out-specifies `button:hover`
+   (0,2,0 beats 0,1,1), so the plate never appears.
+
+   The hover state is deliberately EMPTY — no plate, no colour shift, no
+   underline under the wordmark. The button is still a button (pointer cursor,
+   goes home on click, keyboard focus keeps its white outline below); it simply
+   never paints anything on hover. Do not "add" an affordance here. */
 .ir-brand-home {
   background: none;
   border: 0;
@@ -794,9 +1394,12 @@
   text-align: left;
   cursor: pointer;
 }
-.ir-brand-home:hover .ir-brand-line2 {
-  text-decoration: underline;
+.ir-brand-home:hover {
+  background: none;
+  border-color: transparent;
+  color: inherit;
 }
+
 .ir-brand-home:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 3px;
@@ -863,10 +1466,10 @@
   z-index: 60;
   min-width: 16rem;
   padding: 0.35rem;
-  background: #fff;
+  background: var(--ir-card);
   border: 1px solid var(--ir-border);
   border-radius: 4px;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--shadow-md);
   color: var(--ir-text);
 }
 
@@ -908,7 +1511,7 @@
   gap: 0.55rem;
   width: 100%;
   padding: 0.5rem 0.6rem;
-  background: #fff;
+  background: var(--ir-card);
   border: 1px solid transparent;
   border-radius: 3px;
   color: var(--ir-text);
@@ -919,6 +1522,91 @@
   background: var(--ir-page);
   border-color: var(--ir-border);
   color: var(--ir-red);
+}
+
+/* ---- Preferences — display choices, not report data ----------------------
+   They sit between the identity block and Log out, so the menu reads
+   top-to-bottom: who you are → how the workspace is drawn → the one
+   destructive action. */
+.ir-profile-prefs {
+  padding: 0.15rem 0.35rem 0.55rem;
+}
+
+.ir-pref-title {
+  padding: 0 0.25rem 0.4rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+}
+
+.ir-pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  padding: 0.15rem 0.25rem;
+}
+
+.ir-pref-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ir-pref-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ir-text);
+}
+/* The hint IS the value: it says which format is currently on, so a single
+   switch needs no second control to explain itself. */
+.ir-pref-hint {
+  max-width: 11.5rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--ir-muted);
+}
+
+/* The switch: a pill that fills blue when on, with a white knob. Fixed px on
+   the track and the knob so the travel is exact and the two never drift. */
+.ir-switch {
+  flex: none;
+  position: relative;
+  width: 40px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--ir-border);
+  border-radius: 999px;
+  background: var(--ir-page);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.ir-switch:hover {
+  border-color: var(--ir-blue);
+  background: var(--ir-page);
+}
+.ir-switch[aria-checked='true'] {
+  background: var(--ir-blue);
+  border-color: var(--ir-blue);
+}
+.ir-switch[aria-checked='true']:hover {
+  background: var(--ir-blue-hi);
+  border-color: var(--ir-blue-hi);
+}
+.ir-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--on-accent);
+  box-shadow: var(--shadow-xs);
+  transition: transform 140ms ease;
+}
+.ir-switch[aria-checked='true'] .ir-switch-knob {
+  transform: translateX(18px);
 }
 
 /* ===========================================================================
@@ -938,8 +1626,21 @@
 
 @media (max-width: 560px) {
   .ir-sub,
-  .ir-sign-grid {
+  .ir-sign-grid,
+  /* The review's label/value pairs are two columns for a wide page and one
+     for a phone: a document reads down, never across. */
+  .ir-review-rows {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* The stepper stays horizontal (it is five steps, not five screens), but
+     the dots tighten and the labels drop a size so they fit side by side. */
+  .ir-stepper {
+    --ir-stepper-dot-size: 20px;
+    --ir-stepper-label-w: 100%;
+  }
+  .ir-stepper-label {
+    font-size: 0.64rem;
+    letter-spacing: 0.04em;
   }
   .ir-nav {
     padding: 0.6rem 0.9rem;
@@ -960,4 +1661,73 @@
   .ir-home-when {
     width: 100%;
   }
+}
+
+/* ===========================================================================
+   9. Appearance (Profile ▸ Preferences)
+
+   Form format is a boolean and wears the switch above. Appearance is not:
+   light, dark and follow-the-workstation are three different answers, so a
+   switch would have to lie about the third one. A segmented control states all
+   three at once and shows which is on — which is also what lets it read
+   without a legend, and why it does not need the switch's hint line to
+   explain the value it is currently set to.
+
+   It is stacked under its label rather than sitting beside it: three segments
+   plus a name do not fit the 16rem menu on one line, and squashing them is the
+   one way this control stops being readable.
+   =========================================================================== */
+.ir-pref-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.15rem 0.25rem 0.15rem;
+}
+.ir-pref-stack .ir-pref-text {
+  padding: 0 0.05rem;
+}
+
+.ir-seg {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 2px;
+  border: 1px solid var(--ir-border);
+  border-radius: 4px;
+  background: var(--ir-page);
+}
+
+/* A segment is not a button in the document grammar — no border, no plate of
+   its own — so it is opted out of `button:hover` by carrying its own hover at
+   a higher specificity (0,2,0 beats 0,1,1) and never painting a border. */
+.ir-seg-btn {
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ir-muted);
+  font-family: var(--font-family);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.3rem 0.2rem;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.ir-seg-btn:hover {
+  background: var(--panel-raised);
+  border-color: transparent;
+  color: var(--paper);
+}
+/* The chosen segment is the app's filled primary: the accent SURFACE with ink
+   on top, the same trade `button.primary` makes. */
+.ir-seg-btn[aria-checked='true'] {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.ir-seg-btn[aria-checked='true']:hover {
+  background: var(--accent-fill-hover);
+  color: var(--on-accent);
+}
+.ir-seg-btn:focus-visible {
+  outline: 2px solid var(--accent-fill);
+  outline-offset: 1px;
 }

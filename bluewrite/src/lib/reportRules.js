@@ -12,6 +12,8 @@
 
 import {
   GROUP_CONFIG,
+  GROUP_ROW_RULES,
+  TYPE_FIELDS,
   DEFAULT_SOFT_WARN_AT,
 } from './incidentTypes.js';
 
@@ -82,6 +84,169 @@ export function validateReporterParty(draft) {
     if (value === '') continue; // optional and empty — nothing to check
     if (field.pattern.test(value)) continue;
     problems.push(err(field.key, `${field.label} ${field.hint}`));
+  }
+  return problems;
+}
+
+// ---------------------------------------------------------------------------
+// Per-type fields (TYPE_FIELDS): the specifics of the incident itself.
+//
+// This is the only place a `type_specific.<key>` error path is produced, and it
+// runs at Gate 2 only — a draft is allowed to be half-written, which is the
+// whole point of a draft. The requirements live on the field metadata (see
+// TYPE_FIELDS) and are mirrored in ReportRules::TYPE_RULES in PHP, so the form,
+// the rule engine, the review step and the API cannot disagree about what a
+// given incident type must record.
+//
+// A field the form is not SHOWING cannot be demanded: `showIf` is resolved
+// against the current draft first, exactly as the form resolves it. That is
+// also what makes `requireWhenShown` work — Weapon Description becomes required
+// the moment Weapon Involved flips to Yes, and stops being required (and stops
+// being an error) the moment it flips back.
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Group rows and the scalars they mirror (see `mirrorOf` in incidentTypes.js).
+// ---------------------------------------------------------------------------
+
+/**
+ * The rows that actually carry something — a blank row the officer left
+ * behind is not a record, and neither is it a reason to hold a report back.
+ *
+ * @param {Array<object>|null} list
+ * @returns {Array<object>}
+ */
+export function meaningfulRows(list) {
+  return (Array.isArray(list) ? list : []).filter((row) =>
+    Object.values(row ?? {}).some((x) => String(x ?? '').trim() !== ''),
+  );
+}
+
+/**
+ * Does this group hold at least one row with something in it? This is the ONE
+ * question that decides whether a mirrored scalar reads from its group or is
+ * asked for directly — the form and the rule engine must agree, so they ask it
+ * here rather than twice.
+ *
+ * @param {object} ts type_specific
+ * @param {string} groupKey
+ * @returns {boolean}
+ */
+export function hasGroupRows(ts, groupKey) {
+  return meaningfulRows(ts?.[groupKey]).length > 0;
+}
+
+/**
+ * Fill in the scalars the v3 groups superseded, so anything that still reads
+ * the flat shape (the printed sheet, the AI context, an export) sees the
+ * officer's rows. Pure — returns a new type_specific.
+ *
+ * An empty group never blanks a value: a report written before the groups
+ * existed keeps the scalars it was filed with, and the officer is not handed a
+ * mirror of nothing. That is also why the group must HOLD a row before it
+ * speaks — see `hasGroupRows`.
+ *
+ * @param {object} ts type_specific
+ * @param {string} incidentType
+ * @returns {object} a copy with the derivable scalars written in
+ */
+function mirrorValue(spec, rows) {
+  if (spec.length) return String(rows.length);
+  if (spec.countInjury !== undefined) {
+    return String(rows.filter((r) => String(r?.injury_status ?? '').trim() === spec.countInjury).length);
+  }
+  if (spec.countInjured) {
+    return String(
+      rows.filter((r) => {
+        const status = String(r?.injury_status ?? '').trim();
+        return status !== '' && status !== 'Uninjured';
+      }).length,
+    );
+  }
+  return String(rows[spec.index ?? 0]?.[spec.key] ?? '').trim();
+}
+
+/**
+ * ONLY what the groups derive right now — nothing the report already holds.
+ * `deriveMirrors` cannot answer "did this value come from a row?" because it
+ * hands back the report's own scalar too; this is the function that can.
+ *
+ * @returns {object} { [scalarKey]: derivedValue } for groups that hold a row
+ */
+function derivedValues(ts, incidentType) {
+  const out = {};
+  for (const fld of TYPE_FIELDS[incidentType] ?? []) {
+    const spec = fld.mirrorOf;
+    if (!spec) continue;
+    const rows = meaningfulRows(ts?.[spec.group]);
+    if (rows.length === 0) continue;
+    const value = mirrorValue(spec, rows);
+    if (value !== '') out[fld.key] = value;
+  }
+  return out;
+}
+
+export function deriveMirrors(ts, incidentType) {
+  return { ...(ts ?? {}), ...derivedValues(ts, incidentType) };
+}
+
+/**
+ * deriveMirrors() plus the one thing a pure «never blank» rule cannot do on its
+ * own: clear the GHOST a deleted row leaves behind.
+ *
+ * A mirrored field is READ-ONLY while its group holds a row, so a value that
+ * still equals what the group derived a moment ago was not typed by the officer
+ * — delete the last stolen-item row and the copy has to go with it, or the
+ * report (and the sheet, which falls back to the flat pair when no rows are
+ * left) would keep stating an item the officer just removed.
+ *
+ * Only that case is cleared. A value that differs from the group's derivation is
+ * the officer's own typing — "None taken — the attempt was interrupted", or a
+ * legacy report's flat field — and a group that never held a row cannot speak
+ * for it at all.
+ *
+ * @param {object} prevTs the type_specific before this edit
+ * @param {object} nextTs the type_specific after it
+ * @param {string} incidentType
+ * @returns {object} the type_specific to keep in the draft
+ */
+export function syncMirrors(prevTs, nextTs, incidentType) {
+  const next = deriveMirrors(nextTs, incidentType);
+  const before = derivedValues(prevTs ?? {}, incidentType);
+  for (const fld of TYPE_FIELDS[incidentType] ?? []) {
+    if (!fld.mirrorOf) continue;
+    if (hasGroupRows(nextTs, fld.mirrorOf.group)) continue; // still held by a row
+    const held = String(prevTs?.[fld.key] ?? '');
+    if (held !== '' && held === String(before[fld.key] ?? '')) delete next[fld.key];
+  }
+  return next;
+}
+
+function validateTypeFields(draft) {
+  const problems = [];
+  // No type chosen yet: there is nothing to hold the officer to, and the
+  // common rules already flag the missing incident_type itself.
+  if (!draft.incident_type) return problems;
+
+  const ts = draft.type_specific ?? {};
+  for (const fld of TYPE_FIELDS[draft.incident_type] ?? []) {
+    if (fld.showIf && !fld.showIf.values.includes(ts?.[fld.showIf.key] ?? '')) continue;
+    // Auto-filled from a group that HOLDS a row: the row is the record, and its
+    // own rules are the ones that apply (a missing plate is caught on the
+    // vehicle row, not on the copy of it). With the group empty the scalar is a
+    // field the officer still fills — which is how an attempted theft says
+    // "None taken" without a stolen-item row — so it is validated as usual.
+    if (fld.mirrorOf && hasGroupRows(ts, fld.mirrorOf.group)) continue;
+    const msg = checkField(
+      {
+        label: fld.label,
+        required: fld.required === true || fld.requireWhenShown === true,
+        type: fld.type,
+        min: fld.min,
+        max: fld.max,
+      },
+      ts?.[fld.key],
+    );
+    if (msg) problems.push(err(`type_specific.${fld.key}`, msg));
   }
   return problems;
 }
@@ -211,9 +376,7 @@ function validateGroups(draft, level) {
 
     // Drop fully-blank items the officer left behind (count sync should
     // prevent these, but never let a blank item block a finalize).
-    const meaningful = items.filter((item) =>
-      Object.values(item ?? {}).some((x) => String(x ?? '').trim() !== ''),
-    );
+    const meaningful = meaningfulRows(items);
 
     // Count floors (addendum §3.3): minCount items that each carry a name
     // (person-ish) or ANY content (vehicles) must exist by finalize.
@@ -224,6 +387,8 @@ function validateGroups(draft, level) {
     }
 
     // Per-instance field validation.
+    const rowRules = GROUP_ROW_RULES[groupKey] ?? {};
+    const labelOf = (key) => (cfg.itemSchema.find((f) => f.key === key) ?? { label: key }).label;
     meaningful.forEach((item, i) => {
       for (const fld of cfg.itemSchema) {
         const rule = {
@@ -235,6 +400,27 @@ function validateGroups(draft, level) {
         };
         const msg = checkField(rule, item?.[fld.key]);
         if (msg) problems.push(err(`${groupKey}[${i}].${fld.key}`, `${cfg.label} ${i + 1}: ${msg}`));
+      }
+
+      // What this group's ROW must carry, by role (GROUP_ROW_RULES). The count
+      // floor above only proves rows exist; these are what make a row a record —
+      // a victim with no name, or a suspect with neither name nor description,
+      // is a placeholder the sheet cannot use.
+      for (const key of rowRules.require ?? []) {
+        if (String(item?.[key] ?? '').trim() === '') {
+          problems.push(err(`${groupKey}[${i}].${key}`, `${cfg.label} ${i + 1}: ${labelOf(key)} required.`));
+        }
+      }
+      for (const options of rowRules.requireAny ?? []) {
+        const filled = options.some((k) => String(item?.[k] ?? '').trim() !== '');
+        if (!filled) {
+          problems.push(
+            err(
+              `${groupKey}[${i}].${options[0]}`,
+              `${cfg.label} ${i + 1}: ${options.map(labelOf).join(' or ')} required.`,
+            ),
+          );
+        }
       }
     });
 
@@ -286,6 +472,9 @@ export function validateReport(draft, level = 'draft') {
     const g = validateGroups(draft, level);
     errors.push(...g.problems);
     warnings.push(...g.warnings);
+
+    // The incident type's own fields: what this KIND of incident must record.
+    errors.push(...validateTypeFields(draft));
 
     // Panel I / IV shapes: only checked when the officer is submitting, so a
     // half-typed email never nags while the draft is being written.

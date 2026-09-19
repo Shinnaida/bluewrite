@@ -18,6 +18,11 @@
    ============================================================ */
 
 :root {
+  /* color-scheme is not a colour: it is the browser's instruction for its OWN
+     chrome — scrollbars, the date-picker popup, the select dropdown, autofill.
+     Custom properties cannot reach any of that, so each theme states it. */
+  color-scheme: light;
+
   --void: #EEF0F4;
   --panel: #FFFFFF;
   --panel-raised: #F4F6FA;
@@ -25,6 +30,24 @@
   --line-bright: #C2C9D6;
   --cyan: #1F5FD0;
   --cyan-dim: #6B7488;
+  /* The completion rail's accent, and the rail's alone. It is the one place
+     in the system where a second hue earns its keep: the rail sits ON the
+     hairline it colours, so the app's blue would read as more blue against
+     its own track, and the marks that have to be told apart at a glance are
+     "filled / not filled" and "you are here" — form does that, and the hue
+     only has to be unmistakably not-the-track. Contrast on white is 5.1:1,
+     so it carries both the ring and the white tick inside it. */
+  --violet: #8444F2;
+  /* The body's half of the same idea. The rail says which STEP you are on; this
+     paints the whole header bar of every card that step OWNS, so a step that is
+     two cards (Parties Involved + the per-type block) reads as one.
+
+     A solid bar, so the label on it has to be white — the house treatment for
+     ink on a filled colour (.ir-nav-link, .ir-profile-trigger, button.primary).
+     White on #6F79E8 measures 3.8:1: over the 3:1 a non-text cue needs, under
+     the 4.5:1 the 12px label wants as plain text. Darkening THIS token is the
+     one-line way back to AA (#4A55C8 gives 6.1:1) without touching any rule. */
+  --indigo: #6F79E8;
   --green-ok: #15803D;
   --amber: #B26A00;
   --red: #B3261E;
@@ -34,6 +57,56 @@
   --steel: #5B6577;
   --input-bg: #FFFFFF;
   --ink-dim: #33405A;
+
+  /* ---- Role tokens -------------------------------------------------------
+     Colours that share a ROLE but do not always share a value, named once so
+     the theme switch (dark-theme.css) has one place to answer for each and no
+     rule has to be duplicated to be recoloured. Every one of them resolves to
+     today's light value, so naming them changed nothing on screen. */
+
+  /* Blue has two jobs, and once a dark theme exists they need two values:
+     INK (links, focus rings, small labels — has to lift off the page) and
+     SURFACE (the filled primary action, which always carries white). Light
+     uses the brand blue for both; dark cannot, because a blue bright enough
+     to read as ink on near-black is too bright to hold white on a button. */
+  --accent-fill: #1F5FD0;
+  --accent-fill-hover: #17489F;
+  --on-accent: #FFFFFF;
+
+  /* Tinted fills and their hairlines, so a badge, an alert, a connection
+     notice and a selected row cannot each invent their own alpha. */
+  --cyan-bg: rgba(31, 95, 208, 0.08);
+  --cyan-bg-strong: rgba(31, 95, 208, 0.25);
+  --focus-ring: rgba(31, 95, 208, 0.18);
+  --focus-ring-strong: rgba(31, 95, 208, 0.55);
+  --red-line: rgba(179, 38, 30, 0.4);
+  --amber-bg: rgba(178, 106, 0, 0.1);
+  --amber-line: rgba(178, 106, 0, 0.45);
+  --green-bg: rgba(21, 128, 61, 0.12);
+  --green-line: rgba(21, 128, 61, 0.4);
+
+  /* The remaining one-value inks and surfaces the document layer borrows. */
+  --card-head: #ECEEF2;
+  --head-ink: #2B3547;
+  --icon-dim: #8B95A7;
+  --placeholder: #9AA3B2;
+  --hero-ink: #1A2B4A;
+  --info-ink: #1B3F7A;
+  --danger-ink: #7F1D16;
+  --panel-sunken: #F7F9FC;
+  --panel-soft: #FBFCFE;
+
+  /* Veils under overlays, and the elevation each floating surface sits at.
+     Dark inverts both: a shadow needs to be darker than what it falls on, and
+     a scrim needs to be darker than the page it dims. */
+  --scrim: rgba(15, 23, 42, 0.5);
+  --overlay-deep: rgba(3, 7, 18, 0.85);
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-sm: 0 4px 16px rgba(15, 23, 42, 0.18);
+  --shadow-md: 0 12px 28px rgba(15, 23, 42, 0.18);
+  --shadow-lg: 0 25px 50px rgba(15, 23, 42, 0.25);
+  --shadow-panel: -12px 0 32px rgba(15, 23, 42, 0.12);
+  --shadow-up: 0 -6px 18px rgba(15, 23, 42, 0.12);
 
   /* League Spartan is self-hosted (src/fonts/fonts.css) as a 100-900 variable
      font, so bold here is a drawn weight, not faux-bold. System fonts stay
@@ -110,27 +183,27 @@ button:hover {
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 button.primary {
-  background: var(--cyan);
-  border-color: var(--cyan);
-  color: #FFFFFF;
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
   font-weight: 700;
 }
 button.primary:hover {
-  background: #17489F;
-  border-color: #17489F;
-  color: #FFFFFF;
+  background: var(--accent-fill-hover);
+  border-color: var(--accent-fill-hover);
+  color: var(--on-accent);
   box-shadow: none;
 }
 
 button.danger {
-  border-color: rgba(179, 38, 30, 0.4);
+  border-color: var(--red-line);
   color: var(--red-text);
-  background: #FFFFFF;
+  background: var(--panel);
 }
 button.danger:hover {
   border-color: var(--red);
   color: var(--red-text);
-  background: rgba(179, 38, 30, 0.06);
+  background: var(--red-bg);
 }
 
 label {
@@ -153,7 +226,7 @@ input, select, textarea {
   caret-color: var(--cyan);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-input::placeholder, textarea::placeholder { color: #9AA3B2; }
+input::placeholder, textarea::placeholder { color: var(--placeholder); }
 input:disabled, select:disabled, textarea:disabled {
   opacity: 1;
   cursor: not-allowed;
@@ -163,7 +236,7 @@ input:disabled, select:disabled, textarea:disabled {
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--cyan);
-  box-shadow: 0 0 0 3px rgba(31, 95, 208, 0.18);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 input[aria-invalid='true'], textarea[aria-invalid='true'] {
   border-color: var(--red);
@@ -513,14 +586,14 @@ button.brand.brand-home:focus-visible {
   min-width: 11.5rem;
   padding: 0.7rem 1.4rem;
   font-size: 0.9rem;
-  box-shadow: 0 0 22px rgba(31, 95, 208, 0.12);
+  box-shadow: 0 0 22px var(--cyan-bg);
 }
 .welcome-recent {
   width: 100%;
   max-width: 30rem;
   margin-top: clamp(2.5rem, 6vw, 4rem);
   padding-top: 0.85rem;
-  border-top: 1px solid rgba(55, 65, 81, 0.75);
+  border-top: 1px solid var(--line);
   text-align: left;
 }
 .welcome-recent .side-section-label { padding-left: 0; color: var(--cyan-dim); }
@@ -528,7 +601,7 @@ button.brand.brand-home:focus-visible {
   width: 100%;
   margin: 0;
   border: 1px solid var(--line);
-  background: rgba(10, 17, 32, 0.42);
+  background: var(--panel-raised);
 }
 .welcome-recent .side-report-item + .side-report-item { border-top: none; }
 
@@ -755,11 +828,11 @@ button.brand.brand-home:focus-visible {
   border-radius: 2px;
   border: 1px solid;
 }
-.badge.draft { background: rgba(178, 106, 0, 0.12); color: var(--amber); border-color: rgba(178, 106, 0, 0.45); }
+.badge.draft { background: var(--amber-bg); color: var(--amber); border-color: var(--amber-line); }
 .badge.submitted { background: var(--panel-raised); color: var(--steel); border-color: var(--line-bright); }
-.badge.finalized { background: rgba(21, 128, 61, 0.12); color: var(--green-ok); border-color: rgba(21, 128, 61, 0.4); transition: background 300ms ease, color 300ms ease; }
-.badge.active { background: rgba(21, 128, 61, 0.12); color: var(--green-ok); border-color: rgba(21, 128, 61, 0.4); }
-.badge.inactive { background: var(--red-bg); color: var(--red-text); border-color: rgba(179, 38, 30, 0.4); }
+.badge.finalized { background: var(--green-bg); color: var(--green-ok); border-color: var(--green-line); transition: background 300ms ease, color 300ms ease; }
+.badge.active { background: var(--green-bg); color: var(--green-ok); border-color: var(--green-line); }
+.badge.inactive { background: var(--red-bg); color: var(--red-text); border-color: var(--red-line); }
 
 /* ---- Tables: ruled HUD style ---- */
 /* Wide tables scroll inside their own container on narrow screens instead
@@ -774,6 +847,33 @@ th, td {
 }
 /* Data cells never wrap: dates and report numbers stay on one line. */
 td.num, th.num { white-space: nowrap; }
+/* The status column holds a badge, not text, so it centres — heading included:
+   a chip hard against the left edge read as if it belonged to the column before
+   it, and centring one without the other put the chip under the gap between
+   columns. */
+th.status, td.status { text-align: center; }
+
+/* The register's one sortable heading (see ReportsTable's STATUS_SORTS). It has
+   to look like the heading it is, not like the app's filled buttons: the word
+   stays the word, and the arrow that says which way it is sorting appears only
+   while it IS sorting. The state itself is written out in the button's tooltip. */
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+/* The heading's own ink, not the button rule's (which is --paper): the label has
+   to look like every other column heading. */
+.th-sort { color: inherit; }
+.th-sort:hover { color: var(--cyan); }
+.th-sort-arrow { font-size: 0.8rem; line-height: 1; }
 table th:nth-child(3), table td:nth-child(3) { white-space: nowrap; }
 th {
   font-family: var(--font-hud);
@@ -787,36 +887,82 @@ th {
 /* Blotter hover: a left-edge signal, not a full-row wash. */
 tbody tr { border-left: 2px solid transparent; }
 tbody tr:hover { background: var(--panel-raised); border-left-color: var(--cyan); }
+/* A row is focusable now (its actions are behind a context menu), so focus has
+   to be visible — otherwise the keyboard path exists and cannot be seen. The
+   background matches the hover wash; the outline is what distinguishes the two. */
+tbody tr:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -2px;
+  background: var(--panel-raised);
+}
+/* A LOCKED row — finalized, and not the administrator's to change — is muted,
+   so the register reads at a glance as "these are the record, those are still
+   yours to work on". `tbody tr.row-locked td` outranks the `td:first-child`
+   rule, so the report number is muted too, not just the cells beside it. The
+   status badge keeps its colour on purpose: it is WHY the row looks like this.
+   Nothing else changes — the hover wash, the focus ring, the menu and the
+   double-click all still land on it. */
+tbody tr.row-locked td {
+  color: var(--cyan-dim);
+}
+/* The report number is the one cell the register emphasises — full ink and bold.
+   A locked row gives that up as well, so the muting is unmistakable rather than
+   a shade apart from the row above it. (--cyan-dim is the palette's muted ink
+   that still clears AA on the card in both themes; nothing lighter here would
+   be readable data.) */
+tbody tr.row-locked td:first-child {
+  font-weight: 400;
+}
 td { color: var(--steel); }
 td:first-child { color: var(--paper); font-weight: 600; }
 td.num, th.num { font-variant-numeric: tabular-nums; }
 td.num { text-align: left; letter-spacing: 0.02em; }
 
-/* Compact row actions: small ghost buttons that stay on one line. */
-.row-actions { display: flex; gap: 0.35rem; white-space: nowrap; }
-.row-actions button {
-  padding: 0.28rem 0.65rem;
-  font-size: 0.78rem;
+/* ---- The row menu: the register's per-row actions --------------------------
+   These were four ghost buttons in a column of their own. On a blotter that
+   runs to hundreds of rows that is four hundred buttons of chrome competing
+   with the data, so the column is gone and the actions live where the officer
+   is already pointing: right-click a row, or the keyboard's Menu key /
+   Shift+F10. A double-click goes straight to Open, which was the common case.
+   Portaled to <body> (see RowMenu) because .table-wrap is a scroll box and
+   would clip a menu positioned inside it; the coordinates are the pointer's,
+   so `fixed` is the right frame for them. */
+.row-menu {
+  position: fixed;
+  z-index: 90;
+  min-width: 11rem;
+  padding: 0.3rem;
+  background: var(--ir-card);
+  border: 1px solid var(--ir-border);
+  border-radius: 4px;
+  box-shadow: var(--shadow-md);
+}
+.row-menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.42rem 0.6rem;
   background: transparent;
-  border-color: var(--line);
-  color: var(--ink-dim, var(--steel));
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--ir-text);
+  font-size: 0.82rem;
+  text-align: left;
 }
-.row-actions button:hover {
-  border-color: var(--cyan);
-  color: var(--cyan);
-  background: rgba(31, 95, 208, 0.06);
+/* :not(:disabled) so a dead item cannot look hoverable — the disabled Open on a
+   finalized report is the whole point of the item being there. */
+.row-menu-item:hover:not(:disabled) {
+  background: var(--ir-page);
+  border-color: var(--ir-border);
 }
-.row-actions button.danger:hover {
-  border-color: var(--red);
-  color: var(--red-text);
-  background: rgba(179, 38, 30, 0.06);
+.row-menu-item:disabled {
+  color: var(--ir-muted);
+  cursor: default;
+  opacity: 1;
 }
-.row-actions .locked-note {
-  font-family: var(--font-hud);
-  font-size: 0.72rem;
-  color: var(--steel);
-  align-self: center;
-  padding: 0 0.35rem;
+.row-menu-item.danger:hover {
+  border-color: var(--red-line);
+  color: var(--ir-red);
+  background: var(--red-bg);
 }
 
 /* ---- Forms & sections ---- */
@@ -911,7 +1057,7 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 }
 .ai-tighten-result { margin-bottom: 0.7rem; }
 .ai-tighten-result .field-hint { margin: 0 0 0.5rem; }
-.ai-manual-banner { border-color: var(--amber); background: rgba(178, 106, 0, 0.08); color: var(--steel); }
+.ai-manual-banner { border-color: var(--amber); background: var(--amber-bg); color: var(--steel); }
 
 /* Loading state while the AI drafts: spinner + pulsing dots + progress bar. */
 .ai-loading {
@@ -1009,7 +1155,7 @@ body.ai-panel-open .main {
   flex-direction: column;
   background: var(--panel);
   border-left: 1px solid var(--line-bright);
-  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--shadow-panel);
   transition: width 0.15s ease-out;
 }
 .ai-side-panel.is-resizing { transition: none; }
@@ -1026,7 +1172,7 @@ body.ai-panel-open .main {
   opacity: 0.92;
 }
 .ai-side-panel.rail.hover-open {
-  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--shadow-panel);
   opacity: 1;
 }
 .ai-rail-expand {
@@ -1063,7 +1209,7 @@ body.ai-panel-open .main {
   cursor: col-resize;
   z-index: 2;
 }
-.ai-resizer:hover, .ai-resizer:focus-visible { background: rgba(31, 95, 208, 0.25); outline: none; }
+.ai-resizer:hover, .ai-resizer:focus-visible { background: var(--cyan-bg-strong); outline: none; }
 
 /* Collapse chevron in the panel header. */
 .ai-side-toggle {
@@ -1221,7 +1367,7 @@ body.ai-panel-open .main {
   border: 1px solid var(--line-bright);
   border-radius: 4px;
   background: var(--panel);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+  box-shadow: var(--shadow-md);
 }
 .timepicker-actions {
   display: flex;
@@ -1279,7 +1425,7 @@ body.ai-panel-open .main {
 }
 .timepicker-opt:hover { background: var(--panel-raised); }
 .timepicker-opt.is-selected {
-  background: rgba(31, 95, 208, 0.12);
+  background: var(--cyan-bg);
   color: var(--cyan);
   font-weight: 600;
 }
@@ -1388,7 +1534,7 @@ body.ai-panel-open .main {
 }
 .alert.info {
   border-color: var(--cyan);
-  background: rgba(31, 95, 208, 0.07);
+  background: var(--cyan-bg);
   color: var(--steel);
 }
 
@@ -1404,7 +1550,7 @@ body.ai-panel-open .main {
   margin-bottom: 1.2rem;
   padding: 0.8rem 0.9rem;
   border-left: 4px solid var(--amber);
-  background: rgba(178, 106, 0, 0.08);
+  background: var(--amber-bg);
 }
 .conn-notice-icon {
   flex-shrink: 0;
@@ -1444,11 +1590,11 @@ body.ai-panel-open .main {
   letter-spacing: 0.06em;
   color: var(--paper);
   background: transparent;
-  border: 1px solid rgba(178, 106, 0, 0.45);
+  border: 1px solid var(--amber-line);
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease;
 }
-.conn-retry:hover { background: rgba(178, 106, 0, 0.1); }
+.conn-retry:hover { background: var(--amber-bg); }
 .conn-retry:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
 /* Slim banner for an already-loaded workspace that loses the server. */
@@ -1458,9 +1604,9 @@ body.ai-panel-open .main {
   gap: 0.5rem;
   margin-bottom: 1rem;
   padding: 0.55rem 0.9rem;
-  border: 1px solid rgba(178, 106, 0, 0.4);
+  border: 1px solid var(--amber-line);
   border-left-width: 4px;
-  background: rgba(178, 106, 0, 0.08);
+  background: var(--amber-bg);
   font-size: 0.85rem;
   color: var(--paper);
 }
@@ -1495,7 +1641,7 @@ body.ai-panel-open .main {
 .stale-note {
   margin: 0 0 0.75rem;
   padding: 0.4rem 0.7rem;
-  border-left: 3px solid rgba(178, 106, 0, 0.45);
+  border-left: 3px solid var(--amber-line);
   font-size: 0.8rem;
   color: var(--steel);
 }
@@ -1513,14 +1659,14 @@ body.ai-panel-open .main {
   font-family: var(--font-hud);
   font-size: 0.8rem;
   z-index: 50;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--shadow-md);
 }
 
 /* ---- Dialog confirm ---- */
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1534,7 +1680,7 @@ body.ai-panel-open .main {
   max-width: min(440px, 100%);
   width: 100%;
   padding: clamp(1rem, 3vw, 1.5rem);
-  box-shadow: 0 25px 50px rgba(15, 23, 42, 0.25);
+  box-shadow: var(--shadow-lg);
 }
 .dialog h2 { margin-bottom: 0.5rem; }
 .dialog p { color: var(--steel); }
@@ -1567,7 +1713,7 @@ body.ai-panel-open .main {
   border-bottom: 1px solid var(--line);
   vertical-align: top;
 }
-.audits-table tbody tr:hover { background: rgba(31, 95, 208, 0.05); }
+.audits-table tbody tr:hover { background: var(--cyan-bg); }
 .audit-when { font-family: var(--font-hud); font-size: 0.78rem; white-space: nowrap; color: var(--paper); }
 .audit-system { color: var(--cyan-dim); font-style: italic; }
 .audit-entity { font-family: var(--font-hud); font-size: 0.78rem; }
@@ -1584,9 +1730,9 @@ body.ai-panel-open .main {
   color: var(--steel);
   white-space: nowrap;
 }
-.audit-action.red { color: var(--red-text); border-color: rgba(179, 38, 30, 0.4); background: rgba(179, 38, 30, 0.07); }
-.audit-action.amber { color: var(--amber); border-color: rgba(178, 106, 0, 0.45); background: rgba(178, 106, 0, 0.08); }
-.audit-action.green { color: var(--green-ok); border-color: rgba(21, 128, 61, 0.4); background: rgba(62, 213, 152, 0.08); }
+.audit-action.red { color: var(--red-text); border-color: var(--red-line); background: var(--red-bg); }
+.audit-action.amber { color: var(--amber); border-color: var(--amber-line); background: var(--amber-bg); }
+.audit-action.green { color: var(--green-ok); border-color: var(--green-line); background: var(--green-bg); }
 .audits-skeleton .skeleton-row {
   height: 2.4rem;
   margin-bottom: 0.4rem;
@@ -1670,10 +1816,11 @@ button.dash-kpi--link:focus-visible {
 .reports-search {
   display: flex;
   /* Grow to absorb the slack, shrink last: the filters keep their natural
-     width while the text field gives up space first. */
+     width while the text field gives up space first. It holds the field alone
+     now — the Search button that used to sit beside it is gone (the search
+     follows what is typed), so there is no gap to keep. */
   flex: 1 1 12rem;
   min-width: 8.5rem;
-  gap: 0.4rem;
 }
 .reports-search input { flex: 1; min-width: 6rem; }
 .reports-toolbar select {
@@ -1860,7 +2007,7 @@ button.dash-kpi--link:focus-visible {
 .print-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(3, 7, 18, 0.85);
+  background: var(--overlay-deep);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -1942,7 +2089,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   .main { padding: 0.75rem; }
   table { min-width: 30rem; }
   th, td { padding: 0.5rem 0.5rem; }
-  .row-actions button { padding: 0.3rem 0.5rem; font-size: 0.72rem; }
+  .row-menu-item { padding: 0.5rem 0.6rem; font-size: 0.8rem; }
   .toast { left: 0.75rem; right: 0.75rem; bottom: 0.75rem; }
   .print-overlay { padding: 0.5rem; }
   .pr-org { font-size: 9pt; }
@@ -2019,7 +2166,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash-alert {
   background: var(--red-bg);
   color: var(--red-text);
-  border: 1px solid rgba(179, 38, 30, 0.3);
+  border: 1px solid var(--red-line);
   padding: 10px 14px;
   border-radius: 8px;
   margin-bottom: 16px;
@@ -2031,14 +2178,14 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 }
 .dash-alert__retry {
   background: transparent;
-  border: 1px solid rgba(179, 38, 30, 0.4);
+  border: 1px solid var(--red-line);
   color: var(--red-text);
   border-radius: 6px;
   padding: 3px 10px;
   cursor: pointer;
   font-size: 12.5px;
 }
-.dash-alert__retry:hover { background: rgba(179, 38, 30, 0.08); }
+.dash-alert__retry:hover { background: var(--red-bg); }
 
 /* KPIs */
 .dash-kpis {
@@ -2087,13 +2234,30 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 
 .dash-flag {
   color: var(--amber);
-  border: 1px solid rgba(178, 106, 0, 0.45);
-  background: rgba(178, 106, 0, 0.08);
+  border: 1px solid var(--amber-line);
+  background: var(--amber-bg);
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 11.5px;
   white-space: nowrap;
 }
+
+/* ---- Chart ink ----------------------------------------------------------
+   The charts are hand-drawn SVG, and an SVG PRESENTATION ATTRIBUTE
+   (stroke="…") is parsed as a CSS value but has never been a reliable place
+   for var() — so every stroke and fill that has to follow the theme is set
+   from these classes instead. Named by what the mark IS, not by its colour,
+   which is what keeps the palette out of the component. */
+.chart-grid { stroke: var(--line); }
+.chart-axis { fill: var(--cyan-dim); }
+.chart-line { stroke: var(--cyan); }
+.chart-area { fill: var(--cyan-bg); }
+.chart-hover-line { stroke: var(--cyan); stroke-opacity: 0.35; }
+.chart-dot { fill: var(--cyan); }
+.chart-track { stroke: var(--line); }
+.chart-arc--draft { stroke: var(--amber); }
+.chart-arc--submitted { stroke: var(--cyan); }
+.chart-arc--final { stroke: var(--green-ok); }
 
 /* Line chart + hover tooltip */
 .dash-line-wrap { position: relative; }
@@ -2112,7 +2276,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   display: flex;
   flex-direction: column;
   gap: 1px;
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--shadow-sm);
 }
 .dash-tip strong { color: var(--cyan); font-variant-numeric: tabular-nums; }
 .dash-tip span { color: var(--steel); font-size: 11px; }
@@ -2276,15 +2440,15 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    jump — or a failed validation — landed on. ---- */
 @keyframes jump-flash-ring {
   0% {
-    box-shadow: 0 0 0 0 rgba(31, 95, 208, 0.55);
+    box-shadow: 0 0 0 0 var(--focus-ring-strong);
     border-color: var(--cyan);
   }
   70% {
-    box-shadow: 0 0 0 7px rgba(31, 95, 208, 0);
+    box-shadow: 0 0 0 7px transparent;
     border-color: var(--cyan);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(31, 95, 208, 0);
+    box-shadow: 0 0 0 0 transparent;
   }
 }
 .jump-flash {
@@ -2294,8 +2458,8 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   border-radius: 4px;
 }
 @keyframes jump-flash-group-box {
-  0% { box-shadow: inset 0 0 0 2px rgba(179, 38, 30, 0.85); }
-  100% { box-shadow: inset 0 0 0 2px rgba(179, 38, 30, 0); }
+  0% { box-shadow: inset 0 0 0 2px var(--red); }
+  100% { box-shadow: inset 0 0 0 2px transparent; }
 }
 .jump-flash-group {
   animation: jump-flash-group-box 1s ease-out 2;
@@ -2306,9 +2470,9 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   scroll-margin: 6rem;
 }
 @keyframes alert-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(179, 38, 30, 0.45); }
-  60% { box-shadow: 0 0 0 10px rgba(179, 38, 30, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(179, 38, 30, 0); }
+  0% { box-shadow: 0 0 0 0 var(--red-line); }
+  60% { box-shadow: 0 0 0 10px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
 }
 
 /* ---- Printed sheet masthead (on paper: no theme colours, no glow) ---- */
@@ -2356,7 +2520,10 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   overflow-y: auto;
   align-items: flex-start;
   justify-content: center;
-  padding: 1.5rem;
+  /* Extra room at the BOTTOM so the sheet's last line can always be scrolled
+     clear of the docked bar: without it the text stops flush against the bar's
+     top edge, mid-line, and reads as the bar covering the report. */
+  padding: 1.5rem 1.5rem 2.25rem;
 }
 .finalize-bar {
   position: static;
@@ -2371,24 +2538,47 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 4px;
-  box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--shadow-up);
 }
 .finalize-bar-text { color: var(--steel); font-size: 0.9rem; }
 .finalize-bar-actions { display: flex; gap: 0.6rem; flex-shrink: 0; }
 .finalize-bar-actions button:disabled { opacity: 0.6; cursor: wait; }
+/* Docked at the very bottom of the preview as ONE row: the message takes the
+   slack, the two buttons sit hard right, and the strip is ~60px tall instead
+   of the three-line centred stack it used to be — the sheet above it gets that
+   height back. The base rule's flex-wrap is what turns this back into a
+   centred stack when there is no room for a row. */
 .print-overlay--review .finalize-bar {
   margin-top: 0;
+  padding: 0.6rem 1.1rem;
   border-radius: 0;
   border-left: 0;
   border-right: 0;
   border-bottom: 0;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  text-align: center;
+  justify-content: space-between;
+  text-align: left;
 }
-.print-overlay--review .finalize-bar-text { max-width: 70ch; }
-.print-overlay--review .finalize-bar-actions { justify-content: center; }
+.print-overlay--review .finalize-bar-text {
+  flex: 1 1 26ch;
+  min-width: 0;
+  max-width: none;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.print-overlay--review .finalize-bar-actions { justify-content: flex-end; }
+
+@media (max-width: 720px) {
+  /* No room for a row: the message goes over the buttons, both centred —
+     the layout this bar had everywhere before. */
+  .print-overlay--review .finalize-bar {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .print-overlay--review .finalize-bar-text { flex: 0 1 auto; max-width: 46ch; }
+  .print-overlay--review .finalize-bar-actions { justify-content: center; }
+}
 
 @media print {
   /* The review chrome must not print — only the sheet itself. */

@@ -1,0 +1,143 @@
+/* ============================================================
+   BLUEWRITE dark theme — the same document, after dark.
+
+   This file is the WHOLE dark theme. Every colour in the app is a custom
+   property, so the switch is one attribute on <html> plus this file of
+   overrides; no component knows which theme is on. Light stays where it always
+   was — the palette in styles.css and the document aliases in
+   incident-report.css — and this file only answers for dark.
+
+   Three things it deliberately does NOT do:
+
+   1. It does not restate a single rule that already reads a token. If a rule
+      is hardcoded this file could not reach it, which is why those literals
+      were turned into role tokens (--card-head, --head-ink, --shadow-md …)
+      first. A rule duplicated here would be a rule that drifts.
+
+   2. It does not touch the print sheet. A printed report is white paper with
+      dark ink in both themes — that is the station's paper, not a preference —
+      so .print-sheet and its children keep their longhand colours.
+
+   3. It does not darken the DEAD rules left over from the removed sidebar rail
+      (.sidebar, .user-menu, .ctx-menu, .workspace-backdrop). Nothing renders
+      them, so there is nothing to look right.
+
+   Why :root[data-theme='dark'] rather than [data-theme='dark']: incident-report.css
+   declares its --ir-* aliases on :root, which is the SAME specificity as a bare
+   attribute selector, and ties fall back to import order. The extra :root makes
+   these overrides win on specificity instead, so the document aliases cannot
+   shadow them however the bundle ends up ordered.
+
+   The palette (contrast against --panel #161A21 unless noted):
+
+     page #0E1116 · card #161A21 · raised #1D222B · input #12161D
+     hairline #262C36 · hairline-strong #363E4C
+     accent ink #6FA8FF (7.3:1) · accent surface #2E6FD8 holding white (4.8:1)
+     primary ink #E6EAF0 (14.6:1) · secondary ink #A2ACBD (7.5:1)
+     muted #7E8899 (4.8:1) — the floor, and it is only used for micro-labels
+     ok #45C98A · attention #D9A03F · stop #F0847C
+
+   The accent kept its HUE and split its jobs. A blue bright enough to read as
+   ink on near-black (#6FA8FF) is far too bright to carry a white label, and a
+   blue dark enough to carry white (#2E6FD8) is far too dark to read as ink —
+   so ink and surface are two tokens here where light needed only one.
+   ============================================================ */
+
+:root[data-theme='dark'] {
+  /* The one property that is not a colour: the browser's own chrome —
+     scrollbars, the date-picker popup, the select dropdown, autofill — listens
+     to color-scheme and nothing else. Without it a dark page keeps a blinding
+     white select menu. */
+  color-scheme: dark;
+
+  /* ---- Surfaces and hairlines ---- */
+  --void: #0E1116;
+  --panel: #161A21;
+  --panel-raised: #1D222B;
+  --line: #262C36;
+  --line-bright: #363E4C;
+  --panel-sunken: #1A1F27; /* table row hover */
+  --panel-soft: #14181E; /* signature boxes */
+  --input-bg: #12161D; /* a well, so a field reads as fillable */
+  --card-head: #1C2129; /* tinted card and table headers */
+
+  /* ---- Ink ---- */
+  --paper: #E6EAF0; /* primary text */
+  --steel: #A2ACBD; /* secondary text */
+  --cyan-dim: #7E8899; /* the muted quaternary: micro-labels, meta */
+  --ink-dim: #C2CAD8; /* secondary-button ink (dark ink on white in light) */
+  --icon-dim: #7A8598; /* icons that sat beside a label */
+  --placeholder: #6F7A8C;
+  --head-ink: #C6CEDA; /* ink on a tinted header bar */
+  --hero-ink: #EFF2F7; /* the wordmark, and the panel headings on the gate */
+  --danger-ink: #F0847C;
+  --info-ink: #9CC2FF;
+  --on-accent: #FFFFFF;
+
+  /* ---- The accent, in its two jobs ---- */
+  --cyan: #6FA8FF; /* ink: links, focus, small labels, active nav */
+  --accent-fill: #2E6FD8; /* surface: the filled action, always with white */
+  --accent-fill-hover: #3E7FE8;
+
+  /* ---- Status inks ---- */
+  --green-ok: #45C98A;
+  --amber: #D9A03F;
+  --red: #E5534B;
+  --red-text: #F0847C; /* error copy, one step lighter than the border red */
+
+  /* ---- Tinted fills and their hairlines ----
+     Alphas climb in dark: a 7% wash over a near-black card is invisible, so
+     the same intent needs 12–14% plus a slightly stronger hairline. */
+  --cyan-bg: rgba(111, 168, 255, 0.12);
+  --cyan-bg-strong: rgba(111, 168, 255, 0.3);
+  --focus-ring: rgba(111, 168, 255, 0.3);
+  --focus-ring-strong: rgba(111, 168, 255, 0.6);
+  --red-bg: rgba(229, 83, 75, 0.12);
+  --red-line: rgba(229, 83, 75, 0.42);
+  --amber-bg: rgba(217, 160, 63, 0.14);
+  --amber-line: rgba(217, 160, 63, 0.42);
+  --green-bg: rgba(69, 201, 138, 0.14);
+  --green-line: rgba(69, 201, 138, 0.42);
+
+  /* ---- The rail's accent, and the current card's bar ----
+     Violet lifts with the page the same way the blue does; the indigo header
+     fill is already a mid-tone that carries white in either theme, so it does
+     not move. */
+  --violet: #A78BFA;
+  --indigo: #6F79E8;
+
+  /* ---- Veils and elevation ----
+     A shadow has to be darker than what it falls on, and a scrim darker than
+     the page it dims. Both were a navy-tinted ink that read as a soft shadow
+     on white; on near-black neither reads at all, so dark goes to plain black
+     at a higher alpha. */
+  --scrim: rgba(4, 7, 12, 0.66);
+  --overlay-deep: rgba(2, 4, 8, 0.9);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --shadow-md: 0 12px 28px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 25px 50px rgba(0, 0, 0, 0.7);
+  --shadow-panel: -12px 0 32px rgba(0, 0, 0, 0.55);
+  --shadow-up: 0 -6px 18px rgba(0, 0, 0, 0.5);
+
+  /* ---- The document layer's navy chrome ----
+     The bar keeps its navy — it is the department's colour, not a surface
+     colour — but the light navy (#1a2b4a) is only 1.35:1 against the dark page,
+     so the bar would dissolve into it. Lifting the navy keeps the bar distinct
+     and still reads as navy rather than as grey. */
+  --ir-navy: #1E2E50;
+  --ir-navy-hi: #22355C;
+}
+
+/* The bar is delimited by its own colour in light (navy against a light-grey
+   page). Against a near-black page that step is much smaller, so dark adds the
+   hairline the bar does not otherwise need. */
+:root[data-theme='dark'] .ir-nav,
+:root[data-theme='dark'] .la-topbar {
+  border-bottom: 1px solid var(--line-bright);
+}
+
+/* The register's row hover is `--panel-sunken`, which is only one step off the
+   card in dark; the left-edge signal is what carries the row, so keep the rule
+   that already draws it and let the wash stay quiet. Nothing to restate — this
+   comment marks the decision, not a rule. */

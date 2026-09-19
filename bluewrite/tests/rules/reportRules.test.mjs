@@ -13,9 +13,16 @@ import {
   resizeGroup,
   allItemsBlank,
   stolenItemsTotal,
+  deriveMirrors,
+  syncMirrors,
 } from '../../src/lib/reportRules.js';
 import { normalizeLegacyTypeSpecific, hasLegacyShape } from '../../src/lib/normalizeLegacy.js';
-import { GROUP_CONFIG } from '../../src/lib/incidentTypes.js';
+import {
+  GROUP_CONFIG,
+  GROUP_ROW_RULES,
+  INCIDENT_TYPES,
+  TYPE_FIELDS,
+} from '../../src/lib/incidentTypes.js';
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -290,6 +297,11 @@ test('hasLegacyShape detects both old and new', () => {
 test('SCENARIO: multi-vehicle accident (3 vehicles, 2 drivers, 1 pedestrian)', () => {
   const draft = validBase('Traffic Accident', {
     type_specific: {
+      // The type's own required fields (TYPE_FIELDS): a traffic report has to
+      // say what kind of collision it was and what is suspected to have caused
+      // it. The groups below are what this scenario is actually about.
+      accident_type: 'Multiple-vehicle collision',
+      suspected_cause: 'Overspeeding on a wet road',
       complainant: [
         { name: 'Driver One', injury_status: 'Uninjured' },
         { name: 'Driver Two', injury_status: 'Minor Injury' },
@@ -311,6 +323,11 @@ test('SCENARIO: multi-vehicle accident (3 vehicles, 2 drivers, 1 pedestrian)', (
 test('SCENARIO: group robbery (4 suspects, 1 complainant, 2 witnesses)', () => {
   const draft = validBase('Robbery', {
     type_specific: {
+      // Robbery's required fields. Weapon Involved is answered "No", which is
+      // also what keeps the conditional Weapon Description out of the picture.
+      property_taken: 'Cash and a mobile phone from the counter',
+      method_used: 'Threat of a bladed weapon; the cash was handed over',
+      weapon_involved: 'No',
       complainant: [{ name: 'Store Owner', injury_status: 'Minor Injury' }],
       respondent: [
         { name: 'Suspect One' },
@@ -349,8 +366,18 @@ test('SCENARIO: legacy 2-vehicle accident loads read-only through the adapter', 
   assert.deepEqual(ts.complainant, [{ name: 'Maria Santos' }]);
   assert.deepEqual(ts.respondent, [{ name: 'Juan Dela Cruz' }]);
 
-  // The normalized draft passes finalize validation.
-  const draft = validBase('Traffic Accident', { type_specific: ts });
+  // The normalized draft passes finalize validation once the per-type fields
+  // the legacy row predates are filled. That is the honest shape of this: the
+  // adapter restores the GROUPS, and the type's own requirements apply on top,
+  // so an old DRAFT has to be completed like any other before it can be
+  // finalized. (A report already finalized is never re-validated.)
+  const draft = validBase('Traffic Accident', {
+    type_specific: {
+      ...ts,
+      accident_type: 'Rear-end collision',
+      suspected_cause: 'Following too closely',
+    },
+  });
   const { errors } = validateReport(draft, 'finalize');
   assert.equal(errors.length, 0, `expected clean finalize, got: ${JSON.stringify(errors)}`);
 });
@@ -374,6 +401,15 @@ test('every incident type has a GROUP_CONFIG entry with valid schemas', async ()
 
 const keysOf = (type, role) => GROUP_CONFIG[type][role].itemSchema.map((f) => f.key);
 
+// Theft's own required fields, reused by the fixtures in this section so each
+// test stays about the thing it names (item rows, victim shapes) rather than
+// about the type's requirement list.
+const theftFields = {
+  item_stolen: 'None taken — the attempt was interrupted',
+  owner_of_property: 'Ana Cruz',
+  how_property_was_taken: 'Reached over the counter while the till was closed',
+};
+
 test('victim groups carry victim type + representative; suspect groups carry status + description', () => {
   assert.ok(keysOf('Theft', 'complainant').includes('victim_type'));
   assert.ok(keysOf('Theft', 'complainant').includes('representative_name'));
@@ -391,6 +427,7 @@ test('victim groups carry victim type + representative; suspect groups carry sta
 test('a victim with no representative and an identified/organization mix is valid', () => {
   const draft = validBase('Theft', {
     type_specific: {
+      ...theftFields,
       complainant: [{ name: 'Ana Cruz', victim_type: 'Individual' }],
     },
   });
@@ -412,11 +449,14 @@ test('an unidentified suspect is valid with only a description', () => {
 });
 
 test('stolen items take free-text quantities and may be absent entirely', () => {
-  const attempted = validBase('Theft', { type_specific: { complainant: [{ name: 'Ana Cruz' }] } });
+  const attempted = validBase('Theft', {
+    type_specific: { ...theftFields, complainant: [{ name: 'Ana Cruz' }] },
+  });
   assert.equal(validateReport(attempted, 'finalize').errors.length, 0, 'nothing taken is valid');
 
   const withItems = validBase('Theft', {
     type_specific: {
+      ...theftFields,
       complainant: [{ name: 'Ana Cruz' }],
       stolen_items: [
         { item_description: 'Copper wire', quantity: '128m', unit: 'meters', estimated_value: '8,500' },
@@ -499,4 +539,340 @@ test('the reporting-party shapes are a finalize check, not a draft nag', () => {
   assert.equal(asDraft.errors.filter((e) => e.path === 'reporter_email').length, 0);
   const atFinalize = validateReport(draft, 'finalize');
   assert.equal(atFinalize.errors.filter((e) => e.path === 'reporter_email').length, 1);
+});
+
+// ---- 12. Per-type requirements: what each incident KIND must record --------
+//
+// The requirements live on the field metadata (TYPE_FIELDS in incidentTypes.js)
+// and are mirrored in ReportRules::TYPE_RULES in app/rules/report_rules.php.
+// This section pins them: the exact list per type, that filling exactly that
+// list passes, that blanking any one of them is caught, and that the
+// conditional ones follow their controlling field.
+//
+// A change to REQUIRED_OF is a deliberate change to what the station will
+// refuse to submit, so it should be made on purpose, in both engines.
+
+// NOTE: a field the v3 groups auto-fill (mirrorOf) is deliberately NOT on its
+// type's list — it is not a field the officer can be held to, because the row
+// that carries it is. Owner of Property comes from the Victims row, and the
+// Missing Person's description from the Missing Persons row (see section 13).
+const REQUIRED_OF = {
+  'Theft': ['item_stolen', 'how_property_was_taken'],
+  'Robbery': ['property_taken', 'method_used', 'weapon_involved'],
+  'Assault / Physical Injury': ['type_of_injury', 'body_part_injured', 'cause_of_injury'],
+  'Traffic Accident': ['accident_type', 'suspected_cause'],
+  'Rape / Sexual Assault': ['relationship_to_victim', 'medical_examination'],
+  'Domestic Violence': ['relationship_between_parties', 'type_of_abuse', 'children_involved'],
+  'Missing Person': ['date_last_seen', 'location_last_seen'],
+  'Lost Property': ['property_type', 'property_description', 'circumstances_of_loss'],
+  'Fraud / Estafa': ['transaction_date', 'amount_involved', 'promised_service_or_item'],
+  'Property Damage / Malicious Mischief': ['damaged_property', 'type_of_damage', 'cause_of_damage'],
+  'Fire Incident': ['type_of_property', 'possible_cause', 'extent_of_damage'],
+  'Drug-Related Incident': ['incident_classification', 'items_seized', 'evidence_turnover'],
+  'Burglary / Break-In': ['establishment_or_residence', 'entry_point', 'signs_of_forced_entry'],
+  'Other Incident': ['incident_category', 'additional_information'],
+};
+
+/** A value that satisfies a field descriptor. */
+function sampleValue(fld) {
+  // For a select, the LAST option: these are the "none / unknown / declined"
+  // answers, which also keep that field's dependents off screen.
+  if (fld.select) return fld.select[fld.select.length - 1];
+  if (fld.date) return '2026-08-30';
+  if (fld.time) return '09:15';
+  if (fld.type === 'number') return String(fld.min ?? 20);
+  if (fld.type === 'plate') return 'ABC1234';
+  if (fld.type === 'phone') return '0917 555 1234';
+  if (fld.type === 'name') return 'Ana Cruz';
+  return 'Recorded in detail by the responding officer.';
+}
+
+/** A row that satisfies a group's row rules and the vehicle cross-check. */
+function sampleRow(groupKey, schema) {
+  const row = {};
+  for (const key of GROUP_ROW_RULES[groupKey]?.require ?? []) {
+    row[key] = sampleValue(schema.find((f) => f.key === key) ?? {});
+  }
+  for (const options of GROUP_ROW_RULES[groupKey]?.requireAny ?? []) {
+    row[options[0]] = 'Ana Cruz';
+  }
+  if (schema.some((f) => f.key === 'plate_number')) row.plate_number = 'ABC1234';
+  if (schema.some((f) => f.key === 'driver_name')) row.driver_name = 'Ana Cruz';
+  if (schema.some((f) => f.key === 'circumstances')) {
+    row.circumstances = 'Last seen leaving the house at seven in the morning.';
+  }
+  return row;
+}
+
+/** The draft a type needs: required fields, conditional ones, count floors. */
+function completeDraftFor(type) {
+  const ts = {};
+  for (const fld of TYPE_FIELDS[type] ?? []) {
+    const shown = !fld.showIf || fld.showIf.values.includes(ts[fld.showIf.key] ?? '');
+    if (shown && (fld.required || fld.requireWhenShown)) ts[fld.key] = sampleValue(fld);
+  }
+  for (const [groupKey, cfg] of Object.entries(GROUP_CONFIG[type] ?? {})) {
+    if (cfg.minCount < 1) continue;
+    ts[groupKey] = [sampleRow(groupKey, cfg.itemSchema)];
+  }
+  return validBase(type, { type_specific: ts });
+}
+
+const typeErrorsOf = (draft) =>
+  validateReport(draft, 'finalize')
+    .errors.filter((e) => e.path.startsWith('type_specific.'))
+    .map((e) => e.path.slice('type_specific.'.length));
+
+test('the required per-type fields are exactly the agreed set', () => {
+  for (const type of INCIDENT_TYPES) {
+    const declared = (TYPE_FIELDS[type] ?? []).filter((f) => f.required === true).map((f) => f.key);
+    assert.deepEqual(declared, REQUIRED_OF[type], `${type} requirement list changed`);
+  }
+});
+
+test('no incident type is satisfied by an empty type_specific', () => {
+  // The hole this exists to close: a type whose fields are all optional reads as
+  // nothing to fill in the moment the type is chosen.
+  for (const type of INCIDENT_TYPES) {
+    const errors = typeErrorsOf(validBase(type, { type_specific: {} }));
+    assert.deepEqual(errors, REQUIRED_OF[type], `${type} flagged an unexpected set`);
+  }
+});
+
+test('filling exactly the required fields clears them, for every type', () => {
+  for (const type of INCIDENT_TYPES) {
+    const { errors } = validateReport(completeDraftFor(type), 'finalize');
+    assert.equal(errors.length, 0, `${type}: ${JSON.stringify(errors)}`);
+  }
+});
+
+test('blanking any one required field is caught, once, on its own path', () => {
+  for (const type of INCIDENT_TYPES) {
+    for (const key of REQUIRED_OF[type]) {
+      const draft = completeDraftFor(type);
+      draft.type_specific = { ...draft.type_specific, [key]: '' };
+      const hits = validateReport(draft, 'finalize').errors.filter(
+        (e) => e.path === `type_specific.${key}`,
+      );
+      assert.equal(
+        hits.length,
+        1,
+        `${type}.${key}: expected exactly one error for it, got ${JSON.stringify(validateReport(draft, 'finalize').errors)}`,
+      );
+    }
+  }
+});
+
+test('a conditional requirement follows its controlling field', () => {
+  const base = {
+    property_taken: 'Cash and a mobile phone',
+    method_used: 'Intimidation at knife point',
+  };
+  const armed = validBase('Robbery', { type_specific: { ...base, weapon_involved: 'Yes' } });
+  assert.ok(
+    typeErrorsOf(armed).includes('weapon_description'),
+    'a weapon means the weapon has to be described',
+  );
+
+  const unarmed = validBase('Robbery', { type_specific: { ...base, weapon_involved: 'No' } });
+  assert.ok(
+    !typeErrorsOf(unarmed).includes('weapon_description'),
+    'no weapon, nothing to describe',
+  );
+});
+
+test('the per-type requirements are a finalize check, not a draft nag', () => {
+  const draft = validBase('Drug-Related Incident', { type_specific: {} });
+  const asDraft = validateReport(draft, 'draft').errors.filter((e) =>
+    e.path.startsWith('type_specific.'),
+  );
+  assert.deepEqual(asDraft, [], 'a draft may be half-written');
+  assert.deepEqual(typeErrorsOf(draft), REQUIRED_OF['Drug-Related Incident']);
+});
+
+test('a recorded row has to be a record: a name — or, for a suspect, a description', () => {
+  const unnamedVictim = validBase('Theft', {
+    type_specific: { ...theftFields, complainant: [{ address: 'Poblacion, City of Naga' }] },
+  });
+  assert.ok(
+    validateReport(unnamedVictim, 'finalize').errors.some((e) => e.path === 'complainant[0].name'),
+    'a victim with no name is a placeholder, not a record',
+  );
+
+  const unidentifiedSuspect = validBase('Theft', {
+    type_specific: {
+      ...theftFields,
+      complainant: [{ name: 'Ana Cruz' }],
+      respondent: [{ suspect_status: 'Unidentified', suspect_description: 'Black motorcycle, no plate' }],
+    },
+  });
+  assert.equal(validateReport(unidentifiedSuspect, 'finalize').errors.length, 0);
+
+  const emptySuspect = validBase('Theft', {
+    type_specific: {
+      ...theftFields,
+      complainant: [{ name: 'Ana Cruz' }],
+      respondent: [{ suspect_status: 'Unidentified' }],
+    },
+  });
+  assert.ok(
+    validateReport(emptySuspect, 'finalize').errors.some((e) => e.path === 'respondent[0].name'),
+    'a suspect row with neither name nor description is caught',
+  );
+});
+
+test('a stolen-item row has to say what was taken', () => {
+  const draft = validBase('Theft', {
+    type_specific: { ...theftFields, complainant: [{ name: 'Ana Cruz' }], stolen_items: [{ quantity: '2' }] },
+  });
+  assert.ok(
+    validateReport(draft, 'finalize').errors.some((e) => e.path === 'stolen_items[0].item_description'),
+    JSON.stringify(validateReport(draft, 'finalize').errors),
+  );
+});
+
+// ---- 13. Auto-filled scalars: the group is the record ----------------------
+//
+// v2 asked the same fact twice: once in a repeatable group, once as a flat
+// scalar beside it (Item, Vehicle 1 — Plate Number, Physical Description…).
+// The group wins and the scalar is DERIVED from it (mirrorOf in
+// incidentTypes.js, mirrored by ReportRules::applyMirrors in PHP). Three
+// properties make that swap safe, and each one is pinned here: the value
+// travels, an empty group never blanks anything, and a fact the group records
+// is never demanded a second time.
+
+/** A Theft report whose items and victim are recorded the v3 way — as rows. */
+const theftWithItemRows = (extra = {}) =>
+  validBase('Theft', {
+    type_specific: {
+      how_property_was_taken: 'The padlock was cut at the bicycle rack',
+      complainant: [{ name: 'Ana Cruz' }],
+      stolen_items: [
+        { item_description: 'Copper wire', quantity: '128m', unit: 'meters', estimated_value: '8500' },
+        { item_description: 'Assorted tools', quantity: 'several, exact count unknown' },
+      ],
+      ...extra,
+    },
+  });
+
+test('a group row fills the flat scalars the sheet still reads', () => {
+  const ts = deriveMirrors(theftWithItemRows().type_specific, 'Theft');
+  assert.equal(ts.item_stolen, 'Copper wire', 'Item mirrors the first Stolen Items row');
+  assert.equal(ts.item_description, 'Copper wire');
+  assert.equal(ts.quantity, '128m');
+  assert.equal(ts.estimated_value, '8500');
+  assert.equal(ts.owner_of_property, 'Ana Cruz', 'Owner of Property mirrors the recorded victim');
+});
+
+test('an empty or blank group never blanks a scalar', () => {
+  // A report filed before the groups existed keeps exactly what it was filed
+  // with — deriving from nothing must not erase a value.
+  const legacy = deriveMirrors(
+    { item_stolen: 'One shoulder bag', owner_of_property: 'Ana Lopez' },
+    'Theft',
+  );
+  assert.equal(legacy.item_stolen, 'One shoulder bag');
+  assert.equal(legacy.owner_of_property, 'Ana Lopez');
+
+  // Nor does a blank row the officer left behind count as a record.
+  const blankRow = deriveMirrors(
+    { item_stolen: 'One shoulder bag', stolen_items: [{}, {}] },
+    'Theft',
+  );
+  assert.equal(blankRow.item_stolen, 'One shoulder bag');
+  assert.equal(deriveMirrors({ item_stolen: '', stolen_items: [{ item_description: 'Wallet' }] }, 'Theft').item_stolen, 'Wallet');
+});
+
+test('a fact the group records is never demanded twice', () => {
+  // No item row at all: the single Item field is still the record — which is
+  // how an ATTEMPTED theft states "None taken" without inventing a row.
+  const noRows = validBase('Theft', {
+    type_specific: { how_property_was_taken: 'Forced window, nothing taken', complainant: [{ name: 'Ana Cruz' }] },
+  });
+  assert.ok(
+    typeErrorsOf(noRows).includes('item_stolen'),
+    'with no Stolen Items row, the Item field carries the requirement',
+  );
+
+  // With rows, the rows carry it: nothing on the type block is left to fill.
+  const withRows = theftWithItemRows();
+  assert.deepEqual(validateReport(withRows, 'finalize').errors, []);
+
+  // And a row that says nothing about the item is still caught on the ROW —
+  // per-item paths, which is where the officer can actually fix it.
+  const silentRow = theftWithItemRows({ stolen_items: [{ quantity: '2' }] });
+  assert.ok(
+    validateReport(silentRow, 'finalize').errors.some(
+      (e) => e.path === 'stolen_items[0].item_description',
+    ),
+    JSON.stringify(validateReport(silentRow, 'finalize').errors),
+  );
+});
+
+test('deleting the last row takes its auto-filled copy with it', () => {
+  const withRow = theftWithItemRows().type_specific;
+  const rowsIn = deriveMirrors(withRow, 'Theft');
+  assert.equal(rowsIn.item_stolen, 'Copper wire');
+
+  // The officer removes the row: the copy goes too, or the report (and the
+  // sheet, which falls back to the flat pair once no rows are left) would keep
+  // stating an item they just deleted.
+  const cleared = syncMirrors(rowsIn, { ...rowsIn, stolen_items: [] }, 'Theft');
+  assert.equal(cleared.item_stolen, undefined);
+  assert.equal(cleared.quantity, undefined);
+  assert.equal(cleared.item_description, undefined);
+
+  // A value the officer typed is not a ghost: the group never held a row, so it
+  // never spoke for this field.
+  const typed = syncMirrors({ item_stolen: 'None taken' }, { item_stolen: 'None taken' }, 'Theft');
+  assert.equal(typed.item_stolen, 'None taken');
+
+  // Nor is a legacy value whose row never knew about it (the old flat vehicle
+  // keys do not all line up with the group schema, and losing them would be
+  // data loss on the first edit after load).
+  const legacy = { vehicle_1_damage: 'Dented rear door', vehicles: [{ plate_number: 'XYZ9999' }] };
+  const after = syncMirrors(legacy, { ...legacy, vehicles: [] }, 'Traffic Accident');
+  // The scalar that described the deleted row goes with it…
+  assert.equal(after.vehicle_1_plate_number, undefined);
+  // …while one the row schema never covered is not something the row can
+  // retract, so it stays: losing it would be data loss on the first edit.
+  assert.equal(after.vehicle_1_damage, 'Dented rear door');
+});
+
+test('the derived counts follow the casualty list, not the other way round', () => {
+  const ts = deriveMirrors(
+    {
+      vehicles: [{ plate_number: 'ABC1234' }, { plate_number: 'XYZ9999' }],
+      injured_persons: [
+        { name: 'Ana Cruz', injury_status: 'Minor Injury' },
+        { name: 'Pedro Reyes', injury_status: 'Deceased' },
+        { name: 'Lita Ramos', injury_status: 'Uninjured' },
+      ],
+    },
+    'Traffic Accident',
+  );
+  assert.equal(ts.number_of_vehicles, '2', 'the count comes from the rows');
+  assert.equal(ts.fatalities, '1', 'only the recorded Deceased counts');
+  assert.equal(ts.vehicle_1_plate_number, 'ABC1234');
+  assert.equal(ts.vehicle_2_plate_number, 'XYZ9999', 'the second vehicle mirrors the second row');
+});
+
+test('a casualty count is a count of people, never a number typed twice', () => {
+  const fire = validBase('Fire Incident', {
+    type_specific: {
+      type_of_property: 'Two-storey residential house',
+      possible_cause: 'Electrical short circuit',
+      extent_of_damage: 'Second floor gutted',
+      complainant: [{ name: 'Ana Cruz', victim_type: 'Individual' }],
+      injured_persons: [
+        { name: 'Ana Cruz', injury_status: 'Serious Injury' },
+        { name: 'Pedro Reyes', injury_status: 'Deceased' },
+        { name: 'Lita Ramos', injury_status: 'Uninjured' },
+      ],
+    },
+  });
+  const ts = deriveMirrors(fire.type_specific, 'Fire Incident');
+  assert.equal(ts.injuries, '2', 'the Uninjured are not casualties');
+  assert.equal(ts.fatalities, '1');
+  assert.deepEqual(validateReport(fire, 'finalize').errors, []);
 });

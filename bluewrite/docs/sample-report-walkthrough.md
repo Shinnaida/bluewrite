@@ -54,7 +54,10 @@ Every field is editable — add, change, or delete anything and save.
 
 ## 4. Generate the AI narrative
 
-Scroll to the **narrative** section (side-by-side AI panel):
+Scroll to the **narrative** section. The panel sits beside the narrative field
+in the continuous document format; in the stepped format it is on the LAST
+step, **Review** — one place to generate from, where the report reads back in
+one piece (the stepper jumps straight there):
 
 1. Optionally type rough notes in the AI panel's notes box, e.g.
    *"bag snatched sa market around 10:30am, victim shouted, suspect ran toward highway"*

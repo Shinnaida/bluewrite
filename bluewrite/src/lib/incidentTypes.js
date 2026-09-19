@@ -48,28 +48,115 @@ export const SENSITIVE_TYPES = ['Rape / Sexual Assault', 'Domestic Violence'];
 // f(key, label, {textarea?}) — compact field tuple builder.
 const f = (key, label, opts = {}) => ({ key, label, ...opts });
 
+// ---------------------------------------------------------------------------
+// mirrorOf — the scalar half of a fact the v3 GROUPS already record.
+//
+// v2 asked the same question twice: the repeatable group (Stolen Items,
+// Vehicles Involved, Missing Persons…) AND a flat scalar somewhere in the
+// type's own field block (Item, Vehicle 1 — Plate Number, Physical
+// Description…). Two inputs, one fact, and the officer had to keep them
+// agreeing by hand — which is not a habit any form should rely on.
+//
+// So the group is the record and the scalar is DERIVED from it:
+//
+//   - the FORM shows the scalar read-only while its group holds a row, and
+//     editable when the group is empty (which is how an attempted theft still
+//     says "None taken — the attempt was interrupted" without inventing a
+//     stolen-item row);
+//   - the RULE ENGINE skips a mirrored field whose group holds a row — the
+//     row rules own it — and validates it normally when the group is empty,
+//     so a required mirror becomes "recorded here OR as a row", never "not
+//     recorded at all";
+//   - the SHEET and the AI keep reading the scalar unchanged, because
+//     deriveMirrors() fills it in on every edit (src/lib/reportRules.js) and
+//     ReportRules::applyMirrors() fills it in on every write, for any client.
+//
+// Spec shapes (mirrored by ReportRules::applyMirrors in PHP):
+//   { group, key, index }      → that field of that row (index defaults to 0)
+//   { group, length: true }    → how many rows the group holds, as text
+//   { group, countInjury: 'X' } → how many rows carry that Injury Status
+//   { group, countInjured: true } → how many rows are hurt (not Uninjured)
+//
+// Two rules keep this from eating data:
+//   - a group speaks only when it HOLDS a row; an empty group never blanks a
+//     scalar (a report written before the groups existed keeps its values);
+//   - a mirrored field is never the only requirement left standing: the row
+//     rules and count floors carry the requirement once the group has a row.
+//
+// Keep this list, TYPE_RULES and the group floors in lockstep with PHP.
+// ---------------------------------------------------------------------------
+
 // Ordered per-type field sets. Keys are snake_case, matching the prompt.
+//
+// `required` and `requireWhenShown` are what the report cannot be SUBMITTED
+// without (Gate 2 only — a draft stays writable). They live here, on the field
+// itself, so the form's asterisk, the rule engine and the review step all read
+// the same truth instead of three lists drifting apart. Mirrored in
+// app/rules/report_rules.php (TYPE_RULES), which is the only other place they
+// are stated — keep the two in lockstep.
+//
+// The bar for `required`: a fact that ALWAYS exists for this type of incident,
+// that the officer can answer at the time of filing, and without which the
+// report fails its legal purpose. Everything merely useful is advisory instead
+// (see the review step), because demanding a figure nobody knows yet — a repair
+// estimate, a plate nobody saw — only teaches officers to type "N/A".
 export const TYPE_FIELDS = {
+
   'Theft': [
-    f('item_stolen', 'Item'),
-    f('item_description', 'Description', { textarea: true }),
-    f('quantity', 'Quantity'),
-    f('estimated_value', 'Estimated Value'),
-    f('owner_of_property', 'Owner of Property'),
+    // The item, the owner and the amounts live in the Stolen Items and Victims
+    // groups; these carry what those groups hold. Item keeps its requirement
+    // for the case no item row exists at all (an attempt that took nothing).
+    f('item_stolen', 'Item', {
+      required: true,
+      mirrorOf: { group: 'stolen_items', key: 'item_description' },
+    }),
+    f('item_description', 'Description', {
+      textarea: true,
+      mirrorOf: { group: 'stolen_items', key: 'item_description' },
+    }),
+    f('quantity', 'Quantity', { mirrorOf: { group: 'stolen_items', key: 'quantity' } }),
+    f('estimated_value', 'Estimated Value', {
+      mirrorOf: { group: 'stolen_items', key: 'estimated_value' },
+    }),
+    // Owner of Property was the victim typed twice: the Victims group already
+    // requires a name, so this is derived from the first victim instead of
+    // asked again (the requirement moves with it — nothing is lost).
+    f('owner_of_property', 'Owner of Property', {
+      mirrorOf: { group: 'complainant', key: 'name' },
+    }),
     f('location_of_property', 'Location of Property'),
-    f('how_property_was_taken', 'Manner of Taking'),
+    f('how_property_was_taken', 'Manner of Taking', { required: true }),
     f('cctv_available', 'CCTV Available', { select: ['Yes', 'No', 'Unknown'] }),
-    f('cctv_description', 'CCTV Details', { showIf: { key: 'cctv_available', values: ['Yes'] } }),
+    f('cctv_description', 'CCTV Details', {
+      showIf: { key: 'cctv_available', values: ['Yes'] },
+      requireWhenShown: true,
+    }),
     f('recovery_status', 'Recovery Status'),
   ],
   'Robbery': [
-    f('victim_injury', 'Victim Injury'),
-    f('property_taken', 'Property Taken'),
-    f('property_description', 'Description'),
-    f('estimated_value', 'Estimated Value'),
-    f('method_used', 'Method Used'),
-    f('weapon_involved', 'Weapon Involved', { select: ['Yes', 'No'] }),
-    f('weapon_description', 'Weapon Description', { showIf: { key: 'weapon_involved', values: ['Yes'] } }),
+    // Victim Injury stays advisory: the injury is recorded per person in the
+    // Victims group (injury_status), so the scalar is a summary, not the record.
+    f('victim_injury', 'Victim Injury', {
+      mirrorOf: { group: 'complainant', key: 'injury_status' },
+    }),
+    f('property_taken', 'Property Taken', {
+      required: true,
+      mirrorOf: { group: 'stolen_items', key: 'item_description' },
+    }),
+    f('property_description', 'Description', {
+      mirrorOf: { group: 'stolen_items', key: 'item_description' },
+    }),
+    f('estimated_value', 'Estimated Value', {
+      mirrorOf: { group: 'stolen_items', key: 'estimated_value' },
+    }),
+    f('method_used', 'Method Used', { required: true }),
+    // The Yes/No is the fact that must be on the record; the description only
+    // has to follow if there WAS a weapon.
+    f('weapon_involved', 'Weapon Involved', { select: ['Yes', 'No'], required: true }),
+    f('weapon_description', 'Weapon Description', {
+      showIf: { key: 'weapon_involved', values: ['Yes'] },
+      requireWhenShown: true,
+    }),
     f('direction_of_escape', 'Direction of Escape'),
     f('vehicle_used', 'Vehicle Used'),
     f('vehicle_description', 'Vehicle Description'),
@@ -77,63 +164,116 @@ export const TYPE_FIELDS = {
   ],
   'Assault / Physical Injury': [
     f('relationship_between_parties', 'Relationship of Parties'),
-    f('type_of_injury', 'Type of Injury'),
-    f('body_part_injured', 'Body Part Injured'),
-    f('cause_of_injury', 'Cause of Injury'),
+    f('type_of_injury', 'Type of Injury', { required: true }),
+    f('body_part_injured', 'Body Part Injured', { required: true }),
+    f('cause_of_injury', 'Cause of Injury', { required: true }),
     f('weapon_used', 'Weapon Used'),
     f('medical_treatment', 'Medical Treatment'),
     f('medical_facility', 'Medical Facility'),
     f('medical_certificate_available', 'Medical Certificate Issued', { select: ['Yes', 'No', 'Pending'] }),
   ],
   'Traffic Accident': [
-    f('accident_type', 'Accident Type'),
+    f('accident_type', 'Accident Type', { required: true }),
     f('weather_condition', 'Weather Condition'),
     f('road_condition', 'Road Condition'),
-    f('number_of_vehicles', 'Number of Vehicles Involved'),
-    f('vehicle_1_type', 'Vehicle 1 — Type'),
-    f('vehicle_1_plate_number', 'Vehicle 1 — Plate Number'),
-    f('vehicle_1_driver', 'Vehicle 1 — Driver'),
-    f('vehicle_1_damage', 'Vehicle 1 — Damage Sustained'),
-    f('vehicle_2_type', 'Vehicle 2 — Type'),
-    f('vehicle_2_plate_number', 'Vehicle 2 — Plate Number'),
-    f('vehicle_2_driver', 'Vehicle 2 — Driver'),
-    f('vehicle_2_damage', 'Vehicle 2 — Damage Sustained'),
-    f('injured_persons', 'Injured Persons'),
-    f('fatalities', 'Fatalities'),
-    f('suspected_cause', 'Suspected Cause'),
+    // The Vehicles Involved group is the record for machinery; this legacy
+    // flat block is derived from its first two rows and stays read-only while
+    // those rows exist.
+    f('number_of_vehicles', 'Number of Vehicles Involved', {
+      mirrorOf: { group: 'vehicles', length: true },
+    }),
+    f('vehicle_1_type', 'Vehicle 1 — Type', {
+      mirrorOf: { group: 'vehicles', key: 'make_model', index: 0 },
+    }),
+    f('vehicle_1_plate_number', 'Vehicle 1 — Plate Number', {
+      mirrorOf: { group: 'vehicles', key: 'plate_number', index: 0 },
+    }),
+    f('vehicle_1_driver', 'Vehicle 1 — Driver', {
+      mirrorOf: { group: 'vehicles', key: 'driver_name', index: 0 },
+    }),
+    f('vehicle_1_damage', 'Vehicle 1 — Damage Sustained', {
+      mirrorOf: { group: 'vehicles', key: 'damage_description', index: 0 },
+    }),
+    f('vehicle_2_type', 'Vehicle 2 — Type', {
+      mirrorOf: { group: 'vehicles', key: 'make_model', index: 1 },
+    }),
+    f('vehicle_2_plate_number', 'Vehicle 2 — Plate Number', {
+      mirrorOf: { group: 'vehicles', key: 'plate_number', index: 1 },
+    }),
+    f('vehicle_2_driver', 'Vehicle 2 — Driver', {
+      mirrorOf: { group: 'vehicles', key: 'driver_name', index: 1 },
+    }),
+    f('vehicle_2_damage', 'Vehicle 2 — Damage Sustained', {
+      mirrorOf: { group: 'vehicles', key: 'damage_description', index: 1 },
+    }),
+    // No "Injured Persons" scalar: that key belongs to the Injured / Deceased
+    // Persons GROUP, and a scalar under the same name would overwrite the
+    // list. How many were hurt is the thing worth stating, so only the count
+    // is derived from the group (see the Fire Incident block for the same
+    // pair).
+    f('fatalities', 'Fatalities', {
+      mirrorOf: { group: 'injured_persons', countInjury: 'Deceased' },
+    }),
+    // What caused it is the operational crux of a traffic report; the
+    // conditions and the violation are recorded if known.
+    f('suspected_cause', 'Suspected Cause', { required: true }),
     f('traffic_violation', 'Traffic Violation'),
     f('insurance_information', 'Insurance Information'),
   ],
+  // Sensitive types keep the smallest possible required set: the two factual
+  // determinations a sexual-assault report cannot omit. Everything else stays
+  // advisory on purpose — the officer writes clinical fact, not a checklist.
   'Rape / Sexual Assault': [
-    f('relationship_to_victim', 'Relationship to Victim'),
+    f('relationship_to_victim', 'Relationship to Victim', { required: true }),
     f('incident_location', 'Location'),
     f('reported_injury', 'Reported Injury'),
-    f('medical_examination', 'Medical Examination', { select: ['Conducted', 'Pending', 'Declined'] }),
+    f('medical_examination', 'Medical Examination', {
+      select: ['Conducted', 'Pending', 'Declined'],
+      required: true,
+    }),
     f('medical_facility', 'Medical Facility', { showIf: { key: 'medical_examination', values: ['Conducted', 'Pending'] } }),
     f('supporting_evidence', 'Supporting Evidence'),
-    f('suspect_status', 'Suspect Status'),
+    // The suspect's status is recorded per suspect in the Suspects group.
+    f('suspect_status', 'Suspect Status', {
+      mirrorOf: { group: 'respondent', key: 'suspect_status' },
+    }),
   ],
   'Domestic Violence': [
-    f('relationship_between_parties', 'Relationship of Parties'),
-    f('type_of_abuse', 'Type of Abuse'),
+    // The relationship IS the offence here, and whether children were present
+    // is a fact the report has to state either way, so the Yes/No is required
+    // while the consequences (injury, threats, damage) stay advisory.
+    f('relationship_between_parties', 'Relationship of Parties', { required: true }),
+    f('type_of_abuse', 'Type of Abuse', { required: true }),
     f('threats_made', 'Threats Made'),
     f('physical_injury', 'Physical Injury'),
     f('property_damage', 'Property Damage'),
-    f('children_involved', 'Children Involved', { select: ['Yes', 'No'] }),
+    f('children_involved', 'Children Involved', { select: ['Yes', 'No'], required: true }),
     f('medical_treatment', 'Medical Treatment'),
     f('protection_order_information', 'Protection Order Information'),
   ],
   'Missing Person': [
-    f('missing_person_name', 'Missing Person Name'),
-    f('age', 'Age'),
-    f('sex', 'Sex', { select: ['Male', 'Female'] }),
-    f('address', 'Address'),
-    f('physical_description', 'Physical Description', { textarea: true }),
-    f('clothing_last_seen', 'Clothing Last Seen'),
-    f('date_last_seen', 'Date Last Seen', { date: true }),
+    // Everything about the person is recorded in the Missing Persons group,
+    // which is mandatory (minCount 1) and whose rows must carry a name AND a
+    // physical description — so the description requirement lives there, on
+    // the row, instead of being asked a second time up here.
+    f('missing_person_name', 'Missing Person Name', {
+      mirrorOf: { group: 'missing_person', key: 'name' },
+    }),
+    f('age', 'Age', { mirrorOf: { group: 'missing_person', key: 'age' } }),
+    f('sex', 'Sex', { select: ['Male', 'Female'], mirrorOf: { group: 'missing_person', key: 'sex' } }),
+    f('address', 'Address', { mirrorOf: { group: 'missing_person', key: 'address' } }),
+    f('physical_description', 'Physical Description', {
+      textarea: true,
+      mirrorOf: { group: 'missing_person', key: 'physical_description' },
+    }),
+    f('clothing_last_seen', 'Clothing Last Seen', {
+      mirrorOf: { group: 'missing_person', key: 'clothing_last_seen' },
+    }),
+    f('date_last_seen', 'Date Last Seen', { date: true, required: true }),
     f('time_last_seen', 'Time Last Seen', { time: true }),
-    f('location_last_seen', 'Location Last Seen'),
-    f('person_last_seen_with', 'Last Seen With'),
+    f('location_last_seen', 'Location Last Seen', { required: true }),
+    // No "Last Seen With" scalar: that key belongs to the Persons Last Seen
+    // With group (a scalar under it would replace the list).
     f('destination_if_known', 'Possible Destination'),
     f('medical_or_special_condition', 'Medical/Special Condition'),
     f('belongings_carried', 'Belongings Carried'),
@@ -142,24 +282,34 @@ export const TYPE_FIELDS = {
     f('search_actions_taken', 'Search Actions Taken', { textarea: true }),
   ],
   'Lost Property': [
-    f('property_type', 'Property Type'),
-    f('property_description', 'Description'),
-    f('quantity', 'Quantity'),
-    f('estimated_value', 'Estimated Value'),
+    // What was lost is recorded in the Lost Items group; Property Type has no
+    // group equivalent, so it stays a field of its own.
+    f('property_type', 'Property Type', { required: true }),
+    f('property_description', 'Description', {
+      required: true,
+      mirrorOf: { group: 'stolen_items', key: 'item_description' },
+    }),
+    f('quantity', 'Quantity', { mirrorOf: { group: 'stolen_items', key: 'quantity' } }),
+    f('estimated_value', 'Estimated Value', {
+      mirrorOf: { group: 'stolen_items', key: 'estimated_value' },
+    }),
     f('identifying_marks', 'Identifying Marks'),
     f('date_last_seen', 'Date Last Seen', { date: true }),
     f('time_last_seen', 'Time Last Seen', { time: true }),
     f('location_last_seen', 'Location Last Seen'),
-    f('circumstances_of_loss', 'Circumstances of Loss', { textarea: true }),
+    // How it came to be lost is the whole report; when and where are advisory,
+    // because the owner often only knows the last place they remember it.
+    f('circumstances_of_loss', 'Circumstances of Loss', { textarea: true, required: true }),
     f('finder_information', 'Finder Information'),
     f('supporting_documents', 'Supporting Documents'),
   ],
   'Fraud / Estafa': [
     f('transaction_type', 'Transaction Type'),
-    f('transaction_date', 'Transaction Date', { date: true }),
+    f('transaction_date', 'Transaction Date', { date: true, required: true }),
     f('transaction_method', 'Transaction Method'),
-    f('amount_involved', 'Amount Involved'),
-    f('promised_service_or_item', 'Promised Service/Item'),
+    f('amount_involved', 'Amount Involved', { required: true }),
+    // What was promised IS the misrepresentation the case rests on.
+    f('promised_service_or_item', 'Promised Service/Item', { required: true }),
     f('payment_method', 'Payment Method'),
     f('account_or_reference_number', 'Account/Reference Number'),
     f('communication_method', 'Communication Method'),
@@ -167,59 +317,92 @@ export const TYPE_FIELDS = {
     f('proof_of_payment', 'Proof of Payment'),
   ],
   'Property Damage / Malicious Mischief': [
-    f('damaged_property', 'Damaged Property'),
+    f('damaged_property', 'Damaged Property', { required: true }),
     f('property_description', 'Description'),
-    f('type_of_damage', 'Type of Damage'),
-    f('cause_of_damage', 'Cause of Damage'),
+    f('type_of_damage', 'Type of Damage', { required: true }),
+    f('cause_of_damage', 'Cause of Damage', { required: true }),
     f('estimated_damage_cost', 'Estimated Cost of Damage'),
     f('weapon_or_tool_used', 'Tool/Weapon Used'),
     f('cctv_available', 'CCTV Available', { select: ['Yes', 'No', 'Unknown'] }),
     f('photographs_available', 'Photographs Available', { select: ['Yes', 'No'] }),
   ],
   'Fire Incident': [
-    f('type_of_property', 'Type of Property'),
+    f('type_of_property', 'Type of Property', { required: true }),
     f('property_description', 'Description'),
     f('fire_location', 'Fire Location'),
     f('estimated_time_started', 'Estimated Time Started', { time: true }),
     f('estimated_time_reported', 'Estimated Time Reported', { time: true }),
-    f('possible_cause', 'Possible Cause'),
-    f('extent_of_damage', 'Extent of Damage'),
+    // Cause and extent are what the investigation is opened on. The losses,
+    // the casualty counts and the response stay advisory: the figures are
+    // usually assessed later, and the persons groups carry the real records.
+    f('possible_cause', 'Possible Cause', { required: true }),
+    f('extent_of_damage', 'Extent of Damage', { required: true }),
     f('estimated_property_loss', 'Estimated Property Loss'),
-    f('injuries', 'Injuries'),
-    f('fatalities', 'Fatalities'),
+    // Casualty COUNTS only: who was hurt is the Injured / Deceased Persons
+    // group's job, and this is the summary line the sheet states.
+    f('injuries', 'Injuries', {
+      mirrorOf: { group: 'injured_persons', countInjured: true },
+    }),
+    f('fatalities', 'Fatalities', {
+      mirrorOf: { group: 'injured_persons', countInjury: 'Deceased' },
+    }),
     f('persons_evacuated', 'Persons Evacuated'),
     f('fire_department_response', 'Fire Department Response'),
   ],
+  // Drug cases live or die on the corpus delicti and its chain of custody:
+  // what was seized, under what classification, and who took custody of it.
   'Drug-Related Incident': [
-    f('incident_classification', 'Classification'),
+    f('incident_classification', 'Classification', { required: true }),
     f('location_found', 'Location Found'),
-    f('items_seized', 'Items Seized'),
+    f('items_seized', 'Items Seized', { required: true }),
     f('quantity', 'Quantity'),
     f('packaging_description', 'Packaging Description'),
     f('evidence_found', 'Evidence Found'),
     f('operation_type', 'Operation Type'),
-    f('vehicle_involved', 'Vehicle Involved'),
-    f('evidence_turnover', 'Evidence Turnover'),
+    f('vehicle_involved', 'Vehicle Involved', {
+      mirrorOf: { group: 'vehicles', key: 'plate_number' },
+    }),
+    f('evidence_turnover', 'Evidence Turnover', { required: true }),
   ],
   'Burglary / Break-In': [
-    f('establishment_or_residence', 'Type of Premises'),
-    f('entry_point', 'Point of Entry'),
-    f('signs_of_forced_entry', 'Signs of Forced Entry', { select: ['Yes', 'No', 'Unclear'] }),
-    f('property_stolen', 'Property Stolen'),
-    f('property_description', 'Description'),
-    f('estimated_value', 'Estimated Value'),
+    f('establishment_or_residence', 'Type of Premises', { required: true }),
+    f('entry_point', 'Point of Entry', { required: true }),
+    f('signs_of_forced_entry', 'Signs of Forced Entry', {
+      select: ['Yes', 'No', 'Unclear'],
+      required: true,
+    }),
+    // Property Stolen stays advisory: an ATTEMPTED break-in takes nothing, and
+    // forcing the officer to write "none" is worse than leaving it blank.
+    // An ATTEMPTED break-in takes nothing, so Property Stolen stays optional —
+    // it simply carries the first row of the Stolen Items group when there is
+    // one.
+    f('property_stolen', 'Property Stolen', {
+      mirrorOf: { group: 'stolen_items', key: 'item_description' },
+    }),
+    f('property_description', 'Description', {
+      mirrorOf: { group: 'stolen_items', key: 'item_description' },
+    }),
+    f('estimated_value', 'Estimated Value', {
+      mirrorOf: { group: 'stolen_items', key: 'estimated_value' },
+    }),
     f('tools_used', 'Tools Used'),
     f('cctv_available', 'CCTV Available', { select: ['Yes', 'No', 'Unknown'] }),
-    f('cctv_description', 'CCTV Details', { showIf: { key: 'cctv_available', values: ['Yes'] } }),
+    f('cctv_description', 'CCTV Details', {
+      showIf: { key: 'cctv_available', values: ['Yes'] },
+      requireWhenShown: true,
+    }),
     f('recovered_property', 'Recovered Property'),
   ],
+  // The catch-all type carries the smallest possible required set — a category
+  // to file it under and the officer's own account of what happened. Requiring
+  // the structured fields here would defeat the point of having "Other".
   'Other Incident': [
-    f('incident_category', 'Category'),
+    f('incident_category', 'Category', { required: true }),
     f('persons_involved', 'Persons Involved'),
     f('property_involved', 'Property Involved'),
     f('injuries_or_damage', 'Injuries/Damage'),
     f('suspect_information', 'Suspect Information'),
-    f('additional_information', 'Additional Information', { textarea: true }),
+    f('additional_information', 'Additional Information', { textarea: true, required: true }),
   ],
 };
 
@@ -309,6 +492,35 @@ export const WITNESS_ITEM_FIELDS = [
   f('contact_number', 'Contact Number', { type: 'phone' }),
   f('statement_summary', 'Statement Summary', { textarea: true }),
 ];
+
+// What every RECORDED row of a group must carry, by role. A group key IS its
+// role (see GROUP_CONFIG), so this is stated once instead of once per type, and
+// it covers the part of a row no count floor can express: "at least one victim"
+// is satisfied by a row holding nothing but an address.
+//
+// The two shapes are deliberate:
+//   - require    — every one of these fields must carry a value;
+//   - requireAny — at least one of them must, which is how a suspect stays
+//                  recordable when they are UNIDENTIFIED (description, no name)
+//                  without letting an empty suspect row through.
+//
+// Vehicles are deliberately absent: `plate_number` + `driver_name` are enforced
+// by the vehicle_completeness cross-check in reportRules.js, which knows to
+// leave a fully blank row alone. Mirrored in ReportRules::groupRowRules() in
+// app/rules/report_rules.php — keep the two in lockstep.
+export const GROUP_ROW_RULES = {
+  complainant: { require: ['name'] },
+  respondent: { requireAny: [['name', 'suspect_description']] },
+  witness: { require: ['name'] },
+  injured_persons: { require: ['name'] },
+  arrested_persons: { require: ['name'] },
+  person_last_seen_with: { require: ['name'] },
+  // A missing-person row has to describe the person: a name alone does not
+  // tell anyone who to look for, and the type's own Physical Description
+  // scalar is now derived from this row rather than asked separately.
+  missing_person: { require: ['name', 'physical_description'] },
+  stolen_items: { require: ['item_description'] },
+};
 
 // Per-type group configuration. This is the v3 replacement for the fixed
 // singular complainant/respondent slots in ROLE_LABELS:

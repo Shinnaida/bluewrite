@@ -17,6 +17,7 @@
 // read it back in the register. The Profile control closes the bar.
 
 import React, { useEffect, useRef, useState } from 'react';
+import { THEMES, THEME_HINTS, THEME_LABELS } from '../lib/theme.js';
 // The brand mark (shield + report + pen). Square, transparent PNG padded so it
 // can sit in a round or square slot without touching the edges. This is the
 // KNOCKOUT variant — white ink, crest knocked out — because the bar is navy;
@@ -36,15 +37,27 @@ const ADMIN_LINKS = [
   { kind: 'audits', label: 'Audit Trail' },
 ];
 
-// Which nav item wears the active underline for a given view. Opening a saved
-// report keeps its origin highlighted: officers arrived from Write Report,
-// admins from All Reports.
+// Which nav item wears the active underline for a given view. An OPEN REPORT
+// reads as Write Report for an officer — that is the screen they are on — and as
+// All Reports for an admin, who supervises through the list rather than by
+// writing. Both entry paths report it as 'report': Home's recent rows, and the
+// reports list, whose editor panel Shell reports up for exactly this reason
+// (see Shell's `current`).
 function activeFor(current, isAdmin) {
   if (current === 'report') return isAdmin ? 'table' : 'new';
   return current;
 }
 
-export default function AppTopBar({ user, current, onNavigate, onLogout }) {
+export default function AppTopBar({
+  user,
+  current,
+  onNavigate,
+  onLogout,
+  formFormat,
+  onFormFormat,
+  theme,
+  onTheme,
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const wrapRef = useRef(null);
   const isAdmin = user.role === 'Admin';
@@ -120,6 +133,89 @@ export default function AppTopBar({ user, current, onNavigate, onLogout }) {
                   </span>
                 </span>
               </div>
+              <div className="ir-profile-sep" aria-hidden="true" />
+
+              {/* Preferences: display choices about how the workspace is
+                  drawn, not about the report. They sit between identity and
+                  the one destructive action so the menu reads top to bottom:
+                  who you are → how it looks → log out. */}
+              {/* role="group" is the legal way to section a menu; the title text
+                  is the section's name for screen readers. */}
+              <div className="ir-profile-prefs" role="group" aria-label="Preferences">
+                <div className="ir-pref-title" aria-hidden="true">
+                  Preferences
+                </div>
+                <div className="ir-pref-row">
+                  <span className="ir-pref-text">
+                    <span className="ir-pref-name" id="pref-form-format">
+                      Form format
+                    </span>
+                    <span className="ir-pref-hint" id="pref-form-format-hint">
+                      {formFormat === 'steps'
+                        ? 'One panel per step in Write Report'
+                        : 'Continuous document, one long scroll'}
+                    </span>
+                  </span>
+                  {/* A switch, not a checkbox pair: the two states are the same
+                      form, drawn differently. The hint above is the value. */}
+                  <button
+                    type="button"
+                    role="switch"
+                    className="ir-switch"
+                    aria-checked={formFormat === 'steps'}
+                    aria-labelledby="pref-form-format"
+                    aria-describedby="pref-form-format-hint"
+                    onClick={() =>
+                      onFormFormat(formFormat === 'steps' ? 'document' : 'steps')
+                    }
+                    title={
+                      formFormat === 'steps'
+                        ? 'Show Write Report as one long scroll'
+                        : 'Show Write Report one panel per step'
+                    }
+                  >
+                    <span className="ir-switch-knob" aria-hidden="true" />
+                  </button>
+                </div>
+
+                {/* Appearance is a preference on the same footing as form
+                    format, one row down. It is NOT a switch: there are three
+                    answers, and "off" would have to mean either light or
+                    follow-the-workstation. The segmented control states all
+                    three and shows which is on, so the hint line stays a hint
+                    (what the choices mean) instead of repeating the value. */}
+                <div className="ir-pref-stack">
+                  <span className="ir-pref-text">
+                    <span className="ir-pref-name" id="pref-theme">
+                      Appearance
+                    </span>
+                    <span className="ir-pref-hint" id="pref-theme-hint">
+                      {THEME_HINTS[theme]}
+                    </span>
+                  </span>
+                  <div
+                    className="ir-seg"
+                    role="radiogroup"
+                    aria-labelledby="pref-theme"
+                    aria-describedby="pref-theme-hint"
+                  >
+                    {THEMES.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        className="ir-seg-btn"
+                        aria-checked={theme === value}
+                        title={THEME_HINTS[value]}
+                        onClick={() => onTheme(value)}
+                      >
+                        {THEME_LABELS[value]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <div className="ir-profile-sep" aria-hidden="true" />
               <button
                 type="button"

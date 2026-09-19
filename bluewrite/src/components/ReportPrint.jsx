@@ -106,11 +106,33 @@ function buildTypeFacts(type, ctx) {
   const victims = () => people('complainant', report.complainant);
   const suspects = () => people('respondent', report.respondent);
 
-  // Numbered items block from a description/value key pair.
-  const itemsBlock = (label, pairs) => {
-    const items = pairs
-      .map(([desc, value]) => ({ desc: N(desc), value: fmtValue(value) }))
-      .filter((it) => it.desc !== '');
+  // Numbered items block. The Stolen Items GROUP is the record, so every row
+  // is numbered — a report that saw two items taken prints two, not the first
+  // one plus a total that implies the rest. Rows with no value are summed
+  // around and simply suppress the TOTAL line: a partial figure printed as a
+  // total is a worse lie than no figure at all (same rule as the group's own
+  // stolenItemsTotal). The legacy description/value pairs remain the fallback
+  // for a report filed before the group existed, where the scalar is all there
+  // is.
+  const itemsBlock = (label, pairs, groupKey = 'stolen_items') => {
+    const rows = Array.isArray(ts[groupKey])
+      ? ts[groupKey]
+          .map((row) => ({
+            desc: join(
+              N(row.item_description),
+              has(row.quantity)
+                ? `qty. ${N(row.quantity)}${has(row.unit) ? ` ${N(row.unit)}` : ''}`
+                : '',
+            ),
+            value: fmtValue(row.estimated_value),
+          }))
+          .filter((it) => it.desc !== '')
+      : [];
+    const items = rows.length > 0
+      ? rows
+      : pairs
+          .map(([desc, value]) => ({ desc: N(desc), value: fmtValue(value) }))
+          .filter((it) => it.desc !== '');
     if (items.length === 0) return null;
     const nums = items.map((it) => toNumber(it.value));
     const total = nums.every((n) => n !== null)

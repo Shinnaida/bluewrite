@@ -423,7 +423,7 @@ function LineChart({ series }) {
   if (!series.length) {
     return (
       <svg className="dash-line" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Reports filed over time">
-        <text x={W / 2} y={H / 2} textAnchor="middle" fontSize="13" fill="#6B7A8C">
+        <text x={W / 2} y={H / 2} textAnchor="middle" fontSize="13" className="chart-axis">
           No reports in this range yet.
         </text>
       </svg>
@@ -468,19 +468,19 @@ function LineChart({ series }) {
         onMouseLeave={() => setHover(null)}
       >
         {[0, 0.25, 0.5, 0.75, 1].map((f) => (
-          <line key={f} x1={PAD.l} x2={W - PAD.r} y1={py(axisMax * f)} y2={py(axisMax * f)} stroke="#1E293B" strokeWidth="1" />
+          <line key={f} x1={PAD.l} x2={W - PAD.r} y1={py(axisMax * f)} y2={py(axisMax * f)} className="chart-grid" strokeWidth="1" />
         ))}
         {[0, Math.round(axisMax / 2), axisMax].map((v) => (
-          <text key={v} x={PAD.l - 6} y={py(v) + 3} fontSize="9.5" fill="#6B7A8C" textAnchor="end">
+          <text key={v} x={PAD.l - 6} y={py(v) + 3} fontSize="9.5" className="chart-axis" textAnchor="end">
             {v}
           </text>
         ))}
-        <path d={areaPath} fill="rgba(0,240,255,0.07)" stroke="none" />
-        <path d={linePath} fill="none" stroke="#00F0FF" strokeWidth="2" />
+        <path d={areaPath} className="chart-area" stroke="none" />
+        <path d={linePath} className="chart-line" fill="none" strokeWidth="2" />
         {hp && (
           <>
-            <line x1={hp[0]} x2={hp[0]} y1={PAD.t} y2={py(0)} stroke="#00F0FF" strokeOpacity="0.35" strokeWidth="1" />
-            <circle cx={hp[0]} cy={hp[1]} r="3.5" fill="#00F0FF" />
+            <line x1={hp[0]} x2={hp[0]} y1={PAD.t} y2={py(0)} className="chart-hover-line" strokeWidth="1" />
+            <circle cx={hp[0]} cy={hp[1]} r="3.5" className="chart-dot" />
           </>
         )}
         {labelIdx.map((idx, n) =>
@@ -490,7 +490,7 @@ function LineChart({ series }) {
               x={points[idx][0]}
               y={H - 6}
               fontSize="10"
-              fill="#9CA3AF"
+              className="chart-axis"
               textAnchor={n === 0 ? 'start' : n === 2 ? 'end' : 'middle'}
             >
               {series[idx].date.slice(5)}
@@ -555,7 +555,14 @@ function BarRows({ rows, deltas }) {
 
 // ---- Donut: three-slice stroke-dasharray ------------------------------------
 
-const STATUS_COLORS = { draft: '#F59E0B', submitted: '#00F0FF', final: '#3ED598' };
+// The three status inks, named as CSS custom properties rather than literals:
+// the legend dots paint them into a DOM background (where var() resolves) and
+// the donut arcs wear them through a class (styles.css — an SVG presentation
+// attribute cannot read a custom property). They were also carrying the old
+// dark-HUD palette's neon cyan and mint, which no longer existed anywhere else
+// in the app; routing them through the tokens put the chart back on the
+// station's own colours.
+const STATUS_COLORS = { draft: 'var(--amber)', submitted: 'var(--cyan)', final: 'var(--green-ok)' };
 
 function Donut({ status }) {
   const R = 60;
@@ -571,7 +578,7 @@ function Donut({ status }) {
     return (
       <div className="dash-donut-wrap">
         <svg viewBox="0 0 160 160" role="img" aria-label="No reports in range">
-          <text x={80} y={84} textAnchor="middle" fontSize="12" fill="#6B7A8C">
+          <text x={80} y={84} textAnchor="middle" fontSize="12" className="chart-axis">
             No data
           </text>
         </svg>
@@ -603,7 +610,7 @@ function Donut({ status }) {
     <div className="dash-donut-wrap">
       <div className="dash-donut">
         <svg viewBox="0 0 160 160" role="img" aria-label="Reports by status: draft, submitted, finalized">
-          <circle cx={CX} cy={CY} r={R} fill="none" stroke="#1E293B" strokeWidth="18" />
+          <circle cx={CX} cy={CY} r={R} fill="none" className="chart-track" strokeWidth="18" />
           {arcs
             .filter((a) => a.len > 0)
             .map((a) => (
@@ -613,7 +620,7 @@ function Donut({ status }) {
                 cy={CY}
                 r={R}
                 fill="none"
-                stroke={STATUS_COLORS[a.key]}
+                className={`chart-arc chart-arc--${a.key}`}
                 strokeWidth="18"
                 strokeDasharray={`${a.len} ${CIRC}`}
                 strokeDashoffset={-a.offset}

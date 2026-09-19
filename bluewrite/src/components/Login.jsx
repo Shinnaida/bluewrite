@@ -8,8 +8,16 @@
 // as one product. What stays is the fact an officer wants BEFORE typing a
 // passcode: the PHT clock and the SYS_STATUS / ENC_LEVEL readout.
 //
-// The wordmark is plain type on both this screen and Home: BLUE in navy,
-// WRITE in the brand blue. No animation touches it.
+// The wordmark is plain type on both this screen and Home: BLUE in the page's
+// heading ink (navy on the light page, near-white on the dark one), WRITE in
+// the brand blue. No animation touches it.
+//
+// The appearance control (Light / Dark / Auto) was removed from the bar by
+// request — a three-way theme picker on a sign-in screen reads as a settings
+// screen, not a gate. Appearance still lives in Profile ▸ Preferences once
+// signed in, and the stored preference is still applied before the bundle
+// loads (index.html), so a dark workstation stays dark at the gate; it just
+// cannot be CHANGED from it. Do not put the picker back on this bar.
 
 import React, { useEffect, useState } from 'react';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
@@ -63,6 +71,10 @@ function TopStatusBar({ connState }) {
         <span>{time}</span>
       </p>
 
+      {/* The bar's right-hand end is the system readout, and nothing else:
+          no controls live on the gate at all now that the appearance picker
+          is gone. `title` is the one place a connection problem is explained
+          before a submit attempt — the notice inside the panel follows. */}
       <div className="la-topmeta">
         <span title={down ? CONNECTION_MESSAGES[connState] : undefined}>
           SYS_STATUS:{' '}

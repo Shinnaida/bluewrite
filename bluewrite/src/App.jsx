@@ -1,11 +1,19 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from './lib/api.js';
+import { useTheme } from './lib/theme.js';
 import Login from './components/Login.jsx';
 import Shell from './components/Shell.jsx';
 
 export default function App() {
   const [user, setUser] = useState(undefined); // undefined = checking, null = logged out
   const [toast, setToast] = useState(null);
+  // Display preference, owned here for the same reason the form format is
+  // owned by Shell: ONE source of truth, so the control that sets it and the
+  // screens that live under it can never disagree. App holds it because
+  // `useTheme` applies it to <html> for the whole document — the gate included,
+  // which renders outside the Shell and has no controls of its own. The only
+  // menu that CHANGES it is Profile ▸ Preferences, inside the workspace.
+  const [theme, setTheme] = useTheme();
 
   const notify = useCallback((msg) => {
     setToast({ msg, id: Date.now() });
@@ -43,7 +51,13 @@ export default function App() {
 
   return (
     <>
-      <Shell user={user} onLogout={onLogout} notify={notify} />
+      <Shell
+        user={user}
+        onLogout={onLogout}
+        notify={notify}
+        theme={theme}
+        onTheme={setTheme}
+      />
       {toast && (
         <div className="toast" role="status">
           {toast.msg}

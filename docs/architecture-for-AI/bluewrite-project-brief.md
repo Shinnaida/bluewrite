@@ -72,13 +72,16 @@ bluewrite/                  the application
     lib/                    api.js (fetch wrapper), incidentTypes.js (domain data),
                             reportRules.js (client validation mirror),
                             incidentReport.js (case no./date formatting),
-                            normalizeLegacy.js, printActions.js
+                            normalizeLegacy.js, printActions.js,
+                            theme.js (the light/dark/auto preference)
     styles.css              THE theme: tokens + every screen's rules
     incident-report.css     the official-document grammar (top bar, page head,
                             cards, field labels, signature blocks, register table)
     login-theme.css         the login screen only (same tokens and document
                             language as the workspace; login-only pieces are the
                             two-column gate, the PHT clock and SYS_STATUS)
+    dark-theme.css          the dark palette, and the whole dark theme — every
+                            rule in it is behind :root[data-theme='dark']
   api/index.php             front controller: strips /api/v1, dispatches by hand
   app/core/                 Config, Database, Response, Session, Csrf, Auth,
                             Audit, Validator, Station, LegacyNormalizer
@@ -134,14 +137,100 @@ view = { kind: 'welcome' }            // Home — document landing cards  (offic
 
 `AppTopBar.jsx` is the only nav: brand lockup (doubles as Home), role-aware links
 (officer: HOME · WRITE REPORT · MY REPORTS / admin: DASHBOARD · ALL REPORTS ·
-USER MANAGEMENT · AUDIT TRAIL), an `aria-current` underline, and the **Profile**
-control. Sign-out lives **inside Profile**, flows through one confirmation
-dialog, and has exactly one code path (`Shell.doLogout`). There is no
-"Logout" nav link — do not add one back.
+USER MANAGEMENT · AUDIT TRAIL), an`aria-current` underline, and the **Profile** control. Sign-out lives **inside Profile**, flows through one
+confirmation dialog, and has exactly one code path (`Shell.doLogout`). There is no
+"Logout" nav link — do not add one back. The Profile menu also carries
+**Preferences** — display-only, one `localStorage` key per browser, and owned by
+`Shell` so the switch and the screen that reads it can never disagree. Today it
+holds one switch, **Form format**, which picks between Write Report as a
+continuous document and one panel per step, the last of those steps being a
+review of the whole report — editable one row at a time — with the Submit
+cluster under it.
+
+The underline (`aria-current`) follows what is ON SCREEN, not what route got
+there: an open report reads as WRITE REPORT for an officer and as ALL REPORTS
+for an admin (`activeFor`). That matters because there are two ways into a
+report — Home's recent rows (Shell renders the editor itself, `view.kind` becomes
+`'report'`) and the reports list, which renders the editor in its OWN panel to
+keep its search, filters and page while a report is open over it. That second
+path leaves `view.kind` at `'table'`, so `ReportsTable` reports the panel up
+through `onReportOpenChange` and Shell passes `'report'` to the bar while the
+list is the view. Adding a third way in means telling the bar the same way — the
+route alone is not the answer.
+
+**The register's rows carry no buttons.** The ACTIONS column is gone — four ghost
+buttons on a blotter that runs to hundreds of rows is hundreds of buttons of
+chrome competing with the data. A row's actions are its context menu: right-click
+it (`RowMenu`, portaled to `<body>`, clamped to the viewport), or select the row
+and press Shift+F10 / the Menu key — the row is `tabIndex={0}` for exactly that,
+and `Enter` opens it. Double-click also opens. `rowCanOpen` is the ONE answer to
+"may this list open this row" (the archive is restore-only; a finalized report
+belongs to an administrator) and all three ways in use it, so they cannot
+disagree; the status line above the table states the interaction, which is what
+replaced the column's discoverability.
+
+**Search runs as you type.** There is no Search button (removed by request): the
+box is the immediate value and `query.q` follows it 350ms later, so one query
+per pause rather than one per keystroke. Enter commits what is typed
+immediately, Escape clears the search, and the other filters still apply the
+instant they change. Two consequences worth keeping: because requests now overlap
+by design, `load()` stamps each one with `loadSeq` and only the NEWEST may write
+its answer (a slow earlier search landing late would repaint the register with
+results the box no longer holds); and "Clear filters" clears `search` and
+`query.q` together, or the box and the query would disagree until the next
+keystroke.
+
+**What the search matches.** The query is split into WORDS and every word has to
+appear somewhere in the record — AND between words, OR across the fields — which
+is what makes a name findable: parties are stored "Last Name, First Name, M.I."
+(the form's own placeholders), so a whole-phrase match could only ever find the
+stored spelling, and "Ana Reyes" — how the name is said — found nothing while
+"Reyes, Ana" did. The searched fields are type, place, the legacy party columns,
+narrative, the recording officer, the reporting party (`reporter_name`) and the
+investigator on case (`ioc_name`), plus every person name inside `type_specific`:
+`ReportsController::SEARCH_PERSON_PATHS` is that list, and a new group that carries
+a name belongs in it in the same commit, or the officer cannot find the report by
+that person. Past `MAX_SEARCH_WORDS` (12) a query is a pasted paragraph rather than
+a search and the API answers 422.
+
+Two invariants live in that SQL. **The JSON name search must be an alternative
+INSIDE each word's group, never a condition beside it** — a party name can exist
+nowhere else on the report, so ANDing it to the group demands the name also appear
+in a text column and every name-only search comes back empty (it did; the suite
+caught it). And the names are joined by a newline before the `LIKE`, a separator no
+single word can contain, so one word cannot straddle two people.
+
+**STATUS is the one sortable heading.** Clicking it cycles `STATUS_SORTS`:
+register order (newest incident first) → **draft first** → **finalized first** →
+back, and every step resets to page 1. The heading itself stays the plain word
+STATUS (by request): the arrow beside it appears only while this column is the
+one sorting, and the full state is written out in the button's `title` — which is
+why that tooltip has to stay accurate if the cycle ever changes. The state is
+DERIVED from `sort`/`dir`, so picking "Status A→Z" in the sort dropdown lands on
+the same state and the two controls can never disagree. The two status sorts are
+the server's own `status` column asc/desc, so they agree with the API, the export
+and the tie-break (`ORDER BY <col>, r.id DESC`).
+
+A row the officer can no longer change — finalized, and not an administrator's —
+wears `.row-locked` and is muted (`--cyan-dim`, and the report number gives up
+its bold), so the register reads as "the record" versus "still yours to work on"
+at a glance. The status badge keeps its colour on purpose: it is why the row
+looks like that. Hover, focus and the menu all still work on it.
 
 Data flow: children signal changes through `onMutated` → `bumpList()` → version
-bump → refetch. `ReportEditor` autosaves every 30s while dirty. Opening a
-different report remounts via `key` in Shell.
+bump → refetch. Opening a different report remounts via `key` in Shell.
+
+**Saving a draft has ONE write path** — `ReportEditor.writeDraft()` — and four
+callers: the 30s interval, a `pagehide` / `visibilitychange` exit flush, an
+unmount flush, and Shell's sign-out flush (via `onRegisterFlush`, run BEFORE
+`/logout`, because the idle timeout destroys the session that authorises the
+write). The exit flush passes `keepalive: true` through `api()` so a closing tab
+cannot cancel it. Three rules hold this together: `incident_type` is NOT NULL so
+a report with no type yet is not savable (the sessionStorage mirror is the
+fallback); `writeDraft` returns a promise and joins a write already in flight,
+because two POSTs a moment apart would create two reports; and the manual Save
+button is deliberately NOT this path — it validates first and shows errors.
+There is no `beforeunload` prompt by design.
 
 Invariants in `ReportEditor` that have caused real crashes — do not regress:
 
@@ -152,17 +241,99 @@ Invariants in `ReportEditor` that have caused real crashes — do not regress:
    `created_by` on first save. Editing is then ownership + `status !== 'finalized'`,
    mirroring the server.
 
-## 6. The look — official document, light
+**Field ids and the review's second copy.** Not a crash, but the same class of
+silent failure, and it cost two real bugs. A field's DOM id comes from
+`src/lib/reviewFields.js` — never spell one inline. While the stepped format's
+Review step is on screen the form's own copy of a field is mounted but `hidden`
+(IrCard hides rather than unmounts, so error jumps stay resolvable), so
+`resolveTarget`/`groupSection` walk BOTH id sets and prefer the copy that is not
+inside a `[hidden]` ancestor; `getElementById` alone would hand back the
+invisible one. The review's copy is built by passing
+`idPrefix={REVIEW_FIELD_PREFIX}` to `TypeSpecificFields` / `RepeatableGroup`. The
+old inline table searched two ids that have never existed — `location` looked for
+`r-location` (the control is `r-loc`) and the approximate-time checkbox for
+`r-incident_time_approximate` (it is `r-time-approx`) — so a blocked Submit
+listed the field and the link it built scrolled nowhere. Only `incident_type` and
+`incident_time` follow the `<key>` → `r-<key>` convention, so a new required
+field needs an entry in that table in the same commit as its control;
+`tests/rules/reviewFields.test.mjs` is what pins it.
+
+**Editing from the review.** The Review step's rows are editable in place, ONE at
+a time, and that single open row is the only place a second copy of a control is
+rendered. `ReportReview` marks a row editable with `{...editable(path)}`;
+`ReviewRow` renders that row's value as a button (`reviewRowValueId(path)`) and,
+while its path is open, `ReviewFieldEditor` swaps the read-back for the form's
+own control for that field (same input type, placeholder, autocomplete — the
+table is `REVIEW_INPUTS`). Keys to not regress:
+
+- The open row (`editingReviewRow`) lives in `ReportEditor`, NOT in the review,
+  because `jumpTo` has to be able to OPEN a row: a blocked Submit or error link
+  for a path the review has a row for opens that row in place (and then focuses
+  the review's copy, which `findControl` prefers because the form's is hidden —
+  see the id scheme above); every other path falls back to revealing its step,
+  unchanged.
+- Every edit goes through the setters the form uses, including `setNarrative`
+  and `setActionTaken` (they carry the narrative provenance tag and close the
+  AI's undo offer), so autosave, the exit/sign-out flush, the inline errors and
+  the rule engine need to know nothing new. There is no second write path.
+- `canEdit` decides whether a row is a button at all, so a finalized report
+  offers no control; the derived read-outs (Badge No., the signed name, the
+  submit timestamp) pass no `path`, which is the same refusal for a different
+  reason.
+- `reviewEdit` is a plain object and this project has NO typecheck, so a key the
+  review reads that it does not carry is `undefined` at runtime — that is how
+  `draft` crashed `ReviewFieldEditor` on the first click. Add the key to
+  `reviewEdit` in the same edit as the consumer, and keep the whole kit (draft,
+  the four setters, errors, the open row) in mind when adding a control there.
+- A row closes on Escape (which returns focus to the value it was opened from),
+  on its **Done** chip, on opening another row, or on leaving the Review step —
+  never on blur. That is deliberate: closing re-flows the document, and doing it
+  while the officer reaches for Save Draft / Print / Submit moves that button out
+  from under the pointer between mousedown and mouseup, so the click is swallowed
+  or lands on whatever moved into its place. Nothing is pending while a row is
+  open (every keystroke is already in the draft), so leaving it open loses
+  nothing.
+- The approximate-time checkbox has no row of its own — it lives inside the date
+  & time row, which is what `reviewRowForPath` encodes for the jumps.
+
+Phase 1 is the scalar rows only — the whole of `REVIEW_SCALAR_PATHS` minus the
+approximate-time checkbox, which is a control inside the date & time row rather
+than a row of its own (`REVIEW_INPUTS` plus the select/datetime/two-textarea
+branches in `ReviewFieldEditor` is that set; the two must stay in step). The
+per-type fields and the repeatable groups are not editable from the review yet,
+and neither is the changed-row marker / per-row undo (the plan's Phase 2 and 3);
+`changedReviewPaths` / `valueAtPath` in `reviewFields.js` are the tested halves
+they will use.
+
+## 6. The look — official document, light and dark
 
 The whole app wears the "Official Incident Reporting System" look: **navy top
 bar, light gray page, white bordered cards, uppercase small-caps labels, bold
 sans page title**, blue primary action.
 
+**LIGHT IS THE DEFAULT AND THE PRODUCT.** There is also a dark theme, chosen
+per browser in Profile ▸ Preferences ▸ Appearance (three answers — Light, Dark,
+Auto, where Auto follows `prefers-color-scheme` and keeps following it). The
+login bar used to carry the same control and no longer does (removed by
+request: a theme picker on the gate read as a settings screen) — but the stored
+preference is still applied there by the inline script in `index.html`, so a
+dark workstation opens dark at the gate and just cannot be switched from it.
+It is opt-in, so no existing workstation changes appearance; the preference is
+the `bw-theme` localStorage key and nothing about it touches the account or the
+server.
+
 * Tokens live in `:root` in `styles.css`. The names are holdovers from the old
   dark theme but the **values are the light palette**: `--void` = page
   `#EEF0F4`, `--panel` = card white, `--cyan` = primary blue `#1F5FD0`,
   `--paper` = primary text `#1F2733`, `--steel` = secondary text, `--line` /
-  `--line-bright` = borders.
+  `--line-bright` = borders. Two hues sit outside the blue, both belonging to
+  **one screen only** — Write Report — where they answer "where am I?":
+  `--violet` (`#8444F2`) is the completion stepper's accent (dot numbers, their
+  rings, the track fill), and `--indigo` (`#6F79E8`) fills the whole header bar
+  of every card the officer's current step owns, its label in white. See the
+  write-report architecture note for why that screen gets its own accents — and
+  for the contrast trade that a filled bar with white ink makes. Everything else
+  in the app stays on the blue.
 * **The typeface is League Spartan, self-hosted.** One `--font-family` token
   (`'League Spartan', 'Segoe UI', system-ui, sans-serif`) is what `--font-body`
   and `--font-hud` both alias, so retyping the app is a one-line change — that
@@ -187,7 +358,32 @@ sans page title**, blue primary action.
   `.ir-card-body--flush`.
 * **Put a colour change in the token, not in a rule.** Because screens read
   tokens, one palette edit restyles everything — that is what made this redesign
-  small.
+  small, and it is the whole reason the dark theme is one file.
+* **The theme switch is `<html data-theme>` plus `src/dark-theme.css`.** No
+  component knows which theme is on. Two things make it work: (1) blue had to
+  split into two tokens, `--cyan` for accent **ink** (links, focus, small
+  labels) and `--accent-fill` for the accent **surface** (the filled primary
+action, which always carries white) — dark needs a blue that lifts off
+  near-black *and* a blue dark enough to hold white, and those are not the same
+  blue; (2) every hardcoded colour that had to flip was promoted to a role token
+  first (`--card-head`, `--head-ink`, `--icon-dim`, `--placeholder`,
+  `--hero-ink`, `--panel-sunken`, `--panel-soft`, `--scrim`, `--shadow-*`, the
+  `--*-bg` / `--*-line` tint pairs). **If you write a colour longhand in a rule,
+  dark cannot reach it** — put it in a token.
+* Dark overrides are written as `:root[data-theme='dark']`, not
+  `[data-theme='dark']`: `incident-report.css` declares its `--ir-*` aliases on
+  `:root`, which ties with a bare attribute selector, and ties fall back to
+  import order. The extra `:root` wins on specificity instead.
+* `index.html` carries a tiny inline script that applies the stored theme
+  **before the bundle loads** — otherwise a dark workstation flashes white on
+  every navigation. It duplicates four lines of `lib/theme.js` on purpose: it
+  has to be inline and synchronous, which a module cannot be.
+* `color-scheme` is set per theme and is not cosmetic: it is the only thing that
+  reaches the browser's OWN chrome (scrollbars, date-picker popup, select
+  dropdown, autofill).
+* **The print sheet stays white paper in both themes.** `.print-sheet` and its
+  children keep their longhand colours and live outside every token scope; that
+  is the station's paper, not a preference. Do not "theme" it.
 * `ReportPrint.jsx` + `pr-*` CSS render the **official PNP sheet** with hardcoded
   paper colours and live **outside** every token scope. Leave it that way; it is
   the one output that must not drift. `@media print` must keep neutralizing

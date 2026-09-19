@@ -18,6 +18,41 @@ final class ReportsController
     private const LEGACY_TYPES = ['Physical Injury', 'Vehicular Accident', 'Drug-related', 'Other'];
 
     /**
+     * Every person a report can name, as [group path, name path] inside its
+     * type_specific blob. Keep this in step with GROUP_CONFIG in
+     * src/lib/incidentTypes.js: a group that carries a `name` (or a vehicle's
+     * `driver_name`) but is missing here is a person the officer cannot find
+     * the report by.
+     *
+     * `$.vehicle_N_driver` are the legacy flat Traffic Accident keys that
+     * LegacyNormalizer reshapes into `vehicles[]`, so a report written before
+     * the groups still answers to its driver's name (a NESTED PATH may match a
+     * scalar — that is what the `$` field path is for).
+     */
+    private const SEARCH_PERSON_PATHS = [
+        ['$.complainant[*]', '$.name'],
+        // The representative who files on behalf of an organization victim is
+        // a person too, and the sheet prints their name.
+        ['$.complainant[*]', '$.representative_name'],
+        ['$.respondent[*]', '$.name'],
+        ['$.witness[*]', '$.name'],
+        ['$.missing_person[*]', '$.name'],
+        ['$.injured_persons[*]', '$.name'],
+        ['$.arrested_persons[*]', '$.name'],
+        ['$.person_last_seen_with[*]', '$.name'],
+        ['$.vehicles[*]', '$.driver_name'],
+        ['$.vehicle_1_driver', '$'],
+        ['$.vehicle_2_driver', '$'],
+    ];
+
+    /**
+     * A keyword search is ANDed word by word, and every word costs a LIKE per
+     * field plus a term in the JSON scan. Past this many words it is a pasted
+     * paragraph, not a search, and the statement built from it would be huge.
+     */
+    private const MAX_SEARCH_WORDS = 12;
+
+    /**
      * Types this station accepts: the configured list (station_settings,
      * spec §1.1/§1.2 — the dropdown is station data, not code) plus the
      * legacy Phase 1/2 spellings.
@@ -96,6 +131,15 @@ final class ReportsController
                 Response::json(422, ['error' => "type_specific.{$k} must be a scalar value."]);
             }
             $clean[$k] = mb_substr(trim((string) $v), 0, 500);
+        }
+
+        // Auto-fill the scalars the v3 groups superseded (Item, Owner of
+        // Property, the legacy vehicle block…) BEFORE the rule pass, so what
+        // gets validated is exactly what gets stored — and a client that only
+        // sends the groups (the form) or only the flat scalars (an older build)
+        // both end up with a report the sheet can print. See ReportRules::MIRRORS.
+        if ($incidentType !== null) {
+            $clean = ReportRules::applyMirrors($clean, $incidentType);
         }
 
         // Gate 2: per-item rule validation for the given type.
@@ -239,50 +283,104 @@ final class ReportsController
         }
 
         // Keyword search (UC-013): type, location, parties, creator, narrative.
-        // Distinct placeholders per column — native prepares (EMULATE_PREPARES
-        // = false) don't allow reusing one named parameter multiple times.
+        //
+        // The query is split into WORDS and every word has to appear somewhere
+        // in the record — AND between words, OR across the fields. Matching the
+        // whole query as one phrase (what this did before) could only ever find
+        // a name in its STORED spelling, and reports store their parties
+        // "Last Name, First Name, M.I." (see the form's own placeholders) — so
+        // "Ana Reyes", which is how the name is said, matched nothing while
+        // "Reyes, Ana" did. Words can only ever WIDEN the result set: anything
+        // that matched the phrase still matches each of its words.
+        //
+        // Distinct placeholders per column AND per word — native prepares
+        // (EMULATE_PREPARES = false) don't allow reusing one named parameter
+        // multiple times.
         $q = trim((string) ($_GET['q'] ?? ''));
         if ($q !== '') {
-            $qCols = ['r.incident_type', 'r.location', 'r.complainant', 'r.respondent', 'r.narrative', 'u.full_name'];
-            $qParts = [];
-            foreach ($qCols as $i => $col) {
-                $key = ':q' . $i;
-                $qParts[] = "{$col} LIKE {$key}";
-                $params[$key] = '%' . $q . '%';
+            $words = preg_split('/\s+/u', $q, -1, PREG_SPLIT_NO_EMPTY);
+            if (!is_array($words) || $words === []) {
+                // Input that is not valid UTF-8: still a search, just one term.
+                $words = [$q];
             }
-            // v3 reports keep ALL parties — victims, suspects, witnesses,
-            // drivers, missing/arrested persons — inside the type_specific
-            // JSON groups; the legacy text columns only mirror the first
-            // party. Search every person name in the blob so admins can
-            // find a report by ANY involved name (JSON_TABLE, MySQL 8+;
-            // NULL blobs simply yield no rows).
-            //
-            // Implementation note: JSON_TABLE may only reference tables from
-            // its OWN FROM clause, so the subquery self-joins reports (jr)
-            // and correlates on jr.id = r.id — a direct JSON_TABLE(r.…)
-            // inside EXISTS compiles but silently matches nothing.
-            $qParts[] = 'EXISTS (SELECT 1 FROM reports jr, JSON_TABLE('
-                . "jr.type_specific, '\$' COLUMNS ("
-                . "NESTED PATH '$.complainant[*]' COLUMNS (qn0 VARCHAR(500) PATH '$.name'), "
-                . "NESTED PATH '$.respondent[*]' COLUMNS (qn1 VARCHAR(500) PATH '$.name'), "
-                . "NESTED PATH '$.witness[*]' COLUMNS (qn2 VARCHAR(500) PATH '$.name'), "
-                . "NESTED PATH '$.missing_person[*]' COLUMNS (qn3 VARCHAR(500) PATH '$.name'), "
-                . "NESTED PATH '$.injured_persons[*]' COLUMNS (qn4 VARCHAR(500) PATH '$.name'), "
-                . "NESTED PATH '$.arrested_persons[*]' COLUMNS (qn5 VARCHAR(500) PATH '$.name'), "
-                . "NESTED PATH '$.person_last_seen_with[*]' COLUMNS (qn6 VARCHAR(500) PATH '$.name'), "
-                . "NESTED PATH '$.vehicles[*]' COLUMNS (qn7 VARCHAR(500) PATH '$.driver_name')"
-                // NOTE: two closing parens here — the first closes the COLUMNS
-                // list, the second closes JSON_TABLE( before its alias. With
-                // only one, the whole statement is a syntax error and EVERY
-                // keyword search 500s.
-                . ')) jt WHERE jr.id = r.id AND (jt.qn0 LIKE :qts0 OR jt.qn1 LIKE :qts1'
-                . ' OR jt.qn2 LIKE :qts2 OR jt.qn3 LIKE :qts3 OR jt.qn4 LIKE :qts4'
-                . ' OR jt.qn5 LIKE :qts5 OR jt.qn6 LIKE :qts6 OR jt.qn7 LIKE :qts7))';
+            if (count($words) > self::MAX_SEARCH_WORDS) {
+                Response::json(422, ['error' => 'Search is limited to ' . self::MAX_SEARCH_WORDS . ' words.']);
+            }
 
-            for ($qi = 0; $qi <= 7; $qi++) {
-                $params[':qts' . $qi] = '%' . $q . '%';
+            $qCols = [
+                'r.incident_type',
+                'r.location',
+                'r.complainant',
+                'r.respondent',
+                'r.narrative',
+                'u.full_name',
+                // The other two people a report names: the party who reported
+                // (migration 006) and the investigator on case (004). A report
+                // can carry the reporting party and no groups at all — and then
+                // the only name on it was unfindable.
+                'r.reporter_name',
+                'r.ioc_name',
+            ];
+
+            // One JSON projection, shared by every word: the COLUMNS list does
+            // not depend on what was typed, only the LIKE does.
+            $jsonColumns = '';
+            $jsonHaystack = [];
+            foreach (self::SEARCH_PERSON_PATHS as $qi => $spec) {
+                $col = 'qn' . $qi;
+                $jsonColumns .= "NESTED PATH '{$spec[0]}' COLUMNS ({$col} VARCHAR(500) PATH '{$spec[1]}'), ";
+                $jsonHaystack[] = 'jt.' . $col;
             }
-            $where[] = '(' . implode(' OR ', $qParts) . ')';
+            $jsonColumns = rtrim($jsonColumns, ', ');
+
+            $parts = [];
+            foreach ($words as $wi => $word) {
+                $or = [];
+                foreach ($qCols as $ci => $col) {
+                    $key = ":q{$wi}_{$ci}";
+                    $or[] = "{$col} LIKE {$key}";
+                    $params[$key] = '%' . $word . '%';
+                }
+
+                // v3 reports keep ALL parties — victims, suspects, witnesses,
+                // drivers, missing/arrested persons — inside the type_specific
+                // JSON groups; the legacy text columns only mirror the first
+                // party. Search every person name in the blob so a report can be
+                // found by ANY involved name (JSON_TABLE, MySQL 8+; NULL blobs
+                // simply yield no rows).
+                //
+                // ONE EXISTS PER WORD, and it is an alternative *inside* that
+                // word's group — not a condition on its own. A party name can
+                // live nowhere else on the report, so a word only a person's
+                // name carries has to be able to satisfy the word by itself.
+                // (ANDing it to the group would demand the name appear in a
+                // text column as well, and every name-only search would come
+                // back empty.)
+                //
+                // The word is matched against the names joined by a newline —
+                // a separator no single word can contain, so one word cannot
+                // straddle two people.
+                //
+                // Implementation note: JSON_TABLE may only reference tables from
+                // its OWN FROM clause, so the subquery self-joins reports (jr)
+                // and correlates on jr.id = r.id — a direct JSON_TABLE(r.…)
+                // inside EXISTS compiles but silently matches nothing.
+                $key = ":qts{$wi}";
+                $params[$key] = '%' . $word . '%';
+                $or[] = 'EXISTS (SELECT 1 FROM reports jr, JSON_TABLE('
+                    . "jr.type_specific, '\$' COLUMNS ("
+                    . $jsonColumns
+                    // NOTE: two closing parens here — the first closes the
+                    // COLUMNS list, the second closes JSON_TABLE( before its
+                    // alias. With only one, the whole statement is a syntax
+                    // error and EVERY keyword search 500s.
+                    . ")) jt WHERE jr.id = r.id AND CONCAT_WS('\\n', "
+                    . implode(', ', $jsonHaystack) . ") LIKE {$key})";
+
+                $parts[] = '(' . implode(' OR ', $or) . ')';
+            }
+
+            $where[] = '(' . implode(' AND ', $parts) . ')';
         }
 
         // Incident-type filter.
@@ -581,18 +679,21 @@ final class ReportsController
             if (!array_key_exists('type_specific', $body)) {
                 $stored = $report['type_specific'] ?? null;
                 $storedBlob = is_string($stored) ? json_decode($stored, true) : null;
-                if (is_array($storedBlob)) {
-                    $groupErrors = ReportRules::validateTypeSpecific(
-                        $storedBlob,
-                        (string) ($body['incident_type'] ?? $report['incident_type']),
-                        true
-                    );
-                    if ($groupErrors !== []) {
-                        Response::json(422, [
-                            'error' => 'The report has invalid fields.',
-                            'details' => $groupErrors,
-                        ]);
-                    }
+                // An absent blob is NOT an exemption. "Nothing was recorded" is
+                // precisely what the rules exist to catch, so an empty set is
+                // validated like any other — otherwise a report that never had
+                // a type_specific column value could be finalized with none of
+                // its incident type's fields filled in.
+                $groupErrors = ReportRules::validateTypeSpecific(
+                    is_array($storedBlob) ? $storedBlob : [],
+                    (string) ($body['incident_type'] ?? $report['incident_type']),
+                    true
+                );
+                if ($groupErrors !== []) {
+                    Response::json(422, [
+                        'error' => 'The report has invalid fields.',
+                        'details' => $groupErrors,
+                    ]);
                 }
             }
 

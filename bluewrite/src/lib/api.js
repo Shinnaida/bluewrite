@@ -44,7 +44,7 @@ export function getCsrfToken() {
   return csrfToken;
 }
 
-export async function api(path, { method = 'GET', body } = {}) {
+export async function api(path, { method = 'GET', body, keepalive = false } = {}) {
   const headers = {};
   if (body) headers['Content-Type'] = 'application/json';
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && csrfToken) {
@@ -56,6 +56,13 @@ export async function api(path, { method = 'GET', body } = {}) {
     credentials: 'same-origin',
     headers,
     body: body ? JSON.stringify(body) : undefined,
+    // `keepalive` lets a request outlive the document that fired it, which is
+    // the only way a save triggered by a closing tab reaches the server — an
+    // ordinary fetch is cancelled with the page (see ReportEditor's exit
+    // flush). Browsers cap a keepalive body at 64 KB; a draft is a few KB, and
+    // an over-cap request fails the same silent, best-effort way as an offline
+    // one, with the sessionStorage mirror still holding the text.
+    keepalive,
   });
 
   let data = null;

@@ -37,6 +37,12 @@
 /* ============================================================
    1. Top bar — the same navy chrome as the app's own .ir-nav
    ============================================================ */
+/* Three parts, LEFT to RIGHT: the lockup, the clock, then the system readout.
+   The clock used to be absolutely centred over the bar, which worked while the
+   bar had only two other items and the right-hand one was narrow; the (now
+   removed) appearance control made that untrue and the clock ended up under it.
+   The bar wraps like the workspace's own .ir-nav does, so a narrow window drops
+   the readout to a second line instead of overlapping the time. */
 .la-topbar {
   position: relative;
   z-index: 20;
@@ -44,7 +50,8 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
   padding: 0.7rem clamp(1rem, 3vw, 2rem);
   background: var(--ir-navy);
   color: #fff;
@@ -88,10 +95,6 @@
 }
 
 .la-clock {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
   display: flex;
   align-items: baseline;
   gap: 0.4rem;
@@ -107,6 +110,9 @@
   letter-spacing: 0.18em;
   color: rgba(255, 255, 255, 0.62);
 }
+/* The right-hand end of the bar: the SYS_STATUS / ENC_LEVEL readout — the
+   whole of it, which is what keeps the bar's three-part shape (lockup · clock
+   · this) at every width. */
 .la-topmeta {
   display: flex;
   align-items: center;
@@ -121,6 +127,14 @@
 .la-topmeta .ok { color: #7fe3a6; }
 .la-topmeta .warn { color: #ffca6b; }
 .la-topmeta .accent { color: #9cc2ff; }
+
+/* The Light / Dark / Auto segmented group lived HERE. It was removed by
+   request: a three-way theme picker on a sign-in screen reads as a settings
+   screen rather than a gate, and the gate's job is one thing — get the officer
+   in. Appearance still exists, one menu deeper, in Profile ▸ Preferences ▸
+   Appearance, and the stored preference is applied before the bundle loads
+   (index.html) so the gate still OPENS in whichever theme the workstation
+   chose. Do not add the picker back to this bar. */
 
 /* ============================================================
    2. Page body — a centred two-column spread on the light page
@@ -181,7 +195,7 @@
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.05;
-  color: var(--ir-navy);
+  color: var(--ir-hero-ink);
   white-space: normal;
   max-width: 100%;
   word-break: break-word;
@@ -228,7 +242,7 @@
   border-left: 4px solid var(--ir-blue);
   border-radius: 4px;
   background: var(--ir-card);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow-xs);
 }
 .la-card.advisory { border-left-color: var(--ir-amber); }
 .la-card-head {
@@ -270,7 +284,7 @@
   border: 1px solid var(--ir-border);
   border-radius: 4px;
   background: var(--ir-card);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow-xs);
 }
 .la-panel-head {
   margin-bottom: 1.5rem;
@@ -285,7 +299,7 @@
   width: 40px;
   height: 40px;
   margin-bottom: 0.6rem;
-  color: var(--ir-navy);
+  color: var(--ir-hero-ink);
 }
 .la-lock svg { color: inherit; }
 .la-panel-head h2 {
@@ -294,7 +308,7 @@
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--ir-navy);
+  color: var(--ir-hero-ink);
 }
 .la-panel-sub {
   margin: 0.35rem 0 0;
@@ -342,7 +356,7 @@
   left: 0.85rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #8b95a7;
+  color: var(--icon-dim);
   pointer-events: none;
 }
 .la-input {
@@ -357,11 +371,11 @@
   caret-color: var(--ir-blue);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-.la-input::placeholder { color: #9aa3b2; }
+.la-input::placeholder { color: var(--placeholder); }
 .la-input:focus {
   outline: none;
   border-color: var(--ir-blue);
-  box-shadow: 0 0 0 3px rgba(31, 95, 208, 0.16);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .la-input:disabled { opacity: 0.6; cursor: not-allowed; }
 
@@ -466,9 +480,14 @@
   .la-left > .la-cards { order: 3; max-width: none; }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 900px) {
+  /* The readout is the bar's longest run and the least load-bearing part of
+     it — SYS_STATUS is already carried by the notice in the panel below. It
+     drops before anything else does. */
   .la-topmeta { display: none; }
-  .la-clock { position: static; transform: none; margin-left: auto; }
+}
+
+@media (max-width: 640px) {
   .la-hero { font-size: clamp(1.5rem, 8vw, 2rem); }
   .la-panel { padding: 1.4rem; }
 }
