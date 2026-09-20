@@ -13,6 +13,7 @@ use App\Core\Auth;
 use App\Core\Database;
 use App\Core\LanguageRegistry;
 use App\Core\Response;
+use App\Rules\ReportRules;
 use PDO;
 
 /**
@@ -28,6 +29,11 @@ use PDO;
  * the economy rules over the officer's OWN narrative instead of generating
  * one. It shares this controller because it shares the masking, the safety
  * gate and the response shape; unlike generate it applies nothing.
+ *
+ * Phase 7 adds `classify` — POST /ai/classify — the free-form account read.
+ * It is the only route here that is not per-report, and it lives here for the
+ * same reason: it is AI over the officer's own words. It runs BEFORE a report
+ * exists, because the incident type it names is what lets one be created.
  */
 final class NarrativeController
 {
@@ -72,7 +78,16 @@ final class NarrativeController
             // the one free-text slot the provider renders.
             $notes = $sourceText;
         } else {
-            $sourceLanguage = self::narrativeLanguageCode($body['notes_language'] ?? 'en');
+            // NOTES_ARE_ENGLISH — the notes source is ENGLISH, always, and the
+            // language is not read from the request at all. The notes box
+            // carried a language SELECTOR whose value the officer declared and
+            // nothing could verify: a stale or wrong one silently turned this
+            // request into a grammar fix of native text, past both of the
+            // translation guards below (they key off the source language). A
+            // native account therefore comes in through the narrative path
+            // above, whose language is the report's own stored value rather
+            // than a claim made in the request.
+            $sourceLanguage = 'en';
             $sourceText = $notes;
         }
         // D6a — the per-type kill switch. Only a TRANSLATION is refused; an
@@ -327,6 +342,167 @@ final class NarrativeController
             'factLoss' => array_values($out['factLoss']),
             'narrativeRepetition' => array_values($out['narrativeRepetition']),
             'residualRisk' => array_values($out['residualRisk']),
+        ]);
+    }
+
+    /**
+     * Phase 7 — POST /ai/classify
+     *
+     * Read the official report's own fields out of a free-form ACCOUNT. The
+     * one AI endpoint that is NOT per-report, because it is what tells the
+     * editor which incident type to create the report with in the first place:
+     * `reports.incident_type` is NOT NULL and checked against the station's
+     * allowlist, and the generation prompt is type-scoped, so a report cannot
+     * be created (or a narrative generated for it) until the type is known.
+     *
+     * Nothing is written here. The answer goes back to the client, which shows
+     * the officer what was read and what was left out, and creates the draft
+     * itself — one path, so the audit trail of the report's creation stays in
+     * ReportsController::store() where it has always been.
+     *
+     * Three guards, and the reason each one is here rather than in the client:
+     *
+     *   * the incident type in the answer is checked against
+     *     ReportsController::allowedTypes() — the SAME list POST /reports
+     *     validates against. The provider's response schema already carries it
+     *     as an enum, but a schema is a request to the model, not a guarantee,
+     *     and a type this station does not carry must never reach the create.
+     *   * the account must be non-empty and is length-capped like every other
+     *     free-text field the officer's words travel through.
+     *   * AI assistance must be enabled, checked before the provider is even
+     *     constructed — a disabled station must not spend a request.
+     */
+    public function classify(): void
+    {
+        $user = Auth::requireUser();
+        if (!NarrativeService::enabled()) {
+            Response::json(503, ['error' => 'AI assistance is disabled. Continue with a manual report.']);
+        }
+
+        $body = NarrativeController::jsonBody();
+        $account = trim((string) ($body['account'] ?? ''));
+        if ($account === '') {
+            Response::json(422, ['error' => 'Write the incident in your own words first — there is nothing to read yet.']);
+        }
+        $account = mb_substr($account, 0, 20000);
+
+        // The station's own list, plus the legacy Phase 1/2 spellings: the
+        // allowlist is wider than the current dropdown on purpose, because
+        // older reports carry those names and a corrected type may point at
+        // one. What matters is that it is the SAME list the create enforces.
+        $types = ReportsController::allowedTypes();
+        if ($types === []) {
+            // Not a client error: with no types there is no enum to read
+            // against, and the provider's own guard would refuse anyway.
+            Response::json(503, ['error' => 'This station has no incident types configured yet.']);
+        }
+
+        try {
+            $svc = new NarrativeService();
+            $out = $svc->classifyAccount($account, $types);
+        } catch (AiUnavailableException $e) {
+            Response::json(503, [
+                'error' => $e->getMessage(),
+                'retry_in' => $e->retryIn,
+                'manual_mode' => true,
+            ]);
+        } catch (AiProviderException $e) {
+            Response::json(502, [
+                'error' => 'The AI service could not complete the request.',
+                'manual_mode' => !$e->retryable,
+            ]);
+        }
+
+        // The real actor, and no report id — the report does not exist yet.
+        // The reading is recorded because it is what picked the incident type,
+        // which selects the prompt's vocabulary, the type-specific fields and
+        // the print layout.
+        Audit::log((int) $user['id'], 'ai.classify', 'report', null, sprintf(
+            'type: %s, parties: %d, unstated: %d',
+            (string) ($out['fields']['incident_type'] ?? '') !== '' ? (string) $out['fields']['incident_type'] : '(none read)',
+            count((array) ($out['fields']['parties'] ?? [])),
+            count((array) ($out['fields']['unstated'] ?? [])),
+        ));
+
+        Response::json(200, [
+            // The report's own field names, every one present and each empty
+            // when the account does not state it — an empty field is an
+            // answer, and the one the officer is shown rather than a gap the
+            // model was free to fill.
+            'fields' => $out['fields'],
+            // Names the account mentions that the masker could not have
+            // replaced, because on this call there is no structured record to
+            // build a value map from. Reported, never hidden.
+            'residualRisk' => array_values($out['residualRisk']),
+            // The list the read was constrained to, so the editor can show the
+            // officer the same options when they correct it without asking
+            // again.
+            'types' => $types,
+        ]);
+    }
+
+    /**
+     * Phase 7 — POST /ai/classify/details
+     *
+     * The second half of the account read: the incident type's OWN fields. Same
+     * guards as the first half, plus the one this call adds — the TYPE must be
+     * one this station records AND one whose field list the app knows, because
+     * that list is what the reading is scoped to (a legacy spelling the create
+     * still accepts has no field list here, and guessing one would be inventing
+     * the form).
+     *
+     * Nothing is written, exactly as on the first call: the answer goes to the
+     * client, which fills blanks in the officer's own draft, and the reading
+     * alone saves nothing.
+     */
+    public function classifyDetails(): void
+    {
+        $user = Auth::requireUser();
+        if (!NarrativeService::enabled()) {
+            Response::json(503, ['error' => 'AI assistance is disabled. Continue with a manual report.']);
+        }
+
+        $body = NarrativeController::jsonBody();
+        $account = trim((string) ($body['account'] ?? ''));
+        if ($account === '') {
+            Response::json(422, ['error' => 'Write the incident in your own words first — there is nothing to read yet.']);
+        }
+        $account = mb_substr($account, 0, 20000);
+
+        $type = trim((string) ($body['type'] ?? ''));
+        if (!in_array($type, ReportsController::allowedTypes(), true)
+            || ReportRules::groupsFor($type) === null) {
+            Response::json(422, [
+                'error' => 'Choose the incident type first — the details that can be read depend on it.',
+            ]);
+        }
+
+        try {
+            $out = (new NarrativeService())->classifyTypeDetails($account, $type);
+        } catch (AiUnavailableException $e) {
+            Response::json(503, [
+                'error' => $e->getMessage(),
+                'retry_in' => $e->retryIn,
+                'manual_mode' => true,
+            ]);
+        } catch (AiProviderException $e) {
+            Response::json(502, [
+                'error' => 'The AI service could not complete the request.',
+                'manual_mode' => !$e->retryable,
+            ]);
+        }
+
+        Audit::log((int) $user['id'], 'ai.classify.details', 'report', null, sprintf(
+            'type: %s, fields: %d, groups: %d',
+            $type,
+            count($out['fields']),
+            count($out['groups']),
+        ));
+
+        Response::json(200, [
+            'fields' => $out['fields'],
+            'groups' => $out['groups'],
+            'unstated' => $out['unstated'],
         ]);
     }
 

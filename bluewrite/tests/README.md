@@ -48,3 +48,29 @@ php phpunit.phar --bootstrap tests/bootstrap.php tests
   maintainer comments stripped, matching type vocabulary + sensitivity note
   appended once, unknown/empty types fall back to the base instruction.
   Run directly: `php phpunit.phar --bootstrap tests/bootstrap.php tests/SystemInstructionTest.php`
+- **AiClassifyTest** — Phase 7, standalone (no server, DB or key): the
+  free-form account read's contract. The type is an enum of the station's own
+  list; every answer field is required and may be empty; a type off the list, a
+  datetime that is not one, a role that is not one and a party with no name are
+  rejected rather than repaired; the instruction actually carries the station's
+  types and today's date; and `NarrativeService::classifyAccount()` is driven
+  through the stub provider.
+
+  The same file covers the SECOND half of that read,
+  `POST /ai/classify/details` — the incident type's own fields. There the field
+  list is assembled by the app (`ReportRules::scalarKeysFor()` /
+  `groupsFor()`), so what is asserted is that the list reaching the model is
+  exactly the form's own: every scalar and row field of the type and nothing
+  else, no mirrored scalar (`vehicle_1_plate_number` belongs to vehicles[0]),
+  no `required` anywhere (an empty field is the honest answer), and an answer
+  about a field that was not asked dropped rather than passed on.
+  Run directly: `php phpunit.phar --bootstrap tests/bootstrap.php tests/AiClassifyTest.php`
+- **AiClassifyApiTest** — the routes and the guards in front of them (session,
+  CSRF, empty account → 422), for both `POST /ai/classify` and
+  `POST /ai/classify/details` — the second one adds the guard that a type with
+  no field list (`Vehicular Accident`, a legacy spelling the create still
+  accepts) is refused rather than read against a form that does not exist.
+  **Neither test sends a non-empty account**: the station's key is configured,
+  so that would be a real, billed model call, and a test must not spend the
+  station's budget or depend on an answer. The reading itself is covered
+  offline above.

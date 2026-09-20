@@ -1168,7 +1168,7 @@
    4. Submit bar + footer
    =========================================================================== */
 .ir-actions {
-  margin-top: clamp(1rem, 2vw, 1.5rem);
+  margin-top: 0.85rem;
 }
 
 .ir-submit {
@@ -1180,7 +1180,7 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 0.85rem 1rem;
+  padding: 0.62rem 1rem;
   border-radius: 4px;
 }
 .ir-submit:hover:not(:disabled) {
@@ -1195,9 +1195,9 @@
 .ir-actions-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   flex-wrap: wrap;
-  margin-top: 0.7rem;
+  margin-top: 0.55rem;
 }
 
 /* The report's secondary actions now sit ABOVE the commit button — Save Draft
@@ -1206,7 +1206,7 @@
    not on .ir-submit itself: Home's own action row holds its Submit INSIDE it,
    so this cannot reach that screen. */
 .ir-actions-row + .ir-submit {
-  margin-top: 0.7rem;
+  margin-top: 0.45rem;
 }
 
 /* .ir-stepper-node is excluded for the same reason .ir-submit is: it is not
@@ -1218,13 +1218,19 @@
    same kind of thing, a way OUT of an open row rather than an action on the
    report. .th-sort is the register's sortable heading: it must read as the table
    heading it is, so it too is excluded here and styled where the table lives
-   (styles.css). */
-.ir-body button:not(.ir-submit):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort) {
+   (styles.css).
+
+   .ai-run is the AI panel's Generate button: it asks for `button.primary` and
+   for the panel's own compact button size, so it needs nothing from this
+   neutral treatment — without the exclusion below that fill would be repainted
+   as a plain button and the panel's main action would read like a secondary
+   one. */
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort) {
   background: var(--ir-btn);
   border: 1px solid var(--ir-border);
   color: var(--ir-btn-ink);
 }
-.ir-body button:not(.ir-submit):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):hover {
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):hover {
   border-color: var(--ir-blue);
   color: var(--ir-blue);
   background: var(--ir-btn);
@@ -1252,7 +1258,7 @@
 }
 
 .ir-footer {
-  margin: 1.25rem 0 0;
+  margin: 0.6rem 0 0;
   text-align: center;
   font-size: 0.76rem;
   line-height: 1.6;
@@ -2647,7 +2653,9 @@
    The format's opening state, and the reason it exists: ONE card is the page
    (the writing surface) and everything else — every panel, every group, the
    action row, the advisory footer — is off screen until the officer asks for it
-   with the control above the sheet.
+   with the reveal control on the desk below the sheet. What is left is the
+   station's letterhead and a page to write on, which is the whole promise of the
+   format.
 
    Hidden, never unmounted, like the stepped format's panels and for the same
    reason: the rules engine, the error jumps and the save path all resolve
@@ -2664,8 +2672,15 @@
 }
 
 /* Inside the page card, only the writing area survives. The heading and the
-   label are the two things that would print on the paper, and the placeholder is
-   a sentence the officer did not write.
+   label are the two things that would read as form chrome on the paper.
+
+   The placeholder STAYS, and that is the point: on a page this empty it is the
+   one thing that says the paper can be written on — a blank leaf with no label,
+   no prompt and no caret reads as a page that failed to load, not as stationery
+   waiting for an account. It cannot reach paper either way: the printed report
+   is drawn by ReportPrint (its own component, its own portal), and the print
+   stylesheet hides `.main` outright, so nothing on this screen is ever printed.
+   It goes the moment the officer types on the page.
 
    The station's LETTERHEAD is not in this list, and its absence is the point:
    the letterhead is not the form, it is the paper — see .ir-sheet-head below.
@@ -2680,12 +2695,6 @@
 .ir-form--blank .ir-card--sheet-page .section-hint,
 .ir-form--blank .ir-card--sheet-page .error {
   display: none;
-}
-/* `color: transparent` rather than removing the attribute: the text is still in
-   the DOM for a screen reader to announce as guidance, it just never shows on
-   paper the officer did not write on. */
-.ir-form--blank .ir-card--sheet-page textarea::placeholder {
-  color: transparent;
 }
 
 /* With the report's fields open, the writing area is simply given a generous
@@ -2718,6 +2727,14 @@
 .ir-form--blank .ir-grid {
   display: flex;
   flex-direction: column;
+  /* `align-items: start` is restated rather than inherited: on the base grid it
+     aligns ROWS, but this container is a column, where the same property is the
+     CROSS axis — and `start` there shrink-wraps every child to its content. The
+     page card would then be as wide as its widest line (the letterhead's), so
+     the station's paper would carry the seal band and the writing area squeezed
+     into the left of the sheet with a hand's width of blank paper beside them.
+     Stretch is what makes the card the page. */
+  align-items: stretch;
   flex: 1;
   min-height: 0;
 }
@@ -2839,98 +2856,36 @@
   color: var(--ir-muted);
 }
 
-/* ---- The AI panel: below the paper, on the desk ---- */
+/* ---- The AI panel: on the desk BELOW the paper ---- */
 /* In the page's column so the two line up, and OUTSIDE `.ir-form--sheet` so it
-   is not printed on the page (see ReportEditor). */
+   is not printed on the page (see ReportEditor). On the desk below the paper,
+   with the rest of the sheet's chrome: the page is what this format is for, so
+   the page comes first and the controls for it follow. */
 .ir-sheet-ai {
   max-width: 8.5in;
-  margin: 1rem auto 0;
+  margin: 0 auto 0.4rem;
 }
 
-/* The action row below the sheet: same column as the page, and no top margin of
-   its own — `.ir-actions` already carries one, so adding a second here would
-   leave a gap half again as tall as the one under the AI panel. */
 /* ===========================================================================
-   Phase 6 Stage 1 — the declared language of the narrative (migration 007)
+   Phase 6 Stage 1 — the language of the narrative (migration 007)
 
-   An officer who writes better in Bisaya or Tagalog than in English declares
-   the language of the narrative, and this is that control. Three things shape
-   how it is drawn, and none of them is decoration:
+   The narrative-language SELECTOR is gone, and so are the `ir-language-*`
+   styles that drew it. The record still carries a language and the AI panel,
+   the finalize warning and the printed sheet all still read it — it is simply
+   DETECTED from the text the officer writes rather than declared by hand (see
+   detectNarrativeLanguage in src/lib/reportLanguages.js), so there is no
+   control left to draw.
 
-     * It is a CONTROL, not paper. In the sheet format everything inside the
-       sheet's card IS the page, so the selector renders on the desk beneath
-       the paper instead (.ir-sheet-language, below); everywhere else it sits
-       inside the narrative field. Never both — see Reports.jsx.
-
-     * It is a LABEL on the record, so nothing here is coloured as danger.
-       Filing in Bisaya is a supported way to file; the note that the text is
-       untranslated states a fact and uses informational ink.
-
-     * It follows the narrative's own lock (disabled when the report cannot be
-       edited), so a locked selector has to LOOK locked rather than faded into
-       looking broken.
+   The one rule here that was never about the control is the ink the panel's
+   language note uses below: INFORMATIONAL, never the danger colour. Filing in
+   Bisaya is a supported way to file a report; a note that the text is
+   untranslated states a fact about the record, not a mistake in it.
    =========================================================================== */
-
-.ir-language {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  margin-top: 0.75rem;
-  /* Sized to its own row rather than to the field grid: the language is a
-     property OF the narrative, not one of the report's fields. */
-  max-width: 22rem;
-}
-
-.ir-language-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ir-muted);
-}
-
-.ir-language-select {
-  font: inherit;
-  font-size: 0.85rem;
-  padding: 0.4rem 0.5rem;
-  color: var(--ir-head-ink);
-  background: var(--ir-input);
-  border: 1px solid var(--ir-border);
-  border-radius: 4px;
-}
-
-.ir-language-select:focus-visible {
-  outline: 2px solid var(--ir-focus-ring);
-  outline-offset: 1px;
-}
-
-.ir-language-select:disabled {
-  color: var(--ir-muted);
-  cursor: not-allowed;
-}
-
-/* The "not translated" fact beside the narrative. Informational ink, not the
-   danger colour, on purpose: this is a supported way to file a report. */
-.ir-language-note {
-  margin: 0;
-  font-size: 0.78rem;
-  line-height: 1.35;
-  color: var(--ir-info-ink);
-}
-
-/* The sheet format's home for the selector: on the desk under the paper,
-   sharing the paper's column so the control and the sheet read as one block.
-   In view in BOTH of the sheet's states — including the blank page, where the
-   writing area is what is on screen. */
-.ir-sheet-language {
-  max-width: 8.5in;
-  margin: 1rem auto 0;
-}
 
 /* D3 — the reason the AI controls are unavailable, in the panel where those
    controls would be. A disabled button with no explanation reads as a bug. */
 .ai-language-blocked {
-  margin: 0 0 0.55rem;
+  margin: 0 0 0.4rem;
 }
 
 .ir-sheet-actions {
@@ -2941,14 +2896,16 @@
 /* ---- The reveal control ---- */
 /* Outside the sheet on purpose: the control that opens the rest of the report
    must not itself be printed on the page it is describing. Centred with the
-   paper so the two share a column. */
+   paper so the two share a column, and FIRST on the desk below it — the top
+   margin is the white gap under the sheet, which the paper carries none of its
+   own (`.ir-form--sheet` has `margin: 0 auto`). */
 .ir-sheet-bar {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 0.35rem 0.75rem;
   max-width: 8.5in;
-  margin: 0 auto 0.75rem;
+  margin: 0.6rem auto 0.5rem;
 }
 
 .ir-sheet-toggle {
@@ -2971,14 +2928,6 @@
   background: var(--ir-card);
   border-color: var(--ir-blue);
   color: var(--ir-blue);
-}
-
-.ir-sheet-hint {
-  flex: 1;
-  min-width: 15rem;
-  font-size: 0.76rem;
-  line-height: 1.45;
-  color: var(--ir-muted);
 }
 
 /* Disabled and locked fields: on paper a locked report is a print-out, and

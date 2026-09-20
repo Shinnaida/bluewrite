@@ -14,12 +14,14 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { api } from '../lib/api.js';
 import NarrativeReveal from './NarrativeReveal.jsx';
-import NarrativeTermsLookup from './NarrativeTermsLookup.jsx';
 import { useRotatingStatus, holdVerifyPhase, VERIFY_PHRASE, THINKING_PHRASES } from '../lib/useRotatingStatus.js';
 // Phase 6 Stage 4/5 — the language vocabulary all comes from the registry
 // (never a list held here), and the one wording for a language whose AI
-// translation is switched off.
-import { languageLabel, narrativeLanguageOptions } from '../lib/reportLanguages.js';
+// translation is switched off. `narrativeLanguageOptions` is NOT read here any
+// more: the notes box has no language selector (notes are read as English —
+// see NOTES_ARE_ENGLISH in generate()), so no control in this panel lists the
+// codes. The registry function stays for the callers that still offer them.
+import { languageLabel } from '../lib/reportLanguages.js';
 import { translationEnabled, translationDisabledNotice } from '../lib/languageRegistry.js';
 // Phase 6 Stage 5 (Track C) — the guided "Translate & tighten" flow. The rule
 // is a pure state machine (src/lib/guidedFlow.js) and this component only ever
@@ -45,6 +47,15 @@ const REDUNDANCY_LABEL = {
   padding: 'Trimmed as padding',
 };
 
+// The panel's two actions share ONE toolbar row, and the explanation each of
+// them used to carry in a hint paragraph under it rides on the ⓘ marker beside
+// them instead (see InfoHint). Same words, one line of the panel instead of
+// three — the panel is chrome beside the report, not a second page of it.
+const AI_TOOLBAR_HINT =
+  'Generate writes a formal draft from your rough notes — or, when the report is written in another language, from that narrative itself. Tighten runs the economy rules over the narrative you wrote: repeated propositions merged, padding and closing formulas removed. Nothing is written into the report until you review and accept it.';
+const AI_GUIDED_HINT =
+  'Step 1 translates your narrative into formal English; you check it against the glosses and apply it. Step 2 then offers a tightened version of that English text as a proposal — nothing is written into the report until you click.';
+
 const PANEL_MIN = 320;
 const PANEL_MAX = 560;
 const COLLAPSE_BELOW = 280;
@@ -68,6 +79,22 @@ function PinIcon({ filled }) {
       <path d="M12 17v5" />
       <path d="M7 3h10l-1.5 7 3 3.5c.5.6.1 1.5-.7 1.5H6.2c-.8 0-1.2-.9-.7-1.5l3-3.5L7 3z" />
     </svg>
+  );
+}
+
+/**
+ * The ⓘ marker: a small circle whose explanation is a tooltip, not a paragraph.
+ *
+ * Focusable on purpose — a tooltip that only opens under a pointer is a tooltip
+ * half the officers cannot read — and the same sentence is the accessible name,
+ * so a screen reader hears the explanation where a sighted officer sees it.
+ */
+function InfoHint({ text }) {
+  return (
+    <span className="ai-hint" tabIndex={0} title={text}>
+      <span aria-hidden="true">i</span>
+      <span className="sr-only">{text}</span>
+    </span>
   );
 }
 
@@ -97,6 +124,19 @@ function loadStoredDraft(rid) {
 
 export default function AiNarrativePanel({
   reportId,
+  // The report id the panel's requests are addressed to, resolved on demand:
+  // returns `reportId` when the report exists, and otherwise asks the editor to
+  // SAVE the draft and hand back the id the server assigned (null when it could
+  // not — the editor has already said why, on its own banner, and the panel then
+  // goes no further).
+  //
+  // Generate, Translate and Tighten are all per-report endpoints — the server
+  // files the request against a row and reads the stored language back — so a
+  // report has to exist before the AI can be asked for anything. Requiring the
+  // officer to find Save Draft first was the old answer; saving it FOR them on
+  // the click that needs it is this one, and it is why the panel renders on a
+  // report that has never been saved (see the guard near the render).
+  ensureReportId,
   canEdit,
   narrative,
   actionTaken = '',
@@ -121,6 +161,18 @@ export default function AiNarrativePanel({
   // returns false, generation is refused BEFORE any request — the editor has
   // already flagged "The report has N problems" with jump-to-field links.
   onBeforeGenerate,
+  // Phase 7 — the account read. Handed over by the SHEET format only, and run
+  // on Generate before the gate and before anything is saved: it fills the
+  // blank fields (the incident type, the date and the place among them) out of
+  // the officer's own words, so a report written on a blank page can be created
+  // at all. Takes the account text, returns the receipt the officer is shown —
+  // { ok, filled, unstated, residual, stillNeeded, detailsFailed } or
+  // { ok: false, message } — and never throws, because a failed read is not a
+  // failed generate. `stillNeeded` is the RULE ENGINE's answer (the type fields
+  // this report still has to carry), not the model's; `detailsFailed` says the
+  // second read did not answer, so an empty type block is never mistaken for a
+  // model that found nothing.
+  onReadAccount,
   // D3 (Phase 6 Stage 1) — the reason Generate and Tighten are unavailable for
   // a narrative that is not in English, or null when they are. The EDITOR owns
   // the wording (src/lib/reportLanguages.js), so the panel, the finalize bar
@@ -138,12 +190,20 @@ export default function AiNarrativePanel({
   // Phase 6 Stage 5 (Track C) — the guided flow's current step, or null when
   // no guided flow is running. Every move goes through moveGuided().
   const [guided, setGuided] = useState(GUIDED_IDLE);
-  // Phase 6 Stage 3 — the language the NOTES are written in (declared, never
-  // detected), which source the officer wants translated, and the source text
-  // captured at generate time so Apply can state and store it.
-  const [notesLanguage, setNotesLanguage] = useState('en');
+  // Phase 6 Stage 3 — which source the officer wants translated, and the source
+  // text captured at generate time so Apply can state and store it.
+  //
+  // There is no notes-language state any more. The notes box carried a language
+  // SELECTOR whose value the officer declared and nothing could check, so a
+  // stale or wrong value silently turned a translation into a grammar fix of
+  // native text. Notes are read as English now, the field is gone from the
+  // request, and an account written in another language goes in through the
+  // narrative ("Translate my narrative"), where the language is DETECTED from
+  // the text rather than claimed.
   const [sourceChoice, setSourceChoice] = useState(null); // null = auto, 'notes' | 'narrative'
   const [lastSource, setLastSource] = useState(null); // { kind, text, language }
+  // Phase 7 — what the last account read changed, for the one-line receipt.
+  const [fillNote, setFillNote] = useState(null);
   const [feedback, setFeedback] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [message, setMessage] = useState(null);
@@ -315,7 +375,9 @@ export default function AiNarrativePanel({
   // model call is made for it: the officer is told plainly and can still write
   // and file. The server enforces this too; the disable is so the officer is
   // not offered a control whose only answer would be no.
-  const translationSourceLanguage = effectiveSource === 'narrative' ? narrativeLanguage : notesLanguage;
+  // The notes are English by definition, so the narrative is the only source
+  // that can be in another language — and the only one this guard can fire for.
+  const translationSourceLanguage = effectiveSource === 'narrative' ? narrativeLanguage : 'en';
   const translationOff = String(translationSourceLanguage) !== 'en'
     && !translationEnabled(translationSourceLanguage);
 
@@ -334,10 +396,85 @@ export default function AiNarrativePanel({
     return next;
   };
 
+  // The id a request is addressed to. Called at the top of every entry point
+  // (generate, tighten, and both through the guided flow) rather than read from
+  // the prop, because the FIRST request on an unsaved report is what creates
+  // the report: the prop is still null in this render, and the id only arrives
+  // with the editor's next one.
+  const resolveReportId = async () => {
+    if (reportId != null) return reportId;
+    const id = await ensureReportId?.();
+    return id ?? null;
+  };
+
   const generate = async (feedbackText = '', asGuidedStep = false) => {
-    // Gate first: a blocked generate flags the problems and never opens the
-    // loading panel — exactly like a blocked finalize.
+    // THE ACCOUNT — the officer's own words, read ONCE and used for both the
+    // read below and the generation request further down. Two places hold them:
+    // the notes box, and the form's own narrative field. The notes box wins when
+    // the officer used it (it is the control that says "the AI writes from
+    // these"); otherwise the account is what they typed on the form. On the
+    // sheet that second case is the NORMAL one: the officer types the whole
+    // incident onto the page and never opens the notes box at all, so the page
+    // IS the account. Reading it in one place is what keeps the read and the
+    // draft from working on different text.
+    const accountText = String(notes || '').trim() !== '' ? String(notes) : String(narrative || '');
+    // Nothing typed anywhere is the one precondition the AI call itself has —
+    // NOT the field verification the sheet deliberately skips (see
+    // ReportEditor's onBeforeGenerate). A request with no text in it would come
+    // back as an invented narrative, and an officer cannot tell that from a real
+    // one.
+    if (accountText.trim() === '') {
+      setMessage('Write what happened first — there is nothing for the AI to work from yet.');
+      setMode('error');
+      setPanelOpen(true);
+      return;
+    }
+
+    // Phase 7 — the account read runs BEFORE the gate, and that order is the
+    // whole point of it: the gate refuses an incomplete report, and on the
+    // sheet's blank page the fields it is about to complain about (type, date,
+    // place) are exactly the ones the read is about to fill from the officer's
+    // own words. Gating first would refuse the very press that makes the report
+    // completable. A read that fails changes nothing and does not stop the
+    // press.
+    if (onReadAccount) {
+      setFillNote(null);
+      try {
+        const receipt = await onReadAccount(accountText);
+        if (receipt) setFillNote(receipt);
+      } catch (err) {
+        // The editor promised not to throw; a reader that does anyway must not
+        // take the Generate press with it.
+        setFillNote({ ok: false, message: err?.message || '' });
+      }
+    }
+
+    // Gate: a blocked generate flags the problems and never opens the loading
+    // panel — exactly like a blocked finalize. The SHEET format hands over no
+    // gate at all: there the account on the page IS the source, the read has
+    // just filled the fields the gate would have named, and an officer writing a
+    // one-page account should not be stopped short of the AI by the form's own
+    // blanks. Submit still runs every rule it ever did.
     if (onBeforeGenerate && !onBeforeGenerate()) {
+      if (asGuidedStep) moveGuided('cancel');
+      return;
+    }
+    // The report the answer is filed against. A brand-new report is saved here
+    // (the gate above has already proved it can be — Gate 1's three fields are
+    // the first thing the Gate 2 rule set checks).
+    const rid = await resolveReportId();
+    if (rid == null) {
+      // The save behind the id was refused, or the report still has no incident
+      // type to be created with (writeDraft returns null for one). Say so HERE:
+      // a Generate press that appears to do nothing is the worst version of
+      // this, and on the sheet it is the case the account read did not manage
+      // to name a type for — the officer picks one from the dropdown and the
+      // press works.
+      setMessage(
+        'This report is not saved yet — it still needs an incident type, a date and a place before the AI can work on it.',
+      );
+      setMode('error');
+      setPanelOpen(true);
       if (asGuidedStep) moveGuided('cancel');
       return;
     }
@@ -355,11 +492,20 @@ export default function AiNarrativePanel({
     // these live values when they are present.
     const sourceMeta = effectiveSource === 'narrative'
       ? { kind: 'narrative', text: String(narrative || ''), language: narrativeLanguage }
-      : { kind: 'notes', text: notes, language: notesLanguage };
+      // NOTES_ARE_ENGLISH — the notes source is English, always. No language
+      // field is sent: the server reads this path as English by construction
+      // (see NarrativeController::generate), and a source pair is therefore
+      // never recorded for a notes draft — there is no original text in
+      // another language to keep.
+      : { kind: 'notes', text: accountText, language: 'en' };
     setLastSource(sourceMeta);
     const body = {
-      notes,
-      notes_language: notesLanguage,
+      // The ACCOUNT, not the notes box: on the sheet the officer's words are on
+      // the page, and the request that formalises them has to be made of the
+      // same text the read was. On the Translate-narrative path the server
+      // replaces this with the narrative it is translating (see
+      // NarrativeController::generate), so sending it is always correct.
+      notes: accountText,
       source: effectiveSource,
       // On the Translate-narrative path the narrative IS the text to translate.
       narrative: effectiveSource === 'narrative' ? String(narrative || '') : undefined,
@@ -376,7 +522,7 @@ export default function AiNarrativePanel({
     const MAX_TRIES = 3;
     for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
       try {
-        const out = await api(`/reports/${reportId}/narrative/generate`, { method: 'POST', body });
+        const out = await api(`/reports/${rid}/narrative/generate`, { method: 'POST', body });
         // The response arrived AND the server's safety gate (bug-fix
         // addendum §2) already passed on this text. Phase B: hold the
         // "verifying" message for a legible beat (the check is real, just
@@ -463,6 +609,17 @@ export default function AiNarrativePanel({
       setPanelOpen(true);
       return;
     }
+    // Tighten is not gated (a half-written report is exactly when it helps), so
+    // this is where an unsaved, incomplete report is caught: the save behind
+    // resolveReportId is refused, and the reason is stated HERE rather than
+    // leaving a click that did nothing.
+    const rid = await resolveReportId();
+    if (rid == null) {
+      setMessage('This report is not saved yet — it still needs an incident type, a date and a place before the AI can work on it.');
+      setMode('error');
+      setPanelOpen(true);
+      return;
+    }
     setMode('loading');
     setThinkPhase('waiting');
     setMessage(null);
@@ -470,7 +627,7 @@ export default function AiNarrativePanel({
     setRail(false);
     setPanelOpen(true);
     try {
-      const out = await api(`/reports/${reportId}/narrative/tighten`, {
+      const out = await api(`/reports/${rid}/narrative/tighten`, {
         method: 'POST',
         body: {
           narrative: text,
@@ -569,7 +726,11 @@ export default function AiNarrativePanel({
     setMessage(null);
   };
 
-  if (!reportId || !canEdit) return null;
+  // Editability is the only gate left. `reportId` used to be one too — the panel
+  // was hidden until the report had been saved — which made the writing
+  // assistant vanish on exactly the screen where an officer starts writing.
+  // The id is resolved per request instead (resolveReportId).
+  if (!canEdit) return null;
 
   // What a TIGHTEN result proposes for the officer's own two fields. A button
   // is offered only when the analyser's version actually differs from what is
@@ -596,6 +757,41 @@ export default function AiNarrativePanel({
 
   const expanded = !rail || hoverOpen || mode === 'loading' || resizing;
 
+  // Phase 7 — the receipt for the account read, in one line. It states what was
+  // filled and — because the endpoint's own contract is that they are reported
+  // and never hidden — any name the read could not protect, and the fields the
+  // officer still has to supply themselves. Silent filling of a form is not a
+  // thing this system does: the fill is invisible, the RECEIPT is not.
+  const fillLine = fillNote ? (
+    <p className={fillNote.ok ? 'ai-fill-note' : 'ai-fill-note ai-fill-note--failed'} role="status">
+      {fillNote.ok ? (
+        (fillNote.filled ?? []).length > 0
+          ? <><strong>Filled from your account:</strong> {fillNote.filled.join(', ')}.</>
+          : <>Read your account — every field it names was already filled.</>
+      ) : (
+        <>Your account could not be read, so nothing was filled.{fillNote.message ? ` ${fillNote.message}` : ''}</>
+      )}
+      {fillNote.ok && (fillNote.unstated ?? []).length > 0 && (
+        <> <span className="ai-fill-unstated">Your account does not say: {fillNote.unstated.join('; ')}.</span></>
+      )}
+      {fillNote.ok && (fillNote.residual ?? []).length > 0 && (
+        <> <span className="ai-fill-risk">Names the read could not protect: {fillNote.residual.join(', ')}.</span></>
+      )}
+      {/* The SECOND read (the incident type's own block) can fail on its own
+          while the first one succeeded. Saying so is what keeps an empty
+          Vehicle/Item block from looking like a reading that found nothing. */}
+      {fillNote.ok && fillNote.detailsFailed && (
+        <> <span className="ai-fill-risk">The fields for this incident type could not be read this time — press Generate again.</span></>
+      )}
+      {/* The type's own fields this report still has to carry before Submit —
+          asked of the RULE ENGINE, not of the model, so an empty required
+          field is named here rather than discovered at Submit. */}
+      {fillNote.ok && (fillNote.stillNeeded ?? []).length > 0 && (
+        <> <span className="ai-fill-needed">Still needed for this report: {fillNote.stillNeeded.join(' ')}</span></>
+      )}
+    </p>
+  ) : null;
+
   // The recorded disposition the model must close the narrative with. Long
   // text is trimmed for the hint; the full text rides on the tooltip.
   const referenceText = String(actionTaken || '').replace(/\s+/g, ' ').trim().slice(0, 160);
@@ -604,11 +800,13 @@ export default function AiNarrativePanel({
 
   return (
     <div className="ai-panel">
-      {/* Phase 6 Stage 2 — the approved-terminology lookup. Rendered in EVERY
-          mode, including 'manual' (AI disabled) and 'idle': a dictionary for
-          the officer must not depend on the model being reachable. Offline,
-          read-only, and it never touches the narrative. */}
-      <NarrativeTermsLookup reportLanguage={narrativeLanguage} />
+      {/* The approved-terminology lookup that used to open this panel — in every
+          mode, because a dictionary for the officer must not depend on the
+          model being reachable — is no longer here. The officer's dictionary is
+          the editor's own panel beside the narrative (NarrativeTermsPanel),
+          which is the fuller of the two: categorised, searchable, and mounted
+          where the words are being written. Two copies of the same terms in one
+          sidebar was one more than the sidebar needed. */}
       {mode === 'manual' && (
         <div className="alert info ai-manual-banner" role="status">
           AI assistance unavailable — manual narrative mode. {message ? `${message}` : 'Continue writing below.'}
@@ -665,16 +863,34 @@ export default function AiNarrativePanel({
               {translationDisabledNotice()}
             </div>
           )}
-          <div className="ai-generate-row">
+          {/* ONE row for the two things an officer can ask for: Generate
+              (which writes from the notes below) and Tighten (which works on
+              the narrative THEY wrote). Sits beside Generate because it is the
+              other thing an officer can ask for; disabled while that text is
+              empty, because a live button that can only refuse is a dead
+              click. The long explanation of both is on the ⓘ marker, so this
+              row is a toolbar rather than two buttons under two paragraphs. */}
+          <div className="ai-toolbar">
             <button
               type="button"
-              className="side-new"
+              className="ai-run primary"
               onClick={() => generate()}
               disabled={translationOff}
             >
               {nativeNarrative && effectiveSource === 'narrative' ? 'Translate my narrative' : 'Generate AI draft'}
             </button>
+            <button
+              type="button"
+              className="ai-tighten"
+              onClick={() => tighten()}
+              disabled={!!languageBlocked || !String(narrative || '').trim()}
+              title="Runs the economy rules over your own narrative: repeated propositions merged, padding and closing formulas removed. Nothing is written into the report until you click."
+            >
+              Tighten my draft
+            </button>
+            <InfoHint text={AI_TOOLBAR_HINT} />
           </div>
+          {fillLine}
           {/* Phase 6 Stage 5 (Track C) — the guided flow's ONE entry point. It
               is offered only where it applies (a native narrative being
               translated) and it says plainly that this is two steps with a
@@ -691,65 +907,55 @@ export default function AiNarrativePanel({
               >
                 Translate &amp; tighten (2 steps — you review between them)
               </button>
-              <p className="field-hint">
-                Step 1 translates your narrative into formal English; you check it against
-                the glosses and apply it. Step 2 then offers a tightened version of that
-                English text as a proposal — nothing is written into the report until you click.
-              </p>
+              <InfoHint text={AI_GUIDED_HINT} />
             </div>
           )}
           {effectiveSource === 'notes' && (
-            <div className="ai-notes-row">
-              <textarea
-                className="ai-notes"
-                rows={3}
-                placeholder="Rough notes (optional) — the AI writes from these"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-              <label className="ai-notes-lang">
-                Notes language
-                <select value={notesLanguage} onChange={(e) => setNotesLanguage(e.target.value)}>
-                  {/* Phase 6 Stage 5 (Track A) — from the registry, so a new
-                      language appears here with no client change. */}
-                  {narrativeLanguageOptions().map((l) => (
-                    <option key={l.code} value={l.code}>{l.label}</option>
-                  ))}
-                </select>
-              </label>
+            <>
+              <div className="ai-notes-row">
+                {/* Two rows, not three: the notes are rough by definition, and
+                    the box grows as it is typed into. */}
+                <textarea
+                  className="ai-notes"
+                  rows={2}
+                  placeholder="Rough notes (optional) — the AI writes from these"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </div>
+              {/* Where the Notes-language selector used to be. The notes are
+                  read as English now, so the officer writing in Bisaya or
+                  Tagalog is sent to the ONE place a native source is still
+                  welcome — the narrative, where the language is DETECTED from
+                  the text instead of declared by hand. Without this line the
+                  capability would simply disappear from the screen, which is
+                  exactly the silent version of the bug the selector caused. */}
+              <p className="ai-notes-note">
+                Notes are read as English. Writing in Bisaya or Tagalog? Put that
+                account in “Detailed Description of Events” above and use
+                “Translate my narrative”.
+              </p>
+            </>
+          )}
+          {/* What the draft will be written against, on ONE line: each quote
+              is truncated to the measure (the full text is on its tooltip via
+              `title`), so two field-length quotes cost two short lines instead
+              of two paragraphs — and neither can push the toolbar off screen. */}
+          {(referenceText || findingsReference) && (
+            <div className="ai-context">
+              {referenceText && (
+                <p className="ai-reference" title={referenceText}>
+                  Closes with your recorded Action Taken / Status:{' '}
+                  <em>“{referenceText}”</em>
+                </p>
+              )}
+              {findingsReference && (
+                <p className="ai-reference" title={findingsReference}>
+                  Also formalises your Notable Findings for the sheet:{' '}
+                  <em>“{findingsReference}”</em>
+                </p>
+              )}
             </div>
-          )}
-          {/* Sits beside Generate because it is the other thing an officer can
-              ask for, but on top of the narrative THEY wrote: Generate writes
-              from the notes, Tighten works on the form's own narrative text.
-              Disabled while that text is empty — there is nothing to tighten,
-              and a live button that can only refuse is a dead click. */}
-          <div className="ai-tighten-row">
-            <button
-              type="button"
-              className="ai-tighten"
-              onClick={() => tighten()}
-              disabled={!!languageBlocked || !String(narrative || '').trim()}
-              title="Runs the economy rules over your own narrative: repeated propositions merged, padding and closing formulas removed. Nothing is written into the report until you click."
-            >
-              Tighten my draft
-            </button>
-            <p className="field-hint">
-              On the narrative you wrote — removes repetition and padding. You review every
-              change before it lands.
-            </p>
-          </div>
-          {referenceText && (
-            <p className="ai-reference" title={referenceText}>
-              Closes with your recorded Action Taken / Status:{' '}
-              <em>“{referenceText}”</em>
-            </p>
-          )}
-          {findingsReference && (
-            <p className="ai-reference" title={findingsReference}>
-              Also formalises your Notable Findings for the sheet:{' '}
-              <em>“{findingsReference}”</em>
-            </p>
           )}
         </>
       )}
@@ -875,6 +1081,9 @@ export default function AiNarrativePanel({
               </button>
             ) : (
               <div className="ai-side-body">
+                {/* Phase 7 — what the read filled, above everything else: it is
+                    about the REPORT, not about the draft below it. */}
+                {fillLine}
                 {/* Track C — the guided flow's step, always visible while the
                     officer holds a decision. The cancel control is offered in
                     the two states where a click still changes something; during

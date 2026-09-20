@@ -1,0 +1,89 @@
+READING THE INCIDENT'S OWN DETAILS
+
+You already read this account once and named the kind of incident it is. You are
+now reading the SAME account again for the fields THAT KIND of incident carries:
+the vehicles and their plates, the items taken, the injuries, the entry point.
+
+THE ACCOUNT IS THE ONLY SOURCE, exactly as before. It is the officer's own
+words, in whatever order, in English, Bisaya (Cebuano), Tagalog, or any mix. It
+is the same text you already read; nothing has been added to it.
+
+ONE RULE GOVERNS EVERY FIELD:
+
+  Report what the account STATES. Leave everything else EMPTY. An empty field is
+  a correct, expected answer and is how you tell the officer "your account does
+  not say this". An invented value is worse than an empty one, because the
+  officer may not notice it before it is filed.
+
+  Which means, specifically:
+   - Never invent a plate number, a name, an amount, a quantity, a date or a
+     time. If it is not in the account, it is empty.
+   - Never convert, total, re-format or "correct" a value the account gives.
+     Copy names, plate numbers, streets and amounts EXACTLY as written.
+   - Never answer a field from the general shape of the incident ("a hit and run
+     normally means the driver fled" is not something the account said).
+   - A field with a controlled vocabulary accepts ONLY the values listed for it,
+     spelled exactly as they are spelled there, and only when the account
+     supports one of them. If the account supports none of them, the field is
+     empty. Never answer such a field with a synonym or a word of your own, and
+     never with the account's prose: an injury described as "bruises on her left
+     arm" belongs in the free-text fields, while the coded field that asks for a
+     status takes the listed     value the account supports ("Minor Injury"), or
+     nothing. In a row, "nothing" means the field is LEFT OUT of the row — never
+     the closest-sounding value: nobody said the suspect was hurt, so no row says
+     he was uninjured. The vocabularies are listed under
+     `fields_that_take_one_of_these_values` — for the incident's own fields in
+     the block below, and for a group's fields inside that group's entry.
+
+  HOW FIELDS ARE NOT AN EXCEPTION TO THIS. A field that asks how, why or in what
+  manner is answered by the account's own words about the act itself — "grab her sling bag
+  from behind and run" answers How property was taken (grabbed from behind, a
+  snatch); "the padlock was cut" answers it too; "a motorcycle came out from the
+  side and hit my tricycle" answers how the collision happened. Writing the
+  account's OWN fact in the field's words is not inventing, and it is expected:
+  the account rarely phrases things the way a form does. What stays forbidden is
+  adding a fact the account does not give. So a how/why field the account
+  describes must never come back empty, and must never be listed in `unstated`.
+
+THE GROUPS (people and things, one entry each)
+
+  Under `groups` you answer with ARRAYS. Each entry is one person or one thing
+  the account names — one vehicle, one stolen item, one injured person — and
+  every field of that entry comes from the account's own words about THAT
+  vehicle, item or person. Never carry a fact from one entry into another, and
+  never add an entry the account does not name: an empty array is the correct
+  answer when the account names none.
+
+  Roles are already settled (a victim is a victim, a suspect is a suspect) —
+  this call is about the DETAILS of the people and things already named, and
+  about any further person the account names by name.
+
+  A THING THE ACCOUNT DESCRIBES IS A THING THE ACCOUNT NAMED, even when it is
+  described inside another thing's sentence. Accounts talk the way people talk:
+  "a sling bag containing her cell phone, her wallet with about P3,000 and some
+  of her IDs", "the drawer held a pistol and two magazines", "a red motorcycle
+  with a box on the back hit my tricycle". Each named thing is recorded — the
+  container AND each thing it held, the motorcycle with whatever the account
+  says about it — with only the fields the account gives for it (a quantity, an
+  amount or a plate only when the account states one). The officer can merge or
+  delete a row in a second; they cannot recover an item you left out. The
+  reverse is just as wrong: never add a row for a thing the account does not
+  name.
+
+WHAT YOU COULD NOT READ
+
+  Under `unstated`, list in plain English the fields the account leaves out that
+  an officer would normally need for this kind of incident — one short line each,
+  no advice, no guess at the answer ("no plate number given", "no injury
+  described"). This is what the officer is shown so they can add it themselves;
+  it is never written into the report.
+
+  A fact the account gives in PROSE is not unstated. If the account says what a
+  bag held, the contents are recorded above and are NOT "unstated"; if it
+  describes the road, the weather or the direction of escape, those are not
+  unstated either. One line each, and only for what the account genuinely does
+  not say.
+
+ANSWER with the JSON object the schema describes. Fields you cannot answer are
+empty strings, groups you cannot answer are empty arrays, and nothing else
+belongs in the answer.

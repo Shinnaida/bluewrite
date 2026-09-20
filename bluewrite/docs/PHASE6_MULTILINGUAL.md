@@ -261,7 +261,8 @@ audited — by a reviewing officer, by the station, or in court.
 So the source is stored, not consumed:
 
 - keep the officer's native-language text **verbatim** on the report;
-- keep the language it was written in, as a declared value (§8 Q2);
+- keep the language it was written in, detected from the text (§8 Q2 — the
+  recommendation there was superseded; see the note under it);
 - it goes into `report_history` snapshots with everything else, so the audit
   trail shows the source and the translation as they stood at each change;
 - the officer can see it beside the English at all times — including after the
@@ -395,6 +396,29 @@ unreliable — *ang* and *sa* are shared between Tagalog and Cebuano — and a w
 guess would silently apply the wrong terminology table. Let the officer say, and
 offer a suggested default from the last report.
 
+*SUPERSEDED — the owner's decision, taken after Stage 5: the language is
+**detected**, and there is no selector.* `detectNarrativeLanguage()` in
+`src/lib/reportLanguages.js` reads the narrative and returns `en`, `ceb`, `tl` or
+`mixed`; `setNarrative()` writes that verdict into `narrative_language` in the
+same update as the text, so a new report has no language until it has words and
+a stored report's language follows any edit to its narrative. The objection above
+is not so much answered as bounded, and the bounds are the design: a language is
+named only on EXCLUSIVE evidence (a shared word like *ang* is counted as "not
+English" and as nothing else), every ambiguity resolves to English, and `mixed`
+is claimed only when the two native languages are within 2:1 of each other.
+
+What that costs, stated plainly: **a miss is silent.** Bisaya written mostly in
+shared words is filed as English, with no "not translated" note anywhere. That is
+the direction it was chosen to fail in — a false Bisaya reading would label the
+record, disable Tighten and switch terminology tables on a guess — but it does
+mean detection is not a guarantee that every Bisaya report is marked as one.
+
+Gone with the selector: D7's suggestion below (nothing declares a language, so
+there is nothing to suggest), the `ir-language-*` styles, and the "not
+translated" note that sat under the selector. The AI panel's `aiBlockedReason`
+note, the finalize warning and the printed `pr-language` line all still read the
+field, and now read exactly what the narrative says.
+
 **Q3. What happens to Tighten on a native-language narrative?**
 *Answered in Stage 5, Track C (D2):* offered as a **guided flow**, not one
 action — "Translate & tighten", two steps with the officer's review between
@@ -467,11 +491,11 @@ declares; nothing detects it, and nothing translates it.
 | `app/controllers/NarrativeController.php` | the server-side AI guard `languageRefusal()` (D3), applied to both Generate and Tighten |
 | `src/lib/reportLanguages.js` | **new** — the one place a stored code becomes a label, a warning or a printed line |
 | `src/lib/reportRules.js` | the language becomes an input; the single English-reading rule is marked `readsNarrativeText` and skipped for non-`en` |
-| `src/components/Reports.jsx` | the language selector, the untranslated indicator, the D7 default, the finalize confirmation, the AI disable |
+| `src/components/Reports.jsx` | the language field (detected from the narrative since Q2 was superseded — the selector, the untranslated indicator and the D7 default are gone), the finalize confirmation, the AI disable |
 | `src/components/AiNarrativePanel.jsx` | Generate / Tighten disabled with the visible reason |
 | `src/components/Shell.jsx` | carries the report's language through to the editor |
 | `src/components/ReportPrint.jsx` | the D6 sheet line |
-| `src/incident-report.css`, `src/styles.css` | styling for the selector, the indicator and `.pr-language` |
+| `src/incident-report.css`, `src/styles.css` | styling for `.pr-language` and the AI panel's language note (the selector's `ir-language-*` rules were removed with the selector) |
 | `tests/BaseApiTestCase.php` | replays `007` into the scratch DB (without it every create 500s) |
 | `tests/rules/reportLanguages.test.mjs` | **new** — 20 tests for the module and the rule engine |
 | `tests/MultilingualTest.php` | **new** — 19 tests for persistence, round trip, snapshots and guards (18 over HTTP, 1 pure) |
@@ -491,7 +515,7 @@ test alone runs **38 tests / 237 assertions, OK**, unmodified.
 | **D4** | Automatic: the snapshot is the whole row as JSON, so `narrative_language` is in it from the first snapshot. A change of language therefore leaves the old value in history and the new one on the report (asserted both ways). |
 | **D5** | A warning with explicit confirm/cancel in the editor, stating plainly that the narrative is not in English and has not been translated. It never blocks, and the **server never refuses a filing for language** (asserted: a `ceb` report finalizes 200). Recorded per **Q9** by appending to the existing `change_note` — no new column, no extra audit row. |
 | **D6** | `printLanguageLine()` returns `Narrative language: <short> (not translated)` for non-`en` and **null** for `en`; `ReportPrint.jsx` renders the node only when it is non-null, so an English sheet is the same nodes it always was. The short form exists so the line does not read "Bisaya (Cebuano) (not translated)". The source-text appendix remains Stage 4. |
-| **D7** | `suggestedLanguage()` filters the fetched list to the officer's own rows and takes the greatest `id` — not the first row, because the list is sorted by incident date and an Admin's list is the whole station's. A suggestion only: the editor shows a stored report's own value, and the selector is always visible and changeable. |
+| **D7** | `suggestedLanguage()` filters the fetched list to the officer's own rows and takes the greatest `id` — not the first row, because the list is sorted by incident date and an Admin's list is the whole station's. A suggestion only: the editor shows a stored report's own value, and the selector is always visible and changeable. **Superseded with Q2:** nothing declares the language any more, so the editor no longer calls it — the function and its tests are kept for the day the selector comes back, and `Shell` still fetches the list for Home. |
 
 ### Live evidence
 
@@ -767,11 +791,11 @@ reviewer. Until then the feature is enabled in code but unreviewed.
 | `app/ai/AiNarrativeResult.php` | three new fields: `gloss`, `sourceGloss`, `ambiguities` |
 | `app/ai/GeminiNarrativeProvider.php` | response-schema fields + `normaliseGloss()`; the declared source language and the per-call **pinned-terms** block in the user content; `matchPinnedTerms()`, `pinnedTermsBlock()`, `foldForMatch()` |
 | `app/ai/NarrativeService.php` | source language on the masked payload; gloss/ambiguities unmask + `gateLeaks()`; the per-type kill switch (`translationDisabled()`, `translationDisabledReason()`) |
-| `app/controllers/NarrativeController.php` | Generate **no longer refused for a native source** (D4); the `source`/`notes_language`/`narrative` request fields; the kill-switch guard; the gloss, ambiguity and app-computed `pinnedTerms` in the response; `narrativeLanguageCode()` |
+| `app/controllers/NarrativeController.php` | Generate **no longer refused for a native source** (D4); the `source`/`notes_language`/`narrative` request fields (`notes_language` was removed afterwards — notes are read as English; see the post-G4 change at the end of this file); the kill-switch guard; the gloss, ambiguity and app-computed `pinnedTerms` in the response; `narrativeLanguageCode()` |
 | `app/controllers/ReportsController.php` | accepts the **paired** `narrative_source_text` + `narrative_source_language` on PATCH, with both-or-neither validation and explicit NULL on clear |
 | `app/config/ai.sample.php` | the `translation.disabled_incident_types` kill switch (empty by default) |
 | `resources/ai/narrative_system_prompt.txt` | **new** `SOURCE LANGUAGE AND TRANSLATION`, `PINNED TERMS` and `THE GLOSS PAIR` sections (no existing rule altered) |
-| `src/components/AiNarrativePanel.jsx` | notes box → textarea + language selector; the source choice; gloss/ambiguity/pinned-terms display; the Apply note; source-aware `onAccept` |
+| `src/components/AiNarrativePanel.jsx` | notes box → textarea + language selector (the selector was removed afterwards — see the post-G4 change); the source choice; gloss/ambiguity/pinned-terms display; the Apply note; source-aware `onAccept` |
 | `src/components/Reports.jsx` | Generate no longer gated on language; `onAccept` stores the source pair; the read-only **Original text** view (D10) |
 | `src/styles.css`, `src/incident-report.css` | styling for the new controls and the source view |
 | `docs/bluewrite-police-terminology-glossary.md` | **§14** (the translation rules) + eight **§11** anti-drift rows |
@@ -1231,7 +1255,7 @@ without leaving the report, and without the model.
 |---|---|
 | `src/components/NarrativeTermsPanel.jsx` | **new** — the panel: browse by category, search, "terms found in your text", copy control, both empty states |
 | `src/lib/narrativeTerms.js` | `termsInText()` (the Stage 3 matching rule, client-side), `groupByCategory()`, `categoryLabel()`, `TERM_CATEGORY_LABELS` |
-| `src/components/Reports.jsx` | mounts the panel beside the narrative, and on the desk under a blank sheet |
+| `src/components/Reports.jsx` | mounts the panel beside the narrative in the Document and Steps formats; the sheet format's copy on the desk below the paper was removed later by request |
 | `src/incident-report.css` | the `term-panel-*` styles (the form's own tokens, so it follows the dark theme) |
 | `tests/rules/narrativeTerms.test.mjs` | 5 new tests: grouping, labels, whole-token matching, empty inputs, the server's cap |
 | `tests/PinnedTermsTest.php` | a **parity** test: the same fixtures, asserted on the server matcher |
@@ -1243,7 +1267,7 @@ without leaving the report, and without the model.
 | **D6** | Read-only, offline and AI-independent. The derived table is **bundled at build time** (`import termsData from '../../resources/ai/narrative_terms.json'`); the component imports no `api`, so there is no network call to make. It renders in every format, with the AI off, and with **zero** approved entries. The only write is `navigator.clipboard.writeText` on the official English term — nothing is inserted into a field. |
 | **Scope statement** | `SCOPE_TEXT` (*"Approved report terminology — not a translator. A word not listed here is not covered."*) is rendered at the top of the panel in every state, including the empty one. |
 | **Approved entries only** | The panel reads the same derived file the model is pinned with, which by construction carries approved entries only — asserted by the existing drift guard (`no draft id appears anywhere in the derived file`). |
-| **Placement** | Beside the narrative in the editor, and on the **desk under the paper** in the sheet format — never on the page, because anything inside the sheet's card *is* the report. |
+| **Placement** | Beside the narrative in the editor, in the Document and Steps formats — never on the page, because anything inside the sheet's card *is* the report. The sheet format carried a copy of it on the desk below the paper while it needed one; that copy was removed by request, and the dictionary is now absent from the Sheet format altogether. It was briefly placed above the paper to keep it in view while writing; that was reverted, because it put four blocks of chrome ahead of the page the officer opened the format to write on. |
 
 ### Live evidence
 
@@ -1491,3 +1515,62 @@ React/DOM harness). Their pure rules are tested; their rendering rests on the
 written manual procedures in the Track B and Track C records above, which the
 author could not observe (no browser). Those, plus the Stage 3 bilingual review
 and the Stage 4 UI/print and legal read, remain human gates before real use.
+
+---
+
+### Post-G4 change — the notes source is locked to English — 2026-09-20
+
+Stage 3 put a language selector beside the rough-notes box (D3/D4: the notes
+language was **declared**, never detected) and its value travelled as
+`notes_language` on the generate request. The selector is **gone**: the notes
+source is English, always, on both sides of the wire.
+
+**Why.** Three findings, all of them about the same value being a claim nothing
+could answer for:
+
+1. **Nothing could check it.** `detectNarrativeLanguage()` has only ever run on
+   the narrative (`Reports.jsx`), never on the notes. A wrong or stale selection
+   produced the wrong *kind* of request — "formalise these English notes"
+   instead of "translate these Bisaya notes" — with no warning, no refusal and
+   no record that the wrong thing had been declared.
+2. **Both guards trusted it.** The per-type kill switch (D6a) and the
+   `translation_enabled: false` language guard (Track A, D4) key off the source
+   language, which on this path was the request's own claim. Declaring
+   "English" over native notes passed both of them, and the model was then
+   asked to formalise native text — the one thing those guards exist to stop.
+3. **It was the only declaration with no fallback.** The narrative's language is
+   read from the text, and the report's own `narrative_language` is stored and
+   printed. The notes language lived in component state, hard-coded to `en` on
+   every mount, so the officer writing in Bisaya re-picked it each session — and
+   the cost of forgetting was a silently wrong draft.
+
+**What changed.**
+
+| File | Change |
+|---|---|
+| `app/controllers/NarrativeController.php` | the notes branch sets `$sourceLanguage = 'en'` outright; `notes_language` is no longer read from the request |
+| `src/components/AiNarrativePanel.jsx` | no notes-language state, no field in the request body, no selector; a one-line note in its place sends a native account to the narrative path |
+| `src/styles.css` | the `.ai-notes-lang` rules removed; `.ai-notes-note` added for that line |
+| `docs/architecture-for-AI/write-report-architecture.md` | the generate contract block and a §6 contract point, so the field is not "restored" by a later agent |
+
+**What deliberately did NOT change.** The narrative path, entirely: "Translate
+my narrative", the guided Translate & tighten flow (Track C), the gloss pair,
+the pinned terms, the source pair (`narrative_source_text` +
+`narrative_source_language`, still recorded on the narrative path), both
+translation guards, the prompt's `SOURCE LANGUAGE AND TRANSLATION` section, and
+`narrativeLanguageOptions()` (still exported and tested, for the day a picker
+comes back). A Bisaya or Tagalog account still has a supported way in — the
+narrative field, where the language is detected from the text — and the line
+under the notes box says so, because a capability removed without a signpost is
+the same silent failure this change is about.
+
+**The one behavioural consequence to expect:** a draft generated from the notes
+records **no** source pair. There is no original text in another language to
+keep, which is the truth for that path.
+
+**Evidence (real output, this pass):** JS suites **201 / 0 failures**;
+`npm run build` clean; `php -l app/controllers/NarrativeController.php` — no
+syntax errors. The **PHP suite was not run in this pass** (it needs the scratch
+`bluewrite_test` MySQL and its own server on port 8098 — see tests/README.md),
+so `MultilingualTest.php`'s coverage of this endpoint is unverified here and
+should be run before the change is relied on.

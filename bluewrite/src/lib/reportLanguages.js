@@ -5,11 +5,14 @@
 //
 // Things about this module that are deliberate and worth not "fixing":
 //
-//   * The language is DECLARED, never detected. §8 Q2 of the plan settles it:
-//     detection by function words is unreliable — ang, sa and nga are shared
-//     between Tagalog and Cebuano — and a wrong guess would silently apply the
-//     wrong terminology table in Stage 2. Nothing here inspects the narrative
-//     text, and nothing here ever should.
+//   * The language is DETECTED, not declared — the owner's decision, and a
+//     REVERSAL of §8 Q2 of the Phase 6 plan, which had settled on declaration
+//     because detection by function words is unreliable. The unreliability is
+//     real (ang, sa, mga, si, ni, na, wala and forty more belong to BOTH Bisaya
+//     and Tagalog) and it is why detectNarrativeLanguage() is built the way it
+//     is: only EXCLUSIVE evidence names a language, every ambiguity resolves to
+//     English, and 'mixed' is claimed only when the two are in comparable
+//     measure. See the section above that function for what that costs.
 //
 //   * "Untranslated" is DERIVED, not stored. It is exactly
 //     `language !== 'en'`, so it cannot come to disagree with the language it
@@ -124,6 +127,205 @@ export function languageShort(code) {
  */
 export function isUntranslated(code) {
   return normaliseLanguage(code) !== DEFAULT_LANGUAGE;
+}
+
+/* ===========================================================================
+   AUTOMATIC DETECTION — the language is READ from the narrative
+
+   This REVERSES §8 Q2 of the Phase 6 plan (see the module header). Detection is
+   a heuristic and always will be: Cebuano and Tagalog share their subject
+   markers, their linkers' ancestry and most of their function words, so no
+   count of words can separate them the way a declaration could. The rules below
+   are therefore shaped around which way a mistake should fail:
+
+     * ONLY EXCLUSIVE EVIDENCE NAMES A LANGUAGE. Shared words — ang, sa, mga,
+       si, ni, na, pa, ka, ko, wala… — are counted as "not English" and as
+       nothing else. They can never make the text Tagalog or Bisaya; only the
+       exclusive sets can.
+
+     * EVERY AMBIGUITY RESOLVES TO ENGLISH. A narrative under three words, one
+       lone marker, or any text neither list recognises reads as English. That
+       is the verdict that changes nothing downstream: no "not translated" note,
+       no language line on the printed sheet, no terminology table switched on,
+       and no refusal of the English AI tools.
+
+     * A NATIVE NARRATIVE WITH NO MARKER READS AS BISAYA. Text that is plainly
+       not English but carries nothing that tells the two apart is filed as the
+       station's own language rather than as a third thing.
+
+   THE COST, stated where it is paid: a MISS IS SILENT. Bisaya written with
+   mostly shared words — "Gidala sa ospital ang biktima" without gidala in a
+   list — reads as English and is filed with no note. That is the direction
+   chosen: a quiet miss is a report that looks exactly like one written in
+   English, while a false positive labels a narrative, gates Tighten and picks a
+   table the officer never asked for.
+   =========================================================================== */
+
+/**
+ * Function words BOTH Bisaya and Tagalog use. Their presence says the text is
+ * not English; it can never say which of the two it is.
+ */
+const SHARED_MARKERS = new Set([
+  'ang', 'sa', 'mga', 'si', 'ni', 'na', 'pa', 'ba', 'ka', 'ko', 'mo',
+  'ako', 'kami', 'siya', 'kay', 'niya', 'nila', 'kanila', 'iyo', 'iya', 'ninyo',
+  'wala',
+]);
+
+/**
+ * Words only Bisaya (Cebuano) uses — the marker list, not a dictionary. It
+ * carries the function words that have no Tagalog twin and the incident verbs
+ * and nouns this station's narratives are actually made of (gidakop, gipusil,
+ * nasakpan, sakyanan…), because those are the words a robbery report repeats.
+ */
+const CEBUANO_MARKERS = new Set([
+  'nga', 'ug', 'kaayo', 'gyud', 'gayud', 'ra', 'pud', 'hinuon', 'bahin',
+  'nako', 'nimo', 'nato', 'kanako', 'kanimo', 'kaniya',
+  'amo', 'amoa', 'amoang', 'atoa', 'among', 'akong', 'imong', 'iyang',
+  'naa', 'naay', 'dunay', 'adunay', 'anaa', 'didto', 'dinhi', 'karon',
+  'gahapon', 'buntag', 'udto', 'gabii', 'adlaw', 'tuig', 'bulan', 'alas',
+  'balay', 'tawo', 'babaye', 'sakyanan', 'sundang', 'pusil',
+  'dakop', 'gidakop', 'nasakpan', 'gidala', 'gipusil', 'gidunggab', 'gitulis',
+  'gisulong', 'gibunalan', 'gikuha', 'giingon', 'miingon', 'niingon', 'ingon',
+  'matod', 'sumala', 'tungod', 'aron', 'sulong', 'sulod', 'gawas', 'dapit',
+  'unsa', 'kinsa', 'ngano', 'daghan', 'gamay', 'dako', 'maayo', 'lisod',
+  'tabang', 'hubog', 'silingan', 'igsoon', 'ginikanan', 'karsel', 'prisohan',
+  'husgado',
+]);
+
+/**
+ * Words only Tagalog uses. Same rules as the Cebuano list: no shared word
+ * appears here either ('mga' is Cebuano's plural marker too, and 'niya' is both
+ * languages' possessive).
+ */
+const TAGALOG_MARKERS = new Set([
+  'ng', 'hindi', 'ay', 'lang', 'din', 'rin', 'naman', 'yung', 'iyong', 'iyon',
+  'dito', 'doon', 'sino', 'bakit', 'sana', 'po', 'daw', 'mayroon', 'meron',
+  'natin', 'tayo', 'namin', 'kasi', 'dahil', 'upang', 'kapag', 'habang',
+  'hanggang', 'kanina', 'kahapon', 'ngayon', 'bukas', 'gabi', 'umaga',
+  'tanghali', 'araw', 'bahay', 'tao', 'babae', 'sasakyan', 'pera', 'kalsada',
+  'presinto', 'bilangguan', 'hukuman', 'ginawa', 'gumawa', 'pinatay',
+  'sinaksak', 'ninakaw', 'nagnakaw', 'nakuha', 'nahuli', 'dinala', 'dumating',
+  'pumunta', 'umuwi', 'nasugatan', 'usapin', 'reklamo', 'testigo', 'tumawag',
+  'tumakbo', 'pinagmulan', 'ibinigay', 'binigay', 'sinabi',
+]);
+
+/**
+ * ENGLISH function words, and function words only. Content words are
+ * deliberately absent: "police", "hospital" and "station" appear in a Bisaya
+ * narrative as often as in an English one, so counting them would make the
+ * English share of a Bisaya report look like a mix. This set answers exactly
+ * one question — is this text partly English as well as native?
+ */
+const ENGLISH_MARKERS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'was', 'were', 'is', 'are', 'am', 'be',
+  'of', 'to', 'in', 'on', 'at', 'for', 'with', 'from', 'by', 'that', 'this',
+  'these', 'those', 'there', 'here', 'he', 'she', 'they', 'it', 'we', 'i',
+  'you', 'his', 'her', 'their', 'our', 'my', 'your', 'its', 'when', 'while',
+  'after', 'before', 'then', 'not', 'no', 'had', 'has', 'have', 'did', 'does',
+  'do', 'will', 'would', 'could', 'should', 'said', 'told', 'went', 'came',
+  'took', 'them', 'him', 'us', 'me', 'if', 'so', 'as', 'about', 'around',
+  'into', 'over', 'out', 'up', 'down', 'because', 'during', 'until', 'since',
+  'which', 'who', 'what', 'where', 'why', 'how', 'all', 'any', 'some', 'very',
+  'also', 'just', 'only',
+]);
+
+/** Below this many words there is nothing to read. */
+const MIN_WORDS = 3;
+
+/**
+ * How much evidence a native reading needs. ONE marker is never a language: an
+ * English narrative that borrows a local noun — "brought to the presinto" — is
+ * not a Tagalog report, and a single stray function word must not relabel it,
+ * disable Tighten and switch the terminology table under the officer's hands.
+ */
+const MIN_NATIVE_MARKERS = 2;
+
+/** The share of a text that has to be English AND native before it is 'mixed'. */
+const MIXED_SHARE = 0.2;
+
+/**
+ * The language claimed when the text is plainly not English and carries nothing
+ * that tells the two apart. The station writes in Bisaya; a single unanswered
+ * question is answered here rather than escalated to 'mixed', which would turn
+ * the terminology table off for a report that is very likely Bisaya.
+ */
+const UNDISCRIMINATED = 'ceb';
+
+/**
+ * What language is this narrative IN?
+ *
+ * Returns one of the registry's codes — 'en', 'ceb' (Bisaya), 'tl' (Tagalog) or
+ * 'mixed' — read from the text itself. The rules are the section above: only
+ * exclusive evidence names a language, every ambiguity resolves to English, and
+ * 'mixed' is claimed only when English and a native language, or Bisaya and
+ * Tagalog, are present in comparable measure.
+ *
+ * It is deliberately NOT a language identifier: it is a six-way decision
+ * between the four languages this station files in, made from a fixed word
+ * list, and it is honest about the two ways it can be wrong — a miss (native
+ * prose read as English) and a tie broken towards Bisaya.
+ *
+ * A verdict the registry does not carry is never returned. The API REJECTS an
+ * unknown code with a 422 rather than coercing it (see normaliseLanguage), so a
+ * suggestion the server would refuse has to become English here, not at save
+ * time — an officer must never be blocked from filing by a guess.
+ *
+ * @param {unknown} text the narrative, as typed
+ * @returns {'en'|'ceb'|'tl'|'mixed'} a code the registry carries
+ */
+export function detectNarrativeLanguage(text) {
+  const words = String(text ?? '').toLowerCase().match(/[a-zñ]+/g) ?? [];
+  if (words.length < MIN_WORDS) return DEFAULT_LANGUAGE;
+
+  let english = 0;
+  let shared = 0;
+  let cebuano = 0;
+  let tagalog = 0;
+  for (const word of words) {
+    if (CEBUANO_MARKERS.has(word)) cebuano += 1;
+    else if (TAGALOG_MARKERS.has(word)) tagalog += 1;
+    else if (SHARED_MARKERS.has(word)) shared += 1;
+    else if (ENGLISH_MARKERS.has(word)) english += 1;
+  }
+
+  const verdict = nativeVerdict({ english, shared, cebuano, tagalog }, words.length);
+  return verdict === DEFAULT_LANGUAGE || isKnownLanguage(verdict) ? verdict : DEFAULT_LANGUAGE;
+}
+
+/**
+ * The verdict half of detectNarrativeLanguage, split out so the rule reads as
+ * one sentence: how much of the text is English, how much is native, and which
+ * of the two native languages the exclusive markers point at.
+ *
+ * @param {{english: number, shared: number, cebuano: number, tagalog: number}} counts
+ * @param {number} total words in the narrative
+ * @returns {'en'|'ceb'|'tl'|'mixed'}
+ */
+function nativeVerdict({ english, shared, cebuano, tagalog }, total) {
+  const native = shared + cebuano + tagalog;
+
+  // Nothing to go on, or one lone marker: English, whatever the text does
+  // elsewhere. See MIN_NATIVE_MARKERS.
+  if (native < MIN_NATIVE_MARKERS) return DEFAULT_LANGUAGE;
+
+  // English AND a native language, both carrying the text: a narrative that
+  // switches language mid-report, which is what 'mixed' is for. The share is
+  // there so English loanwords beside a fully native sentence cannot qualify.
+  if (english >= MIN_NATIVE_MARKERS && native / total >= MIXED_SHARE) {
+    return 'mixed';
+  }
+
+  if (cebuano > 0 && tagalog > 0) {
+    const lo = Math.min(cebuano, tagalog);
+    const hi = Math.max(cebuano, tagalog);
+    // Within 2:1 of each other: the text is using both, not leaning on one.
+    if (lo / hi >= 0.5) return 'mixed';
+  }
+
+  // Equal means neither exclusive set fired (both are zero — comparable pairs
+  // were caught above), so the shared words are all the evidence there is.
+  if (cebuano === tagalog) return UNDISCRIMINATED;
+  return cebuano > tagalog ? 'ceb' : 'tl';
 }
 
 /**

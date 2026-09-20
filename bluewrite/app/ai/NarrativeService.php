@@ -114,6 +114,110 @@ final class NarrativeService
     }
 
     /**
+     * Phase 7 — read the report's fields out of a free-form ACCOUNT.
+     *
+     * The ONE AI call that runs with no report behind it, and every difference
+     * from generateForReport follows from that:
+     *
+     *   * NOTHING IS QUEUED. `ai_requests` is keyed by report id and this call
+     *     runs BEFORE a report exists — it is what tells the client which
+     *     incident type to create the report with — so there is no row to
+     *     record the attempt against and none to retry from. One attempt; a
+     *     failure is reported to the officer as a failure rather than as a
+     *     queued retry, because there is no queue to put it in.
+     *
+     *   * NOTHING IS CACHED. The cache key is a hash of a masked payload built
+     *     from a stored report. There is no payload here beyond the officer's
+     *     own words, so there is nothing to key on.
+     *
+     *   * NOTHING IS UNMAPPED, and this is the one fact about the call worth
+     *     stating plainly rather than implying: the unmask map is built from a
+     *     report's STRUCTURED fields, and there is no report yet. The account is
+     *     the officer's own text and the only source, so the model reads it as
+     *     typed. maskFreeText() has nothing to swap — it masks the values a
+     *     report already carries, not values it has not been given — and the
+     *     residual-risk detector is therefore run and REPORTED instead: what it
+     *     names goes back to the officer with the answer, never hidden.
+     *
+     *     That last one is an OPEN decision, not a settled design — §6 of
+     *     docs/architecture-for-AI/write-report-architecture.md records it and
+     *     the alternative — and it should be settled before a client calls
+     *     this route.
+     *
+     * @param string $account the officer's text, as typed
+     * @param string[] $types the incident types the answer may name
+     * @return array{fields:array<string,mixed>, residualRisk:string[]}
+     */
+    public function classifyAccount(string $account, array $types): array
+    {
+        return [
+            'fields' => $this->provider->classify($account, [
+                'types' => array_values($types),
+                // Relative days in the account are resolved against this, which
+                // is why it is passed rather than read inside the provider: a
+                // test must be able to ask the same question of any date.
+                'today' => date('Y-m-d'),
+            ]),
+            'residualRisk' => MaskingGateway::freeTextResidualRisk($account),
+        ];
+    }
+
+    /**
+     * Phase 7 — the type-scoped half of the read: the incident type's OWN
+     * fields, once the first call has established what the incident is.
+     *
+     * The field list is assembled HERE, from the app's own tables, and never
+     * from the request: `ReportRules::scalarKeysFor()` is every scalar the type
+     * carries with its group-derived mirrors already removed, and
+     * `ReportRules::groupsFor()` is the group config the validator itself uses.
+     * The caller supplies only the type, and only after checking it against the
+     * station's allowlist.
+     *
+     * No residual-risk scan is run here: it is the same account text the first
+     * call already scanned, and reporting the same names twice would read as two
+     * findings rather than one.
+     *
+     * @return array{fields:array<string,string>, groups:array<string,array<int,array<string,string>>>, unstated:string[]}
+     */
+    public function classifyTypeDetails(string $account, string $incidentType): array
+    {
+        $rowVocabulary = \App\Rules\ReportRules::groupSelectOptionsFor($incidentType);
+        $groups = [];
+        foreach (\App\Rules\ReportRules::groupsFor($incidentType) ?? [] as $key => $cfg) {
+            $groups[$key] = [
+                'label' => (string) ($cfg['label'] ?? $key),
+                'fields' => array_keys((array) ($cfg['fields'] ?? [])),
+            ];
+            // The group's own controlled vocabularies, when it has any: a row's
+            // `injury_status` accepts four values and nothing else, and a reading
+            // that is not told so answers with the account's prose, which the
+            // client then drops. Omitted rather than sent empty.
+            if (isset($rowVocabulary[$key])) {
+                $groups[$key]['selects'] = $rowVocabulary[$key];
+            }
+        }
+
+        return $this->provider->classifyDetails(
+            $account,
+            $incidentType,
+            // THE FORM TO READ AGAINST, all of it app-held (see the interface's
+            // doc for each key): the field list, the controlled vocabularies, the
+            // fields the report cannot be filed without, and the ones a
+            // conditional turns on. Nothing here comes from the request.
+            [
+                'scalars' => \App\Rules\ReportRules::scalarKeysFor($incidentType),
+                'groups' => $groups,
+                'selects' => \App\Rules\ReportRules::selectOptionsFor($incidentType),
+                'required' => \App\Rules\ReportRules::requiredScalarKeysFor($incidentType),
+                'conditional' => \App\Rules\ReportRules::conditionalScalarKeysFor($incidentType),
+            ],
+            // Relative days in the account resolve against today, exactly as
+            // they do on the first read.
+            ['today' => date('Y-m-d')],
+        );
+    }
+
+    /**
      * Generate for a report. Returns the AI draft payload; NEVER writes the
      * report row. On provider failure after the retry budget, records the
      * failure in ai_requests and rethrows for the controller to translate

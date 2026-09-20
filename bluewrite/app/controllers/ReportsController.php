@@ -20,11 +20,18 @@ final class ReportsController
     private const LEGACY_TYPES = ['Physical Injury', 'Vehicular Accident', 'Drug-related', 'Other'];
 
     /**
-     * Phase 6 Stage 1 — the languages an officer may DECLARE for the narrative
-     * (migration 007). Declared, never detected: §8 Q2 of the plan settles
-     * that, because detection by function words is unreliable (ang, sa and nga
-     * are shared between Tagalog and Cebuano) and a wrong guess would silently
-     * apply the wrong terminology table in Stage 2.
+     * Phase 6 Stage 1 — the languages a narrative may be filed in (migration
+     * 007). §8 Q2 of the plan settled on DECLARATION, and that was later
+     * superseded by the owner: the client now DETECTS the language from the
+     * narrative text and posts the result (detectNarrativeLanguage in
+     * src/lib/reportLanguages.js).
+     *
+     * This server's part is unchanged by that reversal, and it is the part that
+     * matters here: an incoming code is validated against the registry allowlist
+     * and an unknown one is REJECTED with a 422 rather than coerced. The client's
+     * detector is careful to return only codes the registry carries, but the API
+     * does not take that on trust — a stored value is always one this system can
+     * name, whatever a client sends.
      *
      * Phase 6 Stage 5 (Track A, D3) — the allowlist is read from the LANGUAGE
      * REGISTRY, not held here. resources/ai/language_registry.json is the single
@@ -71,9 +78,18 @@ final class ReportsController
      * Types this station accepts: the configured list (station_settings,
      * spec §1.1/§1.2 — the dropdown is station data, not code) plus the
      * legacy Phase 1/2 spellings.
+     *
+     * Public and static since Phase 7: the free-form account read
+     * (POST /ai/classify) has to constrain the model to the SAME list this
+     * controller validates a create against. A read that named a type the
+     * create then rejects would be a dead end for the officer, and a second
+     * copy of this list here is how the two would drift apart. Read-only —
+     * nothing outside a request handler may mutate station settings through
+     * it.
+     *
      * @return string[]
      */
-    private function allowedTypes(): array
+    public static function allowedTypes(): array
     {
         return array_values(array_unique(array_merge(Station::incidentTypes(), self::LEGACY_TYPES)));
     }

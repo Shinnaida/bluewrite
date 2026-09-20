@@ -351,10 +351,15 @@ single source of truth for it:
 - `GROUP_CONFIG[type]` — repeatable groups (which role exists, `minCount`,
   `itemSchema`). A key absent from a type is structurally N/A, never rendered.
 - `GROUP_ROW_RULES[groupKey]` — what a RECORDED row of a group must carry, by
-  role: `require: ['name']`, or `requireAny: [['name','suspect_description']]`
-  for suspects, who must stay recordable while unidentified. The count floors
-  only prove rows exist; this is what makes a row a record. Keyed by role (a
-  group key IS its role), so it is stated once rather than per type.
+  role: `require: ['name']`, or `requireAny` where one of several fields will
+  do. `requireAny` is what keeps a record of a person whose identity is not
+  known: a suspect by `['name','suspect_description']` (unidentified), and a
+  witness by `['name','statement_summary']` — the complainant who reports "a
+  vendor saw him run" often cannot name the vendor, and what the witness SAID
+  is the fact the report needs. What neither may carry is neither field: a row
+  holding only a contact number says nothing about who or what. The count
+  floors only prove rows exist; this is what makes a row a record. Keyed by
+  role (a group key IS its role), so it is stated once rather than per type.
 - `ROLE_LABELS`, `BLOCK_HEADINGS`, `SENSITIVE_TYPES`, `LEGACY_TYPE_MAP`.
 
 Rules the editor enforces on `type_specific`:
@@ -475,7 +480,12 @@ hover-peek, Ctrl+J, Escape). It **never writes the report**; the officer accepts
 
 ```
 Generate AI draft ──► POST /reports/:id/narrative/generate
-                      body: { notes, feedback?, action_taken, notable_findings }
+                      body: { notes, source, feedback?, action_taken,
+                              notable_findings }
+                      source = "notes" | "narrative"; a "narrative" source is
+                      the officer's own account in another language, sent as
+                      `narrative` and translated. There is NO language field:
+                      the notes source is read as ENGLISH, always (see §6).
                       ──► { narrative, notableFindings, actionTaken, suggestions,
                             possibleGaps, addedContentWarnings, redundancy,
                             narrativeRepetition, narrativeRepaired, residualRisk }
@@ -484,17 +494,204 @@ Generate AI draft ──► POST /reports/:id/narrative/generate
 Tighten my draft  ──► POST /reports/:id/narrative/tighten   (officer's OWN text;
                       nothing auto-applied — merged/trimmed results are
                       proposals with their own buttons)
+Read the account  ──► POST /ai/classify        (Phase 7 — called from Generate,
+                      body: { account }        SHEET format only; see below)
+                      ──► { fields: { incident_type, incident_datetime,
+                            incident_time_approximate, location, reporter_*,
+                            action_taken, parties[], unstated[] },
+                            residualRisk, types }
+Read the type's   ──► POST /ai/classify/details  (Phase 7 — the SECOND half of
+  own fields          body: { account, type }   the same read, same press)
+                      ──► { fields: { <the type's own scalar keys> },
+                            groups: { <groupKey>: [ {…row} ] }, unstated[] }
 ```
+
+**`POST /ai/classify` is the one AI route that is not per-report** (Phase 7
+stage 1). It reads the official report's fields out of a free-form account —
+the officer's own words — because `reports.incident_type` is `NOT NULL` and
+checked against the station's allowlist, and the generation prompt is
+**type-scoped**: until the type is known, no report can be created and no
+narrative generated for it. So the order is classify → create the draft →
+generate, and nothing is written by the reading itself. Three things an agent
+must not "simplify" away: the type is validated against
+`ReportsController::allowedTypes()` (the same list the create enforces, so the
+answer can never name a type the create would reject); every field is required
+and every field may be **empty**, an empty field being the honest answer "your
+account does not state this"; and the account reaches the model **unmasked** — the
+one question of the stage that was left open, and it is now SETTLED BY DECISION:
+the account goes as typed, and the residual-risk scan's findings are *reported*
+to the officer on the receipt line rather than the text being masked. §4's
+invariant (names never reach the provider) is knowingly not kept here, because
+the mask it depends on is built from a report's structured values — the very
+thing that does not exist yet, since the point of this call is to establish
+them. The alternative was recorded and is still available: mask by the same
+name-like heuristic the scanner uses, keep the placeholders in an in-request
+map, unmask every returned string through it, and run the leak gate as the
+narrative path does. It is also the only call with no `ai_requests` row and no
+cache entry, because both are keyed by a report id that does not exist yet.
+
+**The read is TWO CALLS, and they are ordered by what each one can know.** The
+first establishes *what the incident is*; only then does that kind's own field
+list exist — the vehicles and their plates, the items taken, the injuries, the
+entry point. `POST /ai/classify/details` is that second half, and it exists
+because the field lists are per-type: one prompt carrying all fourteen types'
+fields on every call would be the first call's answer repeated back at it. Its
+field list is assembled **on the server** from `ReportRules::scalarKeysFor()`
+and `ReportRules::groupsFor()` — never from the request — and the caller
+supplies only the type, after the same allowlist check the first call makes.
+One guard it adds: a type whose field list the app does not know is REFUSED
+(422), which is the legacy Phase 1/2 spellings (`Vehicular Accident`,
+`Physical Injury`, …). The create still accepts those names, so a client can
+reach one by correcting an old report's type; the reading has no form to be
+scoped to there, and guessing one would be inventing the report.
 
 Contract points an agent must preserve:
 
-- The panel renders **only when `reportId` exists and `canEdit`** — so on a
-  brand-new report there is no AI until the first save/autosave. That is by
-  design, not a bug.
+- **The type-scoped read must not be dropped, and must not replace the first
+  one.** They are two halves of one press (Generate in the Sheet format) and
+  both are merged by `src/lib/classifyFill.js` under the same blanks-only rule.
+  The second call cannot run before the first: until a type is known there is
+  nothing to scope it to, and it is skipped (not failed) when the first read
+  and the officer's own typing both leave the type empty — the panel's message
+  then names the type, and the officer picks it and presses again.
+- **Its groups REPLACE, the first read's groups APPEND.** `buildTypeDetailsFill`
+  returns each group's complete row list (the officer's own rows already merged
+  in by the lib), so `applyTypeDetailsFill` assigns it; `mergeClassifiedGroups`
+  appends, because the first read's rows are newcomers. Appending the second
+  read's list would duplicate the officer's own vehicle on every press.
+- **The type-scoped prompt carries two rules that must not be trimmed.**
+  `resources/ai/classification_details_prompt.txt` says (a) a thing the account
+  DESCRIBES is a thing it named — "a sling bag containing her phone, wallet and
+  IDs" is four rows, not an empty group — and (b) a fact given in prose is not
+  `unstated`. Without them a live model answered `stolen_items: []` and reported
+  the contents as "unstated" while the account plainly listed them, which is the
+  failure that looks exactly like a broken read from the outside. It also means
+  the prompt is only as good as its examples: a phrase an officer would actually
+  type belongs in one.
+- **Everything the type-scoped read is told comes from the app, never from the
+  request**: the field list (`ReportRules::scalarKeysFor` / `groupsFor`), the
+  controlled vocabularies (`SELECT_OPTIONS` for the incident's own fields and
+  `GROUP_SELECT_OPTIONS` for the fields inside a group's rows — both sent as an
+  instruction block AND pinned as a response-schema `enum`, at both levels), the
+  fields the report cannot be filed
+  without (`TYPE_RULES`, mirrors removed) and the ones a conditional turns on
+  (`TYPE_CONDITIONAL`, both ends scoped to the type's own scalars). Each block is
+  omitted when empty — an empty list would read as "no value is allowed" /
+  "nothing is required". The three reasons are all live findings: a read guessed
+  `cctv_available = "Unconfirmed"` for a form whose only options are
+  Yes/No/Unknown (dropped by the client's allowlist, taking `cctv_description`
+  with it); it filled "How property was taken" on one press and skipped the same
+  field on the next for the same account at temperature 0, which is why the
+  required fields are named as such — a required field that comes and goes is one
+  an officer cannot file around; and answering a conditional's controller without
+  its dependant produces the same blocked Submit from the other direction. The
+  row-level vocabulary was found by pushing a live answer through the CLIENT
+  merge: `injury_status` came back as the account's prose and `suspect_status` as
+  "At large", and `src/lib/classifyFill.js`'s own allowlist dropped both — the
+  server could not tell, because the drop happens client-side. A row field with
+  no support in the account is left OUT of the row, never given the closest
+  value (a reading once answered the suspect's injury status "Uninjured" for an
+  account that says nothing about it).
+- **Every free-text key of that response schema is `required` and may be EMPTY**
+  — the rule `classificationSchema()` has always followed, and the one this
+  schema was missing. "Optional" does not mean "optional to decide": with the
+  keys optional a live read OMITTED "How property was taken" for an account that
+  says the bag was grabbed from behind, on one press and not the next, at
+  temperature 0. Required-but-empty-capable makes the model decide and SAY the
+  empty answer. A key with a controlled vocabulary (an `enum`) is the ONE
+  exception and cannot be otherwise: an enum has no "unanswered" member — Gemini
+  rejects an empty enum value with HTTP 400 (`enum[3]: cannot be empty`), and
+  every call failed until that was undone — so such a key is optional and its
+  absence IS the empty answer. Nothing carries `minLength`/`minItems`; a required
+  key must never force a value. Re-verify any change here against the live API,
+  because a schema the API refuses breaks the whole second read silently.
+- **A failed SECOND read says so.** The two calls fail independently, and the
+  first one succeeding is what makes the second's silence ambiguous — an empty
+  Vehicle/Item block reads as "the model found nothing" when it may mean "the
+  call never answered". `readAccountForForm` reports `detailsFailed` and the
+  panel's receipt line names it. Do not quiet that line to keep the receipt
+  short.
+- **A read that changed anything drops the previous verdict.** The account read
+  runs before the Sheet's gate (which no longer runs at Generate at all), so the
+  "the report has N problems" banner and the per-field errors can be left over
+  from an earlier Submit — reached *before* the fields the read just filled
+  existed. `readAccountForForm` clears them (`setError`/`setErrors`/
+  `setGroupErrors`/`setRuleWarnings`) when, and only when, the merge wrote
+  something; Submit re-runs every rule, so nothing is excused. A red "Incident
+  type is required." under a field the read just filled is the one thing that
+  makes the fill look like it never happened.
+- The panel renders whenever **`canEdit`** — including on a report that has
+  never been saved. It **used to** require `reportId` too, which made the
+  writing assistant absent on exactly the screen where an officer starts
+  writing (and absent for good on the Sheet format's blank page, where Save
+  Draft sits under a full sheet of paper). The id is now resolved per request
+  through the `ensureReportId` prop: the editor saves the draft with
+  `writeDraft()` (the autosave's own write, so an autosave cannot race it into
+  creating a second report) and returns the id the server assigned, or null
+  when the draft is not yet savable — in which case the panel states why and
+  sends nothing. `writeDraft` needs an incident type, which is why that is the
+  field the panel's message names alongside date and place.
+- The panel's home in the Sheet format is the desk **below** the paper
+  (with the reveal control, the officer's dictionary and the action row — see
+  `Reports.jsx`). It sat above the paper for a while to keep the assistant in
+  view while writing; that was reverted, because on the blank page — the state
+  the format opens in — it put the assistant ahead of the page the format exists
+  to write on. One instance in each of the sheet's two states. The
+  approved-terminology lookup that used to open the panel is gone: the editor's
+  own dictionary is the fuller of the two, and one copy of the terms is enough.
 - The live form values (`action_taken`, `notable_findings`) are sent with the
   request because autosave can be 30 s behind; the server prefers them.
 - Free text reaches the model **masked** via `MaskingGateway` and only through
   the payload's `officer_notes`. Never re-add a raw `notes` provider path.
+- **The account is the notes box when the officer used it, and otherwise the
+  form's own narrative text** — read once in `AiNarrativePanel.generate()` and
+  used for BOTH the account read and the generation request, so the two can
+  never work on different text. On the Sheet that second case is the normal one:
+  the officer types the whole account onto the page and never opens the notes
+  box. An account with nothing in it is refused before any request, because a
+  model asked for a narrative with no text in it invents one.
+- **The Sheet's Generate is NOT gated** (`onBeforeGenerate` is handed over only
+  in the stepped and document formats). The account on the page IS the source,
+  the read has just filled the fields the gate would have named, and an officer
+  writing one page should not be stopped short of the AI by the form's own
+  blanks — the "the report has N problems" banner belongs to Submit, which
+  still runs every rule it ever did. Do not "restore" the gate here without
+  reading `Reports.readAccountForForm`: it is the read that makes the report
+  creatable at all, and a Generate press that silently does nothing (no id, no
+  type) is the failure this ordering exists to prevent.
+- The account read runs on **Generate, in the Sheet format only**
+  (`Reports.readAccountForForm`, handed to the panel as `onReadAccount`): it
+  fills the report's own fields out of the account BEFORE the save and before
+  the narrative draft, because a report is created with a type, a date and a
+  place and none of the three exists on a blank sheet. It therefore runs before
+  the completeness gate — gating first would refuse the press that makes the
+  report completable. It is **two calls** (the account, then the type's own
+  fields — see below). It changes **blanks only**: `src/lib/classifyFill.js` is
+  the whole of what it may touch, in both halves (`buildClassifyFill` for the
+  account, `buildTypeDetailsFill` for the type-scoped answer; a filled field is
+  never overwritten, even when the read disagrees, and a type outside the form's
+  dropdown is dropped rather than written), and every value goes through the
+  form's own setters or `applyTypeDetailsFill`, so it is an ordinary edit to the
+  draft — dirty flag, autosave and history  included. It never throws, and a failed read does not stop the press. The
+  fill is silent; the receipt line is not, and it must keep reporting what was
+  filled, what the account does not state, and any name the read could not
+  protect — plus two things that are not the model's: that the TYPE's own fields
+  could not be read this time (the two calls fail independently, and silence in
+  an empty Vehicle/Item block otherwise reads as "the model found nothing"), and
+  which of the type's REQUIRED fields the report still has to carry, which is
+  asked of the rule engine (`validateReport`, filtered to `type_specific.*`) and
+  never of the model. That last line is a report, not a gate: it names what
+  Submit will say, so an officer answers the field instead of pressing Generate
+  again hoping the AI changes its mind.
+- The **notes source is English, always** — there is no `notes_language`
+  request field and no picker for it. The value used to be declared by the
+  officer and nothing could check it, so a stale one silently turned a
+  request into a grammar fix of native text *and* walked past both translation
+  guards, which key off the source language. A native account goes in through
+  the narrative path, whose language is the report's own stored value rather
+  than a claim. Do not reintroduce the field or a dropdown for it; if notes
+  must carry a language again, it has to come from **detection** of the text
+  (`detectNarrativeLanguage`) or from a value the server can establish.
 - Response budget: `503` with `retry_in` is transparently retried up to 3
   times; persistent failure or `manual_mode` flips the panel to a manual-mode
   banner and hides Generate. `GET /ai/health` decides the initial mode, and
@@ -580,6 +777,9 @@ DELETE /reports/:id                          archive (soft)
 GET    /reports/:id/history                  change list + JSON snapshots
 POST   /reports/:id/narrative/generate       AI draft
 POST   /reports/:id/narrative/tighten        economy pass over the officer's text
+POST   /ai/classify                          read the report's fields out of an
+                                             account (not per-report; sheet
+                                             format, on Generate)
 GET    /ai/health                            is the AI configured?
 ```
 

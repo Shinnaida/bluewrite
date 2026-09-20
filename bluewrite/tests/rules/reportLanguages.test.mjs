@@ -35,6 +35,7 @@ import {
   printLanguageLine,
   suggestedLanguage,
   languageHint,
+  detectNarrativeLanguage,
 } from '../../src/lib/reportLanguages.js';
 
 // Phase 6 Stage 5 (Track A) — the language SET now comes from the registry, so
@@ -321,4 +322,82 @@ test('language-independent rules still work in every language', () => {
     );
     assert.ok(result, `${code}: validation must return a result`);
   }
+});
+
+// ---- 3. automatic detection (the language is read, not declared) ------------
+//
+// The rules these tests pin are the ones that decide which way a wrong answer
+// falls, so they are written as PROPERTIES rather than as a table of sentences:
+// the fixtures below are examples of each, not the specification.
+
+test('detection names each language from text alone', () => {
+  assert.equal(detectNarrativeLanguage(BISAYA), 'ceb');
+  assert.equal(detectNarrativeLanguage(TAGALOG), 'tl');
+  assert.equal(
+    detectNarrativeLanguage('The suspect left the scene at around 9:00 PM. He was driving a red car.'),
+    'en',
+  );
+  // Both native languages, in comparable measure: 'mixed' is what the registry
+  // already carries for exactly this narrative, and it is the verdict that
+  // turns the bilingual terminology table off rather than picking wrong.
+  assert.equal(
+    detectNarrativeLanguage('Gidakop ang suspek ug dumating ang mga pulis.'),
+    'mixed',
+  );
+});
+
+test('every ambiguity resolves to English', () => {
+  // The verdict that changes nothing: no language note on the sheet, no
+  // warning at finalize, no terminology table switched on, no refusal of the
+  // English AI tools. Under three words there is nothing to read.
+  for (const text of ['', '   ', 'Wala mi nag-away.', null, undefined, 42]) {
+    assert.equal(detectNarrativeLanguage(text), 'en', JSON.stringify(text));
+  }
+  // ONE native word inside an English narrative is a loanword, not a language.
+  const borrowedNoun =
+    'The suspect was brought to the presinto and booked at 9:00 PM by the duty officer.';
+  assert.equal(detectNarrativeLanguage(borrowedNoun), 'en');
+});
+
+test('shared function words alone never name Tagalog', () => {
+  // ang, sa, mga, si, ni, na, pa, ka, ko and wala belong to both languages, so a
+  // narrative made of them is text the two cannot be told apart by. It falls to
+  // the station's own language rather than to a wrong pick — the tie-break is a
+  // documented decision, not an oversight.
+  const shared = 'Ang mga tawo sa barangay ni Kapitan ang unang miabot sa ospital.';
+  assert.equal(detectNarrativeLanguage(shared), 'ceb');
+});
+
+test('English loanwords do not turn a Bisaya narrative into a mix', () => {
+  // The station writes Bisaya with English nouns in it (police station, report,
+  // hospital). Only FUNCTION words count as English evidence, so the loanwords
+  // cannot make the report 'mixed' — which would cost it its terminology table.
+  const bisayaWithLoans =
+    'Nag-report ang biktima sa police station ug miingon nga gidakop ang suspek kagabii.';
+  assert.equal(detectNarrativeLanguage(bisayaWithLoans), 'ceb');
+  // ...and a narrative that really does change language mid-report is a mix,
+  // whether the switch is between the two native languages or into English.
+  const switchedToEnglish =
+    'Gipusil ang biktima gahapon sa gabii. He was brought to the hospital and the police responded.';
+  assert.equal(detectNarrativeLanguage(switchedToEnglish), 'mixed');
+  const nativeClauseInEnglish = 'The suspect fled on foot after the incident. Nahuli siya.';
+  assert.equal(detectNarrativeLanguage(nativeClauseInEnglish), 'mixed');
+});
+
+test('a verdict is always a code the server will accept', () => {
+  // The API REJECTS an unknown code with a 422 rather than coercing it, so a
+  // detection that named a language the registry does not carry would block the
+  // officer from saving. Every verdict here has to be one of the shipped codes.
+  const sentences = [
+    BISAYA, TAGALOG, MIXED, '', 'hello there', 'Gidakop ang suspek ug dumating ang mga pulis.',
+    'the quick brown fox', 'Wala mi nag-away ug wala mi nahibalo.',
+  ];
+  for (const text of sentences) {
+    assert.ok(isKnownLanguage(detectNarrativeLanguage(text)), `${JSON.stringify(text)} → unknown code`);
+  }
+  // And the four verdicts are the ones the UI has words for.
+  assert.deepEqual(
+    new Set(sentences.map(detectNarrativeLanguage)),
+    new Set(['en', 'ceb', 'tl', 'mixed']),
+  );
 });

@@ -504,6 +504,13 @@ export const WITNESS_ITEM_FIELDS = [
 //                  recordable when they are UNIDENTIFIED (description, no name)
 //                  without letting an empty suspect row through.
 //
+// A WITNESS is the second use of requireAny, and for the same reason a suspect
+// uses it: the report must be able to record a witness the complainant cannot
+// name. "My neighbour saw him run" is a fact the record needs even when the
+// neighbour's name is not known yet — so a witness row carries a name OR what
+// they said. What it may not carry is neither: a row with only a contact number
+// says nothing about who or what.
+//
 // Vehicles are deliberately absent: `plate_number` + `driver_name` are enforced
 // by the vehicle_completeness cross-check in reportRules.js, which knows to
 // leave a fully blank row alone. Mirrored in ReportRules::groupRowRules() in
@@ -511,7 +518,7 @@ export const WITNESS_ITEM_FIELDS = [
 export const GROUP_ROW_RULES = {
   complainant: { require: ['name'] },
   respondent: { requireAny: [['name', 'suspect_description']] },
-  witness: { require: ['name'] },
+  witness: { requireAny: [['name', 'statement_summary']] },
   injured_persons: { require: ['name'] },
   arrested_persons: { require: ['name'] },
   person_last_seen_with: { require: ['name'] },

@@ -1175,33 +1175,119 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 .picker-field { cursor: pointer; }
 
 /* ---- Phase 3: AI narrative — slide-in side panel ---- */
-.ai-panel { margin-bottom: 0.25rem; margin-top: 0.9rem; position: relative; }
-.ai-generate-row {
+.ai-panel { margin-bottom: 0.25rem; margin-top: 0.5rem; position: relative; }
+
+/* ONE toolbar row, not two stacked pairs.
+
+   Generate and Tighten are the two things an officer can ask the AI for, and
+   each of them used to cost the panel a button PLUS a hint paragraph under it.
+   The paragraphs are on the ⓘ marker now (see .ai-hint), so the row that is
+   left is what the officer actually reads: a control, and the control beside
+   it. In the sheet format this panel sits on the desk under the page, where
+   every line it takes is a line of the report pushed off the screen. */
+.ai-toolbar {
   display: flex;
-  gap: 0.6rem;
   align-items: center;
+  gap: 0.45rem;
   flex-wrap: wrap;
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.45rem;
 }
-.ai-notes { flex: 1; min-width: 16rem; }
+
+/* Generate wears the app's own primary fill (`button.primary`) at the size this
+   row needs. It is NOT the sidebar's "New report" button (.side-new) any more:
+   that one carries the sidebar's own margins — 0.85rem above it and 1rem either
+   side — which inside a panel row are a gap and a stray indent. */
+.ai-run {
+  margin: 0;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.82rem;
+}
+
+/* The ⓘ explanation marker: one circle, a tooltip, and the same sentence as the
+   accessible name — so the words are still there for a screen reader and for a
+   pointer, and there for a keyboard because the marker takes focus. */
+.ai-hint {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 50%;
+  color: var(--steel);
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+  cursor: help;
+}
+.ai-hint:hover,
+.ai-hint:focus-visible {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  outline: none;
+}
+
+.ai-notes { flex: 1 1 14rem; min-width: 10rem; font-size: 0.85rem; }
 
 /* Phase 6 Stage 3 — the notes box is a textarea (native accounts are longer
-   than one line invites), with a declared notes-language selector beside it. */
+   than one line invites). The declared notes-language selector that used to sit
+   beside it is gone: notes are read as English (see NOTES_ARE_ENGLISH in
+   AiNarrativePanel), so there is no language left to pick. */
 .ai-notes-row {
   display: flex;
-  gap: 0.6rem;
-  align-items: flex-start;
+  gap: 0.45rem;
+  align-items: center;
   flex-wrap: wrap;
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.25rem;
 }
-.ai-notes-lang {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.78rem;
-  color: var(--muted, #6b7280);
+
+/* In the selector's place, the one sentence that keeps the multilingual path
+   findable: where to put an account written in Bisaya or Tagalog instead. */
+.ai-notes-note {
+  margin: 0 0 0.5rem;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--steel);
+  opacity: 0.85;
 }
-.ai-notes-lang select { min-width: 9rem; }
+
+/* Phase 7 — the receipt for the account read (see Reports.readAccountForForm).
+   The fill itself is silent; this is the one line that says what it changed, so
+   an officer is never left wondering why the form suddenly has a type and a
+   place in it. Quiet by design — it reports, it does not ask. */
+.ai-fill-note {
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0.55rem;
+  border-left: 2px solid var(--cyan);
+  background: var(--cyan-bg, rgba(31, 95, 208, 0.06));
+  border-radius: 0 3px 3px 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--paper);
+}
+.ai-fill-note--failed {
+  border-left-color: var(--amber);
+  background: var(--amber-bg);
+  color: var(--steel);
+}
+.ai-fill-unstated {
+  color: var(--steel);
+}
+/* The names the read could not protect are the one part of this line that is
+   not housekeeping: they are the system telling on itself, in the amber the app
+   uses for "look at this", and never silently swallowed. */
+.ai-fill-risk {
+  color: var(--red-text, var(--red));
+  font-weight: 600;
+}
+/* The type's own fields the report still has to carry. Weighted like the risk
+   line (this one will block Submit) but not red: nothing has gone wrong — the
+   read simply did not, and could not, answer it. */
+.ai-fill-needed {
+  color: var(--amber-text, var(--amber));
+  font-weight: 600;
+}
 
 /* D3 — exactly one source per Apply. The choice is explicit and the ignored
    side is named, so a native narrative and native notes are never merged. */
@@ -1240,17 +1326,11 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 
 /* Phase 5 — "Tighten my draft": runs the economy rules over the narrative the
    OFFICER wrote (Generate works from the notes field instead). A peer of
-   Generate rather than a competitor, so it is styled as a secondary action
-   with its own one-line explanation instead of a second primary button. */
-.ai-tighten-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.6rem;
-}
+   Generate rather than a competitor, so it is styled as a secondary action —
+   and the two now share ONE row (.ai-toolbar above) instead of one each. */
 .ai-tighten {
-  padding: 0.45rem 0.8rem;
+  margin: 0;
+  padding: 0.4rem 0.8rem;
   border: 1px solid var(--line-bright);
   border-radius: 3px;
   background: transparent;
@@ -1265,11 +1345,6 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 .ai-tighten:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-.ai-tighten-row .field-hint {
-  flex: 1;
-  min-width: 14rem;
-  margin: 0;
 }
 .ai-tighten-result { margin-bottom: 0.7rem; }
 .ai-tighten-result .field-hint { margin: 0 0 0.5rem; }
@@ -1296,7 +1371,6 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 }
 .ai-guided-start:hover:not(:disabled) { background: var(--cyan); color: var(--ink, #0b1220); }
 .ai-guided-start:disabled { opacity: 0.5; cursor: not-allowed; }
-.ai-guided-row .field-hint { flex: 1; min-width: 14rem; margin: 0; }
 
 /* The step the officer is on, shown while a decision is theirs. */
 .ai-guided-banner {
@@ -2903,12 +2977,27 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 }
 .ai-undo:hover { color: var(--paper); }
 .ai-undo:focus-visible { outline: 1px solid var(--cyan); outline-offset: 2px; }
+/* What the draft will be written against — the officer's own Action Taken text
+   and Notable Findings. Both used to be full paragraphs of quoted field text;
+   they are one clamped line each now (the full text rides on the tooltip), so
+   the context is still on screen and the panel does not grow a page of it. */
+.ai-context {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-top: 0.1rem;
+}
 .ai-reference {
-  margin: 0 0 0.6rem;
-  font-size: 0.78rem;
-  line-height: 1.45;
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
   color: var(--steel);
   opacity: 0.85;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .ai-reference em { color: var(--cyan); font-style: italic; }
 

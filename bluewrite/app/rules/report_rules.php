@@ -135,6 +135,201 @@ final class ReportRules
      *
      * @var array<string, array<string, array{0:string,1:string[]}>>
      */
+    /**
+     * EVERY scalar field each incident type carries — the keys of TYPE_FIELDS in
+     * src/lib/incidentTypes.js that are NOT derived from a group.
+     *
+     * This is the ONE table here that is not a rule: TYPE_RULES holds what must
+     * be answered, this holds everything that MAY be, because Phase 7's
+     * type-scoped read has to offer the model the whole field list of the type
+     * it is reading for (see NarrativeController::classifyDetails). The two
+     * lists are the same shape on purpose — a key is a key wherever it is
+     * spelled — and the client validates the answer against the same list, so a
+     * key that is not here cannot reach the form.
+     *
+     * Keys only, no labels: the label the model sees is humanise()d from the
+     * key, exactly as the validation messages are, so this table cannot drift
+     * from TYPE_FIELDS' spellings without the label drifting too.
+     *
+     * A group-derived scalar (`mirrorOf`) is deliberately ABSENT: the row is the
+     * record, and the read fills the row (see applyMirrors, and syncMirrors on
+     * the client). scalarKeysFor() enforces that rather than trusting the list.
+     *
+     * @var array<string, string[]>
+     */
+    private const TYPE_FIELD_KEYS = [
+        'Theft' => ['location_of_property', 'how_property_was_taken', 'cctv_available', 'cctv_description', 'recovery_status'],
+        'Robbery' => ['method_used', 'weapon_involved', 'weapon_description', 'direction_of_escape', 'vehicle_used', 'vehicle_description', 'cctv_available'],
+        'Assault / Physical Injury' => ['relationship_between_parties', 'type_of_injury', 'body_part_injured', 'cause_of_injury', 'weapon_used', 'medical_treatment', 'medical_facility', 'medical_certificate_available'],
+        'Traffic Accident' => ['accident_type', 'weather_condition', 'road_condition', 'suspected_cause', 'traffic_violation', 'insurance_information'],
+        'Rape / Sexual Assault' => ['relationship_to_victim', 'incident_location', 'reported_injury', 'medical_examination', 'medical_facility', 'supporting_evidence'],
+        'Domestic Violence' => ['relationship_between_parties', 'type_of_abuse', 'threats_made', 'physical_injury', 'property_damage', 'children_involved', 'medical_treatment', 'protection_order_information'],
+        'Missing Person' => ['date_last_seen', 'time_last_seen', 'location_last_seen', 'destination_if_known', 'medical_or_special_condition', 'belongings_carried', 'recent_photo_available', 'possible_location', 'search_actions_taken'],
+        'Lost Property' => ['property_type', 'identifying_marks', 'date_last_seen', 'time_last_seen', 'location_last_seen', 'circumstances_of_loss', 'finder_information', 'supporting_documents'],
+        'Fraud / Estafa' => ['transaction_type', 'transaction_date', 'transaction_method', 'amount_involved', 'promised_service_or_item', 'payment_method', 'account_or_reference_number', 'communication_method', 'communication_evidence', 'proof_of_payment'],
+        'Property Damage / Malicious Mischief' => ['damaged_property', 'property_description', 'type_of_damage', 'cause_of_damage', 'estimated_damage_cost', 'weapon_or_tool_used', 'cctv_available', 'photographs_available'],
+        'Fire Incident' => ['type_of_property', 'property_description', 'fire_location', 'estimated_time_started', 'estimated_time_reported', 'possible_cause', 'extent_of_damage', 'estimated_property_loss', 'persons_evacuated', 'fire_department_response'],
+        'Drug-Related Incident' => ['incident_classification', 'location_found', 'items_seized', 'quantity', 'packaging_description', 'evidence_found', 'operation_type', 'evidence_turnover'],
+        'Burglary / Break-In' => ['establishment_or_residence', 'entry_point', 'signs_of_forced_entry', 'tools_used', 'cctv_available', 'cctv_description', 'recovered_property'],
+        'Other Incident' => ['incident_category', 'persons_involved', 'property_involved', 'injuries_or_damage', 'suspect_information', 'additional_information'],
+    ];
+
+    /**
+     * The SCALAR fields that take one of a fixed set of values, and what those
+     * values are. Mirrors the `select:` option lists on TYPE_FIELDS in
+     * src/lib/incidentTypes.js — keep the two in lockstep by review.
+     *
+     * WHY THE SERVER HOLDS IT. Phase 7's type-scoped read has to offer the model
+     * the type's whole field list, and a field with a controlled vocabulary is
+     * only answerable if the model is told what the vocabulary IS. Without this
+     * table a live read answered `cctv_available` with "Unconfirmed" for an
+     * account that mentioned a CCTV pole — a true reading that no option could
+     * hold, so the client's own allowlist dropped it and the officer's CCTV
+     * evidence vanished with nothing said. With it, the allowed values reach the
+     * model in the instruction AND are pinned in the response schema as an
+     * enum, so a synonym cannot come back at all.
+     *
+     * KEYED BY FIELD KEY, not by type, because a key means the same thing in
+     * every type that carries it (`cctv_available` in four of them). A field
+     * whose options differ by CONTEXT rather than by type — `sex` on a person
+     * row is Male/Female/Unknown while Missing Person's `sex` scalar is
+     * Male/Female — is not listed here: this table is consulted for a type's
+     * SCALAR keys only (see selectOptionsFor), and that scalar is a mirror
+     * derived from the missing-person row rather than asked for.
+     *
+     * @var array<string, string[]>
+     */
+    private const SELECT_OPTIONS = [
+        'cctv_available' => ['Yes', 'No', 'Unknown'],
+        'photographs_available' => ['Yes', 'No'],
+        'recent_photo_available' => ['Yes', 'No'],
+        'signs_of_forced_entry' => ['Yes', 'No', 'Unclear'],
+        'weapon_involved' => ['Yes', 'No'],
+        'children_involved' => ['Yes', 'No'],
+        'medical_certificate_available' => ['Yes', 'No', 'Pending'],
+        'medical_examination' => ['Conducted', 'Pending', 'Declined'],
+    ];
+
+    /**
+     * The GROUP ROW fields that take one of a fixed set of values, and what
+     * those values are. Mirrors the `select:` option lists on the item schemas in
+     * src/lib/incidentTypes.js — keep the two in lockstep by review.
+     *
+     * The same need as SELECT_OPTIONS, one level down, and found the same way: a
+     * live read of a rape report answered a victim row's `injury_status` with the
+     * prose description ("bruises on her left arm and a scratch on her neck") and
+     * a suspect row's `suspect_status` with "At large" — neither is a value the
+     * row accepts, so the client's own allowlist dropped both and the officer was
+     * shown rows that were silently missing what the account had said. The coded
+     * answer the account supports is "Minor Injury" and "Unidentified"; told the
+     * vocabulary, that is what a reading answers.
+     *
+     * KEYED BY FIELD KEY, and unlike SELECT_OPTIONS these lists are the same ones
+     * in EVERY group and type that carries the key (checked across all of them),
+     * which is why one table serves all groups.
+     *
+     * @var array<string, string[]>
+     */
+    private const GROUP_SELECT_OPTIONS = [
+        'sex' => ['Male', 'Female', 'Unknown'],
+        'injury_status' => ['Uninjured', 'Minor Injury', 'Serious Injury', 'Deceased'],
+        'victim_type' => ['Individual', 'Organization'],
+        'suspect_status' => ['Unidentified', 'Identified'],
+    ];
+
+    /**
+     * The vocabularies inside the type's groups' rows: groupKey => fieldKey =>
+     * values, for the item fields that have one. A group whose rows are free text
+     * throughout (Witnesses, Stolen Items, Vehicles) is absent rather than sent
+     * empty, so the caller can omit the block entirely.
+     *
+     * @return array<string, array<string, string[]>>
+     */
+    public static function groupSelectOptionsFor(string $incidentType): array
+    {
+        $out = [];
+        foreach (self::groupsFor($incidentType) ?? [] as $groupKey => $cfg) {
+            $vocabulary = [];
+            foreach (array_keys((array) ($cfg['fields'] ?? [])) as $fieldKey) {
+                if (isset(self::GROUP_SELECT_OPTIONS[$fieldKey])) {
+                    $vocabulary[$fieldKey] = self::GROUP_SELECT_OPTIONS[$fieldKey];
+                }
+            }
+            if ($vocabulary !== []) {
+                $out[$groupKey] = $vocabulary;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * The type's OWN scalar fields the report cannot be filed without — what a
+     * caller has to record before the incident kind means anything.
+     *
+     * MIRRORS ARE REMOVED, the same way scalarKeysFor removes them, and for the
+     * same reason: a mirrored scalar (Theft's Item, which is stolen_items[0]
+     * seen flat) is DERIVED from a group row, so the form fills it and asking
+     * the model for it would put a value in the field the row it mirrors does
+     * not hold. What is left is the set a reading should be told to find
+     * specifically — a live read filled "How property was taken" on one press
+     * and skipped it on the next for the same account, and a required field that
+     * silently comes and goes is the field an officer cannot file around.
+     *
+     * @return string[]
+     */
+    public static function requiredScalarKeysFor(string $incidentType): array
+    {
+        $own = self::scalarKeysFor($incidentType);
+        return array_values(array_intersect(self::TYPE_RULES[$incidentType] ?? [], $own));
+    }
+
+    /**
+     * The type's scalar fields that are required only once ANOTHER field takes
+     * one of a set of values — `cctv_description` once CCTV is "Yes",
+     * `weapon_description` once a weapon is involved. Shaped as
+     * field => [controller => values], both ends restricted to fields the
+     * reading is actually asked about (a controller that is itself a mirror is
+     * not answerable by this read, so its dependants are not its business).
+     *
+     * Sent to the model so a conditional cannot be left behind by the answer
+     * that switches it on: answering CCTV "Yes" makes CCTV Details required, and
+     * a reading that answers the one and not the other hands the officer the
+     * same blocked Submit from the other direction.
+     *
+     * @return array<string, array<string, string[]>>
+     */
+    public static function conditionalScalarKeysFor(string $incidentType): array
+    {
+        $own = self::scalarKeysFor($incidentType);
+        $out = [];
+        foreach (self::TYPE_CONDITIONAL[$incidentType] ?? [] as $field => $when) {
+            [$controller, $values] = [$when[0], $when[1]];
+            if (!in_array($field, $own, true) || !in_array($controller, $own, true)) {
+                continue;
+            }
+            $out[$field] = [$controller => array_values($values)];
+        }
+        return $out;
+    }
+
+    /**
+     * The type's scalar fields that take one of a fixed set of values, mapped to
+     * the values they accept. Empty for a type with none, which is the ordinary
+     * case: most of these fields are free text.
+     *
+     * @return array<string, string[]>
+     */
+    public static function selectOptionsFor(string $incidentType): array
+    {
+        $out = [];
+        foreach (self::scalarKeysFor($incidentType) as $key) {
+            if (isset(self::SELECT_OPTIONS[$key])) {
+                $out[$key] = self::SELECT_OPTIONS[$key];
+            }
+        }
+        return $out;
+    }
+
     private const TYPE_CONDITIONAL = [
         'Theft' => ['cctv_description' => ['cctv_available', ['Yes']]],
         'Robbery' => ['weapon_description' => ['weapon_involved', ['Yes']]],
@@ -148,12 +343,15 @@ final class ReportRules
      * suspect with neither name nor description, is a placeholder.
      *
      * `requireAny` is how an UNIDENTIFIED suspect stays recordable: a
-     * description, no name.
+     * description, no name — and, since the same need applies, how a witness the
+     * complainant cannot name stays recordable: what they said, no name. A
+     * witness row must carry a name OR a statement summary; what it may not
+     * carry is neither.
      */
     private const GROUP_ROW_RULES = [
         'complainant' => ['require' => ['name'], 'requireAny' => []],
         'respondent' => ['require' => [], 'requireAny' => [['name', 'suspect_description']]],
-        'witness' => ['require' => ['name'], 'requireAny' => []],
+        'witness' => ['require' => [], 'requireAny' => [['name', 'statement_summary']]],
         'injured_persons' => ['require' => ['name'], 'requireAny' => []],
         'arrested_persons' => ['require' => ['name'], 'requireAny' => []],
         'person_last_seen_with' => ['require' => ['name'], 'requireAny' => []],
@@ -313,6 +511,23 @@ final class ReportRules
     private static function humanise(string $key): string
     {
         return ucfirst(str_replace('_', ' ', $key));
+    }
+
+    /**
+     * The scalar keys a type-scoped READ may offer the model: every scalar the
+     * type carries, minus the ones its groups derive.
+     *
+     * The subtraction is not decoration. A mirrored scalar is the row's content
+     * seen from the flat shape, and asking the model to fill it would put a
+     * value in type_specific that the row it mirrors does not hold — the exact
+     * disagreement applyMirrors()/syncMirrors() exist to prevent.
+     *
+     * @return string[]
+     */
+    public static function scalarKeysFor(string $incidentType): array
+    {
+        $mirrored = array_keys(self::MIRRORS[$incidentType] ?? []);
+        return array_values(array_diff(self::TYPE_FIELD_KEYS[$incidentType] ?? [], $mirrored));
     }
 
     /** @return array<string, mixed>|null group config for a type */

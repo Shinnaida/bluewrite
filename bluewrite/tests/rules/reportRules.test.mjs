@@ -721,6 +721,100 @@ test('a recorded row has to be a record: a name — or, for a suspect, a descrip
   );
 });
 
+test('a witness the complainant cannot name is a record if they said something', () => {
+  // The officer reports "a vendor saw him run" without a name to file it under.
+  // The statement is the fact the report needs, so the row is a record on it.
+  const withStatement = validBase('Theft', {
+    type_specific: {
+      ...theftFields,
+      complainant: [{ name: 'Ana Cruz' }],
+      witness: [{
+        statement_summary: 'A vendor at the corner said the suspect is known in the area but would not give a name.',
+      }],
+    },
+  });
+  assert.equal(
+    validateReport(withStatement, 'finalize').errors.length,
+    0,
+    JSON.stringify(validateReport(withStatement, 'finalize').errors),
+  );
+
+  // A contact number is neither who they are nor what they said: the row still
+  // says nothing, and the message names BOTH ways out rather than only the name.
+  const neither = validBase('Theft', {
+    type_specific: {
+      ...theftFields,
+      complainant: [{ name: 'Ana Cruz' }],
+      witness: [{ contact_number: '(0917) 555-0142' }],
+    },
+  });
+  assert.ok(
+    validateReport(neither, 'finalize').errors.some(
+      (e) => e.path === 'witness[0].name' && /Full Name or Statement Summary/.test(e.message),
+    ),
+    JSON.stringify(validateReport(neither, 'finalize').errors),
+  );
+});
+
+test('the controlled vocabularies on scalar fields are exactly these', () => {
+  // Mirrored in ReportRules::SELECT_OPTIONS (app/rules/report_rules.php), which
+  // is what Phase 7's type-scoped AI read is told the allowed values from. A
+  // change on one side has to be made on the other, and this list is the one a
+  // reviewer diffs against: a free-text field is absent, and so is any scalar
+  // that is a MIRROR of a group row — Missing Person's `sex` is the case in
+  // point, and it is the reason the PHP table lists no `sex` at all. (Its list
+  // differs by CONTEXT too: the scalar is Male/Female while a person ROW's sex,
+  // which lives in the item schemas rather than in TYPE_FIELDS, also accepts
+  // Unknown.)
+  const found = {};
+  for (const fields of Object.values(TYPE_FIELDS)) {
+    for (const fld of fields) {
+      if (!fld.select) continue;
+      (found[fld.key] ??= new Set()).add(fld.select.join('/'));
+    }
+  }
+  const actual = Object.fromEntries(
+    Object.entries(found).map(([key, lists]) => [key, [...lists].sort()]),
+  );
+  assert.deepEqual(actual, {
+    cctv_available: ['Yes/No/Unknown'],
+    weapon_involved: ['Yes/No'],
+    medical_certificate_available: ['Yes/No/Pending'],
+    medical_examination: ['Conducted/Pending/Declined'],
+    children_involved: ['Yes/No'],
+    sex: ['Male/Female'],
+    recent_photo_available: ['Yes/No'],
+    photographs_available: ['Yes/No'],
+    signs_of_forced_entry: ['Yes/No/Unclear'],
+  });
+});
+
+test('the controlled vocabularies on GROUP ROW fields are exactly these', () => {
+  // The row-level half of the test above, mirrored in
+  // ReportRules::GROUP_SELECT_OPTIONS (app/rules/report_rules.php). Told these
+  // values, a reading answers a victim row's injury as "Minor Injury"; not told
+  // them, a live read answered with the account's own prose ("bruises on her
+  // left arm and a scratch on her neck") and the client's allowlist dropped it.
+  const found = {};
+  for (const cfg of Object.values(GROUP_CONFIG)) {
+    for (const group of Object.values(cfg)) {
+      for (const fld of group.itemSchema) {
+        if (!fld.select) continue;
+        (found[fld.key] ??= new Set()).add(fld.select.join('/'));
+      }
+    }
+  }
+  const actual = Object.fromEntries(
+    Object.entries(found).map(([key, lists]) => [key, [...lists].sort()]),
+  );
+  assert.deepEqual(actual, {
+    sex: ['Male/Female/Unknown'],
+    injury_status: ['Uninjured/Minor Injury/Serious Injury/Deceased'],
+    victim_type: ['Individual/Organization'],
+    suspect_status: ['Unidentified/Identified'],
+  });
+});
+
 test('a stolen-item row has to say what was taken', () => {
   const draft = validBase('Theft', {
     type_specific: { ...theftFields, complainant: [{ name: 'Ana Cruz' }], stolen_items: [{ quantity: '2' }] },

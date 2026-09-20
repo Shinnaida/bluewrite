@@ -121,6 +121,24 @@ try {
         (new NarrativeController())->health();
     }
 
+    // Phase 7 — POST /ai/classify: read the report's fields out of the
+    // officer's free-form account. Deliberately NOT under /reports/:id — this
+    // is the call that decides which report to create, so it cannot take an
+    // id, and a report does not have to exist for the officer to use it.
+    if ($seg0 === 'ai' && $seg1 === 'classify' && !isset($parts[2]) && $method === 'POST') {
+        (new NarrativeController())->classify();
+    }
+
+    // Phase 7 — POST /ai/classify/details: the SECOND half of the same read,
+    // for the incident type's OWN fields. A separate route because the type is
+    // what the first call establishes — until it is known there are no
+    // type-specific fields to read against — and because two small prompts
+    // with two narrow answers are worth more than one prompt that has to carry
+    // all fourteen types' field lists on every call.
+    if ($seg0 === 'ai' && $seg1 === 'classify' && ($parts[2] ?? null) === 'details' && $method === 'POST') {
+        (new NarrativeController())->classifyDetails();
+    }
+
     if ($seg0 === 'dashboard' && $seg1 === 'stats' && $method === 'GET') {
         (new DashboardController())->stats();
     }

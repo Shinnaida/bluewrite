@@ -83,24 +83,7 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             throw new AiProviderException('Gemini returned a non-JSON response.');
         }
 
-        // Gemini 3 is a THINKING model: the candidate may contain thought
-        // parts (marked thought: true) alongside the answer part, and the
-        // answer itself may be split across several parts or fenced.
-        // Reading only parts[0] broke when the first part was a thought;
-        // joining ALL text parts broke when thought text preceded the JSON.
-        // Join only NON-THOUGHT text parts.
-        $parts = $decoded['candidates'][0]['content']['parts'] ?? [];
-        $text = '';
-        foreach (is_array($parts) ? $parts : [] as $p) {
-            if (!is_array($p) || !isset($p['text']) || !is_string($p['text'])) {
-                continue;
-            }
-            if (!empty($p['thought'])) {
-                continue; // model reasoning — never part of the answer
-            }
-            $text .= $p['text'];
-        }
-        $text = trim($text);
+        $text = self::answerText($decoded);
         if ($text === '') {
             // A safety block or an empty candidate both land here.
             $reason = $decoded['candidates'][0]['finishReason'] ?? 'unknown';
@@ -139,6 +122,705 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             self::normaliseGloss($parsed['sourceGloss'] ?? ''),
             self::normaliseWarnings($parsed['ambiguities'] ?? []),
         );
+    }
+
+    /**
+     * The roles a party may hold, mirroring the report's own role words.
+     * 'other' is the catch-all, and a role outside this list is stored as
+     * 'other' rather than passed through: the report's role field has its own
+     * vocabulary and an invented one would not survive it.
+     */
+    private const PARTY_ROLES = ['victim', 'suspect', 'respondent', 'witness', 'complainant', 'driver', 'owner', 'other'];
+
+    /**
+     * How many rows of one group a type-scoped read may return. A group longer
+     * than this is an answer to read by hand rather than to write into a form,
+     * and the cap is applied to the ANSWER rather than trusted from the prompt.
+     */
+    private const MAX_DETAIL_ROWS = 10;
+
+    /**
+     * Phase 7 — read the report's fields out of a free-form account.
+     *
+     * Not a second narrative prompt. This call is NOT type-scoped — the type is
+     * what it is trying to establish — and it shares nothing with the cached
+     * stable block, which carries the narrative register and the per-type
+     * vocabulary row that only make sense once a type is known. What it does
+     * share is the transport (post(), the non-thought part extraction, the
+     * tolerance for a fenced JSON answer) and the rule that governs both calls:
+     * a field the account does not state comes back empty.
+     *
+     * @param array<string,mixed> $options `types` and `today`
+     * @return array<string,mixed> the report's field names, all present
+     */
+    public function classify(string $account, array $options = []): array
+    {
+        if ($this->apiKey === '') {
+            throw new AiProviderException('Gemini API key is not configured.', retryable: false);
+        }
+
+        $types = self::normaliseTypes($options['types'] ?? []);
+        if ($types === []) {
+            // Without the list there is no enum to constrain the type to, and a
+            // free-text type would be rejected by POST /reports afterwards — so
+            // there is nothing to read the account against.
+            throw new AiProviderException(
+                'No incident types are configured for this station, so an account cannot be read against any.',
+                retryable: false,
+            );
+        }
+
+        $body = [
+            'contents' => [
+                ['role' => 'user', 'parts' => [['text' => $account]]],
+            ],
+            'systemInstruction' => [
+                'parts' => [[
+                    'text' => self::classificationInstruction(
+                        $types,
+                        (string) ($options['today'] ?? date('Y-m-d')),
+                    ),
+                ]],
+            ],
+            'generationConfig' => [
+                // Zero, not the narrative path's 0.2. This is a reading task
+                // with one defensible answer per field, and the field the officer
+                // cannot easily check — the incident type — is what selects the
+                // prompt's vocabulary, the fields and the print layout.
+                'temperature' => 0.0,
+                'maxOutputTokens' => $this->maxOutputTokens,
+                'responseMimeType' => 'application/json',
+                'responseSchema' => self::classificationSchema($types),
+            ],
+        ];
+        if ($this->thinkingLevel !== '') {
+            $body['generationConfig']['thinkingConfig'] = ['thinkingLevel' => $this->thinkingLevel];
+        }
+
+        $decoded = json_decode($this->post($body), true);
+        if (!is_array($decoded)) {
+            throw new AiProviderException('Gemini returned a non-JSON response.');
+        }
+
+        $text = self::answerText($decoded);
+        if ($text === '') {
+            $reason = $decoded['candidates'][0]['finishReason'] ?? 'unknown';
+            throw new AiProviderException("Gemini returned no classification text (finishReason: {$reason}).");
+        }
+
+        $parsed = self::parseNarrativeJson($text);
+        if (!is_array($parsed)) {
+            // Pre-unmask text, and on this call that is the officer's own
+            // words: the head is bounded for the same reason it is bounded on
+            // the narrative path.
+            $reason = $decoded['candidates'][0]['finishReason'] ?? 'unknown';
+            throw new AiProviderException(
+                "Gemini classification payload did not match the response schema (finishReason: {$reason}). Raw text head: "
+                . substr($text, 0, 200)
+            );
+        }
+
+        return self::normaliseClassification($parsed, $types);
+    }
+
+    /**
+     * Phase 7 — the type-scoped half of the account read: the incident type's
+     * OWN fields, now that the type is known.
+     *
+     * Same account, same rules, one level down: the vehicles and their plates,
+     * the items taken, the injuries, the entry point. It is a SECOND call
+     * because the first one is what establishes the type — until then there is
+     * no field list to read against — and the alternative (one prompt carrying
+     * all fourteen types' fields) would put every type's schema in front of the
+     * model on every call and make the answer's shape a union of all of them.
+     *
+     * Unlike classify(), the field list is NOT an input from the client: the
+     * scalar keys come from ReportRules::scalarKeysFor() and the groups from
+     * ReportRules::groupsFor(), both the app's own tables. A client chooses the
+     * TYPE (validated against the station's allowlist before this runs) and
+     * nothing else, so no officer-supplied string can reach this instruction as
+     * a field name.
+     *
+     * @param string $account the officer's text, as typed
+     * @param string $incidentType a canonical type (ReportRules knows its groups)
+     * @param array $fields the form to read against — `scalars`, `groups`,
+     *   `selects`, `required`, `conditional`; see the interface for each
+     * @return array{fields:array<string,string>, groups:array<string,array<int,array<string,string>>>, unstated:string[]}
+     */
+    public function classifyDetails(
+        string $account,
+        string $incidentType,
+        array $fields,
+        array $options = [],
+    ): array {
+        if ($this->apiKey === '') {
+            throw new AiProviderException('Gemini API key is not configured.', retryable: false);
+        }
+        $scalars = array_values((array) ($fields['scalars'] ?? []));
+        $groups = (array) ($fields['groups'] ?? []);
+        if ($scalars === [] && $groups === []) {
+            // Nothing to read against: the same refusal classify() makes when it
+            // has no type list, and for the same reason — an answer to a
+            // question that was never asked is worse than no answer.
+            throw new AiProviderException(
+                'This incident type has no fields a reading could fill.',
+                retryable: false,
+            );
+        }
+
+        $body = [
+            'contents' => [
+                ['role' => 'user', 'parts' => [['text' => $account]]],
+            ],
+            'systemInstruction' => [
+                'parts' => [[
+                    'text' => self::typeDetailsInstruction(
+                        $incidentType,
+                        $fields,
+                        (string) ($options['today'] ?? date('Y-m-d')),
+                    ),
+                ]],
+            ],
+            'generationConfig' => [
+                // Zero, like the first read: this is a reading task, and the
+                // safest answer about a field the account does not state is the
+                // empty one.
+                'temperature' => 0.0,
+                'maxOutputTokens' => $this->maxOutputTokens,
+                'responseMimeType' => 'application/json',
+                'responseSchema' => self::typeDetailsSchema(
+                    $scalars,
+                    $groups,
+                    (array) ($fields['selects'] ?? []),
+                ),
+            ],
+        ];
+        if ($this->thinkingLevel !== '') {
+            $body['generationConfig']['thinkingConfig'] = ['thinkingLevel' => $this->thinkingLevel];
+        }
+
+        $decoded = json_decode($this->post($body), true);
+        if (!is_array($decoded)) {
+            throw new AiProviderException('Gemini returned a non-JSON response.');
+        }
+
+        $text = self::answerText($decoded);
+        if ($text === '') {
+            $reason = $decoded['candidates'][0]['finishReason'] ?? 'unknown';
+            throw new AiProviderException("Gemini returned no details text (finishReason: {$reason}).");
+        }
+
+        $parsed = self::parseNarrativeJson($text);
+        if (!is_array($parsed)) {
+            $reason = $decoded['candidates'][0]['finishReason'] ?? 'unknown';
+            throw new AiProviderException(
+                "Gemini details payload did not match the response schema (finishReason: {$reason}). Raw text head: "
+                . substr($text, 0, 200)
+            );
+        }
+
+        return self::normaliseTypeDetails($parsed, $scalars, $groups);
+    }
+
+    /**
+     * The non-thought text of a candidate, joined.
+     *
+     * Gemini 3 is a THINKING model: the candidate may contain thought parts
+     * (marked thought: true) alongside the answer part, and the answer itself
+     * may be split across several parts or fenced. Reading only parts[0] broke
+     * when the first part was a thought; joining ALL text parts broke when
+     * thought text preceded the JSON. Join only NON-THOUGHT text parts.
+     *
+     * @param array<string,mixed> $decoded the raw generateContent response
+     */
+    private static function answerText(array $decoded): string
+    {
+        $parts = $decoded['candidates'][0]['content']['parts'] ?? [];
+        $text = '';
+        foreach (is_array($parts) ? $parts : [] as $p) {
+            if (!is_array($p) || !isset($p['text']) || !is_string($p['text'])) {
+                continue;
+            }
+            if (!empty($p['thought'])) {
+                continue; // model reasoning — never part of the answer
+            }
+            $text .= $p['text'];
+        }
+        return trim($text);
+    }
+
+    /** @return string[] the given types, trimmed, blanks dropped, de-duplicated */
+    private static function normaliseTypes(mixed $types): array
+    {
+        if (!is_array($types)) {
+            return [];
+        }
+        $out = [];
+        foreach ($types as $t) {
+            if (is_string($t) && trim($t) !== '') {
+                $out[] = trim($t);
+            }
+        }
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * The classification instruction: the resource file, plus the two things
+     * only the app knows — the station's own type list, and today's date, which
+     * is what a relative day in the account is resolved against.
+     *
+     * Public for tests: the instruction is assembled from a resource file plus
+     * app-held facts (the station's list, today's date), and the failure mode
+     * that matters — the list not reaching the model, or a relative day having
+     * no date to resolve against — is invisible until a live call.
+     *
+     * @param string[] $types
+     */
+    public static function classificationInstruction(array $types, string $today): string
+    {
+        $base = (string) file_get_contents(dirname(__DIR__, 2) . '/resources/ai/classification_prompt.txt');
+        $lines = ["THE STATION'S INCIDENT TYPES (choose exactly one, copied verbatim):"];
+        foreach ($types as $t) {
+            $lines[] = '  - ' . $t;
+        }
+        $lines[] = '';
+        $lines[] = 'TODAY: ' . $today;
+        return rtrim($base) . "\n\n" . implode("\n", $lines);
+    }
+
+    /**
+     * The type-details instruction: the resource file, plus the app's own field
+     * list for THIS incident type and today's date.
+     *
+     * The block is JSON and is DATA, not prose: the keys are the names the
+     * answer must use, and the labels beside them are the app's own
+     * humanised spellings. Both come from ReportRules — see classifyDetails.
+     *
+     * Public for tests: the thing that matters and is invisible until a live
+     * call is whether the field list reached the model at all.
+     *
+     * @param array $fields the form to read against — `scalars`, `groups`, and
+     *   optionally `selects`, `required`, `conditional`. Each travels as its OWN
+     *   block rather than folded into the labels, so the field list stays a list
+     *   of names and the constraints stay machine-readable.
+     */
+    public static function typeDetailsInstruction(
+        string $incidentType,
+        array $fields,
+        string $today = '',
+    ): string {
+        $base = (string) file_get_contents(dirname(__DIR__, 2) . '/resources/ai/classification_details_prompt.txt');
+        if ($today === '') {
+            $today = date('Y-m-d');
+        }
+
+        $scalars = array_values((array) ($fields['scalars'] ?? []));
+        $groups = (array) ($fields['groups'] ?? []);
+        $selects = (array) ($fields['selects'] ?? []);
+
+        $labels = [];
+        foreach ($scalars as $key) {
+            $labels[$key] = self::labelFor($key);
+        }
+        $groupList = [];
+        foreach ($groups as $key => $cfg) {
+            $row = [];
+            foreach ((array) ($cfg['fields'] ?? []) as $fieldKey) {
+                $row[$fieldKey] = self::labelFor($fieldKey);
+            }
+            $entry = [
+                'label' => (string) ($cfg['label'] ?? $key),
+                'fields' => (object) $row,
+            ];
+            // A row's own controlled vocabularies ride in the group's entry, so
+            // the model sees which of THIS group's fields are constrained — and
+            // it is the same block name it already knows from the scalar fields.
+            $rowVocabulary = [];
+            foreach ((array) ($cfg['selects'] ?? []) as $fieldKey => $values) {
+                if (array_key_exists((string) $fieldKey, $row)) {
+                    $rowVocabulary[$fieldKey] = array_values((array) $values);
+                }
+            }
+            if ($rowVocabulary !== []) {
+                $entry['fields_that_take_one_of_these_values'] = (object) $rowVocabulary;
+            }
+            $groupList[$key] = $entry;
+        }
+
+        $block = ['fields' => (object) $labels];
+
+        // Only for the keys this type actually has, and only where the value is
+        // not free text. A field that is NOT listed here is answered from the
+        // account's own words, which is the ordinary case. Each block is omitted
+        // entirely when it is empty: an empty list would read as "no value is
+        // allowed" / "nothing is required".
+        $vocabulary = [];
+        foreach ($scalars as $key) {
+            if (isset($selects[$key])) {
+                $vocabulary[$key] = $selects[$key];
+            }
+        }
+        if ($vocabulary !== []) {
+            $block['fields_that_take_one_of_these_values'] = (object) $vocabulary;
+        }
+
+        // The fields the report cannot be filed without, and the ones a
+        // conditional turns on. Both are intersected with the type's own field
+        // list here rather than trusted: a table entry naming a field this
+        // reading is not asked about must not put a phantom field in front of
+        // the model, and a mirrored scalar is not answerable by this call at all.
+        $required = array_values(array_intersect(
+            array_values((array) ($fields['required'] ?? [])),
+            $scalars,
+        ));
+        if ($required !== []) {
+            $block['fields_the_report_cannot_be_filed_without'] = $required;
+        }
+        $conditional = [];
+        foreach ((array) ($fields['conditional'] ?? []) as $key => $when) {
+            if (!in_array($key, $scalars, true)) {
+                continue;
+            }
+            $scoped = [];
+            foreach ((array) $when as $controller => $values) {
+                if (in_array($controller, $scalars, true)) {
+                    $scoped[$controller] = array_values((array) $values);
+                }
+            }
+            if ($scoped !== []) {
+                $conditional[$key] = $scoped;
+            }
+        }
+        if ($conditional !== []) {
+            $block['fields_required_only_when'] = (object) $conditional;
+        }
+        $block['groups'] = (object) $groupList;
+
+        $lines = [
+            'THE INCIDENT TYPE BEING READ (already established — do not answer it again): ' . $incidentType,
+            '',
+            'THE FIELDS TO READ — JSON. Every key is the name your answer must use; the',
+            'string beside it is that field as the officer reads it on the form. A field',
+            'listed under `fields_that_take_one_of_these_values` — in this block, or',
+            'inside a group\'s entry for that group\'s own fields — accepts ONLY the',
+            'values listed for it, spelled exactly as they are spelled there; if the',
+            'account does not support one of those values, the field is empty. Never',
+            'answer such a field with a word of your own, and never with the account\'s',
+            'prose: the prose belongs in the free-text fields, the coded field takes the',
+            'listed value the account supports or nothing. A field listed under',
+            '`fields_the_report_cannot_be_filed_without` is one the REPORT requires,',
+            'not one the account necessarily dwells on: search the account for what it',
+            'says about that field before answering, and answer it from those words. A',
+            'field under `fields_required_only_when` becomes required once the field it',
+            'names takes one of the values beside it — answer it in the SAME pass, so',
+            'the answer that switches a requirement on does not leave it behind. Under',
+            '`groups`, each entry is an ARRAY of entries (one vehicle, one item, one',
+            'person) built from the fields listed for it.',
+            (string) json_encode($block, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+            '',
+            'TODAY: ' . $today,
+        ];
+
+        return rtrim($base) . "\n\n" . implode("\n", $lines);
+    }
+
+    /** 'estimated_value' -> 'Estimated value' — the app's own way of naming a key. */
+    private static function labelFor(string $key): string
+    {
+        return ucfirst(str_replace('_', ' ', $key));
+    }
+
+    /**
+     * The type-details answer's shape, built from the app's own field list.
+     *
+     * Explicit `properties` per key rather than a free-form object, so the model
+     * cannot answer with a field this type does not have, and so the keys it is
+     * asked about are exactly the keys normaliseTypeDetails() will read back.
+     *
+     * EVERY FREE-TEXT KEY IS `required`, and every one of them may be EMPTY — the
+     * same rule classificationSchema() follows, for the same reason and after the
+     * same failure. "Optional" in a response schema does not mean "optional to
+     * decide" in practice: with the keys optional a live read OMITTED them, so a
+     * field the account plainly answered ("How property was taken", for an
+     * account that says the bag was grabbed from behind) came back absent on one
+     * press and filled on the next, at temperature 0. A required-but-empty-capable
+     * key forces the model to decide and SAY the empty answer rather than skip the
+     * question, which is the only thing that makes a reading reliable. Nothing
+     * carries a `minLength` or `minItems`, so the empty answer stays available.
+     *
+     * A FIELD WITH A CONTROLLED VOCABULARY IS THE ONE EXCEPTION, and it is
+     * forced: an enum cannot carry an "unanswered" member — Gemini rejects an
+     * empty enum value outright ("enum[3]: cannot be empty") — so there is no way
+     * to say "the account supports none of these" inside a required key. Such a
+     * key is therefore optional, and its ABSENCE is the empty answer: the field
+     * is left for the officer rather than filled with the nearest-looking option.
+     * That is the one place a skip means something, which is why it is the one
+     * place it is allowed.
+     *
+     * Public for tests.
+     *
+     * @param string[] $scalars
+     * @param array<string, array{label:string, fields:string[]}> $groups
+     * @param array<string, string[]> $selects scalars with a controlled
+     *   vocabulary — pinned as an `enum`, so a synonym cannot come back at all
+     * @return array<string,mixed>
+     */
+    public static function typeDetailsSchema(array $scalars, array $groups, array $selects = []): array
+    {
+        $fieldProps = [];
+        foreach ($scalars as $key) {
+            $fieldProps[$key] = isset($selects[$key])
+                ? ['type' => 'string', 'enum' => array_values($selects[$key])]
+                : ['type' => 'string'];
+        }
+        // Every free-text field must be ANSWERED (the answer may be empty); a
+        // controlled vocabulary cannot be, so its key stays optional — see the
+        // docblock. Built here so the two stay decided in one place.
+        $requiredFields = [];
+        foreach ($fieldProps as $key => $prop) {
+            if (!isset($prop['enum'])) {
+                $requiredFields[] = $key;
+            }
+        }
+        $groupProps = [];
+        foreach ($groups as $key => $cfg) {
+            $rowProps = [];
+            foreach ((array) ($cfg['fields'] ?? []) as $fieldKey) {
+                // A row field with a controlled vocabulary is pinned the same way
+                // a scalar is — and, for the same reason, its key stays optional
+                // inside the row (an enum cannot carry an "unanswered" member).
+                $rowProps[$fieldKey] = isset($cfg['selects'][$fieldKey])
+                    ? ['type' => 'string', 'enum' => array_values((array) $cfg['selects'][$fieldKey])]
+                    : ['type' => 'string'];
+            }
+            $groupProps[$key] = [
+                'type' => 'array',
+                'items' => ['type' => 'object', 'properties' => $rowProps],
+            ];
+        }
+
+        return [
+            'type' => 'object',
+            'properties' => [
+                // Requires every KEY and constrains no VALUE: each field is
+                // answered, and the answer may be empty.
+                'fields' => $requiredFields === []
+                    ? ['type' => 'object', 'properties' => $fieldProps]
+                    : ['type' => 'object', 'properties' => $fieldProps, 'required' => $requiredFields],
+                // Same rule per group, so "no vehicles" is said rather than
+                // left out — an omitted group and an empty one look identical in
+                // the answer, and only one of them proves the question was put.
+                'groups' => [
+                    'type' => 'object',
+                    'properties' => $groupProps,
+                    'required' => array_keys($groupProps),
+                ],
+                'unstated' => ['type' => 'array', 'items' => ['type' => 'string']],
+            ],
+            'required' => ['fields', 'groups', 'unstated'],
+        ];
+    }
+
+    /**
+     * The details answer, reduced to what the app knows and can carry.
+     *
+     * Both loops iterate the APP'S OWN lists, never the answer's keys — so a
+     * field the model invented, or one belonging to another type, cannot reach
+     * the client at all. Empty values are dropped (an empty field is absent in
+     * this system, and the form's own blank already says it), rows with nothing
+     * in them are dropped (a role is not a person, a row is not a record), and a
+     * runaway array is capped rather than trusted.
+     *
+     * @param array<string,mixed> $parsed
+     * @param string[] $scalars
+     * @param array<string, array{label:string, fields:string[]}> $groups
+     * @return array{fields:array<string,string>, groups:array<string,array<int,array<string,string>>>, unstated:string[]}
+     */
+    public static function normaliseTypeDetails(array $parsed, array $scalars, array $groups): array
+    {
+        $str = static function (mixed $v, int $max = 500): string {
+            return is_string($v) ? mb_substr(trim($v), 0, $max) : '';
+        };
+
+        $fields = [];
+        $rawFields = is_array($parsed['fields'] ?? null) ? $parsed['fields'] : [];
+        foreach ($scalars as $key) {
+            $value = $str($rawFields[$key] ?? '');
+            if ($value !== '') {
+                $fields[$key] = $value;
+            }
+        }
+
+        $outGroups = [];
+        $rawGroups = is_array($parsed['groups'] ?? null) ? $parsed['groups'] : [];
+        foreach ($groups as $key => $cfg) {
+            $rows = [];
+            foreach ((array) ($rawGroups[$key] ?? []) as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $clean = [];
+                foreach ((array) ($cfg['fields'] ?? []) as $fieldKey) {
+                    $value = $str($row[$fieldKey] ?? '');
+                    if ($value !== '') {
+                        $clean[$fieldKey] = $value;
+                    }
+                }
+                if ($clean !== []) {
+                    $rows[] = $clean;
+                }
+                if (count($rows) >= self::MAX_DETAIL_ROWS) {
+                    break;
+                }
+            }
+            if ($rows !== []) {
+                $outGroups[$key] = $rows;
+            }
+        }
+
+        $unstated = [];
+        foreach ((array) ($parsed['unstated'] ?? []) as $line) {
+            $text = $str($line, 200);
+            if ($text !== '') {
+                $unstated[] = $text;
+            }
+        }
+
+        return ['fields' => $fields, 'groups' => $outGroups, 'unstated' => $unstated];
+    }
+
+    /**
+     * The classification answer's shape.
+     *
+     * EVERY field is required and every one may be EMPTY — the same rule the
+     * narrative schema's findings follow: the model must decide-and-say that the
+     * account does not state something rather than be tempted to fill an optional
+     * field with a guess. `incidentType` is an enum of the station's own list, so
+     * a type this station does not carry cannot come back at all, and `role` is
+     * an enum too, so a party is filed under a role the report knows.
+     *
+     * Public for tests: the schema is a request to the model, so what it
+     * actually pins — that the type is an enum of the station's own list, that
+     * every field is required and may be empty — is asserted directly rather
+     * than inferred from an answer.
+     *
+     * @param string[] $types
+     * @return array<string,mixed>
+     */
+    public static function classificationSchema(array $types): array
+    {
+        return [
+            'type' => 'object',
+            'properties' => [
+                'incidentType' => ['type' => 'string', 'enum' => $types],
+                'incidentDatetime' => ['type' => 'string'],
+                'timeApproximate' => ['type' => 'boolean'],
+                'location' => ['type' => 'string'],
+                'reporterName' => ['type' => 'string'],
+                'reporterContact' => ['type' => 'string'],
+                'reporterAddress' => ['type' => 'string'],
+                'actionTaken' => ['type' => 'string'],
+                'parties' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'role' => ['type' => 'string', 'enum' => self::PARTY_ROLES],
+                            'name' => ['type' => 'string'],
+                        ],
+                        'required' => ['role', 'name'],
+                    ],
+                ],
+                'unstated' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string'],
+                ],
+            ],
+            'required' => [
+                'incidentType', 'incidentDatetime', 'timeApproximate', 'location',
+                'reporterName', 'reporterContact', 'reporterAddress', 'actionTaken',
+                'parties', 'unstated',
+            ],
+        ];
+    }
+
+    /**
+     * The provider's answer, in the report's own field names.
+     *
+     * Every string is capped at the length the API accepts for that column, and
+     * two things are REJECTED rather than repaired:
+     *
+     *   * a type that is not on the station's list. Comparison is
+     *     case-insensitive so an answer the model capitalised differently still
+     *     lands, and what is returned is the STATION's spelling — the string
+     *     that POST /reports will accept.
+     *   * a datetime that is not YYYY-MM-DDTHH:MM. A bare date, a bare time or a
+     *     sentence is not a datetime, and an empty one is honest.
+     *
+     * A party with no name is dropped — a role is not a person — and a role
+     * outside the list reads as 'other', which is what the report calls it too.
+     *
+     * @param array<string,mixed> $parsed @param string[] $types
+     * @return array<string,mixed>
+     */
+    public static function normaliseClassification(array $parsed, array $types): array
+    {
+        $str = static function (mixed $v, int $max = 500): string {
+            return is_string($v) ? mb_substr(trim($v), 0, $max) : '';
+        };
+
+        $type = '';
+        $answerType = $str($parsed['incidentType'] ?? '', 60);
+        if ($answerType !== '') {
+            foreach ($types as $t) {
+                if (mb_strtolower($t) === mb_strtolower($answerType)) {
+                    $type = $t;
+                    break;
+                }
+            }
+        }
+
+        $datetime = $str($parsed['incidentDatetime'] ?? '', 32);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $datetime)) {
+            $datetime = '';
+        }
+
+        $parties = [];
+        foreach ((array) ($parsed['parties'] ?? []) as $p) {
+            if (!is_array($p)) {
+                continue;
+            }
+            $name = $str($p['name'] ?? '', 160);
+            if ($name === '') {
+                continue;
+            }
+            $role = mb_strtolower($str($p['role'] ?? '', 20));
+            if (!in_array($role, self::PARTY_ROLES, true)) {
+                $role = 'other';
+            }
+            $parties[] = ['role' => $role, 'name' => $name];
+        }
+
+        $unstated = [];
+        foreach ((array) ($parsed['unstated'] ?? []) as $line) {
+            $text = $str($line, 200);
+            if ($text !== '') {
+                $unstated[] = $text;
+            }
+        }
+
+        return [
+            'incident_type' => $type,
+            'incident_datetime' => $datetime,
+            'incident_time_approximate' => !empty($parsed['timeApproximate']),
+            'location' => $str($parsed['location'] ?? ''),
+            'reporter_name' => $str($parsed['reporterName'] ?? '', 160),
+            'reporter_contact' => $str($parsed['reporterContact'] ?? '', 40),
+            'reporter_address' => $str($parsed['reporterAddress'] ?? ''),
+            'action_taken' => $str($parsed['actionTaken'] ?? '', 4000),
+            'parties' => $parties,
+            'unstated' => $unstated,
+        ];
     }
 
     /**

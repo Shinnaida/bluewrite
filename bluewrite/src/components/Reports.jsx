@@ -33,7 +33,12 @@ import {
   deriveMirrors,
   syncMirrors,
   hasGroupRows,
+  meaningfulRows,
 } from '../lib/reportRules.js';
+// Phase 7 — the account read's merge rules (POST /ai/classify → the form).
+// Pure and separately tested: it owns the ONE rule the silent fill depends on,
+// which is that it fills blanks and touches nothing the officer has written.
+import { buildClassifyFill, buildTypeDetailsFill, classifyFillIsEmpty } from '../lib/classifyFill.js';
 import { normalizeLegacyTypeSpecific, hasLegacyShape } from '../lib/normalizeLegacy.js';
 // The station's letterhead, for the sheet format's page. Same module the printed
 // sheet reads its header through, so the page you write on and the page that
@@ -78,20 +83,21 @@ import {
   specDate,
   specTimestamp,
 } from '../lib/incidentReport.js';
-// Phase 6 Stage 1 — the DECLARED language of the narrative. One module behind
-// the selector, the "not translated" notice, the AI guard's reason, the
-// finalize warning and the printed line, so the editor and the sheet cannot
-// disagree about what a code means.
+// Phase 6 Stage 1 — the language of the narrative. One module behind the
+// detector, the "not translated" notice, the AI guard's reason, the finalize
+// warning and the printed line, so the editor and the sheet cannot disagree
+// about what a code means.
+//
+// There is no language SELECTOR any more. The language is read from the text
+// the officer writes (detectNarrativeLanguage) instead of declared by hand, so
+// nothing here offers the four codes — that is the module's own job now.
 import {
-  narrativeLanguageOptions,
+  detectNarrativeLanguage,
   DEFAULT_LANGUAGE,
-  languageHint,
   languageLabel,
   normaliseLanguage,
-  untranslatedNotice,
   aiBlockedReason,
   finalizeLanguageWarning,
-  suggestedLanguage,
 } from '../lib/reportLanguages.js';
 // Phase 6 Stage 4 (D5/D8) — the status vocabulary and the finalize notice. The
 // server DERIVES the status; these helpers only turn its code into a label, so
@@ -1562,9 +1568,10 @@ export function ReportEditor({
   // by ONE format: the sheet draws these lines at the head of its page, so the
   // officer writes on the station's own paper rather than on a blank anonymous
   // rectangle. Null falls back to the built-in lines — see resolveHeader.
-  // The officer's own recent reports. Shell already fetches the list for Home,
-  // and D7 reads the most recent one's declared language to pre-select the
-  // selector on a NEW report — a suggestion only, visible and changeable.
+  // The officer's own recent reports. Shell already fetches this list for Home,
+  // which is why the prop is still wired here: it used to feed D7's suggestion
+  // (the most recent report's language, pre-selected on a new one), and D7 went
+  // with the selector when the language became detected. Nothing reads it now.
   recentReports = null,
   stationHeader = null,
 }) {
@@ -1573,15 +1580,13 @@ export function ReportEditor({
   // For a new report, start with the empty form immediately; for an existing
   // one, null until fetched. (Starting null for BOTH would crash the first
   // render — effects run after render, so the new-report path must be ready.)
-  // A NEW report starts from D7's suggestion — the language of this officer's
-  // most recent report, or English when there is none. An EXISTING report is
-  // loading at this point (reportId !== null) and always shows its own stored
-  // value, so the suggestion can never relabel a report that already has one.
-  const [draft, setDraft] = useState(() => (
-    reportId === null
-      ? { ...EMPTY, narrative_language: suggestedLanguage(recentReports, user.id) }
-      : null
-  ));
+  // A NEW report starts from the empty form. It does NOT start from the
+  // language of the officer's last report any more: nothing declares a language
+  // now, and a suggestion would be a label with no officer behind it — a fresh
+  // report would open claiming 'ceb' and quietly disable Tighten until the
+  // first sentence was typed. The field fills itself from the text (see
+  // setNarrative), which is the only thing that can answer the question.
+  const [draft, setDraft] = useState(() => (reportId === null ? EMPTY : null));
   const [errors, setErrors] = useState({});
   // AI disposition helper: the officer types a rough note ("follow up
   // investigation") and the model rewrites it into the formal statement that
@@ -1673,11 +1678,12 @@ export function ReportEditor({
   // is the thing this format exists to avoid.
   const sheet = formFormat === 'sheet';
   // Whether the sheet format is showing the rest of the report. False is the
-  // format's whole promise: it opens as a blank page — no labels, no boxes, no
-  // placeholders, nothing to read — and the report's structured fields arrive
-  // when the officer asks for them (see `sheetBar` below). Component state, not
-  // a stored preference, and NOT part of the editor's key: it is a view of one
-  // report, so it resets with the report and never re-lays-out a draft.
+  // format's opening state: the station's letterhead on a blank page and nothing
+  // else — no labels, no boxes, no fields to read — with the report's structured
+  // part arriving when the officer asks for it (the reveal control below the
+  // paper). Component state, not a stored preference, and NOT part of the
+  // editor's key: it is a view of one report, so it resets with the report and
+  // never re-lays-out a draft.
   const [sheetFields, setSheetFields] = useState(false);
   const sheetBlank = sheet && !sheetFields;
   const [activeStep, setActiveStep] = useState(0);
@@ -2004,6 +2010,17 @@ export function ReportEditor({
   // its own copy of the rule. (The review edits both: see ReportReview.)
   function setNarrative(value) {
     set('narrative', value);
+    // The record's language follows the TEXT, in the same update as the text.
+    // This is the only thing that writes narrative_language now that the
+    // selector is gone (see detectNarrativeLanguage): detection cannot be
+    // skipped by a caller, cannot go stale against a narrative it no longer
+    // describes, and never touches a character of what the officer wrote.
+    //
+    // A functional update, so it reads the narrative set() just queued, and it
+    // returns the SAME object when the verdict has not changed — a long English
+    // narrative re-renders exactly as often as it used to.
+    const detected = detectNarrativeLanguage(value);
+    setDraft((d) => (d.narrative_language === detected ? d : { ...d, narrative_language: detected }));
     // Provenance starts at 'manual' and only the AI accept path raises it to
     // 'ai-assisted' — typing never does — but the rule belongs with the field,
     // not with the one control that happened to hold it.
@@ -2061,16 +2078,206 @@ export function ReportEditor({
 
   // Phase 6 Stage 3/5 — what "Apply" does to the FORM. A translated draft
   // carries its source with it, so applying it stores the officer's verbatim
-  // words, its declared language, and marks the report English in the same save.
-  // Shared by the plain accept path and Track C's guided step 1.
+  // words, the language they were written in, and marks the report English in
+  // the same save. Shared by the plain accept path and Track C's guided step 1.
   function applyAiNarrative(aiText, sourceMeta) {
     set('narrative', aiText);
     narrativeSourceRef.current = 'ai-assisted';
     if (sourceMeta && sourceMeta.language && sourceMeta.language !== 'en') {
+      // The text IS the English translation of a known source: the language is
+      // a fact the server just established, so it is not re-detected.
       set('narrative_language', 'en');
       set('narrative_source_text', sourceMeta.text ?? '');
       set('narrative_source_language', sourceMeta.language);
+    } else {
+      // No source pair: this was a draft written from the rough notes rather
+      // than a translation, so its language is read from the text like any
+      // other. Detecting here keeps the rule in one place — the AI writing
+      // English must leave the record saying English.
+      set('narrative_language', detectNarrativeLanguage(aiText));
     }
+  }
+
+  // Phase 7 — the account read (POST /ai/classify), wired to the AI panel's
+  // Generate button IN THE SHEET FORMAT ONLY.
+  //
+  // WHY IT EXISTS. The sheet opens on a blank page: the officer types the whole
+  // account on it, and every structured field is empty. Generate is then the one
+  // press that has to make a report out of that page — and it cannot, because a
+  // report is created with an incident type, a date and a place (see
+  // ensureAiReportId → writeDraft), none of which the officer typed. So the read
+  // runs first, fills the blanks out of the officer's own words, and the save
+  // and the narrative draft follow exactly as they always did.
+  //
+  // WHY ONLY THERE. In the stepped and document formats the fields are on
+  // screen to type into and Generate already works, so the panel is handed no
+  // reader at all (`onReadAccount` is undefined) and this function is never
+  // called from them.
+  //
+  // WHAT IT MAY CHANGE is the whole of src/lib/classifyFill.js — the account
+  // read (buildClassifyFill) and the TYPE-SCOPED read that follows it
+  // (buildTypeDetailsFill, for the type's own vehicles/items/injuries/entry
+  // point, which the first call has no field for): blanks only, a type on the
+  // form's own list, named people into groups this type actually has. It writes
+  // nothing itself — every field goes through the form's own setter, so the
+  // dirty flag, the autosave, the rule engine and the history see an ordinary
+  // edit and nothing else.
+  //
+  // THE SECOND CALL IS SCOPED BY THE FIRST ONE'S ANSWER, which is why the two
+  // are ordered inside this one function rather than offered as two props: the
+  // type the form now holds IS the field list to read against, and it cannot be
+  // known before the first answer lands. A read that names no type — and an
+  // officer who typed none either — skips it entirely; the panel's own message
+  // then says the report still needs a type, and the next press reads on.
+  async function readAccountForForm(accountText) {
+    const account = String(accountText || '').trim();
+    if (account === '') {
+      return { ok: false, message: 'Write the incident in your own words first — there is nothing to read yet.' };
+    }
+    try {
+      const out = await api('/ai/classify', { method: 'POST', body: { account } });
+      const before = draftRef.current ?? {};
+      const fill = buildClassifyFill(out?.fields ?? {}, before, typeOptions);
+      // Nothing to change is a real answer (a report already filled in by hand),
+      // and the honest response to it is to change nothing at all.
+      if (!classifyFillIsEmpty(fill)) {
+        // The ref is brought up to date HERE, before the setters below, and the
+        // reason is the very next thing Generate does: `ensureReportId` SAVES
+        // the draft (writeDraft) and it reads `draftRef`, not the state this
+        // function is about to queue — React has not re-rendered yet, and it
+        // will not until this async function yields. Without this line the save
+        // would post the report the officer typed (no type, no date, no place)
+        // and be refused, seconds after the read just filled all three.
+        draftRef.current = {
+          ...before,
+          ...fill.patch,
+          type_specific: mergeClassifiedGroups(before.type_specific, fill.groups, fill),
+        };
+        // One `set` per field: it is a functional update, so the patch lands in
+        // a single render and the form is never seen half-filled.
+        for (const [key, value] of Object.entries(fill.patch)) set(key, value);
+        if (Object.keys(fill.groups).length > 0) {
+          dirtyRef.current = true;
+          setDraft((d) => ({ ...d, type_specific: mergeClassifiedGroups(d.type_specific, fill.groups, fill) }));
+        }
+      }
+      // THE SECOND HALF OF THE READ. The first call settles WHAT the incident
+      // is; only then does that kind's own field list exist — the vehicles and
+      // their plates, the items taken, the injuries, the entry point. Without
+      // it the type-specific block stays empty on the one format where nothing
+      // else is going to fill it (the officer types an account on the page, not
+      // a form), which is the whole reason this read exists. It is scoped by
+      // the type the form now holds, and REFUSED SERVER-SIDE for a type whose
+      // field list the app does not know.
+      const afterFirst = draftRef.current ?? before;
+      let details = null;
+      // A failed SECOND read is not a failed first one, but it is not nothing
+      // either: the type's own block is the half an officer is most likely to
+      // notice missing, and silence there reads as "the AI found nothing" when
+      // it means "the AI was never asked". Reported on the receipt.
+      let detailsFailed = false;
+      if (afterFirst.incident_type) {
+        try {
+          const answer = await api('/ai/classify/details', {
+            method: 'POST',
+            body: { account, type: afterFirst.incident_type },
+          });
+          details = buildTypeDetailsFill(answer ?? {}, afterFirst);
+          if (!classifyFillIsEmpty(details)) {
+            draftRef.current = { ...afterFirst, type_specific: applyTypeDetailsFill(afterFirst, details) };
+            setDraft((d) => ({ ...d, type_specific: applyTypeDetailsFill(d, details) }));
+            // A group row or a scalar written straight into the draft is an
+            // ordinary edit like any other (the first read's own patch goes
+            // through `set`, which flags it the same way).
+            dirtyRef.current = true;
+          }
+        } catch {
+          // Never fatal, for the same reason the first call is not: what the
+          // first read already put on the form stands, and an unread detail
+          // block is exactly the state the sheet was in before this call
+          // existed. The press continues to the save and the draft.
+          details = null;
+          detailsFailed = true;
+        }
+      }
+
+      const changed = !classifyFillIsEmpty(fill)
+        || (details !== null && !classifyFillIsEmpty(details));
+      if (changed) {
+        // The verdict on the page was reached BEFORE these fields existed, so
+        // it is dropped the same way a generate that passes drops it ("a
+        // previous failed attempt's banner must not linger"): a red "Incident
+        // type is required." left under a field the read just filled is the
+        // one thing that would make the fill look like it had not happened.
+        // Submit re-runs every rule, so nothing is being excused here.
+        setError(null);
+        setErrors({});
+        setGroupErrors({});
+        setRuleWarnings(null);
+      }
+
+      // WHAT THE REPORT ITSELF STILL NEEDS. Not the model's view of the account
+      // — the rule engine's view of the DRAFT, which is what Submit will say in
+      // a moment. Only the type's own fields (type_specific paths) are taken:
+      // the common fields and the group floors are already on screen with the
+      // officer's own attention on them, and a read that ends in "Submit is
+      // still blocked and nothing said why" is the confusion this line exists
+      // to end. It is a REPORT, not a gate — the read has made its changes and
+      // nothing here blocks or retries anything.
+      const stillNeeded = validateReport(draftRef.current ?? {}, 'finalize')
+        .errors.filter((e) => String(e.path ?? '').startsWith('type_specific.'))
+        .map((e) => e.message);
+
+      return {
+        ok: true,
+        filled: [...fill.filled, ...(details?.filled ?? [])],
+        stillNeeded,
+        // Both halves answer about the SAME account, so the lines are joined
+        // rather than one list replacing the other — and deduplicated, because
+        // a name neither read could mask is a fact about the account, and
+        // stating it twice would read as two findings.
+        unstated: [...new Set([...fill.unstated, ...(details?.unstated ?? [])])],
+        // Names the account mentions that nothing could have masked: on this
+        // call there is no structured record to build a value map from. The
+        // endpoint reports them rather than hiding them, and so does the panel.
+        residual: Array.isArray(out?.residualRisk) ? out.residualRisk : [],
+        detailsFailed,
+      };
+    } catch (err) {
+      // Never fatal. The gate that follows says what the report still needs,
+      // with its jump-to-field links, and the panel adds this line to it.
+      return { ok: false, message: err?.message || 'Your account could not be read.' };
+    }
+  }
+
+  // The TYPE-SCOPED read's answer, written into a draft's type_specific. ONE
+  // implementation, called twice: once for the ref the save reads, once for the
+  // state the officer sees — the two must agree, and the way to make them agree
+  // is to compute it once. Unlike mergeClassifiedGroups below, the rows in
+  // `fill.groups` are each group's COMPLETE list (src/lib/classifyFill.js has
+  // already merged the officer's own rows into it), so they REPLACE the group
+  // rather than being appended to it — appending would duplicate the officer's
+  // own vehicle every time they press Generate.
+  function applyTypeDetailsFill(base, fill) {
+    const ts = { ...(base.type_specific ?? {}), ...fill.patch };
+    for (const [groupKey, rows] of Object.entries(fill.groups)) ts[groupKey] = rows;
+    return syncMirrors(base.type_specific, ts, base.incident_type ?? '');
+  }
+
+  // The named people the read found, placed in the groups this type actually
+  // has, and the derived scalars those groups supersede (Owner of Property,
+  // Item…) brought along with them. ONE implementation, called twice: once to
+  // prime the ref the save reads, once for the state the officer sees — the two
+  // must agree, and the way to make them agree is to compute it once.
+  function mergeClassifiedGroups(typeSpecific, groups, fill) {
+    if (!groups || Object.keys(groups).length === 0) return typeSpecific;
+    const ts = { ...typeSpecific };
+    for (const [groupKey, rows] of Object.entries(groups)) {
+      // A row the officer left BLANK is not a row (see meaningfulRows), so the
+      // named people take those slots instead of queueing behind them.
+      ts[groupKey] = [...meaningfulRows(ts[groupKey]), ...rows];
+    }
+    return syncMirrors(typeSpecific, ts, fill.type || '');
   }
 
   // Phase 6 Stage 5 (Track C) — the guided flow's step 1: apply the reviewed
@@ -2123,6 +2330,42 @@ export function ReportEditor({
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  /**
+   * The AI's report id, guaranteed — the id the AI panel addresses its requests
+   * to, and the reason the panel can be offered on a report that has never been
+   * saved.
+   *
+   * Generate, Translate and Tighten are all per-report endpoints: the server
+   * files the request against a row and reads the report's stored language back.
+   * So the FIRST ask has to create the report, and this is what does it — off
+   * the officer's Generate click, not off a Save Draft they had to find
+   * themselves (which in the sheet format sits below a full sheet of paper).
+   *
+   * The write is writeDraft, the autosave's own: same body, same latest-values
+   * ref, and the same in-flight de-duplication, so asking for the id can never
+   * race an autosave into creating a second report — and it returns null for a
+   * report with no incident type, which is why the panel's own message names
+   * the three fields Gate 1 wants.
+   */
+  async function ensureAiReportId() {
+    if (idRef.current) return idRef.current;
+    let id;
+    try {
+      id = await writeDraft();
+    } catch (err) {
+      // Offline, session ended, server refused: the editor's own banner says
+      // which, and the panel does not go on to make a request it cannot file.
+      setError(err.message || 'The draft could not be saved, so the AI has nothing to write against yet.');
+      return null;
+    }
+    if (id == null) return null; // nothing savable yet (no incident type)
+    adoptSavedId(id);
+    dirtyRef.current = false;
+    notify('Draft saved — the report number is assigned.');
+    onMutated?.();
+    return id;
   }
 
   // ---- Navigation, shared by both formats --------------------------------
@@ -2461,51 +2704,25 @@ export function ReportEditor({
   // survives a step change by design — the panel restores it from the per-tab
   // session store keyed by report id — and so does its own visibility, which
   // is settled by the health probe on mount.
-  // The declared language of the narrative (Phase 6 Stage 1). Read through
-  // normaliseLanguage so a stored value this build does not know — an older
-  // row, a draft restored from sessionStorage — shows as English rather than
-  // as a language nobody can name.
+  // The language of the record (Phase 6 Stage 1), read through normaliseLanguage
+  // so a stored value this build does not know — an older row, a draft restored
+  // from sessionStorage — shows as English rather than as a language nobody can
+  // name. Nothing here declares it: setNarrative writes the detector's verdict
+  // into the draft, and every reader below (the AI guard's reason, the finalize
+  // warning, the printed line) reads it from there — so the record and the
+  // decisions made about it cannot disagree.
   const languageCode = normaliseLanguage(draft?.narrative_language);
 
-  // One element, two mutually-exclusive homes — the rule the AI panel and the
-  // action row already follow, and for the same reason: everything inside the
-  // sheet's card IS the page, and a <select> is a control, so in the sheet
-  // format this renders on the desk beneath the paper instead (see the block
-  // after </form>). Never both, so there is always exactly one selector.
-  //
-  // Changing it RELABELS: set() marks the draft dirty and edits nothing else.
-  // No conversion, no translation, no re-processing of a character of text.
-  const languagePicker = (
-    <div className="ir-language">
-      <label className="ir-language-label" htmlFor="r-lang">
-        Narrative language
-      </label>
-      <select
-        id="r-lang"
-        className="ir-language-select"
-        value={languageCode}
-        onChange={(e) => set('narrative_language', e.target.value)}
-        disabled={!canEdit}
-      >
-        {narrativeLanguageOptions().map((l) => (
-          <option key={l.code} value={l.code}>
-            {l.label}
-          </option>
-        ))}
-      </select>
-      <p className="field-hint">{languageHint()}</p>
-      {untranslatedNotice(languageCode) && (
-        <p className="ir-language-note" role="status">
-          {untranslatedNotice(languageCode)}
-        </p>
-      )}
-    </div>
-  );
-
   // Track B — the officer's dictionary. Read-only and offline; it never
-  // inserts a term anywhere. Kept beside the writing (the narrative card, and
-  // on the desk under a blank sheet) rather than inside the AI panel, because
-  // it is useful whether or not the model is available.
+  // inserts a term anywhere. Kept beside the writing (the narrative card)
+  // rather than inside the AI panel, because it is useful whether or not the
+  // model is available.
+  //
+  // The sheet format is the one format it is NOT in. Everything inside
+  // `.ir-form--sheet` IS the page, so beside the narrative there would put the
+  // dictionary on the report; its only sheet-format home was a second copy on
+  // the desk below the paper, and that copy was removed by request. The
+  // dictionary is a Document/Steps affordance.
   const termsPanel = canEdit ? (
     <NarrativeTermsPanel
       reportLanguage={languageCode}
@@ -2520,6 +2737,10 @@ export function ReportEditor({
   const aiPanel = canEdit ? (
     <AiNarrativePanel
       reportId={draft?.id ?? null}
+      // The panel renders on a report that has never been saved too, so the id
+      // its requests are filed against is resolved when they are made: this is
+      // what saves the draft and hands the new id back (see ensureAiReportId).
+      ensureReportId={ensureAiReportId}
       canEdit={canEdit}
       narrative={draft?.narrative || ''}
       // The AI closes the narrative with the recorded disposition,
@@ -2529,9 +2750,21 @@ export function ReportEditor({
       // narrative AND formalises them into the sheet's NOTABLE
       // FINDINGS block.
       notableFindings={draft?.type_specific?.notable_findings || ''}
-      // Completeness gate: flag "The report has N problems" and jump
-      // to the missing fields BEFORE any AI request is sent.
-      onBeforeGenerate={gateAiGenerate}
+      // Completeness gate: flag "The report has N problems" and jump to the
+      // missing fields BEFORE any AI request is sent (@see gateAiGenerate).
+      //
+      // NOT in the sheet format, and that is a decision rather than an omission:
+      // the sheet's blank page IS the source. The officer types the whole
+      // incident there, the account read fills the fields it names, and the
+      // officer should not be stopped short of the AI by the form's own blanks —
+      // the missing-field banner belongs to SUBMIT, where a report genuinely
+      // cannot go on without a type, a date and a place. In the stepped and
+      // document formats the gate stays exactly as it was.
+      onBeforeGenerate={sheet ? undefined : gateAiGenerate}
+      // Phase 7 — the account read, handed over in the SHEET format only: on the
+      // blank page Generate fills the report's own fields out of the account
+      // before it saves or drafts anything (see readAccountForForm).
+      onReadAccount={sheet ? readAccountForForm : undefined}
       // D3 — the panel disables Generate and Tighten and states the reason,
       // rather than offering a control whose only possible answer is no.
       languageBlocked={aiBlockedReason(languageCode)}
@@ -2779,7 +3012,7 @@ export function ReportEditor({
         </div>
       )}
 
-      {/* The asterisk key. Not shown on the blank page: it explains a marker
+      {/* The asterisk key. Not shown on the blank sheet: it explains a marker
           that is not on screen, since every field carrying one is behind the
           sheet's control. */}
       {!sheetBlank && (
@@ -2788,37 +3021,9 @@ export function ReportEditor({
         </p>
       )}
 
-      {/* The sheet format's ONE control, and the only thing it adds to the
-          screen. It sits OUTSIDE the sheet deliberately: the format's promise is
-          a page with nothing on it, so the control that reveals the rest of the
-          report cannot itself be printed on the page it is describing.
-
-          What it reveals is the whole report — every panel, every group, and the
-          action row. That row goes behind this control too, and the trade is
-          worth stating: from the blank page an officer cannot click Save Draft
-          or Submit. Neither can lose work — the draft autosaves, flushes on exit
-          and mirrors in sessionStorage, and Ctrl+S still works from the blank
-          page (it is a chord, not a button, so it never needed the row).
-          Submitting the report is a deliberate act on the whole document, and
-          the page you submit is the one this control opens. */}
-      {sheet && (
-        <div className="ir-sheet-bar">
-          <button
-            type="button"
-            className="ir-sheet-toggle"
-            aria-expanded={sheetFields}
-            onClick={() => setSheetFields((v) => !v)}
-          >
-            {sheetFields ? 'Hide the report fields' : 'Show the report fields'}
-          </button>
-          <span className="ir-sheet-hint">
-            {sheetFields
-              ? 'The page is your account of the incident; the rest is the report it is filed as.'
-              : 'Write on the page. Dates, parties, items and everything else the report needs are one click away — and Ctrl+S saves your draft without leaving it.'}
-          </span>
-        </div>
-      )}
-
+      {/* The sheet's chrome — the AI panel and the officer's dictionary — is on
+          the desk BELOW the paper: see the block after </form>. Nothing sits
+          between an officer and the page they came here to write. */}
       <form
         onSubmit={(e) => e.preventDefault()}
         className={`ir-form${stepped ? ' ir-form--stepped' : ''}${sheet ? ' ir-form--sheet' : ''}${
@@ -3111,10 +3316,6 @@ export function ReportEditor({
                   notify={notify}
                 />
               )}
-              {/* ON THE DESK, NOT ON THE PAGE: in the sheet format this card is
-                  the paper itself, so the selector renders under the sheet
-                  instead (the other home, after </form>). */}
-              {!sheet && languagePicker}
               {/* Track B — the full terminology panel, beside the writing. */}
               {!sheet && termsPanel}
             </div>
@@ -3129,14 +3330,14 @@ export function ReportEditor({
                               the feature being gone.
                   document  — here, under the narrative field, where the
                               writing happens. It has no review step.
-                  sheet     — BELOW the paper (see the block after </form>).
-                              This card IS the sheet's page, so a Generate row
-                              inside it would be printed on the page; the panel
-                              is a control, and controls sit on the desk.
-
-                On the blank page that placement is also what keeps the format
-                usable: the writing assistant stays on screen while the report's
-                fields do not. */}
+                  sheet     — on the desk BELOW the paper (see the desk block
+                              after the form). This card IS the sheet's page,
+                              so a Generate row inside it would be printed on
+                              the page; the panel is a control, and controls sit
+                              on the desk, which in this format is under the
+                              sheet: the page comes first, and the assistant
+                              waits at the foot of it with the rest of the
+                              chrome. */}
             {stepped && (
               <p className="section-hint">
                 Writing assistance — Generate AI draft, or Tighten this narrative — is on the
@@ -3486,31 +3687,65 @@ export function ReportEditor({
         {(!stepped || activeStep === STEP_COUNT - 1) && !sheet && actionsCluster}
       </form>
 
-      {/* The sheet format's home for the AI panel: below the paper, on the
-          workspace — the desk the page lies on. One instance, like every other
-          format (see the note in Panel III), and the same one in both of the
-          sheet's states, so revealing the report's fields never makes the
-          writing assistant move.
+      {/* ---- The desk BELOW the paper ----------------------------------------
+          Everything the sheet's page needs that is not the page, in the order an
+          officer reaches for it: open the report's fields, call on the writing
+          assistant, then save or submit.
 
-          Outside the form on purpose: everything inside `.ir-form--sheet` is the
-          page, and an officer who asked for a blank sheet of paper should not
-          find a toolbar printed at the foot of it. */}
-      {/* The selector's other home, and the same rule: it is a control, so in
-          the sheet format it sits on the desk under the paper rather than
-          being printed on it. In view in both of the sheet's states, so an
-          officer can declare the language while writing on the blank page. */}
-      {sheet && <div className="ir-sheet-language">{languagePicker}</div>}
+          All of them are CONTROLS, not paper — everything inside
+          `.ir-form--sheet` IS the page, so none of them may be printed on it —
+          and all of them therefore sit OUTSIDE the form.
+
+          BELOW the paper, not above it. Above, the reveal control, the AI panel
+          and the dictionary all came first: on the blank page — the state the
+          format opens in — the page the officer came here to write on was the
+          fourth thing down the screen. The page comes first and its controls
+          follow it.
+
+          The dictionary used to be one of these controls and is not any more:
+          everything inside the sheet is the page, so it cannot sit beside the
+          narrative there, and this desk was its only home in this format. The
+          dictionary is a Document/Steps affordance now (see termsPanel).
+
+          The one thing deliberately not on this desk is the narrative-language
+          selector: the language is read from the narrative (see setNarrative)
+          instead of declared by hand. The record still carries one, and the AI
+          guard, the finalize warning and the printed line all still read it —
+          there is simply nothing left to choose.
+
+          One home each, in BOTH of the sheet's states, so revealing the report's
+          fields never makes any of them move under the officer's hands. */}
+
+      {/* The sheet format's ONE control, and the only thing it adds to the
+          screen. It sits OUTSIDE the sheet deliberately: the format's promise is
+          a page with nothing on it, so the control that reveals the rest of the
+          report cannot itself be printed on the page it is describing.
+
+          What it reveals is the whole report — every panel and every group. The
+          action row is NOT behind it: Save Draft and Submit are rendered below
+          the paper in both of the sheet's states (see below), so filing the
+          report never depends on these fields being open. Submitting is a
+          deliberate act on the whole document, and the page you submit is the
+          one this control opens. */}
+      {sheet && (
+        <div className="ir-sheet-bar">
+          <button
+            type="button"
+            className="ir-sheet-toggle"
+            aria-expanded={sheetFields}
+            onClick={() => setSheetFields((v) => !v)}
+          >
+            {sheetFields ? 'Hide the report fields' : 'Show the report fields'}
+          </button>
+        </div>
+      )}
 
       {sheet && canEdit && <div className="ir-sheet-ai">{aiPanel}</div>}
-      {/* Track B — the same panel on the desk under a blank sheet, never on the
-          paper: a dictionary printed at the foot of a page would be part of the
-          report. */}
-      {sheet && canEdit && <div className="ir-sheet-terms">{termsPanel}</div>}
 
-      {/* ...and the action row, under it. The sheet format's whole point is that
-          the report's FORM is one click away, not that its controls are: Save
-          Draft and Submit stay in view in both of the sheet's states, so the
-          blank page is a way to write rather than a locked room. */}
+      {/* ...and the action row, under it. Filing is never behind anything in this
+          format: Save Draft and Submit are rendered, on screen, under the paper
+          they commit — which is the guarantee the reveal control used to have to
+          make. */}
       {sheet && <div className="ir-sheet-actions">{actionsCluster}</div>}
 
       {printing && (
@@ -3820,9 +4055,10 @@ export function ReportsTable({
   // ...and the station's letterhead, for the same reason again: a report opened
   // from the register gets the sheet format's page exactly as one opened from
   // Write Report does.
-  // The officer's own recent reports. Shell already fetches the list for Home,
-  // and D7 reads the most recent one's declared language to pre-select the
-  // selector on a NEW report — a suggestion only, visible and changeable.
+  // The officer's own recent reports. Shell already fetches this list for Home,
+  // which is why the prop is still wired here: it used to feed D7's suggestion
+  // (the most recent report's language, pre-selected on a new one), and D7 went
+  // with the selector when the language became detected. Nothing reads it now.
   recentReports = null,
   stationHeader = null,
   // Tells the shell whether this list is showing its own editor panel. The
