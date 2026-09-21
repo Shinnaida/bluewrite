@@ -81,6 +81,13 @@ export async function api(path, { method = 'GET', body, keepalive = false } = {}
     const err = new Error(data?.error || `Request failed (${res.status})`);
     err.status = res.status;
     err.field = data?.field;
+    // A MACHINE-READABLE reason, where the server offers one. The message is for
+    // the officer; this is for the client, which has to make a different decision
+    // for some of them — the second factor's refusals in particular, where
+    // 'mfa_pending_expired' means "go back to the password form" and
+    // 'mfa_wrong_code' means "the field is wrong". Telling those two apart by
+    // reading the message text would be a copy change away from breaking.
+    err.code = typeof data?.code === 'string' ? data.code : null;
     // Field-level validation details from the server's rule gates (422s).
     err.details = Array.isArray(data?.details) ? data.details : null;
     err.manual_mode = data?.manual_mode === true; // Phase 3: AI unavailable

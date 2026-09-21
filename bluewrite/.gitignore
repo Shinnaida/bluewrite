@@ -1,6 +1,14 @@
 # Secrets
 config/config.php
 app/config/ai.php
+# The mail the 'log' transport writes instead of sending (dev and tests only).
+# It holds real sign-in codes in readable form, because that is the point of it —
+# a test has to be able to read what the server would have emailed.
+config/mail.log
+
+# A leftover from the authenticator-app factor (migration 012). Nothing writes
+# it any more, but an old deployment may still have one, and it is a key.
+config/mfa.key
 
 # Machine-local Gemini cache state (CachedInstructionStore)
 resources/ai/.cache_state.json

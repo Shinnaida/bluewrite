@@ -65,17 +65,40 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // on, so the scratch DB must carry them.
         $this->runSqlFile(__DIR__ . '/../migrations/009_report_verification.sql');
         $this->runSqlFile(__DIR__ . '/../migrations/010_users_languages_read.sql');
+        // 011 adds users.notifications_seen_at. The notification feed READS it
+        // on every GET /notifications (and the seen route writes it), so the
+        // scratch DB must carry the column or the bell's own endpoints 500.
+        $this->runSqlFile(__DIR__ . '/../migrations/011_notifications_seen_at.sql');
+        // 012 adds mfa_credentials and mfa_recovery_codes. THE REQUEST GUARD
+        // JOINS these on every request (Auth::fetchUser), so a scratch DB
+        // without them fails every test in this suite, not just the MFA ones —
+        // which is the same dependency a real deployment has, and the reason
+        // the migration ships with the code that reads it.
+        // 013 moves the second factor from an authenticator app to a code emailed
+        // to the account's own address: it drops 012's tables, adds users.email,
+        // and creates email_otp_codes. THE REQUEST GUARD READS users.email on
+        // every request, so a scratch DB without it fails every test in this
+        // suite — the same dependency a real deployment has, and the reason the
+        // migration ships with the code that reads it.
+        $this->runSqlFile(__DIR__ . '/../migrations/013_email_otp.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
+        // Every account that OWES a second factor has an email address, because
+        // that is where its code goes — and an account without one is refused a
+        // session outright (Auth::requireUser).
         $hash = password_hash('Passw0rd!23', PASSWORD_BCRYPT);
         $ins = $this->rootPdo()->prepare(
-            'INSERT INTO users (role_id, full_name, badge_number, username, password_hash, status)
-             VALUES (:r, :n, :b, :u, :h, :s)'
+            'INSERT INTO users (role_id, full_name, badge_number, username, email, password_hash, status)
+             VALUES (:r, :n, :b, :u, :e, :h, :s)'
         );
-        $ins->execute([':r' => 1, ':n' => 'Test Admin', ':b' => 'T-ADM-1', ':u' => 't.admin', ':h' => $hash, ':s' => 'active']);
-        $ins->execute([':r' => 2, ':n' => 'Test Officer', ':b' => 'T-OFF-1', ':u' => 't.officer', ':h' => $hash, ':s' => 'active']);
-        $ins->execute([':r' => 3, ':n' => 'Test Staff', ':b' => 'T-STF-1', ':u' => 't.staff', ':h' => $hash, ':s' => 'active']);
-        $ins->execute([':r' => 2, ':n' => 'Inactive Officer', ':b' => 'T-OFF-2', ':u' => 't.inactive', ':h' => $hash, ':s' => 'inactive']);
+        $ins->execute([':r' => 1, ':n' => 'Test Admin', ':b' => 'T-ADM-1', ':u' => 't.admin', ':e' => 't.admin@example.test', ':h' => $hash, ':s' => 'active']);
+        $ins->execute([':r' => 2, ':n' => 'Test Officer', ':b' => 'T-OFF-1', ':u' => 't.officer', ':e' => 't.officer@example.test', ':h' => $hash, ':s' => 'active']);
+        $ins->execute([':r' => 3, ':n' => 'Test Staff', ':b' => 'T-STF-1', ':u' => 't.staff', ':e' => null, ':h' => $hash, ':s' => 'active']);
+        $ins->execute([':r' => 2, ':n' => 'Inactive Officer', ':b' => 'T-OFF-2', ':u' => 't.inactive', ':e' => 't.inactive@example.test', ':h' => $hash, ':s' => 'inactive']);
+
+        // Start every test with an empty mail log, so `lastEmailedCode()` can
+        // only ever return a code this test caused the server to send.
+        @file_put_contents($this->mailLogPath(), '');
     }
 
     /**
@@ -160,7 +183,20 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         ];
     }
 
-    /** Log in and return [cookie header string, csrf token, user array]. */
+    /**
+     * Log in and return [cookie header string, csrf token, user array].
+     *
+     * THIS HELPER COMPLETES THE SECOND FACTOR, so the ~40 existing tests that
+     * call it are unchanged by two-factor authentication arriving. That is not a
+     * convenience: every one of them signs in as an Admin or an Officer, both of
+     * which now STOP at a code screen, so without this every test in the suite
+     * would be asserting about a session that was never created.
+     *
+     * WHAT IT DOES IS WHAT THE OFFICER DOES: it reads the six-digit code the
+     * server just emailed, out of the mail log the 'log' transport writes (see
+     * below), and submits it. Nothing here fakes the verification — if the
+     * endpoint is wrong, these tests fail.
+     */
     protected function login(string $username, string $password = 'Passw0rd!23'): array
     {
         $res = $this->request('POST', '/login', ['username' => $username, 'password' => $password]);
@@ -171,7 +207,72 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
             $pair = explode(';', $c)[0];
             $cookie = $cookie === '' ? $pair : $cookie . '; ' . $pair;
         }
-        return [$cookie, (string) $res['body']['csrf_token'], $res['body']['user']];
+        $csrf = (string) ($res['body']['csrf_token'] ?? '');
+
+        // No second factor for this account (Staff): the old, one-step path.
+        if (empty($res['body']['mfa']['required'])) {
+            return [$cookie, $csrf, $res['body']['user']];
+        }
+
+        $verify = $this->request('POST', '/mfa/verify', ['code' => $this->lastEmailedCode()], $cookie, $csrf);
+        $this->assertSame(200, $verify['status'], "mfa verify for {$username} failed: " . json_encode($verify['body']));
+        return [$this->cookieFrom($verify, $cookie), (string) $verify['body']['csrf_token'], $verify['body']['user']];
+    }
+
+    /**
+     * Where the 'log' mail transport writes.
+     *
+     * The API hands this path back so the harness and the server cannot disagree
+     * about it — one definition, in Mailer, read from both sides.
+     */
+    protected function mailLogPath(): string
+    {
+        require_once __DIR__ . '/../app/core/Config.php';
+        require_once __DIR__ . '/../app/core/Mailer.php';
+        return \App\Core\Mailer::logPath();
+    }
+
+    /**
+     * The most recent six-digit code the server emailed.
+     *
+     * READ FROM THE MAIL LOG, because that is the only place a code exists in
+     * readable form: the server stores a bcrypt hash of it and there is
+     * deliberately no endpoint that returns one. This stands in for the officer's
+     * inbox, and it only works when the API process is on the 'log' transport.
+     * On a machine configured for real delivery, that comes from starting the test
+     * server with BLUEWRITE_MAIL_TRANSPORT=log rather than from editing
+     * config/config.php — see tests/README.md, so nobody spends an afternoon on it.
+     */
+    protected function lastEmailedCode(): string
+    {
+        $path = $this->mailLogPath();
+        $raw = is_file($path) ? (string) file_get_contents($path) : '';
+        // Entries are separated by `===== <iso date> =====`; the newest one is
+        // the code the server issued for the sign-in being completed.
+        $parts = preg_split('/^===== .* =====\s*$/m', $raw) ?: [];
+        for ($i = count($parts) - 1; $i >= 0; $i--) {
+            if (preg_match('/code is:\s*(\d{6})/i', $parts[$i], $m) === 1) {
+                return $m[1];
+            }
+        }
+        $this->fail(
+            'No sign-in code was written to ' . $path . '. Start the test server with ' .
+            'BLUEWRITE_MAIL_TRANSPORT=log (or set mail.transport to \'log\' in config/config.php).'
+        );
+    }
+
+    /** Keep the session cookie a response re-issued, falling back to the old one. */
+    private function cookieFrom(array $res, string $fallback): string
+    {
+        if (empty($res['setCookies'])) {
+            return $fallback;
+        }
+        $cookie = '';
+        foreach ($res['setCookies'] as $c) {
+            $pair = explode(';', $c)[0];
+            $cookie = $cookie === '' ? $pair : $cookie . '; ' . $pair;
+        }
+        return $cookie;
     }
 
     protected function createReport(string $cookie, string $csrf, array $overrides = []): array

@@ -16,10 +16,15 @@ use App\Core\Audit;
 
 $pdo = Database::pdo();
 
+// Admin and Officer accounts carry an email address because the second factor is
+// a code sent to it — without one they cannot sign in at all. Staff (e.ramos)
+// signs in with a password alone and needs none. These are DEV addresses: point
+// them at a mailbox you can read, or set mail.transport to 'log' and read the
+// code out of config/mail.log.
 $users = [
-    ['role_id' => 1, 'full_name' => 'Maria Santos',   'badge_number' => 'ADM-0001', 'username' => 'm.santos'],
-    ['role_id' => 2, 'full_name' => 'Juan Dela Cruz', 'badge_number' => '4471',     'username' => 'j.delacruz'],
-    ['role_id' => 3, 'full_name' => 'Elena Ramos',    'badge_number' => '8823',     'username' => 'e.ramos'],
+    ['role_id' => 1, 'full_name' => 'Maria Santos',   'badge_number' => 'ADM-0001', 'username' => 'm.santos',   'email' => 'm.santos@example.test'],
+    ['role_id' => 2, 'full_name' => 'Juan Dela Cruz', 'badge_number' => '4471',     'username' => 'j.delacruz', 'email' => 'j.delacruz@example.test'],
+    ['role_id' => 3, 'full_name' => 'Elena Ramos',    'badge_number' => '8823',     'username' => 'e.ramos',    'email' => null],
 ];
 
 $hash = password_hash('Passw0rd!23', PASSWORD_BCRYPT);
@@ -27,14 +32,15 @@ $hash = password_hash('Passw0rd!23', PASSWORD_BCRYPT);
 $userIds = [];
 foreach ($users as $u) {
     $stmt = $pdo->prepare(
-        'INSERT INTO users (role_id, full_name, badge_number, username, password_hash, status)
-         VALUES (:role, :name, :badge, :username, :hash, :status)'
+        'INSERT INTO users (role_id, full_name, badge_number, username, email, password_hash, status)
+         VALUES (:role, :name, :badge, :username, :email, :hash, :status)'
     );
     $stmt->execute([
         ':role' => $u['role_id'],
         ':name' => $u['full_name'],
         ':badge' => $u['badge_number'],
         ':username' => $u['username'],
+        ':email' => $u['email'],
         ':hash' => $hash,
         ':status' => 'active',
     ]);

@@ -19,6 +19,26 @@ final class AuditsController
     private const ACTIONS = [
         'login.success', 'login.failed', 'login.locked', 'login.blocked_inactive', 'logout',
         'user.create', 'user.update', 'user.password_reset', 'user.deactivate',
+        // An officer changing their OWN password, and a failed attempt at it.
+        // Separate from `user.password_reset` above, which is an ADMIN resetting
+        // somebody else's: the trail has to be able to answer "who set this
+        // credential" without reading the detail column, and the two events have
+        // different actors. The failed one matters as much as the success — an
+        // attempt from a session nobody should have had is exactly what a trail
+        // is for.
+        'user.password_change', 'user.password_change_failed',
+        // The second factor. `login.password_ok` is the important one to keep
+        // apart from `login.success`: it records a password that was accepted
+        // with NOTHING signed in, so a trail without it would show a gap where a
+        // sign-in was attempted and abandoned at the code screen. The rest are
+        // one event per thing that can happen to a factor: enrolled, verified,
+        // refused, locked, a recovery code spent, a replayed code, and an Admin
+        // clearing somebody's factor.
+        'login.password_ok',
+        'mfa.enrolled', 'mfa.setup_started', 'mfa.verified', 'mfa.verify_failed',
+        'mfa.locked', 'mfa.code_replayed', 'mfa.stage_stale', 'mfa.completed_inactive',
+        'mfa.recovery_used', 'mfa.recovery_failed', 'mfa.recovery_regenerated', 'mfa.recovery_regen_failed',
+        'mfa.reset_by_admin',
         'report.create', 'report.update', 'report.finalize', 'report.archive', 'report.restore', 'report.print', 'report.export',
         'ai.narrative.generate',
     ];
