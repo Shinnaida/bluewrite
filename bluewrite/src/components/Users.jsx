@@ -1,13 +1,53 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
+import { checkPassword, MIN_LENGTH, passwordHint } from '../lib/passwordPolicy.js';
 
 const EMPTY_FORM = {
   full_name: '',
   badge_number: '',
   username: '',
+  email: '',
   role: 'Staff',
   password: '',
 };
+
+/**
+ * What the Two-factor column says about one account.
+ *
+ * The second factor is a six-digit code emailed to the account's own address, so
+ * what this column reports is whether that address EXISTS (the factor rests on
+ * it), whether the factor is currently LOCKED after too many wrong codes, and
+ * nothing else. 'Not required' is a Staff account — the factor is only mandatory
+ * for Admin and Officer (see EmailOtp::REQUIRED_ROLES).
+ *
+ * "No email" is the state worth an administrator's attention: that account
+ * cannot finish signing in at all, and the fix — recording an address — is on
+ * the Edit form directly below this row.
+ */
+function twoFactorCell(user) {
+  if (user.role !== 'Admin' && user.role !== 'Officer') {
+    return { text: 'Not required', cls: 'user-mfa--na', title: 'Staff accounts sign in with a password only.' };
+  }
+  if (!user.email) {
+    return {
+      text: 'No email',
+      cls: 'user-mfa--off',
+      title: 'This account cannot receive a sign-in code. Add an email address before it needs to sign in.',
+    };
+  }
+  if (user.otp_locked_until) {
+    return {
+      text: 'Locked',
+      cls: 'user-mfa--thin',
+      title: `Codes go to ${user.email}. Locked until ${user.otp_locked_until} after too many incorrect codes — Reset verification clears it.`,
+    };
+  }
+  return {
+    text: 'Email code',
+    cls: 'user-mfa--on',
+    title: `A six-digit code is sent to ${user.email} at each sign-in.`,
+  };
+}
 
 export default function Users({ notify }) {
   const [users, setUsers] = useState(null);
@@ -72,10 +112,41 @@ export default function Users({ notify }) {
     setResetError('');
   }
 
+  /**
+   * Clear an account's second factor — the way back in when the phone and the
+   * recovery codes are both gone.
+   *
+   * The dialog says what actually happens rather than "are you sure": the
+   * officer is signed out at their next action, the account is password-only
+   * until they sign in again, and they will be asked to enrol from scratch. The
+   * sentence about NOT being able to read their codes is the important one — an
+   * administrator's first instinct is to ask for the codes, and there is no
+   * screen anywhere that can show them (the server keeps digests).
+   */
+  function askResetMfa(u) {
+    setConfirm({
+      title: `Reset verification for ${u.full_name}?`,
+      message:
+        'Use this when their account is locked out by too many incorrect codes, or when their mailbox has just been fixed. Any code they are still holding stops working, and the next sign-in sends a fresh one to the same address. Their email address and password are not changed, and this is recorded in the audit trail. Nobody can read a code for you — only a one-way hash of each is stored.',
+      confirmLabel: 'Reset Verification',
+      doneMessage: `Verification reset for ${u.full_name}.`,
+      action: () => api(`/users/${u.id}/mfa-reset`, { method: 'POST' }),
+    });
+  }
+
   async function runResetPassword(e) {
     e.preventDefault();
-    if (resetPassword.length < 10) {
-      setResetError('Password must be at least 10 characters.');
+    // The same rule the server will apply, from the same one home on this side
+    // (lib/passwordPolicy.js, which is held to app/core/PasswordPolicy.php by
+    // test). Checked against the account being reset, so an admin cannot set a
+    // password that is really just that officer's username. The server refuses
+    // it either way — this is so the admin is told before the round trip.
+    const policy = checkPassword(resetPassword, {
+      username: resetFor.username,
+      badge: resetFor.badge_number,
+    });
+    if (policy !== null) {
+      setResetError(policy);
       return;
     }
     try {
@@ -93,6 +164,7 @@ export default function Users({ notify }) {
       full_name: u.full_name,
       badge_number: u.badge_number,
       username: u.username,
+      email: u.email || '',
       role: u.role,
       password: '',
     });
@@ -191,6 +263,27 @@ export default function Users({ notify }) {
                 <option>Staff</option>
               </select>
             </div>
+            <div className="field">
+              <label htmlFor="u-email">Email address</label>
+              <input
+                id="u-email"
+                type="email"
+                autoComplete="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                required={form.role === 'Admin' || form.role === 'Officer'}
+                aria-describedby="u-email-hint"
+              />
+              {/* The rule is the server's (EmailOtp::REQUIRED_ROLES), stated
+                  here so the admin is not surprised by a 422 after typing a
+                  whole form: Admin and Officer sign in with an emailed code, so
+                  their account needs somewhere for the code to go. */}
+              <p className="field-hint" id="u-email-hint">
+                {form.role === 'Admin' || form.role === 'Officer'
+                  ? 'Sign-in codes are sent here. Required for Admin and Officer accounts.'
+                  : 'Optional — only needed if this account will use a second factor.'}
+              </p>
+            </div>
             <div className="field span-2">
               <label htmlFor="u-pass">
                 Password {editingId && '(leave blank to keep current)'}
@@ -202,7 +295,14 @@ export default function Users({ notify }) {
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 required={!editingId}
+                minLength={MIN_LENGTH}
+                aria-describedby="u-pass-hint"
               />
+              {/* The number is the constant, not a sentence that has to be
+                  remembered when the rule changes. */}
+              <p className="field-hint" id="u-pass-hint">
+                {passwordHint()} Not the account's username or badge number.
+              </p>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.6rem' }}>
@@ -233,8 +333,10 @@ export default function Users({ notify }) {
                   <th>Full name</th>
                   <th>Badge no.</th>
                   <th>Username</th>
+                  <th>Email</th>
                   <th>Role</th>
                   <th>Status</th>
+                  <th>Two-factor</th>
                   <th>Last sign-in</th>
                   <th>Actions</th>
                 </tr>
@@ -246,14 +348,32 @@ export default function Users({ notify }) {
                       <td>{u.full_name}</td>
                       <td className="num">{u.badge_number}</td>
                       <td>{u.username}</td>
+                      <td>{u.email || '—'}</td>
                       <td>{u.role}</td>
                       <td>
                         <span className={`badge ${u.status}`}>{u.status}</span>
+                      </td>
+                      <td>
+                        {(() => {
+                          const cell = twoFactorCell(u);
+                          return (
+                            <span className={`user-mfa ${cell.cls}`} title={cell.title}>
+                              {cell.text}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td>{u.last_login_at ? u.last_login_at.replace('T', ' ') : 'Never'}</td>
                       <td>
                         <button onClick={() => startEdit(u)}>Edit</button>{' '}
                         <button onClick={() => askResetPassword(u)}>Reset password</button>{' '}
+                        {/* Offered for every account that USES a second factor: a
+                            Staff account has none to reset, and for an Admin or
+                            Officer this clears a stuck lock or an outstanding
+                            code. Their address is left alone. */}
+                        {(u.role === 'Admin' || u.role === 'Officer') && (
+                          <button onClick={() => askResetMfa(u)}>Reset verification</button>
+                        )}{' '}
                         {u.status === 'active' ? (
                           <button className="danger" onClick={() => askDeactivate(u)}>
                             Deactivate Account
@@ -294,11 +414,18 @@ export default function Users({ notify }) {
                   autoComplete="new-password"
                   value={resetPassword}
                   onChange={(e) => setResetPassword(e.target.value)}
-                  minLength={10}
+                  minLength={MIN_LENGTH}
                   required
                   autoFocus
                 />
-                <p className="field-hint">Minimum 10 characters, same rule as account creation.</p>
+                {/* Reset sets the password the OFFICER will type at the gate, so
+                    it is held to the same rule as account creation and as the
+                    officer's own change form — no path to a weaker password,
+                    and no path to a stricter one either. */}
+                <p className="field-hint">
+                  {passwordHint()} Same rule as account creation — and as the
+                  password an officer sets for themselves.
+                </p>
               </div>
               {resetError && (
                 <div className="alert error" role="alert">{resetError}</div>

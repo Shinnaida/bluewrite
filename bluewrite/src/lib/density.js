@@ -38,6 +38,16 @@ export const DENSITY_HINTS = {
   compact: 'Tighter rows, so more of the report fits on screen',
 };
 
+/**
+ * One word for each choice, beside the sentence above it — the same LABELS/HINTS
+ * pairing lib/formFormat.js and lib/theme.js carry, and what the Profile panel's
+ * collapsed header uses to state its values in the space of a heading.
+ */
+export const DENSITY_LABELS = {
+  comfortable: 'Comfortable',
+  compact: 'Compact',
+};
+
 /** The stored preference, or the comfortable default when unavailable. */
 export function readDensity() {
   try {

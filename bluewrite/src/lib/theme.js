@@ -47,6 +47,22 @@ export const THEME_HINTS = {
   system: 'Matches this workstation’s display setting',
 };
 
+/**
+ * One word for each choice, beside the sentence above it.
+ *
+ * The hint is what a row says while it is being read; this is what the SAME
+ * value is called when it has to fit before the reader gets there — the Profile
+ * panel's collapsed header, which states its values as `Sheet · Light ·
+ * Comfortable`. Same pairing as lib/formFormat.js's LABELS and HINTS, and the
+ * same reason: a summary built by shortening a sentence is a summary that
+ * eventually reads like a fragment.
+ */
+export const THEME_LABELS = {
+  light: 'Light',
+  dark: 'Dark',
+  system: 'Auto',
+};
+
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 
 /** The stored preference, or the light default when storage is unavailable. */
