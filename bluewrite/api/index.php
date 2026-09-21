@@ -13,7 +13,23 @@ require __DIR__ . '/../app/core/Session.php';
 require __DIR__ . '/../app/core/Csrf.php';
 require __DIR__ . '/../app/core/Audit.php';
 require __DIR__ . '/../app/core/Auth.php';
+// The second factor: a one-time code sent to the account's own Gmail address.
+// The mailer is how it travels, EmailOtp holds the state and the rules, and the
+// one exception means "this server cannot send it" rather than "that code is
+// wrong". Required here for the same reason as everything else in this list —
+// no autoloader.
+require __DIR__ . '/../app/core/MailUnavailableException.php';
+require __DIR__ . '/../app/core/Mailer.php';
+require __DIR__ . '/../app/core/EmailOtp.php';
 require __DIR__ . '/../app/core/Validator.php';
+// The password rule. Required HERE, with the rest: this project has no
+// autoloader, so a class that is named anywhere on a request path and not listed
+// in this file is a fatal error at the point of use, not at boot. It is used by
+// UsersController (account creation and the admin reset) and by AuthController
+// (an officer changing their own password) — three routes that would each have
+// answered 500 while looking, from the outside, like a server fault rather than
+// the missing line it is.
+require __DIR__ . '/../app/core/PasswordPolicy.php';
 require __DIR__ . '/../app/core/LegacyNormalizer.php';
 require __DIR__ . '/../app/core/Station.php';
 require __DIR__ . '/../app/core/ReportVerification.php';
@@ -33,6 +49,7 @@ require __DIR__ . '/../app/ai/CachedInstructionStore.php';
 require __DIR__ . '/../app/ai/NarrativeEconomy.php';
 require __DIR__ . '/../app/ai/NarrativeService.php';
 require __DIR__ . '/../app/controllers/NarrativeController.php';
+require __DIR__ . '/../app/controllers/NotificationsController.php';
 require __DIR__ . '/../app/controllers/AuthController.php';
 require __DIR__ . '/../app/controllers/UsersController.php';
 require __DIR__ . '/../app/controllers/ReportsController.php';
@@ -45,6 +62,7 @@ use App\Controllers\AuditsController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\NarrativeController;
+use App\Controllers\NotificationsController;
 use App\Controllers\ReportsController;
 use App\Controllers\StationController;
 use App\Controllers\UsersController;
@@ -92,10 +110,47 @@ try {
         (new AuthController())->logout();
     }
 
+    // ---- The second factor, before the gate ---------------------------------
+    //
+    // These run on a PENDING session: the password was accepted and NOTHING is
+    // signed in yet (no user_id in the session — see AuthController's
+    // beginSecondFactor). Auth::requireUser would answer 401 to every one of
+    // them, which is the correct behaviour for every other endpoint and exactly
+    // wrong here, because the sign-in could then never finish.
+    //
+    // They are not unguarded: each calls Auth::requireCsrf() itself, and each
+    // takes its account id from the pending session rather than from the
+    // request, so there is no id in a body to tamper with. 'status' is a GET and
+    // exists so a reloaded page can recover its CSRF token and its stage.
+    if ($seg0 === 'mfa') {
+        $c = new AuthController();
+        if ($seg1 === 'status' && $method === 'GET') {
+            $c->mfaStatus();
+        }
+        if ($seg1 === 'send' && $method === 'POST') {
+            $c->mfaResend();
+        }
+        if ($seg1 === 'verify' && $method === 'POST') {
+            $c->mfaVerify();
+        }
+        if ($seg1 === 'cancel' && $method === 'POST') {
+            $c->mfaCancel();
+        }
+    }
+
     // From here on, requests must come from an authenticated session,
     // with a valid CSRF token on state-changing methods.
     Session::start();
     \App\Core\Auth::requireCsrf();
+
+    // The officer changing their OWN password. Registered AFTER the gate above
+    // on purpose, unlike /logout (which sits before it because a session that is
+    // already gone must still be able to end cleanly): this endpoint changes a
+    // credential, so the CSRF token is not optional and there is nothing here
+    // that should work without a live session.
+    if ($seg0 === 'me' && $seg1 === 'password' && $method === 'POST') {
+        (new AuthController())->changePassword();
+    }
 
     if ($seg0 === 'users') {
         $c = new UsersController();
@@ -114,6 +169,13 @@ try {
         }
         if ($seg1 !== null && !isset($parts[2]) && $method === 'DELETE') {
             $c->destroy((string) $seg1);
+        }
+        // POST /users/:id/mfa-reset — clear an outstanding sign-in code and the
+        // attempt lock that comes with it. Admin-only inside the controller (not
+        // by the route), and audited; the next sign-in simply sends a fresh code
+        // to the same address.
+        if ($seg1 !== null && ($parts[2] ?? null) === 'mfa-reset' && !isset($parts[3]) && $method === 'POST') {
+            $c->resetMfa((string) $seg1);
         }
     }
 
@@ -141,6 +203,22 @@ try {
 
     if ($seg0 === 'dashboard' && $seg1 === 'stats' && $method === 'GET') {
         (new DashboardController())->stats();
+    }
+
+    // The bell in the top bar: what has happened to the reports THIS account
+    // recorded (another officer's verification, a finalize, an archive). Not
+    // under /reports/:id — it is about an officer's whole set of reports, and
+    // its own read is what the badge needs on every screen. Any signed-in role
+    // may read its own feed; there is no cross-user view and no role gate to
+    // apply, because the feed's scope is the session's own id.
+    if ($seg0 === 'notifications') {
+        $c = new NotificationsController();
+        if ($seg1 === null && $method === 'GET') {
+            $c->index();
+        }
+        if ($seg1 === 'seen' && $method === 'POST') {
+            $c->markSeen();
+        }
     }
 
     // Station settings (spec §1.1): fixed agency header, type list, personnel.

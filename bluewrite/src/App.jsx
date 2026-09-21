@@ -29,6 +29,13 @@ export default function App() {
   // request and the browser logs a second red 401 on every signed-out load.
   // null = not probed yet (only true after a logout, see onLogout).
   const [boot, setBoot] = useState(null);
+  // Why the gate is showing, when a flow ended the session ON PURPOSE. Exactly
+  // one flow does: the officer changing their own password (Profile ▸ Security),
+  // which ends the session it was made from on purpose — see Shell's
+  // onPasswordChanged. Held here because the gate is rendered here; cleared by
+  // the next successful sign-in, so it can never become a permanent fixture of
+  // the gate.
+  const [gateNotice, setGateNotice] = useState(null);
 
   const notify = useCallback((msg) => {
     setToast({ msg, id: Date.now() });
@@ -66,6 +73,24 @@ export default function App() {
     setUser(null);
   }, []);
 
+  // The one sign-out that is not a sign-out. The session was ended BY the change
+  // rather than by the officer leaving, so they land on the gate owing an
+  // explanation — and the thing they need to know is precisely the thing that
+  // just changed. Same bookkeeping as onLogout, plus the sentence.
+  const onPasswordChanged = useCallback(() => {
+    setBoot(null);
+    setGateNotice('Your password was changed. Sign in with the new one.');
+    setUser(null);
+  }, []);
+
+  // A notice belongs to the visit it was written for, so signing in retires it:
+  // whatever the officer does next, they have seen it, and a stale "your
+  // password was changed" on the gate tomorrow would be a lie about today.
+  const onLogin = useCallback((u) => {
+    setGateNotice(null);
+    setUser(u);
+  }, []);
+
   if (user === undefined) {
     return (
       <div className="la-page" style={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -78,7 +103,14 @@ export default function App() {
 
   if (user === null) {
     return (
-      <Login onLogin={setUser} notify={notify} theme={theme} onTheme={setTheme} boot={boot} />
+      <Login
+        onLogin={onLogin}
+        notify={notify}
+        theme={theme}
+        onTheme={setTheme}
+        boot={boot}
+        notice={gateNotice}
+      />
     );
   }
 
@@ -87,6 +119,7 @@ export default function App() {
       <Shell
         user={user}
         onLogout={onLogout}
+        onPasswordChanged={onPasswordChanged}
         notify={notify}
         theme={theme}
         onTheme={setTheme}
