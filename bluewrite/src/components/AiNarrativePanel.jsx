@@ -61,6 +61,17 @@ const PANEL_MAX = 560;
 const COLLAPSE_BELOW = 280;
 const RAIL_W = 44;
 
+// The account read is ONE attempt server-side by design (nothing to queue a
+// retry against — see NarrativeService::classifyAccount), so a service that is
+// merely BUSY would otherwise be handed straight back to the officer as a
+// failed press they can do nothing about. "Busy" is a wait, not a failure: the
+// press waits it out once, in the open, and only a second busy answer reaches
+// the officer — by which time the panel can honestly say to try again in a
+// minute. (Waiting longer would hold the officer on a spinner longer than a
+// retry is worth; the retry control is there for that.)
+const READ_ATTEMPTS = 2;
+const READ_RETRY_WAIT_MS = 5000;
+
 // Pushpin icon for the pin/unpin control (filled = pinned). Inline SVG so it
 // inherits the button color and needs no asset pipeline.
 function PinIcon({ filled }) {
@@ -173,6 +184,14 @@ export default function AiNarrativePanel({
   // second read did not answer, so an empty type block is never mistaken for a
   // model that found nothing.
   onReadAccount,
+  // The way OUT of a refusal that is about the REPORT and not about the
+  // request. The sheet format keeps the report's own fields behind its reveal
+  // control, so a message that names them ("it still needs an incident type, a
+  // date and a place") has to carry the control that opens them — otherwise the
+  // officer is told to go and fill in fields they cannot see, which is how a
+  // refused press turns into "nothing happened". Undefined in the formats where
+  // those fields are already on screen.
+  onRevealFields,
   // D3 (Phase 6 Stage 1) — the reason Generate and Tighten are unavailable for
   // a narrative that is not in English, or null when they are. The EDITOR owns
   // the wording (src/lib/reportLanguages.js), so the panel, the finalize bar
@@ -207,6 +226,16 @@ export default function AiNarrativePanel({
   const [feedback, setFeedback] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [message, setMessage] = useState(null);
+  // What "Try again" repeats: `{ kind: 'generate' | 'tighten', feedback? }`,
+  // set at the top of each entry point so a failed generate retries a generate
+  // and a failed tighten retries a tighten — the two are not interchangeable
+  // (one writes the officer's report, the other edits their own text), and a
+  // retry control that guessed would be worse than none. An INTENT rather than
+  // a captured closure: the repeat must read the narrative as it is NOW, not as
+  // it was when the first press failed. A GUIDED press sets nothing — its step
+  // is refused once the flow has ended, so the honest retry there is the guided
+  // button itself.
+  const [lastPress, setLastPress] = useState(null);
   const [residual, setResidual] = useState([]);
   const [panelOpen, setPanelOpen] = useState(false); // slide-in side panel
   const draftRef = useRef(null);
@@ -408,6 +437,7 @@ export default function AiNarrativePanel({
   };
 
   const generate = async (feedbackText = '', asGuidedStep = false) => {
+    if (!asGuidedStep) setLastPress({ kind: 'generate', feedback: feedbackText });
     // THE ACCOUNT — the officer's own words, read ONCE and used for both the
     // read below and the generation request further down. Two places hold them:
     // the notes box, and the form's own narrative field. The notes box wins when
@@ -438,15 +468,39 @@ export default function AiNarrativePanel({
     // completable. A read that fails changes nothing and does not stop the
     // press.
     if (onReadAccount) {
+      // SAY SO FIRST. The read is a provider call of its own — a 45s timeout
+      // per attempt, inside the service's own retry — and it lands BEFORE the
+      // loading state below, so until it answered this press showed the officer
+      // NOTHING AT ALL: the button took the click and the screen did not move.
+      // That is the one failure mode this panel must not have, so the panel
+      // opens with the read named for what it is (it is a read, not a draft).
+      setMessage('Reading your account…');
+      setThinkPhase('reading');
+      setMode('loading');
+      setRail(false);
+      setPanelOpen(true);
       setFillNote(null);
       try {
-        const receipt = await onReadAccount(accountText);
+        let receipt = await onReadAccount(accountText);
+        for (let attempt = 2; receipt?.retryable && attempt <= READ_ATTEMPTS; attempt++) {
+          // The receipt's `retryable` is the SERVER's own answer (it said
+          // "busy", not "no"): a rejected request or a wrong key is reported on
+          // the first answer, because waiting cannot fix either.
+          setMessage(`The AI service is busy — trying again (${attempt} of ${READ_ATTEMPTS})…`);
+          await new Promise((r) => setTimeout(r, READ_RETRY_WAIT_MS));
+          receipt = await onReadAccount(accountText);
+        }
         if (receipt) setFillNote(receipt);
       } catch (err) {
         // The editor promised not to throw; a reader that does anyway must not
         // take the Generate press with it.
         setFillNote({ ok: false, message: err?.message || '' });
       }
+      // The read is answered (either way): whatever it found is on the receipt
+      // above or in the panel's own error state, so the "reading" line must not
+      // outlive it, and the press carries on in the ordinary draft phase.
+      setMessage(null);
+      setThinkPhase('waiting');
     }
 
     // Gate: a blocked generate flags the problems and never opens the loading
@@ -461,7 +515,9 @@ export default function AiNarrativePanel({
     }
     // The report the answer is filed against. A brand-new report is saved here
     // (the gate above has already proved it can be — Gate 1's three fields are
-    // the first thing the Gate 2 rule set checks).
+    // the first thing the Gate 2 rule set checks). The save is a second wait
+    // before anything is drawn, so the same rule applies: name it.
+    setMessage('Preparing the report so the AI can work on it…');
     const rid = await resolveReportId();
     if (rid == null) {
       // The save behind the id was refused, or the report still has no incident
@@ -596,6 +652,7 @@ export default function AiNarrativePanel({
   // kept, and the SERVER still enforces it against the saved record.
   const tighten = async (overrideText = null, opts = {}) => {
     const guidedStep = opts.guided === true;
+    if (!guidedStep) setLastPress({ kind: 'tighten' });
     if (!guidedStep && languageBlocked) {
       setMessage(languageBlocked);
       setMode('error');
@@ -792,6 +849,36 @@ export default function AiNarrativePanel({
     </p>
   ) : null;
 
+  // The escape hatch a REPORT-side refusal needs (see onRevealFields): the
+  // sheet keeps the report's own fields behind its reveal control, so the
+  // message that names them carries the control that opens them — the same
+  // words as the sheet's own toggle, because it is that control.
+  const revealFieldsButton = onRevealFields ? (
+    <button type="button" className="ai-reveal-fields" onClick={onRevealFields}>
+      Show the report fields
+    </button>
+  ) : null;
+
+  // Everything a refusal offers besides Dismiss: the way to the fields it is
+  // about (the sheet keeps them behind its reveal control) and the way to
+  // repeat the press that failed. One node, used by both error renderings, so
+  // the two cannot drift into offering different ways out of the same refusal.
+  const errorActions = (
+    <>
+      {revealFieldsButton}
+      {lastPress && (
+        <button
+          type="button"
+          className="ai-retry"
+          onClick={() => (lastPress.kind === 'tighten' ? tighten() : generate(lastPress.feedback))}
+        >
+          Try again
+        </button>
+      )}
+      <button type="button" onClick={() => setMode('ready')}>Dismiss</button>
+    </>
+  );
+
   // The recorded disposition the model must close the narrative with. Long
   // text is trimmed for the hint; the full text rides on the tooltip.
   const referenceText = String(actionTaken || '').replace(/\s+/g, ' ').trim().slice(0, 160);
@@ -963,7 +1050,7 @@ export default function AiNarrativePanel({
       {mode === 'error' && !panelOpen && (
         <div className="alert error" role="alert">
           {message}{' '}
-          <button type="button" onClick={() => setMode('ready')}>Dismiss</button>
+          {errorActions}
         </div>
       )}
 
@@ -1108,9 +1195,19 @@ export default function AiNarrativePanel({
                         aria-hidden so per-phrase changes are never read
                         aloud. The `slow` fallback below has its OWN live
                         region because it is actionable information. */}
-                    <span className="sr-only">Generating draft, please wait</span>
+                    <span className="sr-only">
+                      {thinkPhase === 'reading' ? 'Reading your account, please wait' : 'Generating draft, please wait'}
+                    </span>
                     <span className="ai-spinner" aria-hidden="true" />
-                    {thinkPhase === 'verifying' ? (
+                    {thinkPhase === 'reading' ? (
+                      // The account read: no rotating draft phrases, because
+                      // nothing is being drafted yet — the model is reading
+                      // what the officer already wrote, and saying so is the
+                      // whole point of this phase.
+                      <p className="ai-loading-text" key="read">
+                        Reading your account…
+                      </p>
+                    ) : thinkPhase === 'verifying' ? (
                       <p className="ai-loading-text ai-status-swap" key="verify">
                         {VERIFY_PHRASE}
                       </p>
@@ -1126,7 +1223,7 @@ export default function AiNarrativePanel({
                         {status.phrase}
                       </p>
                     )}
-                    {thinkPhase === 'waiting' && !status.slow && (
+                    {(thinkPhase === 'waiting' || thinkPhase === 'reading') && !status.slow && (
                       <p className="ai-loading-sub">This can take up to 45 seconds</p>
                     )}
                     {message && <p className="ai-loading-sub">{message}</p>}
@@ -1144,7 +1241,7 @@ export default function AiNarrativePanel({
                 {mode === 'error' && (
                   <div className="alert error" role="alert">
                     {message}{' '}
-                    <button type="button" onClick={() => setMode('ready')}>Dismiss</button>
+                    {errorActions}
                   </div>
                 )}
 

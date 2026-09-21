@@ -180,7 +180,7 @@ final class NarrativeController
             ]);
         } catch (AiProviderException $e) {
             Response::json(502, [
-                'error' => 'The AI service could not complete the request.',
+                'error' => self::providerFailureMessage($e),
                 'manual_mode' => !$e->retryable,
             ]);
         }
@@ -408,7 +408,7 @@ final class NarrativeController
             ]);
         } catch (AiProviderException $e) {
             Response::json(502, [
-                'error' => 'The AI service could not complete the request.',
+                'error' => self::providerFailureMessage($e),
                 'manual_mode' => !$e->retryable,
             ]);
         }
@@ -487,7 +487,7 @@ final class NarrativeController
             ]);
         } catch (AiProviderException $e) {
             Response::json(502, [
-                'error' => 'The AI service could not complete the request.',
+                'error' => self::providerFailureMessage($e),
                 'manual_mode' => !$e->retryable,
             ]);
         }
@@ -563,6 +563,33 @@ final class NarrativeController
         // Phase 6 Stage 5 (Track A, D3) — the known set is read from the
         // language registry, so adding a language is a data change here too.
         return is_string($code) && LanguageRegistry::isKnown($code) ? $code : 'en';
+    }
+
+    /**
+     * What the officer is told when the provider itself fails.
+     *
+     * ONE sentence for every provider failure is the wrong answer on a station
+     * system: "this station's key was rejected" needs an administrator, "the
+     * service is busy" needs a minute, and "the service is down" needs both —
+     * and an officer who cannot tell them apart can only press the button
+     * again. The provider already classified the failure when it threw (its
+     * HTTP status), so the sentence follows that, and the catch keeps the
+     * generic wording for the one case that has no status: a call that
+     * COMPLETED but could not be read as an answer.
+     */
+    private static function providerFailureMessage(AiProviderException $e): string
+    {
+        $status = $e->httpStatus;
+        if ($status === 429) {
+            return 'The AI service is busy right now. Wait a minute and try again.';
+        }
+        if ($status !== null && $status >= 400 && $status < 500) {
+            return 'The AI service rejected this station\'s request. Tell an administrator — your report is not affected.';
+        }
+        if ($status !== null && $status >= 500) {
+            return 'The AI service had a problem on its side. Try again in a moment.';
+        }
+        return 'The AI service could not complete the request.';
     }
 
     public static function liveText(array $body, string $key, int $maxLength): ?string
