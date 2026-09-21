@@ -1,0 +1,62 @@
+-- BlueWrite migration 011: how far an account has read its notifications.
+--
+-- The top bar carries a bell that reports what has happened to the reports an
+-- officer WROTE: another officer verified or disputed a translation, or a
+-- report was finalized, archived or restored by somebody else. Every one of
+-- those events is ALREADY stored, permanently and with a server clock:
+--
+--   report_verifications — Phase 6 Stage 4's append-only review record
+--                          (migration 009), one row per human attestation.
+--   report_history       — the change log every write already writes
+--                          (migration 001), whose change_note names the act.
+--
+-- So this migration deliberately creates NO events table. A second store of
+-- the same facts would be a second place for them to be wrong, and the feed is
+-- a READ of what is already recorded. What is missing is only the thing those
+-- events cannot know: where the OFFICER has read up to. That is one timestamp,
+-- and it is per ACCOUNT rather than per browser, because the station PCs are
+-- shared workstations — an officer who reads the bell at one desk must not
+-- find every item unread again at the next one.
+--
+-- COLUMN
+--   notifications_seen_at — the instant this account last read the bell.
+--     NULL means "never read", so every existing account starts with an empty
+--     history and an empty badge: no backfill, and nobody is greeted by a wall
+--     of events from before this feature existed.
+--
+-- A WATERMARK, NOT PER-ITEM FLAGS. One timestamp answers the only question the
+-- badge asks — "is there anything since I last looked?" — and it cannot drift
+-- out of step with the event rows the way a mirrored `read` column would. It
+-- buys nothing else on purpose: there is no per-item read state, and no way to
+-- keep one item unread. A feed of acts performed on an officer's own reports
+-- does not need a mailbox.
+--
+-- Server-set only. The API writes this column (POST /notifications/seen) from
+-- the session and NEVER from a client-supplied identity; the value the client
+-- may contribute is the newest event it was actually shown, and the server
+-- stores it only if it is newer than what is already there and not in the
+-- future. See app/controllers/NotificationsController.php.
+--
+-- GRANULARITY, AND THE ONE RACE IT LEAVES. DATETIME holds whole seconds, and
+-- both source tables stamp their events the same way (report_verifications
+-- .verified_at, report_history.created_at), so "unread" is `happened_at >
+-- notifications_seen_at` and an act recorded in the SAME SECOND as the newest
+-- act the officer was already shown reads as seen. That is deliberate: the
+-- alternative — marking a whole second as read — would be a phantom badge every
+-- time the panel was opened, which is a permanent daily annoyance in exchange
+-- for a window that is already sub-second. The race is closed for the ordinary
+-- case (an event that arrives during the round trip is newer than everything on
+-- screen and so stays unread) and left open only for a collision inside one
+-- second, which no officer can act on anyway.
+--
+-- WHY NOT A TABLE OF EVENTS. Nothing here is mutable, so no indexes are added
+-- beyond the ones the two source tables already carry for exactly these reads:
+-- idx_rv_report (report_id, id) and idx_history_report (report_id). The feed's
+-- own filters are `reports.created_by = me` and `deleted_at IS NULL`, which the
+-- existing reports indexes serve.
+--
+-- Rollback: migrations/011_notifications_seen_at.down.sql — states plainly what
+--   it loses.
+
+ALTER TABLE users
+  ADD COLUMN notifications_seen_at DATETIME NULL AFTER languages_read;
