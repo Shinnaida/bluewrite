@@ -18,16 +18,18 @@
 // read it back in the register. The Profile control closes the bar.
 
 import React, { useEffect, useRef, useState } from 'react';
-import { THEME_HINTS, useResolvedTheme, useThemeSpread } from '../lib/theme.js';
-import { DENSITY_HINTS } from '../lib/density.js';
-import {
-  FORM_FORMAT_HINTS,
-  FORM_FORMAT_LABELS,
-  FORM_FORMATS,
-} from '../lib/formFormat.js';
+// The display preferences that used to be a fold in this menu are NOT here any
+// more — they moved to the Profile panel (ProfilePanel.jsx), which is now their
+// only home. Nothing in this file reads the theme, the density or the form
+// format; it reads the idle limit, because the menu still states the rule that
+// sits directly above Log out.
 import { IDLE_LIMIT_MIN } from '../lib/session.js';
+// The avatar's two letters. Read from lib/profile.js rather than recomputed
+// here, because the panel draws the same avatar for the same person and two
+// copies of a rule eventually disagree about a one-word name.
+import { initialsOf } from '../lib/profile.js';
 import AboutSystem from './AboutSystem.jsx';
-import { MoonIcon, SunIcon } from './ThemeIcons.jsx';
+import NotificationBell from './NotificationBell.jsx';
 // The brand mark (shield + report + pen). Square, transparent PNG padded so it
 // can sit in a round or square slot without touching the edges. This is the
 // KNOCKOUT variant — white ink, crest knocked out — because the bar is navy;
@@ -66,29 +68,24 @@ export default function AppTopBar({
   current,
   onNavigate,
   onLogout,
-  formFormat,
-  onFormFormat,
-  theme,
-  onTheme,
-  density,
-  onDensity,
+  // Opens the Profile panel. The panel is OWNED by Shell, like the shortcut
+  // sheet, because it is a docked surface beside the workspace rather than a
+  // fold inside this menu — and because the menu that opens it is unmounted the
+  // moment it does.
+  onOpenProfile,
   // Opens the shortcut sheet. Owned by Shell, not by this menu, because the `?`
   // key opens the same sheet and Shell is what listens for it.
   onShortcuts,
+  // Opens a report the notification bell names. Shell owns the route, so the
+  // bell asks for the screen change rather than reaching for the view itself —
+  // the same contract every nav link above it uses.
+  onOpenReport,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // The About panel is a dialog, not another fold: it says things, it does not
   // set them, and it is the one menu entry that opens something.
   const [aboutOpen, setAboutOpen] = useState(false);
-  // The Preferences disclosure inside that menu — see the note on it below for
-  // why it starts collapsed.
-  const [prefsOpen, setPrefsOpen] = useState(false);
   const wrapRef = useRef(null);
-  // The appearance switch draws the mode in force, not the stored preference:
-  // 'system' has no icon of its own, so it resolves to whichever of the two is
-  // on — and follows the OS while it stays selected.
-  const mode = useResolvedTheme(theme);
-  const [themeRef, commitTheme] = useThemeSpread(onTheme);
   const isAdmin = user.role === 'Admin';
   const links = isAdmin ? ADMIN_LINKS : OFFICER_LINKS;
   const active = activeFor(current, isAdmin);
@@ -110,12 +107,7 @@ export default function AppTopBar({
     };
   }, [menuOpen]);
 
-  const initials = user.full_name
-    .split(' ')
-    .map((p) => p[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+  const initials = initialsOf(user.full_name);
 
   return (
     <header className="ir-nav">
@@ -149,11 +141,36 @@ export default function AppTopBar({
           </button>
         ))}
 
+        {/* ---- Notifications: what happened to the officer's own reports ----
+            Beside the Profile control and outside its wrapper on purpose: it is
+            its own click-outside region, and it is shown for EVERY role (the
+            feed is scoped to the session's own reports, so an admin reads their
+            own here too). */}
+        <NotificationBell onOpenReport={onOpenReport} />
+
         {/* ---- Profile: identity + the single sign-out action ---- */}
         <div className="ir-profile-wrap" ref={wrapRef}>
           {menuOpen && (
             <div className="ir-profile-menu" role="menu" aria-label="Account">
-              <div className="ir-profile-head">
+              {/* The identity row is the door to the Profile panel. It used to
+                  be a static header — a name and a role, saying nothing you
+                  could not already read in the bar behind it — which made the
+                  one thing an officer looks for (their own account) the one
+                  thing the menu would not open. It is a button now, and the
+                  whole row is the target.
+
+                  It closes the menu on the way: the panel is docked beside the
+                  workspace, so leaving a menu open above it would put two
+                  surfaces over the same click. */}
+              <button
+                type="button"
+                className="ir-profile-head ir-profile-head--link"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpenProfile();
+                }}
+              >
                 <span className="ir-profile-avatar" aria-hidden="true">{initials}</span>
                 <span className="ir-profile-id">
                   <span className="ir-profile-name">{user.full_name}</span>
@@ -161,187 +178,19 @@ export default function AppTopBar({
                     Badge {user.badge_number} · {user.role}
                   </span>
                 </span>
-              </div>
+                <svg className="ir-profile-head-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
+              </button>
               <div className="ir-profile-sep" aria-hidden="true" />
 
-              {/* Preferences: display choices about how the workspace is
-                  drawn, not about the report. They sit between identity and
-                  the one destructive action so the menu reads top to bottom:
-                  who you are → how it looks → log out.
-
-                  The section is a DISCLOSURE, not a heading. The two rows are
-                  settings an officer sets once and then never opens again, and
-                  left open they stood the menu up as tall as the screen it
-                  drops over — with Log out, the one thing that must always be
-                  reachable, pushed to the bottom of it. Collapsed by default;
-                  the state lives here, so it survives closing and reopening the
-                  menu within a session but a reload starts folded. */}
-              <div className="ir-profile-prefs">
-                <button
-                  type="button"
-                  className="ir-pref-disclosure"
-                  aria-expanded={prefsOpen}
-                  aria-controls="profile-prefs-panel"
-                  onClick={() => setPrefsOpen((v) => !v)}
-                >
-                  <span className="ir-pref-title" id="profile-prefs-title">
-                    Preferences
-                  </span>
-                  <svg
-                    className="ir-pref-caret"
-                    width="13"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </button>
-
-                {/* The two rows stay in the DOM and the panel is sized by grid
-                    rows rather than mounted and unmounted, so the open and the
-                    close have a shape to animate. `visibility` is what keeps a
-                    collapsed section out of the accessibility tree, and it is
-                    the one case where a transition helps rather than hurts:
-                    visibility is discrete, so it flips at the END of the close
-                    and the row is still hidden from screen readers once shut. */}
-                <div
-                  id="profile-prefs-panel"
-                  className="ir-pref-panel"
-                  data-open={prefsOpen}
-                  role="group"
-                  aria-labelledby="profile-prefs-title"
-                >
-                  <div className="ir-pref-panel-inner">
-                    <div className="ir-pref-row ir-pref-row--stack">
-                      <span className="ir-pref-text">
-                        <span className="ir-pref-name" id="pref-form-format">
-                          Form format
-                        </span>
-                        <span className="ir-pref-hint" id="pref-form-format-hint">
-                          {FORM_FORMAT_HINTS[formFormat]}
-                        </span>
-                      </span>
-                      {/* A segmented group, not the switch this row used to
-                          carry. The switch was honest while the answer was
-                          binary — two drawings of the same form, and "off"
-                          meant the other one. A third format has nowhere to sit
-                          on a switch: there is no "off" that could mean both
-                          Sheet and Steps. So the row states its three answers
-                          and says which one is on, and the hint above says what
-                          that answer does. */}
-                      <div
-                        className="ir-pref-seg"
-                        role="radiogroup"
-                        aria-labelledby="pref-form-format"
-                        aria-describedby="pref-form-format-hint"
-                      >
-                        {FORM_FORMATS.map((value) => (
-                          <button
-                            key={value}
-                            type="button"
-                            role="radio"
-                            aria-checked={formFormat === value}
-                            className={`ir-pref-seg-btn${formFormat === value ? ' on' : ''}`}
-                            onClick={() => onFormFormat(value)}
-                            title={FORM_FORMAT_HINTS[value]}
-                          >
-                            {FORM_FORMAT_LABELS[value]}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Appearance is the form-format row's twin: name, the hint
-                        that IS the value, and the control on the right. The
-                        control is the same sun/moon button the sign-in gate
-                        carries — same drawings, same animation — which is what
-                        makes a press here and a press there read as one product.
-
-                        It was a three-way Light / Dark / Auto segmented control,
-                        on the argument that a switch cannot honestly represent
-                        three answers. That argument still holds, and it is why
-                        this is NOT the boolean switch above: what is missing is
-                        not the "off" end, it is the third answer, which now has
-                        nowhere to sit. The row was made binary by request. A
-                        stored 'system' — from a workstation that chose Auto
-                        before this, or from index.html's first paint — still
-                        resolves and shows as whichever of the two it landed on;
-                        the first press writes an explicit light or dark over it. */}
-                    <div className="ir-pref-row">
-                      <span className="ir-pref-text">
-                        <span className="ir-pref-name" id="pref-theme">
-                          Appearance
-                        </span>
-                        <span className="ir-pref-hint" id="pref-theme-hint">
-                          {THEME_HINTS[mode]}
-                        </span>
-                      </span>
-                      {/* role="switch" like the row above, but the artwork is
-                          the value: sun showing, light is on. The title says
-                          what a press does, so the icon never has to be read
-                          as a button. */}
-                      <button
-                        ref={themeRef}
-                        type="button"
-                        role="switch"
-                        className="ir-theme-toggle theme-control"
-                        aria-checked={mode === 'dark'}
-                        aria-labelledby="pref-theme"
-                        aria-describedby="pref-theme-hint"
-                        onClick={() => commitTheme(mode === 'dark' ? 'light' : 'dark')}
-                        title={
-                          mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
-                        }
-                      >
-                        <span className="theme-icons">
-                          <SunIcon />
-                          <MoonIcon />
-                        </span>
-                      </button>
-                    </div>
-
-                    {/* Spacing — the third display choice, and the one that
-                        decides how much of a long report fits on a laptop
-                        screen. It moves the AIR around the type, never the type
-                        scale, which is why the hint says rows and gaps rather
-                        than anything about size. */}
-                    <div className="ir-pref-row">
-                      <span className="ir-pref-text">
-                        <span className="ir-pref-name" id="pref-density">
-                          Spacing
-                        </span>
-                        <span className="ir-pref-hint" id="pref-density-hint">
-                          {DENSITY_HINTS[density]}
-                        </span>
-                      </span>
-                      <button
-                        type="button"
-                        role="switch"
-                        className="ir-switch"
-                        aria-checked={density === 'compact'}
-                        aria-labelledby="pref-density"
-                        aria-describedby="pref-density-hint"
-                        onClick={() =>
-                          onDensity(density === 'compact' ? 'comfortable' : 'compact')
-                        }
-                        title={
-                          density === 'compact'
-                            ? 'Give the rows and field gaps more room'
-                            : 'Tighten the rows so more fits on screen'
-                        }
-                      >
-                        <span className="ir-switch-knob" aria-hidden="true" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {/* Preferences USED to be a disclosure here — three display rows,
+                  collapsed, because left open they stood the menu up as tall as
+                  the screen it drops over. They now live in the Profile panel
+                  (ProfilePanel.jsx), which has the room to state them properly
+                  and is where an officer looks for their own account anyway.
+                  Nothing was left behind on purpose: a preference that is set in
+                  two places is a preference with two answers. */}
 
               {/* What ending a session means, stated once, immediately above
                   the action that ends one. There is deliberately no countdown

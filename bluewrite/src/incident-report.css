@@ -33,8 +33,47 @@
      bright to hold a white label. */
   --ir-blue: var(--accent-fill);
   --ir-blue-hi: var(--accent-fill-hover);
+
+  /* Blue has TWO jobs and they need two tokens, which is not obvious until you
+     look at dark. `--ir-blue` is the SURFACE blue — the fill under a white
+     label — and in dark that is #2E6FD8. It was also being used as small-text
+     INK (report numbers, links, glyphs), and #2E6FD8 as ink on the near-black
+     page is 3.6-4.0:1, under the 4.5:1 that 0.68-0.76rem text needs. The
+     palette says this outright, in dark-theme.css: "a blue bright enough to read
+     as ink on near-black is far too bright to carry a white label, and a blue
+     dark enough to carry white is far too dark to read as ink".
+
+     So: `--ir-blue` stays the fill, and anything written as `color:` reads one
+     of these. In light they resolve to exactly what `--ir-blue` did (the light
+     palette uses one blue for both jobs), so nothing moves there; in dark they
+     lift to the palette's ink blue (#6FA8FF, 7.9:1). */
+  --ir-blue-ink: var(--cyan);
+  --ir-blue-ink-hi: var(--accent-fill-hover);
   --ir-amber: var(--amber);
   --ir-red: var(--red);
+
+  /* --- The translation-status badge inks (D5/D8) -------------------------
+     Named per status instead of written into the badge rules, because a badge
+     has to be readable on TWO different surfaces that do not follow the same
+     theme: the app's page (which goes near-black in dark) and the sheet of
+     paper (which is white in BOTH themes — see .ir-form--sheet, which says so
+     deliberately: a document you are writing on is the document). A single
+     colour cannot serve both, so the badges read a token and each surface
+     declares the ink it needs.
+
+     The values are the ones the badges shipped with, chosen against white
+     paper (all 5.7-7.6:1 there — these are 0.65rem bold, so small-text AA
+     applies and they clear it). They are NOT good on the dark page, which is
+     why dark overrides them (dark-theme.css): against #0E1116 the same inks
+     measure 2.3-2.9:1, under even the 3:1 large-text floor. Leaving them as
+     literals in the badge rules is what made that possible — a hard-coded ink
+     has no theme to follow. */
+  --rv-ink-plain: #4b5563;
+  --rv-ink-untranslated: #92400e;
+  --rv-ink-unverified: #1d4ed8;
+  --rv-ink-verified: #166534;
+  --rv-ink-disputed: #b91c1c;
+  --rv-ink-stale: #6d28d9;
 
   /* The document layer's own inks and surfaces, each 1:1 with a role token in
      styles.css. They are named here because this file reads them by role
@@ -53,6 +92,14 @@
   --ir-btn: var(--panel);
   --ir-btn-ink: var(--ink-dim);
   --ir-focus-ring: var(--focus-ring);
+
+  /* The sheet of paper's own writing margin, named once. The paper pads its
+     content by this (see .ir-form--sheet) and the controls on the desk BELOW
+     the paper pad by the same amount, so the reveal button, the AI panel and
+     the Submit bar all line up with the page's text column instead of with the
+     edges of the sheet. The two cannot share a local variable: the desk is not
+     inside the form. */
+  --ir-sheet-inset: clamp(0.9rem, 5vw, 1in);
 }
 
 /* ===========================================================================
@@ -160,7 +207,22 @@
 .ir-body {
   background: var(--ir-page);
   color: var(--ir-text);
-  padding: clamp(1rem, 2.4vw, 1.75rem) clamp(1rem, 3vw, 2rem) 2.5rem;
+  /* The page margin of the document layer, NAMED. Three values rather than one
+     because the bottom is deliberately roomier than the top — and named at all
+     because exactly one thing outside this rule needs to know them: Home's grid
+     backdrop bleeds to the panel's edges by cancelling this gutter (see
+     HomeGrid.css), so the padding IS the variable rather than a second copy of
+     these clamps that could drift from it.
+
+     This is the padding that actually applies to the shell's scroll panel.
+     `.main` declares one too and lists the same class on the same node; that
+     one never wins (this file is imported after styles.css), so the values here
+     are the real page margin — and being fluid, they need no restating at any
+     breakpoint, which is why no media query below mentions these names. */
+  --ir-gutter-top: clamp(1rem, 2.4vw, 1.75rem);
+  --ir-gutter-x: clamp(1rem, 3vw, 2rem);
+  --ir-gutter-bottom: 2.5rem;
+  padding: var(--ir-gutter-top) var(--ir-gutter-x) var(--ir-gutter-bottom);
   flex: 1;
 }
 
@@ -616,7 +678,7 @@
 }
 .ir-review-done:hover {
   border-color: var(--ir-blue);
-  color: var(--ir-blue);
+  color: var(--ir-blue-ink);
 }
 /* The advisory line: what is still blank and merely worth recording. It can
    never block a submission. */
@@ -761,7 +823,7 @@
   gap: 0.5rem;
 }
 .ir-card-head .ir-card-num {
-  color: var(--ir-blue);
+  color: var(--ir-blue-ink);
 }
 
 /* The cards of the step the officer is on — the WHOLE header bar goes --indigo,
@@ -880,6 +942,15 @@
   border-color: var(--ir-red);
 }
 
+/* A radio or a checkbox on the light page follows the document's own blue: the
+   page is white whatever the workspace theme is, so the app-wide accent is not
+   always the right answer inside it. Sized by styles.css; only the colour is
+   restated here. */
+.ir-body input[type='radio'],
+.ir-body input[type='checkbox'] {
+  accent-color: var(--ir-blue);
+}
+
 /* The date/time pair shares one field cell, with the approximate qualifier
    under it — the qualifier preserves "around 1:00 A.M." without inventing a
    precise minute. */
@@ -960,12 +1031,14 @@
   border: 1px solid currentColor;
 }
 .rv-badge--sm { margin-left: 0.35rem; font-size: 0.65rem; }
-.rv-badge.plain { color: #4b5563; }
-.rv-badge.untranslated { color: #92400e; }
-.rv-badge.unverified { color: #1d4ed8; }
-.rv-badge.verified { color: #166534; }
-.rv-badge.disputed { color: #b91c1c; }
-.rv-badge.stale { color: #6d28d9; }
+/* Per-surface inks — see the --rv-ink-* tokens in :root for why these are
+   tokens and not literals. The border is `currentColor`, so it follows. */
+.rv-badge.plain { color: var(--rv-ink-plain); }
+.rv-badge.untranslated { color: var(--rv-ink-untranslated); }
+.rv-badge.unverified { color: var(--rv-ink-unverified); }
+.rv-badge.verified { color: var(--rv-ink-verified); }
+.rv-badge.disputed { color: var(--rv-ink-disputed); }
+.rv-badge.stale { color: var(--rv-ink-stale); }
 
 /* Side by side (D7): original left, English right. Stacks on narrow screens so
    neither column is squeezed into a few characters per line. */
@@ -1232,7 +1305,7 @@
 }
 .ir-body button:not(.ir-submit):not(.ai-run):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):hover {
   border-color: var(--ir-blue);
-  color: var(--ir-blue);
+  color: var(--ir-blue-ink);
   background: var(--ir-btn);
 }
 .ir-body button.danger {
@@ -1389,7 +1462,7 @@
 .ir-card-head-actions button:hover,
 .ir-card-head-actions .button-link:hover {
   border-color: var(--ir-blue);
-  color: var(--ir-blue);
+  color: var(--ir-blue-ink);
   background: var(--ir-btn);
 }
 
@@ -1580,7 +1653,7 @@
   font-weight: 700;
   letter-spacing: 0.03em;
   font-variant-numeric: tabular-nums;
-  color: var(--ir-blue);
+  color: var(--ir-blue-ink);
   white-space: nowrap;
 }
 .ir-home-type {
@@ -1622,7 +1695,7 @@
 }
 .ir-hero-wordmark em {
   font-style: normal;
-  color: var(--ir-blue);
+  color: var(--ir-blue-ink);
 }
 
 .ir-hero-kicker {
@@ -1656,6 +1729,13 @@
    =========================================================================== */
 .ir-home {
   text-align: center;
+  /* The positioning context and the height for Home's ShapeGrid backdrop (see
+     HomeGrid.css): `relative` anchors it, and `min-height:100%` is what lets it
+     cover the panel even on a quiet week when the page holds one button and a
+     short list. Both are declared here rather than in the grid's own file
+     because they describe Home's box — the grid only borrows it. */
+  position: relative;
+  min-height: 100%;
 }
 
 /* The page's single action, directly under the masthead. */
@@ -1801,6 +1881,34 @@
   gap: 0.6rem;
   padding: 0.6rem 0.6rem 0.7rem;
 }
+/* The identity row is the way into the Profile panel, so it is a BUTTON — and a
+   button is the one element this app styles at element level (styles.css
+   `button`), which means every part of that plate has to be taken back off it.
+   Nothing about the row LOOKS different at rest: the same avatar, the same
+   name and role it always carried. */
+.ir-profile-head--link {
+  width: 100%;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: inherit;
+  text-align: left;
+}
+.ir-profile-head--link:hover {
+  background: var(--ir-page);
+  border-color: var(--ir-border);
+}
+/* Pushed to the row's right edge like the menu's other row affordances, and in
+   the row's own ink. Deliberately NOT the red hover the rows below the fold
+   take: this opens a surface, it does not end anything. */
+.ir-profile-head-caret {
+  flex: none;
+  margin-left: auto;
+  color: var(--ir-muted);
+}
+.ir-profile-head--link:hover .ir-profile-head-caret {
+  color: var(--ir-text);
+}
 .ir-profile-menu .ir-profile-avatar {
   width: 32px;
   height: 32px;
@@ -1875,112 +1983,28 @@
   color: var(--ir-muted);
 }
 
-/* ---- Preferences — display choices, not report data ----------------------
-   They sit between the identity block and Log out, so the menu reads
-   top-to-bottom: who you are → how the workspace is drawn → the one
-   destructive action.
+/* ---- Preferences rows: shared by the Profile panel -----------------------
+   These rows USED to live inside the top bar's menu, indented under a
+   disclosure label that folded them away. They now live in the Profile panel
+   (ProfilePanel.jsx, and its layout in styles.css) as the panel's own
+   top-level rows.
 
-   The heading is a BUTTON — the section folds, see AppTopBar — so it carries
-   the chrome of a row rather than of a label, but stays typographically the
-   quiet micro-label it was: it names a region of the menu, it is not another
-   destination in it. It is deliberately NOT styled like `.ir-profile-item`
-   below, which is how the menu says "this one is an action". */
-.ir-profile-prefs {
-  padding: 0.15rem 0.35rem 0.35rem;
-}
-
-.ir-pref-disclosure {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.4rem 0.6rem;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  background: none;
-  color: var(--ir-muted);
-  text-align: left;
-}
-/* Both colours are restated because the element-level `button:hover` in
-   styles.css would otherwise paint a near-white plate and the accent ink
-   behind a section label — the same clash the bar's brand button has. */
-.ir-pref-disclosure:hover {
-  background: var(--panel-raised);
-  border-color: transparent;
-  color: var(--ir-text);
-}
-
-.ir-pref-title {
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: inherit;
-  transition: color 140ms ease;
-}
-
-/* The caret is the whole affordance: it points down when the section is shut
-   and turns over when it is open, so the fold reads as a state rather than as
-   something the label happens to do. */
-.ir-pref-caret {
-  flex: none;
-  color: var(--ir-muted);
-  transition: transform 200ms cubic-bezier(0.34, 1.32, 0.64, 1), color 140ms ease;
-}
-.ir-pref-disclosure[aria-expanded='true'] .ir-pref-caret {
-  color: var(--ir-text);
-  transform: rotate(180deg);
-}
-
-/* The fold itself: an outer grid whose single row goes 0fr → 1fr, and an inner
-   block that clips it. That is what animates a height nobody has to measure —
-   the rows can be any height and the panel still opens the right amount, which
-   `max-height` (the usual trick) only fakes at a guessed value.
-
-   visibility, not display: the collapsed rows have to leave the accessibility
-   tree, and visibility is the one discrete property a transition delays to the
-   end rather than cutting off — so the panel stays visible for the whole close
-   and is properly hidden the moment it finishes. */
-.ir-pref-panel {
-  display: grid;
-  grid-template-rows: 0fr;
-  visibility: hidden;
-  transition: grid-template-rows 220ms ease, visibility 220ms;
-}
-.ir-pref-panel[data-open='true'] {
-  grid-template-rows: 1fr;
-  visibility: visible;
-}
-.ir-pref-panel-inner {
-  min-height: 0;
-  overflow: hidden;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ir-pref-panel,
-  .ir-pref-caret {
-    transition: none;
-  }
-}
-
-/* The two rows are INDENTED under the section's own label, which is what makes
-   them read as the contents of Preferences rather than as two more of the
-   menu's destinations — the fold alone says it while it is moving, and nothing
-   at all once it has settled.
-
-   The left inset is 0.75rem past the label and the right inset matches the
-   caret's, so the switches line up in the same column as the chevron. The
-   indent lives on the ROWS, not on the panel or its clipping inner: a padding
-   on the element that collapses keeps a strip of height of its own when the
-   track goes to 0fr, which would leave the shut section visibly open by a few
-   pixels. Down here it is inside the clip, where it costs nothing. */
+   What is left here is the ROW itself — label, hint, switch, segmented group —
+   because it is still the right shape for a setting wherever it is drawn. What
+   is gone with the fold is the disclosure chrome, the indent, and the collapse
+   animation, all of which existed only to solve the problem of a menu that had
+   to stay short. A panel does not have that problem. */
 .ir-pref-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.9rem;
-  padding: 0.15rem 0.6rem 0.15rem 1.35rem;
+  /* Vertical padding only. The row used to carry a 1.35rem left inset to sit
+     under the menu's disclosure label; in the panel it is a top-level row and
+     starts at the panel's own edge. The hairline between two rows is drawn by
+     the panel (styles.css), not here, because it depends on what is beside
+     them. */
+  padding: 0.55rem 0;
 }
 
 .ir-pref-text {
@@ -1997,7 +2021,10 @@
    what that answer does. It is not a second control explaining the first — the
    row states its value here and sets it on the right. */
 .ir-pref-hint {
-  max-width: 11.5rem;
+  /* Wraps to the row rather than to a guessed width: the menu capped it at
+     11.5rem because the menu was narrow and the switches had to line up, and
+     the panel is wide enough that the cap would only shorten the sentences. */
+  max-width: none;
   font-size: 0.72rem;
   line-height: 1.35;
   color: var(--ir-muted);
@@ -2103,6 +2130,497 @@
 .ir-pref-seg-btn:focus-visible {
   outline: 2px solid var(--ir-blue);
   outline-offset: 1px;
+}
+
+/* ===========================================================================
+   7b. Notifications — the bell beside the profile control
+
+   The trigger is a bare icon on the navy bar (see the NO CIRCLE note below):
+   the profile pill's quiet neighbour, one target wide, so the two controls read
+   as one cluster at the bar's right end.
+
+   The panel is the profile menu's sibling rather than a dialog: it drops from
+   the bar over the page, in the same card stock and the same shadow, because it
+   answers the same kind of question (something about YOU) in the same place.
+   It is WIDER than that menu and its rows are SHAPED DIFFERENTLY, and that part
+   is the design rather than the styling:
+
+     a menu is READ DOWN    — short labels, one column, centred on being picked
+     a feed is SCANNED      — one act per row, glyph first, hierarchy inside
+
+   So a row here is a grid: a gutter for the unread dot, the act's glyph, the
+   sentence with its context under it, and the time on the right. That is what
+   makes "which of these is mine to act on?" answerable in one pass instead of
+   by reading every line — which is the only thing this panel is for.
+   =========================================================================== */
+.ir-bell-wrap {
+  position: relative;
+  /* Like the profile control, the bell never shrinks: it wraps to its own line
+     when the bar runs out of room rather than collapsing to a sliver. */
+  flex: none;
+}
+
+/* NO CIRCLE. The bell is a bare icon standing on the navy bar, not a round
+   plate: no ring, no tint, no fill. It began as the profile pill's twin — same
+   size, same border, same wash — and the plate is gone by request, which is the
+   right call next to a pill that already carries an avatar and a name. The icon
+   reads as a mark on the bar, like the department lockup's.
+
+   The 34px box outlives the plate on purpose. It is not painted, but it is what
+   keeps the bell and the profile pill on one baseline when the officer's name
+   is long, and it is what the badge is positioned against. Removing it would
+   drag the icon into the pill's shadow and move the count. */
+.ir-bell-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  /* The resting ink is dimmed and the hover is full white — the same two-step
+     `.ir-nav-link` uses, so the bell's only hover affordance is INK moving, not
+     a plate appearing. */
+  color: rgba(255, 255, 255, 0.86);
+}
+/* Restated for the same reason the profile pill restates them: an
+   element-level `button:hover` in styles.css would otherwise drop a near-white
+   plate behind the icon on the navy bar. Nothing is painted here — the icon
+   brightens, and "this panel is open" is the same signal. */
+.ir-bell-trigger:hover,
+.ir-bell-trigger[aria-expanded='true'] {
+  background: none;
+  border-color: transparent;
+  color: #fff;
+}
+.ir-bell-trigger:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+/* The count. Red is this product's "needs you" colour and is already spent on
+   the danger actions, so a badge is the one place it belongs outside a button:
+   it is a mark, not a control, and it is the only saturated thing on the bar. */
+.ir-bell-badge {
+  position: absolute;
+  /* Pinned to the GLYPH, not to the box. While the bell wore a circle the count
+     hung off the rim (`-3px` on both axes); with the circle gone those offsets
+     measure from an invisible 34px square, and the icon is 17px inside it — so
+     the count floated ~8px clear of the thing it belongs to. These two values
+     put its lower-left corner over the icon's top-right one, which is what a
+     badge on a bare icon has to look like. */
+  top: 1px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--ir-red);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.ir-bell-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 60;
+  width: min(25rem, calc(100vw - 2rem));
+  max-height: min(72vh, 34rem);
+  overflow-y: auto;
+  /* The panel itself does not scroll the page behind it when the end of the
+     feed is reached — the feed ends, the page stays where it was. */
+  overscroll-behavior: contain;
+  /* No outer padding: the header is flush with the top edge so it can stick
+     there while the feed scrolls under it, and the rows reach the sides so
+     their hover wash does not stop short of the panel's own edge. */
+  padding: 0 0 0.35rem;
+  background: var(--ir-card);
+  border: 1px solid var(--ir-border);
+  border-radius: 4px;
+  box-shadow: var(--shadow-md);
+  color: var(--ir-text);
+}
+
+/* Sticky, because the answer to "why am I looking at this?" is in the header:
+   the feed is about YOUR reports. Scrolled out of sight, a panel of other
+   people's names reads like station-wide activity. */
+.ir-bell-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  padding: 0.6rem 0.85rem 0.5rem;
+  background: var(--ir-card);
+  border-bottom: 1px solid var(--ir-border);
+}
+/* Title, count and the filters on one line: a feed's filters belong beside its
+   title, not floating above the rows. `flex-wrap` is what drops the filters
+   under the title on a narrow panel instead of letting them collide. */
+.ir-bell-head-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.5rem;
+}
+.ir-bell-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ir-text);
+}
+/* The count, repeated from the badge for the officer who opened the panel and
+   looked at the rows first. Blue, not red: the badge on the bar is the urgent
+   mark, this is a statement of what is in front of them. */
+.ir-bell-count {
+  margin-left: auto;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ir-blue-ink);
+}
+/* The scope, stated once: the feed is about the officer's OWN reports, and a
+   bell that did not say so would invite the reading that it reports everything.
+   Same quiet register as the profile menu's `.ir-menu-note`. */
+.ir-bell-scope {
+  font-size: 0.74rem;
+  color: var(--ir-muted);
+}
+
+/* ---- The filters ---------------------------------------------------------
+   Three answers, one of them on at a time. The selected end is the CARD colour
+   on a sunken track rather than the accent fill the profile menu's segmented
+   control uses: this is a view selector sitting among three rows of text, and
+   a filled blue chip in the header would compete with the blue report numbers
+   and the blue unread dots below it. Blue in this panel means "look here". */
+.ir-bell-filters {
+  margin-left: auto;
+  display: flex;
+  gap: 0.1rem;
+  padding: 0.1rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 3px;
+  background: var(--ir-row-hover);
+}
+.ir-bell-filter {
+  padding: 0.18rem 0.5rem;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: var(--ir-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+/* Hover is the SELECTED fill, not the track's own wash — `--ir-row-hover` is
+   the track beneath these chips, so hovering with it would have made the chip
+   disappear into the track it sits on. The inset ring and the weight are what
+   still separate hovered from chosen. Both colours are restated because the
+   element-level `button:hover` in styles.css would otherwise repaint this as a
+   raised plate with accent ink. */
+.ir-bell-filter:hover {
+  background: var(--ir-card);
+  color: var(--ir-text);
+}
+.ir-bell-filter.on,
+.ir-bell-filter.on:hover {
+  background: var(--ir-card);
+  color: var(--ir-text);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--ir-border);
+}
+.ir-bell-filter:focus-visible {
+  outline: 2px solid var(--ir-blue);
+  outline-offset: 1px;
+}
+
+/* Day sections. The label is a real heading in the DOM, so a screen reader gets
+   the grouping too, and the gap above it is what separates one day from the
+   next — the rows themselves keep a single hairline between them and nothing
+   more (see .ir-bell-list). */
+.ir-bell-day {
+  padding-top: 0.15rem;
+}
+.ir-bell-day-label {
+  margin: 0;
+  padding: 0.6rem 0.85rem 0.2rem;
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+}
+
+.ir-bell-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* One hairline between rows, and only between them: no rule above the first row
+   of a day (the day label is the separator there) and none under the last. */
+.ir-bell-list li + li {
+  border-top: 1px solid var(--ir-border);
+}
+
+/* A row is a button when the report can still be opened and a plain block when
+   it cannot (an archived record is restore-only, and its item is a statement).
+   Both lay out identically, so the list does not change rhythm halfway down.
+
+   The columns are: unread gutter, glyph, the sentence, the time. Fixed first
+   two columns are what line every row up vertically; `minmax(0, 1fr)` on the
+   sentence is what lets a long name shrink instead of pushing the time out. */
+.ir-bell-item {
+  display: grid;
+  grid-template-columns: 10px 18px minmax(0, 1fr) auto;
+  column-gap: 0.55rem;
+  align-items: start;
+  width: 100%;
+  padding: 0.6rem 0.85rem 0.65rem;
+  border: 0;
+  background: none;
+  color: var(--ir-text);
+  font: inherit;
+  text-align: left;
+}
+.ir-bell-item:hover {
+  background: var(--ir-row-hover);
+  color: var(--ir-text);
+}
+/* An archived report has nothing left to open, so its row must not pretend to
+   be a control — same box, no hover, default cursor. */
+.ir-bell-item.is-static,
+.ir-bell-item.is-static:hover {
+  cursor: default;
+  background: none;
+}
+.ir-bell-item:focus-visible {
+  outline: 2px solid var(--ir-blue);
+  outline-offset: -2px;
+}
+
+/* The unread signal, half one of two: a 6px dot in its own gutter. It is not
+   also a tinted row and not also a left border — a feed that says "unread"
+   four ways at once is the most common way one starts to look broken. */
+.ir-bell-marker {
+  display: grid;
+  place-items: center;
+  height: 18px;
+}
+.ir-bell-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ir-blue);
+}
+
+/* The act's mark: the one thing that lets an officer sort the feed by kind
+   before reading a word. Colour is the SECOND signal, so each one is legible as
+   a shape on its own and the palette stays small. */
+.ir-bell-glyph {
+  display: grid;
+  place-items: center;
+  height: 18px;
+  color: var(--ir-muted);
+}
+.ir-bell-glyph.is-verified {
+  color: var(--green-ok);
+}
+.ir-bell-glyph.is-disputed {
+  color: var(--ir-red);
+}
+.ir-bell-glyph.is-finalized,
+.ir-bell-glyph.is-restored {
+  color: var(--ir-blue-ink);
+}
+
+.ir-bell-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+/* Half two of the unread signal: a heavier headline. Read rows are not greyed
+   out — the resting state is most of the feed and it has to look deliberate —
+   they are simply one step quieter. */
+.ir-bell-act {
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: var(--ir-muted);
+  overflow-wrap: anywhere;
+}
+.ir-bell-item.is-unread .ir-bell-act {
+  font-weight: 600;
+  color: var(--ir-text);
+}
+
+/* Which report, and what kind of incident. The report number wears the same
+   treatment it wears on Home, so the same report is named the same way in both
+   places. Separated by a single middot — one, not a chain of them. */
+.ir-bell-meta {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--ir-muted);
+}
+.ir-bell-no {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ir-blue-ink);
+  white-space: nowrap;
+}
+
+/* The reviewer's own words (a dispute must say what differs). Quoted rather
+   than restyled: it is somebody else's sentence sitting inside this panel, and
+   the left rule is what marks it as quoted.
+
+   Clamped to two lines so every row keeps the same rhythm — a three-line note
+   is read by opening the report, which is what the row is for. The clamp is
+   `-webkit-box`, which is the form that actually works; the standard property
+   is coming along behind it. */
+.ir-bell-detail {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 0.1rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--ir-border);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--ir-text);
+}
+
+/* An act a later review overtook. Muted, never red: it is not a fresh problem,
+   and the report's live status is stated where the report is. */
+.ir-bell-superseded {
+  font-size: 0.7rem;
+  color: var(--ir-muted);
+  font-style: italic;
+}
+
+.ir-bell-time {
+  padding-top: 0.1rem;
+  font-size: 0.7rem;
+  color: var(--ir-muted);
+  white-space: nowrap;
+}
+
+/* ---- The three states that are not "a feed" ------------------------------
+   Empty, loading and failed are where a panel shows whether anybody thought
+   about them. Skeleton rows are shaped like the real ones so the list does not
+   jump when it lands; the empty state says the work is done rather than
+   rendering as a blank box; and the failure is the ONE case where this bell
+   says anything at all — see the component header on why it is otherwise
+   silent. */
+.ir-bell-skeletons {
+  margin: 0;
+  padding: 0.85rem 0.85rem 1rem;
+  list-style: none;
+  display: grid;
+  gap: 0.95rem;
+}
+.ir-bell-skeleton {
+  display: grid;
+  gap: 0.4rem;
+}
+.ir-bell-skeleton-bar {
+  height: 0.55rem;
+  border-radius: 2px;
+  /* The row-hover wash, which is by definition visible against the card in both
+     themes. `--ir-soft` was the obvious token and the wrong one: it is the
+     panel's own near-white in light mode, so the bars disappeared. */
+  background: var(--ir-row-hover);
+  animation: ir-bell-pulse 1.4s ease-in-out infinite;
+}
+.ir-bell-skeleton-bar.is-w1 {
+  width: 78%;
+}
+.ir-bell-skeleton-bar.is-w2 {
+  width: 45%;
+}
+@keyframes ir-bell-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.ir-bell-empty {
+  padding: 1.05rem 0.85rem 1.15rem;
+}
+.ir-bell-empty-lead {
+  margin: 0 0 0.2rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ir-text);
+}
+.ir-bell-empty-note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--ir-muted);
+}
+/* The two buttons this panel can show — "Try again" on a failed load, "Show
+   all" under an empty filtered view. One class, because they are the same
+   thing in the same place: the way out of a dead end. */
+.ir-bell-action {
+  margin-top: 0.65rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 3px;
+  background: var(--ir-card);
+  color: var(--ir-blue-ink);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+/* Restated for the same reason the bar's own buttons restate theirs: an
+   element-level `button:hover` in styles.css would repaint this as a raised
+   plate with accent ink. */
+.ir-bell-action:hover {
+  background: var(--ir-row-hover);
+  border-color: var(--ir-border);
+  color: var(--ir-blue-ink-hi);
+}
+.ir-bell-action:focus-visible {
+  outline: 2px solid var(--ir-blue);
+  outline-offset: 2px;
+}
+
+/* Reduced motion: the skeleton stops breathing. It still holds the layout
+   open, which is its real job. */
+@media (prefers-reduced-motion: reduce) {
+  .ir-bell-skeleton-bar {
+    animation: none;
+  }
+}
+
+/* A phone cannot hold a 25rem dropdown next to a wrapped nav, so the panel
+   takes the width it can get and keeps the same row grid — the gutter, glyph
+   and time columns are what the row IS, and dropping them on a small screen
+   would leave a paragraph with no anchor. */
+@media (max-width: 560px) {
+  .ir-bell-panel {
+    width: calc(100vw - 1.4rem);
+    right: -0.6rem;
+  }
 }
 
 /* ===========================================================================
@@ -2259,7 +2777,7 @@
     transform 120ms ease;
 }
 .ir-theme-toggle:hover {
-  color: var(--ir-blue);
+  color: var(--ir-blue-ink);
   border-color: var(--ir-blue);
   background: var(--ir-page);
 }
@@ -2423,7 +2941,7 @@
 }
 
 .st-type:not(.off) .st-type-state {
-  color: var(--ir-blue);
+  color: var(--ir-blue-ink);
 }
 
 .st-count {
@@ -2496,9 +3014,24 @@
   --ir-blue-hi: #1a53b7;
   --ir-red: #b3261e;
   --ir-danger-ink: #b3261e;
+  /* The paper is white in both themes, so it restates the ink blue in its own
+     terms rather than following the theme's (which goes light in dark, and
+     would leave pale blue text on white paper). */
+  --ir-blue-ink: #1f5fd0;
+  --ir-blue-ink-hi: #1a53b7;
   /* A blank to write on, not a filled input: the field's own background is
      cleared so the paper shows through. */
   --ir-input: transparent;
+  /* The paper re-states the badge inks for the same reason it re-states every
+     other colour above: a verification badge can appear on the sheet (the
+     review panel is one), and the sheet is white even in dark theme, so it
+     wants the dark-on-white inks rather than whatever the theme is using. */
+  --rv-ink-plain: #4b5563;
+  --rv-ink-untranslated: #92400e;
+  --rv-ink-unverified: #1d4ed8;
+  --rv-ink-verified: #166534;
+  --rv-ink-disputed: #b91c1c;
+  --rv-ink-stale: #6d28d9;
 
   /* SHORT BOND, 8.5 x 11 in — the station's paper, at its real size. The width
      is fixed and the height is a MINIMUM, so the page is a page: it holds the
@@ -2512,7 +3045,7 @@
   max-width: 100%;
   min-height: 11in;
   margin: 0 auto;
-  padding: clamp(1rem, 5vw, 1in) clamp(0.9rem, 5vw, 1in) clamp(1.2rem, 6vw, 1in);
+  padding: clamp(1rem, 5vw, 1in) var(--ir-sheet-inset) clamp(1.2rem, 6vw, 1in);
   background: #ffffff;
   color: var(--ir-text);
   border-radius: 2px;
@@ -2927,7 +3460,7 @@
 .ir-sheet-toggle:hover {
   background: var(--ir-card);
   border-color: var(--ir-blue);
-  color: var(--ir-blue);
+  color: var(--ir-blue-ink);
 }
 
 /* Disabled and locked fields: on paper a locked report is a print-out, and
@@ -2938,4 +3471,23 @@
 .ir-form--sheet .ir-field textarea:disabled {
   background: transparent;
   color: var(--ir-text);
+}
+
+/* ---- The desk keeps the paper's column ------------------------------------
+   The reveal control, the AI panel and the action row are not ON the paper —
+   they sit below it, on the page — but they still belong to the document above
+   them. The paper insets its content by --ir-sheet-inset (up to an inch of
+   margin, as a page has), so without the same inset here the Submit bar and the
+   assistant panel hang past both edges of the sheet they act on, and the
+   primary action reads as a separate slab rather than as the document's own
+   commit row. One measure for the whole screen.
+
+   Vertical gaps are untouched: each block keeps the spacing it was given, and
+   `margin-inline` only restates the centring its own rule already carried. */
+.ir-sheet-bar,
+.ir-sheet-ai,
+.ir-sheet-actions {
+  max-width: 8.5in;
+  margin-inline: auto;
+  padding-inline: var(--ir-sheet-inset);
 }

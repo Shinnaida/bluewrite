@@ -98,6 +98,10 @@
   --amber-line: rgba(217, 160, 63, 0.42);
   --green-bg: rgba(69, 201, 138, 0.14);
   --green-line: rgba(69, 201, 138, 0.42);
+  /* No deeper green is needed here: a dark tint DARKENS the plate, so the same
+     ink that works on the page also works on the chip (5.80:1). Light has to
+     deepen it because its tint lifts the plate toward the ink. */
+  --green-ink: var(--green-ok);
 
   /* ---- The rail's accent, and the current card's bar ----
      Violet lifts with the page the same way the blue does; the indigo header
@@ -119,6 +123,36 @@
   --shadow-lg: 0 25px 50px rgba(0, 0, 0, 0.7);
   --shadow-panel: -12px 0 32px rgba(0, 0, 0, 0.55);
   --shadow-up: 0 -6px 18px rgba(0, 0, 0, 0.5);
+
+  /* ---- The document layer's ink blue ----
+     `--ir-blue-ink` is the blue for TEXT (report numbers, links, glyph inks),
+     as opposed to `--ir-blue`, which is the fill under a white label. The dark
+     palette splits the accent in two for exactly this reason and this is that
+     split reaching the document layer: #6FA8FF reads as ink on this page at
+     7.85:1, where the surface blue (#2E6FD8) managed 3.6-4.0:1.
+
+     The hover step goes brighter rather than darker, which is what a near-black
+     page wants — darkening an ink here moves it toward the background. */
+  --ir-blue-ink: var(--cyan);
+  --ir-blue-ink-hi: #8FBCFF;
+
+  /* ---- The translation-status badge inks (D5/D8) ----
+     The badges were the one place a status colour was written as a literal
+     instead of a token, and it showed: the inks they shipped with are chosen
+     for white paper, and against this near-black page they measure 2.3-2.9:1 —
+     below even the 3:1 floor for large text, on 0.65rem bold text. They now
+     read a token (see incident-report.css) and dark points it at the palette's
+     own status inks, which measure 6.4-9.0:1 here.
+
+     Referenced as tokens rather than repeated as hexes so a badge cannot drift
+     from the status colour it means. The sheet of paper is excluded by
+     construction: it is white in both themes and re-states these inks itself. */
+  --rv-ink-plain: var(--steel); /* 8.26:1 */
+  --rv-ink-untranslated: var(--amber); /* 8.15:1 */
+  --rv-ink-unverified: var(--cyan); /* 7.85:1 */
+  --rv-ink-verified: var(--green-ok); /* 8.98:1 */
+  --rv-ink-disputed: var(--red-text); /* 7.47:1 */
+  --rv-ink-stale: var(--violet); /* 6.95:1 */
 
   /* ---- The document layer's navy chrome ----
      The bar keeps its navy — it is the department's colour, not a surface

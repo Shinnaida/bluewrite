@@ -18,6 +18,13 @@ const ACTION_LABELS = {
   'user.create': 'Created a user',
   'user.update': 'Updated a user',
   'user.password_reset': 'Reset a password',
+  // An officer changing their OWN password, and a failed attempt at it. Worded
+  // so the actor is unambiguous next to the admin reset above — "Reset a
+  // password" is somebody else's action on an account, these two are the account
+  // holder's own. Without the distinction the trail cannot answer "who set this
+  // credential" at a glance.
+  'user.password_change': 'Changed own password',
+  'user.password_change_failed': 'Failed password change',
   'user.deactivate': 'Deactivated a user',
   'report.create': 'Created a report',
   'report.update': 'Updated a report',
@@ -30,9 +37,19 @@ const ACTION_LABELS = {
 };
 
 // Actions that deserve a visual flag in the trail.
-const RED_ACTIONS = new Set(['login.failed', 'login.locked', 'login.blocked_inactive']);
+const RED_ACTIONS = new Set([
+  'login.failed', 'login.locked', 'login.blocked_inactive',
+  // A wrong current password on the change form. Flagged like a failed sign-in
+  // because it means the same thing: somebody tried to prove they hold a
+  // credential and could not. From a session nobody should have had, this is the
+  // entry the trail exists to show.
+  'user.password_change_failed',
+]);
 const AMBER_ACTIONS = new Set([
   'user.password_reset', 'user.deactivate', 'report.archive', 'report.export',
+  // A credential changed — the same weight as an admin reset, since the effect
+  // on the account is identical.
+  'user.password_change',
 ]);
 const GREEN_ACTIONS = new Set(['login.success', 'user.create', 'report.restore']);
 

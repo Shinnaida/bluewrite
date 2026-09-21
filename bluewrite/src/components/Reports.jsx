@@ -73,6 +73,9 @@ import ReportVerificationPanel from './ReportVerificationPanel.jsx';
 // search, and the approved terms the officer's own text already uses. Offline,
 // read-only, and mounted in the editor so it works with the AI switched off.
 import NarrativeTermsPanel from './NarrativeTermsPanel.jsx';
+// Home's backdrop only — the animated grid behind the wordmark and the register
+// tail. Nothing else in the app renders it (see HomeGrid.jsx).
+import HomeGrid from './HomeGrid.jsx';
 // The official-document stylesheet: the navy top bar, page head, card panels,
 // field labels and signature blocks. Shared by every screen now that the whole
 // application uses this look (the tokens themselves live in styles.css).
@@ -1448,6 +1451,13 @@ export function ReportWelcome({ user, onNew, onOpenReport, onMyReports, reports,
   // untouched.
   return (
     <div className="ir-home">
+      {/* Home's backdrop: the React Bits ShapeGrid, behind everything and
+          marking nothing (see HomeGrid.jsx for the tokens it reads, why it
+          stands down for reduced motion, and the numbers). FIRST child, so it
+          is the bottom layer; it is absolutely positioned, so it costs the
+          layout nothing. */}
+      <HomeGrid />
+
       {/* The BlueWrite wordmark back on the page — the old hero, now on the
           light document surface above the working cards. Plain type: BLUE in
           navy, WRITE in the brand blue. */}
@@ -2246,7 +2256,17 @@ export function ReportEditor({
     } catch (err) {
       // Never fatal. The gate that follows says what the report still needs,
       // with its jump-to-field links, and the panel adds this line to it.
-      return { ok: false, message: err?.message || 'Your account could not be read.' };
+      //
+      // `retryable` is the SERVER's verdict, not this client's guess: the
+      // provider's failures travel as `manual_mode` (true when the provider
+      // said no — a rejected key, a bad request — and false when it was merely
+      // busy or had a fault of its own). Only the second kind is worth waiting
+      // out, and only the panel decides how (see READ_ATTEMPTS).
+      return {
+        ok: false,
+        message: err?.message || 'Your account could not be read.',
+        retryable: err?.manual_mode === false,
+      };
     }
   }
 
@@ -2765,6 +2785,12 @@ export function ReportEditor({
       // blank page Generate fills the report's own fields out of the account
       // before it saves or drafts anything (see readAccountForForm).
       onReadAccount={sheet ? readAccountForForm : undefined}
+      // The way OUT of a refusal that names the report's own fields: the sheet
+      // keeps them behind its reveal control, and jumpTo opens that state and
+      // lands on the field — so the panel's message can hand the officer the
+      // control that fixes what it complains about instead of naming fields
+      // that are off screen.
+      onRevealFields={sheet ? () => jumpTo('incident_type') : undefined}
       // D3 — the panel disables Generate and Tighten and states the reason,
       // rather than offering a control whose only possible answer is no.
       languageBlocked={aiBlockedReason(languageCode)}

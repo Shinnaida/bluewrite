@@ -84,6 +84,15 @@
   --amber-line: rgba(178, 106, 0, 0.45);
   --green-bg: rgba(21, 128, 61, 0.12);
   --green-line: rgba(21, 128, 61, 0.4);
+  /* Green has the same two jobs blue has, and for the same reason — see the
+     note on --accent-fill above. `--green-ok` is an INK chosen against a
+     near-white page, and a chip that tints its own plate with green no longer
+     presents that page: the fill lifts the plate and takes the plain ink from
+     5.16:1 to 3.96:1, under the bar for the 0.66rem label it carries. So green
+     ink on a green tint reads THIS value, one step deeper (4.90:1). Light
+     needs the step; dark does not, because its tint darkens the plate rather
+     than lifting it — dark-theme.css maps this straight back to --green-ok. */
+  --green-ink: #12702F;
 
   /* The remaining one-value inks and surfaces the document layer borrows. */
   --card-head: #ECEEF2;
@@ -116,6 +125,18 @@
      sans with letterspacing, matching the printed report. */
   --font-hud: var(--font-family);
   --font-body: var(--font-family);
+  /* THE one place a fixed-width face is right, and the only token for it: a
+     value somebody has to TRANSCRIBE. It is used for the second factor's
+     six-digit code and the address that code was sent to, where every character
+     lines up with what the officer reads in their inbox and a proportional face
+     makes a `1` and an `l` the same shape at a glance. Nothing else in the
+     application should use it — a monospace body font here would be a decision
+     about taste, and this is a decision about reading a code correctly.
+
+     The stack is deliberately system-only (no webfont): a station PC has one of
+     these, and a downloaded mono face would be another file to fail to load on
+     the one screen where the officer is reading mail in the other window. */
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, 'Liberation Mono', 'Courier New', monospace;
 }
 
 * { box-sizing: border-box; }
@@ -242,6 +263,28 @@ input[aria-invalid='true'], textarea[aria-invalid='true'] {
   border-color: var(--red);
 }
 textarea { resize: vertical; min-height: 8rem; }
+
+/* ---- Radios and checkboxes are not boxes to fill in -----------------------
+   Everything above treats an `input` as a text field, and two of those rules
+   break a toggle: `width: 100%` stretches the control across its whole row and
+   drags its own label to the far edge with it — the AI panel's "What should the
+   AI translate?" chooser drew exactly that, the radio marooned mid-row and its
+   words jammed against the right margin — and the boxed fill paints a slab
+   behind a control that draws itself. So the two toggles take their intrinsic
+   size back, once, for the whole app. The local patches elsewhere (.ir-approx,
+   .st-type) are this same fix, written where the bug was found first. */
+input[type='radio'],
+input[type='checkbox'] {
+  width: auto;
+  flex: none;
+  margin: 0;
+  /* The white fill would show as a square behind a round control — visible on
+     the page, where the report editor's own fields are white but the desk
+     below the sheet is not. */
+  background: none;
+  accent-color: var(--cyan);
+  cursor: pointer;
+}
 
 select option {
   background: var(--panel);
@@ -941,7 +984,14 @@ button.brand.brand-home:focus-visible {
   position: relative;
   z-index: 1;
   /* Fluid padding + width: the content area adapts from phone to wide
-     desktop instead of jumping at a single breakpoint. */
+     desktop instead of jumping at a single breakpoint.
+
+     NOTE: on the shell's own element this declaration is overridden by
+     `.ir-body` (same node — `main.ir-body` — and incident-report.css wins the
+     cascade, with a different three-value padding). Nothing here depends on
+     that: Home's grid backdrop reads its gutter from `.ir-body`, which is where
+     the padding that actually applies is declared. Left as-is rather than
+     deleted, because that is a separate question from this file's. */
   padding: clamp(1rem, 2.5vw, 2rem) clamp(1rem, 3vw, 2rem);
   background: var(--void);
   /* Full-bleed: tables and toolbars use every pixel the window offers,
@@ -1520,6 +1570,568 @@ body.ai-panel-open .main {
 }
 .main {
   transition: margin-right 0.22s ease-out;
+}
+
+/* ---- Profile panel: the second dock on the right edge --------------------
+   Opened from the identity row in the top bar's profile menu. Same contract as
+   the AI panel above — the panel publishes a `body` class while it is on screen
+   and the workspace reserves its width with a margin, so the register or the
+   report form reflows rather than being covered.
+
+   Its WIDTH is declared here and nowhere else. The AI panel publishes its own
+   from JS because it is resizable; this one is not, so the number lives on the
+   body class — one declaration read by both the panel's own box and the gap
+   .main reserves. Two places setting it is how a dock and its gap start
+   disagreeing by a few pixels, which reads as a seam.
+
+   The measured widths are not arbitrary: 23rem is a comfortable measure for the
+   fact rows, and `100vw - 3rem` keeps a sliver of the workspace visible on a
+   phone so the panel reads as a drawer over the app rather than as a page that
+   replaced it. */
+body.profile-panel-open {
+  --profile-panel-w: min(23rem, calc(100vw - 3rem));
+}
+
+/* Docked where there is room to give the width away, which is the same
+   threshold the AI panel's own reservation needs to be a reflow rather than a
+   squeeze. Below it the panel overlays: a drawer over the workspace, which is
+   what a narrow screen can honestly offer. */
+@media (min-width: 900px) {
+  body.profile-panel-open .main {
+    margin-right: var(--profile-panel-w);
+  }
+}
+
+/* Both docks at once. There is exactly one right edge, so the AI panel moves
+   inward and the workspace reserves the SUM — which needs ~1280px to leave a
+   usable column behind. Above that line the two panels stand side by side and
+   neither covers the other. */
+@media (min-width: 1280px) {
+  body.profile-panel-open.ai-panel-open .main {
+    margin-right: calc(var(--profile-panel-w) + min(var(--ai-panel-w, 420px), 92vw));
+  }
+  body.profile-panel-open.ai-panel-open .ai-side-panel {
+    right: var(--profile-panel-w);
+  }
+}
+
+/* Below that line BOTH cannot be shown, and this is the honest answer rather
+   than the arithmetic one. Reserving the sum would leave no workspace (at
+   1024px it is 259px of column), and letting the profile panel simply sit on
+   top of the AI panel does not work either: the profile panel is the narrower
+   of the two (23rem against 34rem), so the AI panel would stick out from under
+   it as a 75px sliver with its header cut in half — a bug, by eye, and one that
+   photographs badly.
+
+   So below 1280px one dock is shown at a time: the profile panel takes the edge
+   and the AI panel is hidden WHILE IT IS OPEN, not closed — its open state, its
+   width and its draft are untouched, and closing the profile brings it straight
+   back. The workspace keeps the profile panel's reservation (the rule above),
+   which is now exactly what is covering it. */
+@media (max-width: 1279.98px) {
+  body.profile-panel-open.ai-panel-open .ai-side-panel {
+    visibility: hidden;
+  }
+}
+
+/* The panel itself: fixed to the right edge, full height, sliding in. z-index
+   96 puts it one step above the AI panel (95) — both are docked at the same
+   edge, and the one you opened last should be the one you can see. It covers
+   the top bar's right end while open, exactly as the AI panel does; the ways
+   out are the header's close button, Escape, and a click anywhere outside. */
+.profile-side-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  height: 100dvh;
+  width: var(--profile-panel-w);
+  z-index: 96;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-left: 1px solid var(--line-bright);
+  box-shadow: var(--shadow-panel);
+  color: var(--paper);
+  animation: profile-panel-in 0.22s ease-out;
+}
+@keyframes profile-panel-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.profile-panel-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--panel-raised);
+  border-bottom: 1px solid var(--line-bright);
+}
+.profile-panel-head h2 {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+/* No plate and no ring: an icon button on a panel header should read as the way
+   out, not as a control competing with the content. Square corners because the
+   house radius is 4px and a circle here would read as a different product. */
+.profile-panel-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--steel);
+}
+.profile-panel-close:hover {
+  background: var(--cyan-bg);
+  color: var(--paper);
+}
+.profile-panel-close:focus-visible {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.profile-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  /* NO gap. The sections space THEMSELVES, with a rule between neighbours — see
+     .profile-block + .profile-block. A gap here would sit on top of that rule and
+     leave it nearer one block than the other. */
+}
+
+/* ---- The collapsible sections ---------------------------------------------
+   Every section is a heading that is also its own control, with a chevron, and a
+   summary of what is inside it beside the title. Folding therefore hides only the
+   CONTROLS, never the answer — which is what makes folding acceptable in a panel
+   whose whole job is to be read.
+
+   The rule BETWEEN blocks helps keep a folded panel legible: with the bodies
+   shut, headings stacked with nothing but whitespace between them read as one
+   grey list, and a line says they are four separate things. Written symmetrically
+   (margin above, padding below) so it sits in the middle of the space rather than
+   against one of the two blocks.
+
+   It is `--line`, the same divider every other row in this panel uses, and it
+   stays that way on measurement rather than on habit: `--line` is 1.37:1 against
+   the light panel and 1.24:1 against the dark one, and the brighter `--line-bright`
+   is only 1.66/1.62 — too small a gain to be worth this one rule disagreeing with
+   every other divider in the app. The line is a HINT, not the load-bearing part:
+   what actually separates four shut sections is the heading ink, which measures
+   4.69:1 in light and 4.88:1 in dark (bold, uppercase, letterspaced, 0.7rem). An
+   officer reading a folded panel is reading the headings first and the rules a
+   distant second, which is the order the contrast puts them in. */
+.profile-block + .profile-block {
+  margin-top: 1.4rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--line);
+}
+
+.profile-block-heading {
+  margin: 0;
+}
+
+/* The element-level `button` plate in this file is taken back off, exactly as the
+   top bar's own rows do: a full-width row inside a panel is not a raised control,
+   and the hover it would otherwise paint belongs to the row's own grammar. */
+.profile-block-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+.profile-block-toggle:hover {
+  background: none;
+  border-color: transparent;
+  color: inherit;
+}
+.profile-block-toggle:focus-visible {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.profile-block-title {
+  /* The quiet micro-label it always was — now a SPAN inside the heading, because
+     the heading itself has to hold the button, the summary and the chevron.
+     `flex: 1` is what puts the summary against the right edge, in the same
+     label-left / value-right grammar the preference rows below use, and what
+     keeps the chevron at the edge in the sections that have no summary. */
+  flex: 1;
+  min-width: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+  transition: color 140ms ease;
+}
+/* The whole row is the control, so the whole row says so on hover. Only the ink
+   changes: a plate behind a section heading would look like a pressed row. */
+.profile-block-toggle:hover .profile-block-title {
+  color: var(--paper);
+}
+
+.profile-block-summary {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 0.7rem;
+  color: var(--steel);
+  /* ONE line, ellipsised. A summary that wrapped would make the folded panel
+     taller than the thing it replaced, which is the opposite of the point. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-block-chevron {
+  flex: none;
+  color: var(--steel);
+  /* Points down when shut and turns over when open, so the fold reads as a state
+     rather than as something the title happens to do. */
+  transition: transform 200ms cubic-bezier(0.34, 1.32, 0.64, 1);
+}
+.profile-block-toggle[aria-expanded='true'] .profile-block-chevron {
+  transform: rotate(180deg);
+}
+
+/* The fold, in three elements, and the split is the classic bug rather than
+   taste: a grid track of `0fr` clips its ITEM, but padding on that item still
+   draws a strip of its own height — so a section carrying its spacing on the
+   clipper would stay visibly open by a few pixels. So the track animates, the
+   inner element clips, and the content INSIDE the clipper holds the spacing,
+   where it is cut off along with everything else. See PanelSection. */
+.profile-block-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows 200ms ease, visibility 200ms;
+}
+.profile-block-body[data-open='true'] {
+  grid-template-rows: 1fr;
+  visibility: visible;
+}
+.profile-block-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.profile-block-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-top: 0.8rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-block-body,
+  .profile-block-chevron {
+    transition: none;
+  }
+}
+.profile-block-note {
+  margin: -0.2rem 0 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--steel);
+}
+/* The counts failing is not an error the officer can act on, but it IS a
+   statement about what they are reading, so it is said in the ink the app uses
+   for "this needs your attention" rather than in the muted grey of a hint. */
+.profile-block-note--warn {
+  color: var(--red-text);
+}
+
+.profile-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.profile-panel-avatar {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ir-navy);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.profile-identity-text {
+  flex: 1;
+  min-width: 0;
+}
+.profile-identity-name {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--paper);
+  overflow-wrap: anywhere;
+}
+.profile-identity-meta {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  color: var(--steel);
+}
+.profile-identity-station {
+  margin: 0.3rem 0 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  /* --steel, not the dimmer --cyan-dim: on the raised plate the quaternary ink
+     lands at 4.33:1 light / 4.46:1 dark, under the 4.5 the 0.7rem text needs.
+     The hierarchy is carried by size, weight and case here instead. */
+  color: var(--steel);
+  overflow-wrap: anywhere;
+}
+
+/* The account's standing. Colours come from the role tokens so both themes
+   answer for them in one place, and the pair is chosen for the ink rather than
+   the fill: at 0.66rem uppercase these are small text and need their contrast
+   on the raised plate, not just a legible hue. */
+.profile-chip {
+  flex: none;
+  align-self: flex-start;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+.profile-chip--active {
+  /* --green-ink, not --green-ok: the chip tints its own plate, and the plain
+     green ink only clears the contrast bar on a near-white one. */
+  color: var(--green-ink);
+  background: var(--green-bg);
+  border-color: var(--green-line);
+}
+.profile-chip--inactive {
+  color: var(--red-text);
+  background: var(--red-bg);
+  border-color: var(--red-line);
+}
+
+/* Facts are a definition list because that is what they are: a label and its
+   value, read as pairs. A table would imply columns to compare across. */
+.profile-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+}
+.profile-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.profile-fact dt {
+  font-size: 0.75rem;
+  color: var(--steel);
+}
+.profile-fact dd {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: right;
+  color: var(--paper);
+}
+
+/* auto-fit rather than a fixed three columns: the panel narrows to 100vw-3rem
+   on a phone, and at that width three tiles leave nothing for the label. It
+   drops to two on its own instead of needing a breakpoint that would have to
+   track the panel's width rather than the viewport's. */
+.profile-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.profile-count {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.65rem;
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.profile-count-num {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--paper);
+}
+/* A dash is not a number. While the counts are still being read, and after they
+   have failed, the value is muted so it does not read as a figure — which is
+   the one thing a dash standing in for "unknown" must not look like. */
+.profile-count-num[data-pending='true'] {
+  color: var(--steel);
+}
+.profile-count-label {
+  font-size: 0.69rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+.profile-count-hint {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  /* Same reason as the station line above: on the raised plate --cyan-dim is
+     4.33:1. It stays distinguishable from its label by weight and case. */
+  color: var(--steel);
+}
+
+/* ---- Security: one row, an optional form, and the session fact -------------
+
+   The panel's only BUTTON, drawn as one on purpose. The segments and switches in
+   Preferences are controls a row carries; this is an action on the account, so
+   it gets the app's button plate rather than the row grammar. */
+.profile-inline-btn {
+  flex: none;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  background: var(--panel);
+  color: var(--paper);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+/* The element-level `button:hover` in this file is restated, not inherited: it
+   paints the raised plate and takes the accent for the ink, which is the right
+   treatment for a row inside a menu and the wrong one for a button sitting on a
+   panel. */
+.profile-inline-btn:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: var(--panel);
+}
+
+/* The form. Its hairline is drawn ABOVE it rather than under the row that opened
+   it, so an open form reads as belonging to the row above and a closed one
+   leaves no orphan rule behind. */
+.profile-password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
+/* One field per row, and NO input styling of its own: `input` above already
+   gives every field in the app its whole grammar — full width, the input well,
+   the focus ring, and the red border on `aria-invalid`. A second set of input
+   rules inside the panel is exactly how a field somewhere starts looking like a
+   different product. Only the text AROUND the fields is this panel's business. */
+.profile-pw-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-pw-hint,
+.profile-pw-note {
+  margin: 0.3rem 0 0;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: var(--steel);
+}
+/* An error is not a hint: it wears the ink the app uses for "this is wrong" and
+   sits directly under the field that was refused. */
+.profile-pw-error {
+  margin: 0.3rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--red-text);
+}
+.profile-pw-submit {
+  align-self: flex-start;
+  margin-top: 0.15rem;
+}
+
+/* The session fact, ruled off from whatever precedes it — an open form, or the
+   password row when the form is shut. It is a RULE about the account rather than
+   part of the action above it, which is what the line says. */
+.profile-facts--ruled {
+  margin-top: 0.35rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--line);
+}
+
+/* The preference rows themselves are styled in incident-report.css, where the
+   rest of the row lives (label, hint, switch, segmented group) — reusing them
+   verbatim is the point of moving the block rather than rebuilding it. The one
+   thing added here is the hairline BETWEEN two rows, which is the panel's
+   decision rather than the row's: it is what says the three settings are three
+   settings, and it is drawn on the pair rather than repeated on each row's own
+   bottom edge so the last one does not end the block with a trailing rule. */
+.profile-side-panel .ir-pref-row + .ir-pref-row {
+  border-top: 1px solid var(--line);
+}
+
+/* ---- User management: the second factor's state ----------------------------
+   Four states, and the ink is what separates them because they are three or four
+   words in a table cell. Every colour is a token that already exists and already
+   answers for both themes:
+
+     on      — --green-ink, the stepped green added for the profile panel's status
+               chip (4.90:1 light, and it maps back to --green-ok in dark)
+     thin    — --amber: a factor currently LOCKED after too many wrong codes
+     off     — --red-text: an account that OWES a factor and has nowhere to
+               send one (no email address on file)
+     na      — --steel: not a statement about anything, just Staff
+
+   NOT badges, deliberately. `.badge` is the report-status vocabulary (draft,
+   pending, finalized) and its colours mean workflow position; borrowing it here
+   would put the same green on a finished report and on an enrolled officer. */
+.user-mfa {
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.user-mfa--on { color: var(--green-ink); }
+.user-mfa--thin { color: var(--amber); }
+.user-mfa--off { color: var(--red-text); }
+.user-mfa--na { color: var(--steel); font-weight: 500; }
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-side-panel { animation: none; }
 }
 
 /* Backdrop no longer used — the panel is docked, not a modal overlay. */
@@ -2589,7 +3201,13 @@ button.dash-kpi--link:focus-visible {
   body.print-sheet-open .dialog-overlay,
   body.print-sheet-open .ai-side-panel,
   body.print-sheet-open .ai-panel { display: none !important; }
-  .sidebar, .toast, .dialog-overlay { display: none !important; }
+  /* The profile panel is chrome, not the document, so it is hidden in print
+     alongside the sidebar and the toast. Without this, printing while it is open
+     would put a fixed panel on the sheet — and, since a folded section is
+     `visibility: hidden`, would print its HEADERS with their contents missing, in
+     a medium where nothing can be clicked to bring them back. Hiding it removes
+     the whole class of problem rather than unfolding it for paper. */
+  .sidebar, .toast, .dialog-overlay, .profile-side-panel { display: none !important; }
   .main {
     height: auto !important;
     max-width: none !important;

@@ -5,6 +5,7 @@ import Audits from './Audits.jsx';
 import Dashboard from './Dashboard.jsx';
 import StationSettings from './StationSettings.jsx';
 import AppTopBar from './AppTopBar.jsx';
+import ProfilePanel from './ProfilePanel.jsx';
 import { ConnectionBanner } from './ConnectionNotice.jsx';
 import {
   ReportsTable,
@@ -53,7 +54,20 @@ import KeyboardShortcuts from './KeyboardShortcuts.jsx';
  * those actions came back on the register's own rows: right-click one for Open
  * / History / Print / Archive, or double-click it to open.
  */
-export default function Shell({ user, onLogout, notify, theme, onTheme, density, onDensity }) {
+export default function Shell({
+  user,
+  onLogout,
+  // Called when the session ended because the officer CHANGED THEIR PASSWORD
+  // (Profile ▸ Security) rather than by leaving. App owns the sign-in gate, so
+  // ending the session is App's to do; what belongs here is the workspace's own
+  // last act before it goes — see handlePasswordChanged below.
+  onPasswordChanged,
+  notify,
+  theme,
+  onTheme,
+  density,
+  onDensity,
+}) {
   // View model: { kind: 'welcome' } | { kind: 'report', id } |
   // { kind: 'new' } | { kind: 'table' } | { kind: 'users' } | { kind: 'dashboard' }
   // | { kind: 'audits' } | { kind: 'station' } — status pre-fills the reports
@@ -212,6 +226,12 @@ export default function Shell({ user, onLogout, notify, theme, onTheme, density,
   const [idleLeft, setIdleLeft] = useState(null);
   // The shortcut sheet (Profile ▸ Keyboard shortcuts, or ?).
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // The Profile panel (Profile ▸ the identity row in the top bar). It is owned
+  // HERE rather than inside AppTopBar because it is a DOCKED SURFACE beside the
+  // workspace, not a fold inside the menu that opens it: the menu unmounts the
+  // instant the row is pressed, so anything it rendered would go with it. Same
+  // arrangement as the shortcut sheet above, for the same reason.
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     const bump = () => {
@@ -358,6 +378,23 @@ export default function Shell({ user, onLogout, notify, theme, onTheme, density,
     onLogout();
   }
 
+  // The password change ends this session — deliberately, and server-side (see
+  // AuthController::changePassword). So the workspace has to leave the same way
+  // it does for a logout: an open draft is SAVED FIRST, while the session can
+  // still authorise the write, and only then does the officer land back on the
+  // gate. flushPending is reused rather than reimplemented, because a second
+  // save-then-leave path is exactly how a draft gets saved in one flow and
+  // stranded in the other.
+  //
+  // There is deliberately no `api('/logout')` call here, unlike doLogout: the
+  // endpoint that changed the password already destroyed the session, so the
+  // call would only be a 401 nobody needs.
+  const handlePasswordChanged = useCallback(async () => {
+    setProfileOpen(false);
+    await flushPending();
+    onPasswordChanged();
+  }, [flushPending, onPasswordChanged]);
+
   const onReportMutated = useCallback(() => {
     bumpList();
   }, [bumpList]);
@@ -373,16 +410,18 @@ export default function Shell({ user, onLogout, notify, theme, onTheme, density,
         current={view.kind === 'table' && listReportOpen ? 'report' : view.kind}
         onNavigate={navigate}
         onLogout={() => setConfirmLogout(true)}
-        formFormat={formFormat}
-        onFormFormat={chooseFormFormat}
-        theme={theme}
-        onTheme={onTheme}
-        density={density}
-        onDensity={onDensity}
+        // The display preferences no longer pass THROUGH the bar (they are set
+        // in the Profile panel below), so the bar no longer receives them. One
+        // fewer thing to keep threaded through a component that does not use it.
+        onOpenProfile={() => setProfileOpen(true)}
         // The sheet has two doorways — this menu row and the `?` key — and they
         // have to be the same sheet, so its state lives here, next to the
         // listener, rather than in the menu that only shows one of them.
         onShortcuts={() => setShortcutsOpen(true)}
+        // The bell's items name a report, and opening one is the same route as
+        // the register's own rows (“report”, by id) — so the bell hands the id
+        // up to the one place that owns the screen rather than routing itself.
+        onOpenReport={(reportId) => setView({ kind: 'report', id: reportId })}
       />
 
       <main className="main ir-body">
@@ -411,6 +450,12 @@ export default function Shell({ user, onLogout, notify, theme, onTheme, density,
             user={user}
             onNew={() => navigate('new')}
             onOpenReport={(r) => setView({ kind: 'report', id: r.id })}
+            // Home's queue deep-links into the register's OWN filter: the
+            // `attention` view (`status != 'finalized'`) is the same definition
+            // of unfinished work the queue counted, so the card can hand the
+            // officer the full list of exactly what it was counting instead of
+            // a general "My Reports". No status means the plain route, which is
+            // also the one that closes an open report panel (see navigate).
             onMyReports={() => navigate('table')}
             reports={recentReports ?? []}
             loading={recentReports === null}
@@ -483,6 +528,31 @@ export default function Shell({ user, onLogout, notify, theme, onTheme, density,
           <StationSettings notify={notify} onConnError={reportConn} onSaved={bumpStation} />
         )}
       </main>
+
+      {/* The Profile panel. Docked beside the workspace, mounted only while it
+          is open — so the docking effect inside it can treat mount as "open"
+          and unmount as "closed", with no second flag to fall out of step with
+          what is actually on screen. Deliberately rendered for every role: an
+          admin's own account is as worth reading as an officer's. */}
+      {profileOpen && (
+        <ProfilePanel
+          user={user}
+          // The station the deployment is for. Shell already reads the
+          // letterhead once for the whole workspace; the identity block takes
+          // the station NAME out of it rather than issuing a second request for
+          // one line.
+          stationName={stationHeader ? stationHeader.station_name : null}
+          formFormat={formFormat}
+          onFormFormat={chooseFormFormat}
+          theme={theme}
+          onTheme={onTheme}
+          density={density}
+          onDensity={onDensity}
+          onClose={() => setProfileOpen(false)}
+          onConnError={reportConn}
+          onPasswordChanged={handlePasswordChanged}
+        />
+      )}
 
       {/* The shortcut sheet. Rendered by Shell because Shell owns the keyboard
           that opens it with `?` — the menu row is the other doorway, and both
