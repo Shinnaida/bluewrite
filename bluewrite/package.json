@@ -7,12 +7,15 @@
     "dev": "node node_modules/vite/bin/vite.js",
     "build": "node node_modules/vite/bin/vite.js build && cp -r public-assets/. public/",
     "preview": "node node_modules/vite/bin/vite.js preview",
-    "test": "node --test tests/rules/reportRules.test.mjs tests/rules/printActions.test.mjs tests/rules/incidentReport.test.mjs tests/rules/reviewFields.test.mjs tests/rules/stationSettings.test.mjs tests/rules/formFormat.test.mjs tests/rules/reportLanguages.test.mjs tests/rules/languageRegistry.test.mjs tests/rules/narrativeTerms.test.mjs tests/rules/reportVerification.test.mjs tests/rules/guidedFlow.test.mjs tests/rules/classifyFill.test.mjs"
+    "test": "node --test tests/rules/reportRules.test.mjs tests/rules/printActions.test.mjs tests/rules/incidentReport.test.mjs tests/rules/reviewFields.test.mjs tests/rules/stationSettings.test.mjs tests/rules/formFormat.test.mjs tests/rules/reportLanguages.test.mjs tests/rules/languageRegistry.test.mjs tests/rules/narrativeTerms.test.mjs tests/rules/reportVerification.test.mjs tests/rules/guidedFlow.test.mjs tests/rules/classifyFill.test.mjs tests/rules/notifications.test.mjs tests/rules/profile.test.mjs tests/rules/passwordPolicy.test.mjs tests/rules/mfa.test.mjs tests/rules/codeBoxes.test.mjs"
   },
   "dependencies": {
+    "face-api.js": "^0.22.2",
     "gsap": "^3.15.0",
+    "postprocessing": "^6.39.5",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "three": "^0.186.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",

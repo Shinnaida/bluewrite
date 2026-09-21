@@ -64,6 +64,13 @@ will still paint dark.
 The animated glitch/grid/scanline backdrop retires for good — the light
 document page is the app's atmosphere now.
 
+> **Later change (see §"The sign-in gate").** "For good" did not hold for the
+> gate specifically: the two sign-in screens were given a backdrop again. It is a
+> different animal from the one retired here — a React Bits `GridScan`, drawn
+> from the palette's own tokens, unlit (no bloom, no grain) and static when the
+> OS asks for less motion — but it is a reversal of this sentence, and this note
+> is here so the record says so rather than reading as if the code drifted.
+
 ### Move 2: one top bar, rendered once
 
 New `src/components/AppTopBar.jsx`:
@@ -271,6 +278,35 @@ per-second clock glyph scramble went with them; the PHT clock itself stayed,
 as plain tabular text, because the time an officer signs on is what the audit
 trail records. `LetterGlitch.jsx` is now referenced by nothing and no longer
 reaches the bundle — left in the tree rather than deleted.
+
+**The sign-in gate got a backdrop again, and only it.** `GateGridScan.jsx`
+wraps the React Bits `GridScan` (vendored unmodified as `GridScan.jsx`, the same
+arrangement `HomeGrid.jsx` has with `ShapeGrid.jsx`) under both gate screens. It
+reverses the "retires for good" note above, deliberately and for this one screen:
+the gate is the only place in the app with nothing on it but a form, so a moving
+surface costs no reading. What it is NOT is the retired backdrop coming back —
+there are no scanlines, no glitch, no neon, and the colours are `--line-bright`
+and `--cyan` read off the document at runtime rather than new literals.
+
+Two costs were accepted with it, and both are worth knowing before the next
+change here. It brings **three render engines into the bundle**: `three`,
+`postprocessing` (installed but switched off — `enablePost={false}` is where the
+"no glow" part of this screen's brief lives) and `face-api.js`, which carries
+TensorFlow.js and takes the gate's JS from **491 kB to 1,728 kB** (154 → 463 kB
+gzipped). `face-api.js` is there only for webcam face-tracking, which this screen
+never enables, and its model-loading effect has no `enableWebcam` guard — so the
+gate also makes one outbound request to `cdn.jsdelivr.net` per load. Measured
+savings if that is ever reconsidered: stripping `face-api.js` alone removes
+**639 kB** (157 kB gzipped) and stripping `postprocessing` a further **61 kB**
+(14 kB gzipped). The component was left byte-faithful rather than patched so a
+React Bits update can still be diffed against it, which means the one-line guard
+is a decision to take deliberately, not a fix to make quietly.
+
+It also **cannot take the pointer**. `GridScan`'s parallax skew is pointer-driven,
+but the canvas sits under `.la-content`, a full-size scroll container at a higher
+layer, and clearing that container would break wheel scrolling. The layer is
+`pointer-events: none`, so the sweep and the grid's own drift carry the motion;
+the skew never runs.
 
 **What was kept deliberately:** the two-column arrangement, the PHT clock, the
 `SYS_STATUS` / `ENC_LEVEL` readout (an officer should see a connection problem

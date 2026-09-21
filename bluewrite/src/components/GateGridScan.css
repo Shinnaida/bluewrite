@@ -1,0 +1,49 @@
+/* ===========================================================================
+   The sign-in gate's GridScan backdrop (the React Bits component in
+   GridScan.jsx)
+
+   The backdrop FILLS the gate and sits BEHIND everything on it, adding no box,
+   shifting no text and adding nothing to the tab order — the gate with the
+   backdrop off and the gate with it on occupy the same layout to the pixel.
+
+   THE LAYERING. One layer, at the bottom, under everything:
+
+     z-index 0   the backdrop   — behind the content, above the page's own fill
+     z-index 10   .la-content   — the scroll container and both panels
+     z-index 20   .la-topbar    — the navy bar, which paints over the grid rather
+                                  than letting it show through the bar
+     z-index 60   the theme switch, which is absolutely placed in the page corner
+
+   Nothing below needs `position: relative` spelled per element: those three
+   declarations already exist in login-theme.css and this layer only had to be
+   given the slot at the bottom. `.la-page` itself needed one addition,
+   `isolation: isolate`, which is declared with the screen in login-theme.css
+   because it is a fact about the page's box rather than about the backdrop.
+
+   IT NEVER TAKES THE POINTER. `pointer-events: none`, deliberately: the canvas
+   sits under a full-size scroll container, so it could never be the hit target
+   anyway, and the one thing that must not happen is a decorative layer
+   swallowing a click on an officer's passcode field. The cost is the
+   component's parallax skew, which is pointer-driven — see GateGridScan.jsx for
+   why handing the pointer down is not available here. The sweep and the drift
+   are time-driven and unaffected. */
+.gate-gridscan {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* THE LIGHT THEME IS MULTIPLIED, NOT PAINTED. With `lightMode` on, the shader
+   outputs an OPAQUE frame that is white wherever there is no grid — so unblended
+   it does not sit behind the page, it replaces it, and the white cards lose the
+   --void they are meant to sit on. Under multiply, white is the identity: only
+   the lit hairlines and the sweep darken what is already there.
+
+   Applied to the component's own root rather than to this wrapper so the whole
+   subtree composites as one group. Dark mode is left alone — there the shader is
+   already transparent with an additive-looking numerator, which is how the
+   component was designed to sit on a dark page. */
+.gate-gridscan[data-light] > .gridscan {
+  mix-blend-mode: multiply;
+}

@@ -18,6 +18,11 @@
    Deliberately still login-only: the two-column arrangement (brand and system
    context beside the access panel), the PHT clock, and the SYS_STATUS /
    ENC_LEVEL readout — the facts an officer wants before they type a passcode.
+
+   TWO SCREENS, NOT ONE. The spread above is the PASSWORD screen. The second
+   factor is its own screen (section 4c): the same bar and the same panel
+   grammar, laid out for a procedure rather than for an introduction. Which
+   screen is which is decided in Login.jsx by the sign-in step, not by CSS.
    ============================================================ */
 
 .la-page {
@@ -27,6 +32,13 @@
   height: 100dvh;
   overflow: hidden;
   background: var(--void);
+  /* The backdrop layer (components/GateGridScan.css) is multiply-blended in the
+     light theme, and a blend takes its backdrop from the nearest ancestor that
+     forms a stacking context. `.la-page` is positioned but has no z-index, so it
+     was not one — the group would have reached past the page and multiplied the
+     grid against whatever sits behind it. This makes the page its own group, so
+     the grid blends against --void and nothing else. */
+  isolation: isolate;
   color: var(--paper);
   font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
@@ -128,6 +140,72 @@
 .la-topmeta .warn { color: #ffca6b; }
 .la-topmeta .accent { color: #9cc2ff; }
 
+/* ---- the second step's bar: no clock, no readout, one pill ----
+
+   The same navy chrome in a different shape. The clock and the SYS_STATUS
+   readout answer questions the PASSWORD screen asks — what time is this sign-on,
+   is the server there at all. Once the password has been accepted neither is
+   still open, so the right-hand end becomes one statement about the connection
+   the code is being sent over.
+
+   The lockup drops to sentence case here, at the two sizes the department's own
+   notice uses. That is deliberate and it is the one place the two screens' bars
+   differ in TYPOGRAPHY rather than in content: this bar was specified as a
+   formality — a title, a fact, a rule under both — and 11px sentence case is
+   what that reads as, where the password screen's letterspaced capitals belong
+   to a bar that is still introducing the system. */
+.la-topbar--step2 {
+  min-height: 60px;
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+  padding: 0.65rem 24px;
+  border-bottom: 3px solid var(--ir-blue);
+}
+.la-topbar--step2 .la-brand-mark {
+  width: 34px;
+  height: 34px;
+  /* A rounded square rather than the plain seal: the plate is what makes the
+     mark read as a badge at this size. */
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 9px;
+}
+.la-topbar--step2 .la-brand-text { gap: 0.05rem; line-height: 1.3; }
+.la-topbar--step2 .la-brand-line1 {
+  font-size: 0.6875rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: #a9b7d3;
+}
+.la-topbar--step2 .la-brand-line2 {
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* The pill, and the dot in it. The sentence carries the meaning and the dot is
+   drawn as decoration, so the dot is aria-hidden in the markup. */
+.la-session-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.34rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.9);
+}
+.la-session-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #4ade80;
+}
+
 /* The Light / Dark / Auto segmented group lived HERE. It was removed by
    request: a three-way theme picker on a sign-in screen reads as a settings
    screen rather than a gate, and the gate's job is one thing — get the officer
@@ -212,10 +290,12 @@
   max-width: 100%;
   word-break: break-word;
 }
-/* The wordmark's second half wears the brand blue, exactly as on Home. */
+/* The wordmark's second half wears the brand blue, exactly as on Home — and
+   that means the same token Home uses, or the two would be the same word in
+   two blues the moment the theme changes. */
 .la-hero em {
   font-style: normal;
-  color: var(--ir-blue);
+  color: var(--ir-blue-ink);
 }
 .la-tagline {
   display: flex;
@@ -315,6 +395,9 @@
 }
 .la-lock svg { color: inherit; }
 .la-panel-head h2 {
+  /* The heading is never focused and never was a control: it states which screen
+     this is, and the thing that takes the keyboard when the second step appears
+     is the code field itself (Login.jsx). */
   margin: 0;
   font-size: 1.25rem;
   font-weight: 800;
@@ -349,6 +432,40 @@
   font-size: 0.84rem;
   line-height: 1.5;
   color: var(--red-text);
+}
+
+/* The gate's OTHER band, and the reason it is not `.la-error` in a different
+   colour: a failed sign-in is a problem with what you just typed, and this is
+   the opposite — something SUCCEEDED, and the screen you are looking at is its
+   consequence. Same box, so the gate has one shape for "read this before you
+   sign in", with the accent that means "this worked".
+
+   The gate uses the app's role tokens rather than a private palette (it already
+   drew `.la-error` from --red/--red-bg), so this needs no dark override: --cyan
+   and --cyan-bg each answer for both themes.
+
+   Contrast, measured rather than assumed, because this is small text on a tinted
+   plate — the band is --cyan-bg composited over the gate's own --ir-card: --cyan
+   reads 5.19:1 light and 5.92:1 dark, and the tick at 4.47 / 6.77 clears the 3:1
+   a graphic needs. --cyan-bg-strong is only the 1px border, so it carries no
+   text at all. */
+.la-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  margin-bottom: 1.2rem;
+  padding: 0.75rem;
+  border: 1px solid var(--cyan-bg-strong);
+  border-left: 4px solid var(--cyan);
+  border-radius: 3px;
+  background: var(--cyan-bg);
+}
+.la-notice svg { flex-shrink: 0; margin-top: 2px; color: var(--green-ok); }
+.la-notice p {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--cyan);
 }
 
 /* ---- fields: the workspace's label + input grammar ---- */
@@ -434,31 +551,338 @@
 .la-submit:hover:not(:disabled) svg { transform: translateX(4px); }
 .la-submit:disabled { opacity: 0.55; cursor: not-allowed; }
 
-/* ---- footer reassurance: the workspace's raised panel ---- */
-.la-footer {
+/* ============================================================
+   4b. The second step — one card, two panels
+
+   The gate has a second screen in front of it, and it is built as a single
+   card: what the step is FOR on a navy panel to the left, the task itself to
+   the right. One card rather than a spread, because the two halves are one fact
+   — the code is how this system tells an officer from somebody who found their
+   password — and because there is nothing else on this screen for a spread to
+   share the page with.
+
+   EVERY COLOUR HERE IS A TOKEN, which is what makes the dark theme work without
+   a second palette: --ir-navy is the department's navy (it lifts in dark so it
+   does not dissolve into a near-black page), --panel-sunken is an empty field,
+   --ir-border the hairline, --ir-muted the body copy. The few values written
+   longhand are the inks that sit ON the navy, which have no token for the reason
+   section 1 gives: navy is the one surface that is navy in both themes.
+   ============================================================ */
+
+/* ---- the card ---- */
+.la-verify-card {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  border: 1px solid var(--ir-border);
+  border-radius: 12px;
+  background: var(--ir-card);
+  /* So the navy panel's corners are CUT by the card's radius rather than sitting
+     on top of it as two squares. */
+  overflow: hidden;
+}
+
+/* ---- left: what this step protects ---- */
+.la-verify-aside {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
   gap: 0.7rem;
-  margin-top: 1.5rem;
-  padding: 1rem;
-  border: 1px solid var(--ir-border);
-  border-radius: 4px;
-  background: var(--panel-raised);
+  padding: 28px 22px;
+  background: var(--ir-navy);
+  color: #fff;
 }
-.la-footer > svg { flex-shrink: 0; margin-top: 2px; color: var(--ir-muted); }
-.la-footer h4 {
+.la-verify-shield {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  color: #fff;
+}
+.la-verify-aside-title {
   margin: 0;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 1rem;
+  font-weight: 500;
+}
+.la-verify-aside-text {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: #b8c4dd;
+}
+.la-verify-facts {
+  /* `margin: auto 0 0` pushes the three statements to the FOOT of the panel:
+     they are a footer for the navy block, not a list under the sentence, and on
+     a card taller than the panel wants they are what keeps the block from
+     floating in the middle of it. */
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: auto 0 0;
+  padding: 0;
+  list-style: none;
+}
+.la-verify-facts li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #dce4f3;
+}
+.la-verify-facts svg { flex: none; color: #4ade80; }
+
+/* ---- right: the task ---- */
+.la-verify-main {
+  padding: 26px 28px 22px;
   color: var(--ir-text);
 }
-.la-footer p {
-  margin: 0.3rem 0 0;
-  font-size: 0.78rem;
-  line-height: 1.5;
+
+/* THE PROGRESS. Two filled segments and "Step 2 of 2": the same fact the old
+   rail spelled out in two rows of words, in a third of the height — which on a
+   768px workstation is height the boxes below need. */
+.la-verify-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 1.1rem;
+}
+.la-verify-seg {
+  width: 34px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--ir-blue);
+}
+.la-verify-step {
+  margin-left: auto;
+  font-size: 0.75rem;
   color: var(--ir-muted);
+}
+
+/* The card's own title, and the only heading on this screen. Written out rather
+   than inherited: this is an h1, and the gate's other h1 (the wordmark on the
+   password screen) is letterspaced display type, so every property that would
+   otherwise come with the element is stated here. */
+.la-verify-title {
+  margin: 0 0 0.4rem;
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ir-hero-ink);
+}
+.la-verify-lede {
+  margin: 0 0 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--ir-muted);
+}
+
+/* WHERE THE CODE WENT, as a field of its own: the one fact on this screen the
+   officer checks against the inbox in front of them, so it is drawn as a value
+   in the mono face rather than left to be found inside a sentence. */
+.la-verify-sent {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1.1rem;
+  padding: 8px 12px;
+  border: 1px solid var(--ir-border);
+  border-radius: 8px;
+  background: var(--ir-page);
+  font-size: 0.8125rem;
+  color: var(--ir-muted);
+}
+.la-verify-sent svg { flex: none; color: var(--ir-icon); }
+.la-verify-sent strong {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--ir-text);
+}
+
+/* THE SERVER'S OWN FAILURES — a code that could not be sent, a sign-in the
+   server has dropped. Amber rather than red: these are the station's problems,
+   and red is reserved for the field, where the officer's own typing is at
+   issue. A wrong CODE never reaches this band. */
+.la-verify-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0 0 1.1rem;
+  padding: 10px 12px;
+  border: 1px solid var(--amber-line);
+  border-radius: 8px;
+  background: var(--amber-bg);
+  color: var(--ir-text);
+}
+.la-verify-alert svg { flex: none; margin-top: 1px; color: var(--ir-amber); }
+.la-verify-alert p { margin: 0; font-size: 0.8125rem; line-height: 1.55; }
+
+/* THE FIELD. Label, boxes and the line under them in one column, so the label
+   sits directly over the row it names. */
+.la-verify-form { display: block; }
+.la-verify-label {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ir-text);
+}
+.la-verify-message {
+  /* RESERVED, not conditional. Three things can appear here — too few digits, a
+     refused code, acceptance — and the height is held whether one of them is
+     showing or not, so filling it does not push the button down the card. */
+  min-height: 20px;
+  margin: 0.4rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.la-verify-message .is-error { color: var(--ir-red); }
+.la-verify-message .is-success { color: var(--green-ink); }
+
+/* THE ONLY FILLED BUTTON on this screen, and it is navy rather than the app's
+   accent blue: this is the department's chrome, and its one action should look
+   like the bar it sits under. */
+.la-verify-submit {
+  display: flex;
+  width: 100%;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+  border: 1px solid var(--ir-navy);
+  border-radius: 8px;
+  background: var(--ir-navy);
+  color: #fff;
+  font-family: var(--font-family);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.la-verify-submit:hover:not(:disabled) {
+  background: var(--ir-navy-hi);
+  border-color: var(--ir-navy-hi);
+}
+.la-verify-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+.la-verify-submit:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/* THE RESEND ROW: the sentence on the left, the control on the right, one line
+   where there is room. Mail is the one part of this flow the station does not
+   control, so asking again has to be reachable from the screen that waits. */
+.la-verify-resend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--ir-muted);
+}
+.la-verify-resend-btn {
+  padding: 0.2rem 0;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--ir-blue-ink);
+  font-family: var(--font-family);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.la-verify-resend-btn:hover:not(:disabled) { text-decoration: underline; }
+.la-verify-resend-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+/* While the wait runs the control IS a countdown and not a route: muted, and
+   with no hover to suggest it can be pressed. */
+.la-verify-resend-btn[data-cooling],
+.la-verify-resend-btn:disabled {
+  color: var(--ir-muted);
+  cursor: default;
+}
+
+/* THE FOOT: the way out on the left, the rule that will stop it on the right. */
+.la-verify-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.9rem;
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--ir-border);
+}
+.la-verify-again {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--ir-blue-ink);
+  font-family: var(--font-family);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.la-verify-again:hover { text-decoration: underline; }
+.la-verify-again:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.la-verify-lock {
+  font-size: 0.75rem;
+  color: var(--ir-muted);
+}
+
+/* ============================================================
+   4c. The second step's page
+
+   The card, centred, and the one line under it. The card is the only thing this
+   screen asks the officer to do, so it is centred in the height it has rather
+   than sitting under a header; the notice below it is about the WORKSTATION and
+   not about this sign-in, which is why it is on the page rather than in the
+   card.
+   ============================================================ */
+
+.la-step2 {
+  display: flex;
+  width: 100%;
+  min-height: 100%;
+  padding: clamp(1rem, 3vh, 2.25rem) clamp(1rem, 3vw, 2.5rem);
+}
+
+.la-step2-grid {
+  /* `margin: auto` on the grid, not on the box: it centres the block in the
+     viewport that is left after the bar, and keeps centring when the content is
+     taller than that (where it becomes a normal scroll). */
+  margin: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  /* The card is 620px and the page is wider, and `justify-items` is what centres
+     it in the track instead of stretching a fixed-width card across the page. */
+  justify-items: center;
+  gap: 1.1rem;
+  width: 100%;
+}
+
+.la-verify-note {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--ir-muted);
+  text-align: center;
 }
 
 /* ============================================================
@@ -532,7 +956,11 @@
    section 7's short-viewport rule resets this element's padding shorthand
    further down the file, and this one has to survive it. */
 @media (max-width: 640px) {
-  .la-page .la-content-inner { padding-bottom: 4.75rem; }
+  /* The extra class on each selector is what lets the clearance survive section
+     7's short-viewport rule, which resets these elements' padding shorthand
+     further down the file (same reason as .la-content-inner's, above). */
+  .la-page .la-content-inner,
+  .la-page--step2 .la-step2 { padding-bottom: 4.75rem; }
 }
 
 /* ============================================================
@@ -559,6 +987,36 @@
   .la-left > .la-cards { order: 3; max-width: none; }
 }
 
+/* THE SECOND STEP'S CARD, ONE COLUMN. The navy panel stops being a side and
+   becomes a block on top. The three statements stay — they are the reason the
+   panel exists — but they spread into two columns and then into one, which is
+   the difference between the panel costing a third of a phone screen and half
+   of it. */
+@media (max-width: 720px) {
+  .la-verify-card {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 30rem;
+  }
+  .la-verify-aside { gap: 0.5rem; padding: 18px 20px; }
+  .la-verify-shield { width: 36px; height: 36px; }
+  .la-verify-aside-text { font-size: 0.78rem; }
+  .la-verify-facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem 0.75rem;
+    margin: 0.35rem 0 0;
+  }
+  .la-verify-main { padding: 20px 20px 18px; }
+}
+
+@media (max-width: 420px) {
+  .la-verify-facts { grid-template-columns: 1fr; }
+  /* The pill is the first thing to go when the bar runs out of room: the bar's
+     job on this screen is to say where the officer is, and the department lockup
+     already does that on its own. */
+  .la-session-pill { display: none; }
+}
+
 @media (max-width: 900px) {
   /* The readout is the bar's longest run and the least load-bearing part of
      it — SYS_STATUS is already carried by the notice in the panel below. It
@@ -572,6 +1030,10 @@
 }
 @media (max-height: 700px) {
   .la-content-inner { padding: 0.75rem 1rem; }
+  /* This fires on the common workstation (1366x768 less browser chrome), which
+     is exactly where the second step has to fit without scrolling to reach the
+     button. */
+  .la-step2 { padding-top: 0.9rem; padding-bottom: 0.9rem; }
   .la-columns { gap: 1.75rem; }
   .la-left { gap: 1rem; }
   .la-doc-icon { width: 48px; height: 48px; margin-bottom: 0.6rem; }
@@ -579,7 +1041,6 @@
   .la-card { padding: 0.7rem; }
   .la-panel { padding: 1.4rem; }
   .la-panel-head { margin-bottom: 1rem; padding-bottom: 0.7rem; }
-  .la-footer { margin-top: 1rem; padding: 0.7rem; }
   /* The one step the wordmark takes on a short window, and it is shallow on
      purpose. This query fires on the common workstation — 1366×768 less the
      browser chrome is under 700px of page — so whatever it says here is what
