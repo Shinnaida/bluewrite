@@ -48,6 +48,26 @@ AI-assisted police incident report system for the Naga City Police Station, Cebu
    request guard reads `users.email` on every request, so a database without the
    column fails on the first sign-in. See `docs/EMAIL_OTP.md`.
 
+   `014_presence_and_avatars.sql` is part of that line too: it adds the columns
+   behind the presence rail (`users.last_seen_at`) and officer photographs
+   (`photo_path`, `photo_updated_at`), and `POST /presence/heartbeat` 500s on a
+   database without them. Stored avatars live in `storage/avatars/` (git-ignored,
+   **   outside** `public/`, which is emptied on every build), so that folder has to
+   be writable by the web server. See `docs/PRESENCE.md`.
+
+   `015_messages.sql` is part of it as well: officer-to-officer messages, and
+   the unread counts the heartbeat reports. A database without the table makes
+   the messages panel fail on its first request, and the rail's unread marks
+   never appear. It needs no folder and no writable path — the rows are the
+   record. See `docs/MESSAGES.md`.
+
+   `016_message_typing.sql` is the last one: the latch behind the "somebody is
+   typing" dots. Missing it is quiet in the other direction — the panel still
+   opens and messages still send, and only the thread read 500s — on the table
+   it cannot find. Nothing depends on it and it holds one row per pair
+   of colleagues, so it is the cheapest table here to add or drop.
+
+
    Optional: insert a fully filled SAMPLE Theft report to try the AI
    narrative generator end-to-end — see
    `docs/sample-report-walkthrough.md`:

@@ -826,7 +826,7 @@
   color: var(--ir-blue-ink);
 }
 
-/* The cards of the step the officer is on — the WHOLE header bar goes --indigo,
+/* The cards of the step the officer is on — the WHOLE header bar goes --step-bar,
    the rail's emphasis repeated in the body, because a step is one card or
    several (step 4 is Parties Involved AND the per-type block; step 5 is three
    cards) and nothing else on the page says which cards belong together.
@@ -836,22 +836,25 @@
        current card is never repainted by it;
      · it is a modifier, not a change to --ir-card-head, which also backs table
        headers — recolouring that token would tint every table in the document;
-     · the bar's own hairline goes indigo too, so no grey line cuts across the
-       filled colour, and nothing moves: same padding, same label position.
-   The ink is white, which is the trade a filled header asks for — white on
-   #6F79E8 is 3.8:1, under AA for the 12px label (see the token for the one-line
-   fix if that ever needs to change). Read-out only: a card that is not current
-   stays fully editable. */
+     · the bar's own hairline goes with the fill too, so no grey line cuts across
+       the filled colour, and nothing moves: same padding, same label position.
+   The ink is white, the trade a filled header asks for, and it comes from
+   --on-accent rather than a literal so that both themes answer for it. The bar's
+   own value is --step-bar; the token carries the measured contrast for each
+   theme. Read-out only: a card that is not current stays fully editable. */
 .ir-card--current > .ir-card-head {
-  background: var(--indigo);
-  border-bottom-color: var(--indigo);
-  color: #fff;
+  background: var(--step-bar);
+  border-bottom-color: var(--step-bar);
+  color: var(--on-accent);
 }
-/* The numeral keeps a step of hierarchy on the filled bar — softer than the
-   title, but white rather than the blue it wears on a grey header, which would
-   all but disappear here. */
+/* The numeral keeps a step of hierarchy on the filled bar, but by WEIGHT rather
+   than by a faded white. At 0.72 alpha the composite measured 3.4:1 — under AA,
+   and no alpha on a saturated fill can fix that: even 0.95 lands at 4.8:1, which
+   is indistinguishable from solid at a glance. Weight is a difference that does
+   not spend contrast, so the numeral reads secondary beside the bold title. */
 .ir-card--current > .ir-card-head > .ir-card-num {
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--on-accent);
+  font-weight: 500;
 }
 
 .ir-card-body {
@@ -1843,7 +1846,11 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--ir-navy-hi);
+  /* THE FACE PAINTS NOTHING OF ITS OWN. It used to be the department navy here and a
+     lifted navy in the menu below, which meant the same officer had two different faces
+     depending on whether their own menu was open. The gradient comes from `.bw-avatar` —
+     one face per account, the same one in the bar, the rail, the thread and the profile
+     panel — and this rule is left owning the size, which is what this bar decides. */
   color: #fff;
   font-size: 0.7rem;
   font-weight: 700;
@@ -1912,7 +1919,6 @@
 .ir-profile-menu .ir-profile-avatar {
   width: 32px;
   height: 32px;
-  background: var(--ir-navy);
 }
 .ir-profile-id {
   display: flex;
@@ -2226,6 +2232,73 @@
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.02em;
+}
+
+/* Messages: the bell's twin, standing immediately before it.
+
+   THE SAME TRIGGER, DELIBERATELY. Same 34px box, same bare 17px glyph, same dimmed
+   resting ink and white hover, same white focus ring. The two are a pair — "what
+   happened to my reports" and "what have my colleagues said" — and a second control
+   on the bar that invented its own hover would read as belonging to a different
+   toolbar. The 34px box is what puts the two glyphs on one baseline next to the
+   profile pill, and what the badge is positioned against.
+
+   It is a SIBLING of the bell rather than a child of its wrapper: the bell's wrapper
+   is a click-outside region for its own panel, and a button inside it would be in
+   that region for no reason. */
+.ir-msg-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.86);
+  cursor: pointer;
+}
+/* Restated for the same reason the bell restates them: an element-level
+   `button:hover` in styles.css would otherwise drop a near-white plate behind the
+   icon on the navy bar. Nothing is painted — the icon brightens. */
+.ir-msg-trigger:hover,
+.ir-msg-trigger[aria-expanded='true'] {
+  background: none;
+  border-color: transparent;
+  color: #fff;
+}
+.ir-msg-trigger:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+/* The count, in the same red at the same place as the bell's: on a bare icon the
+   badge hangs off the GLYPH, so these two offsets are the bell badge's own values
+   rather than the rim offsets a round plate used to want.
+
+   The number is capped at 9+ in the component, because an exact 47 in a 16px circle
+   is unreadable at the size it is drawn — it is a hint that something is waiting,
+   not a ledger. */
+.ir-msg-badge {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--ir-red);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .ir-bell-panel {
@@ -2800,11 +2873,27 @@
    drawn in the sheet's own grammar (centered, bold, one line each) rather than
    as a second list of labels.
    =========================================================================== */
+/* One measure for the whole screen, CENTERED. The blocks used to be a column
+   hugging the left gutter with the rest of the page empty beside it — at 1363px
+   that reads as an unfinished screen rather than as a setting. The measure lives
+   here instead of on `.st-stack` so that the title, the status line and the
+   working surface share it: a centered card under a title pinned to the left
+   edge is two alignments on one page. Same reason the sheet's own bars center
+   themselves (`.ir-sheet-bar`).
+
+   The measure is 8.5in rather than a round number of rem, because this is the ONE
+   screen that edits the letterhead which then prints on US Letter: the sheet's own
+   width is the only width at which the proof under the form is proof of anything.
+   `.print-sheet` states the same 8.5in, so the two cannot drift. */
+.st-page {
+  max-width: 8.5in; /* US Letter, the station's paper — see .print-sheet */
+  margin-inline: auto;
+}
+
 .st-stack {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-width: 46rem;
 }
 
 .st-block {

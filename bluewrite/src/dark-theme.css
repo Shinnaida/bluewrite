@@ -61,6 +61,40 @@
   --input-bg: #12161D; /* a well, so a field reads as fillable */
   --card-head: #1C2129; /* tinted card and table headers */
 
+  /* ---- The chatbox: a bubble is not a card (what each one is FOR is in styles.css)
+
+     THESE ARE THE ONE PLACE THIS FILE TINTS TOWARD THE DEPARTMENT'S NAVY rather than
+     toward neutral graphite, and it is because the panel is a transcript rather than a
+     slice of the document. The cards above are the register seen through a window; a
+     conversation is its own object sitting on top of it, and the navy is what the
+     window's own title bar already wears — so the box reads as one thing instead of a
+     navy hat on a graphite body.
+
+     LIGHT KEEPS THE APP'S COOL NEUTRALS. These values are a dark palette; the same
+     hexes dropped into light mode would be a dark slab on a white page, which is why
+     light states its own (see styles.css). */
+  --msg-surface: #171C2A;
+  --msg-line: #262D40;
+  --msg-well: #171C2A; /* the transcript IS the window here: the bubble is what lifts */
+  --msg-bubble: #232B3D;
+  --msg-bubble-line: #2C3448;
+  --msg-input: #1B2130;
+  --msg-input-line: #2C3345;
+  /* LIFTED FROM #5C6478, WHICH WAS THE DESIGN'S NUMBER AND MEASURES 2.9:1 here.
+     Timestamps and the read receipt are 10.5px text on --msg-well, so they need the
+     4.5:1 a small label needs; the intended value is one step lighter and gets 5.5:1.
+     Nothing else about the design changes — the quiet grey stays quiet, it just becomes
+     readable. */
+  --msg-meta: #8892A6;
+  --msg-typing: #6F7A8C;
+
+  /* NO --bw-face-* OVERRIDES, deliberately. Those are the initials gradients, and they
+     are IDENTITY colours rather than surfaces: the same officer should have the same
+     face in either theme, the way the chathead's presence dot is the same green. They
+     are all measured to carry white initials at 4.5:1 or better, which does not change
+     when the page behind them does — and lifting them here would LOWER that contrast,
+     because white on a lifted blue is worse. See styles.css for the six pairs. */
+
   /* ---- Ink ---- */
   --paper: #E6EAF0; /* primary text */
   --steel: #A2ACBD; /* secondary text */
@@ -104,11 +138,45 @@
   --green-ink: var(--green-ok);
 
   /* ---- The rail's accent, and the current card's bar ----
-     Violet lifts with the page the same way the blue does; the indigo header
-     fill is already a mid-tone that carries white in either theme, so it does
-     not move. */
+     Violet lifts with the page the way the blue does, because the rail draws its
+     ring and its tick on a dark surface and has to read as INK there.
+
+     The card's bar cannot follow it. A violet bright enough to work as ink here
+     is far too bright to hold a white label — white on #A78BFA measures 2.7:1 —
+     so this is the same ink/surface split the accent makes one block up, and the
+     surface value has to be stated for dark rather than inherited. */
   --violet: #A78BFA;
-  --indigo: #6F79E8;
+  --step-bar: #6A4AD8; /* white on it measures 5.9:1, and 3.1:1 against --panel */
+
+  /* ---- The incident-type ramp (what it MEANS is documented in styles.css) ----
+     THE RAMP HAS TO BE RESTATED HERE, and inheriting light's was not a near-miss.
+     Light's ladder runs dark-to-pale because its bands sit on white; on this
+     panel the SAME values measured the other way round — step 1 (#14397D) came
+     out at 1.74:1 against #161A21, which is invisible, while step 14 was the
+     brightest thing on the plot at 7.06:1. So in dark the busiest incident type
+     was drawn as the one band you could not see and the rarest was drawn as the
+     most prominent, inverting the exact reading the ramp exists to give.
+
+     A band has to be LIGHTER than a near-black panel to be visible at all, which
+     is the same inversion the green ink above describes, so dark solves its own
+     ladder upward: 12.5:1 at step 1 down to 3.42:1 at step 14, strict, verified.
+     The hues are held to light's family order (blue -> teal -> violet ->
+     periwinkle -> slate) so it still reads as the same chart across a theme
+     switch, and the tail hues stay distinct where the lightness has to converge. */
+  --cat-1: #CCDBF7;  /* 12.5:1 */
+  --cat-2: #B1CBF1;  /* 10.5:1 */
+  --cat-3: #96BEE6;  /* 9:1 */
+  --cat-4: #57BCC7;  /* 7.8:1 */
+  --cat-5: #3FB4AC;  /* 6.9:1 */
+  --cat-6: #3FAB95;  /* 6.2:1 */
+  --cat-7: #9A86D7;  /* 5.6:1 */
+  --cat-8: #997AD7;  /* 5.1:1 */
+  --cat-9: #9C6ED9;  /* 4.7:1 */
+  --cat-10: #6977D7;  /* 4.35:1 */
+  --cat-11: #676FDB;  /* 4.05:1 */
+  --cat-12: #5777A2;  /* 3.8:1 */
+  --cat-13: #417A85;  /* 3.6:1 */
+  --cat-14: #7E5DB6;  /* 3.42:1 */
 
   /* ---- Veils and elevation ----
      A shadow has to be darker than what it falls on, and a scrim darker than

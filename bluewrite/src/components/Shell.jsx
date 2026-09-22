@@ -6,6 +6,17 @@ import Dashboard from './Dashboard.jsx';
 import StationSettings from './StationSettings.jsx';
 import AppTopBar from './AppTopBar.jsx';
 import ProfilePanel from './ProfilePanel.jsx';
+// Who is at a desk right now, down the right edge — see the component for why the
+// heartbeat lives there rather than here.
+import Chatheads from './Chatheads.jsx';
+// The one place the design-preview flag is decided: it changes what the rail draws
+// AND what pressing one of those circles opens, so both surfaces are handed the same
+// answer. See below for the two conditions.
+import { chatheadPreview } from '../lib/presence.js';
+// The messages panel — the third dock on the right edge. Opened from the rail's
+// officer card or from the top bar's messages button, both of which are wired up
+// here because both are surfaces Shell already owns.
+import MessagesPanel from './MessagesPanel.jsx';
 import { ConnectionBanner } from './ConnectionNotice.jsx';
 import {
   ReportsTable,
@@ -62,6 +73,11 @@ export default function Shell({
   // ending the session is App's to do; what belongs here is the workspace's own
   // last act before it goes — see handlePasswordChanged below.
   onPasswordChanged,
+  // A field of the session's own account changed and App's copy of it must be
+  // updated — the profile photo today (see ProfilePanel ▸ Identity). Passed through
+  // rather than handled here because the signed-in record belongs to App, which is
+  // also what draws the sign-in gate when it goes away.
+  onUserPatch,
   notify,
   theme,
   onTheme,
@@ -232,6 +248,52 @@ export default function Shell({
   // instant the row is pressed, so anything it rendered would go with it. Same
   // arrangement as the shortcut sheet above, for the same reason.
   const [profileOpen, setProfileOpen] = useState(false);
+
+  // THE DESIGN PREVIEW, read ONCE for the whole workspace. It decides the presence
+  // rail's roster AND what the messages panel does when one of those circles is
+  // pressed, so it is read in one place rather than by each surface: two reads of one
+  // URL is how a mock officer ends up on a rail whose panel refuses their id.
+  //
+  // Two conditions, and only one of them is negotiable. `import.meta.env.DEV` is
+  // replaced with `false` by Vite at build time, so a SHIPPED bundle cannot reach the
+  // mock whatever the URL says; in dev the mocks are the default (the real rail is a
+  // roster of OTHER people, so it is empty on a machine with one account signed in),
+  // and `?chatheads=off` is how you see the live one. Read on the first render: this
+  // is not a thing to toggle without a reload.
+  const [preview] = useState(
+    () => import.meta.env.DEV && chatheadPreview(window.location.search)
+  );
+
+  // THE MESSAGES PANEL, and it is one piece of state rather than two. `messagesOpen`
+  // is whether the dock is on screen; `messagesPeer` is the conversation inside it
+  // (or null for the list). They live here, not in the panel, because the panel is
+  // MOUNTED BY OPENING IT: a thread has to survive a close-and-reopen — an officer
+  // reading a report and coming back to the reply they were in the middle of — and
+  // state inside a component that unmounts goes with it.
+  //
+  // `messagesPeerHint` is the roster entry the rail or the list handed over, so the
+  // thread can draw the colleague's face on the first frame instead of after a round
+  // trip. The server's own `peer` replaces it as soon as the thread arrives.
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  const [messagesPeer, setMessagesPeer] = useState(null);
+  const [messagesPeerHint, setMessagesPeerHint] = useState(null);
+
+  // ONE COUNT, TWO PLACES. The top bar's badge and the rail's marks are the same
+  // number from the same heartbeat, held here because both surfaces are drawn here —
+  // a second read inside the bar would be a second answer to "how much is waiting".
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  // Opening the panel and opening a conversation are separate because they lead to
+  // different screens of the same dock, and the bar only ever wants the first.
+  const openMessages = useCallback((peerId = null, hint = null) => {
+    setMessagesPeer(peerId === null || peerId === undefined ? null : Number(peerId));
+    setMessagesPeerHint(hint);
+    setMessagesOpen(true);
+    // ONE RIGHT EDGE. The profile panel owns the same edge, so opening messages
+    // closes it: two docks stacked at one edge is the layout the stylesheet
+    // deliberately refuses to draw (see the 1280px rules in styles.css).
+    setProfileOpen(false);
+  }, []);
 
   useEffect(() => {
     const bump = () => {
@@ -413,7 +475,12 @@ export default function Shell({
         // The display preferences no longer pass THROUGH the bar (they are set
         // in the Profile panel below), so the bar no longer receives them. One
         // fewer thing to keep threaded through a component that does not use it.
-        onOpenProfile={() => setProfileOpen(true)}
+        onOpenProfile={() => {
+            setProfileOpen(true);
+            // The same rule in the other direction: whichever dock was opened last
+            // is the one on the edge.
+            setMessagesOpen(false);
+          }}
         // The sheet has two doorways — this menu row and the `?` key — and they
         // have to be the same sheet, so its state lives here, next to the
         // listener, rather than in the menu that only shows one of them.
@@ -422,7 +489,50 @@ export default function Shell({
         // the register's own rows (“report”, by id) — so the bell hands the id
         // up to the one place that owns the screen rather than routing itself.
         onOpenReport={(reportId) => setView({ kind: 'report', id: reportId })}
+        onOpenMessages={() => openMessages(null)}
+        unreadMessages={unreadMessages}
       />
+
+      {/* THE PRESENCE RAIL. Rendered by Shell because Shell is the signed-in frame
+          — it exists on every screen an officer can be on, and nowhere else (the
+          gate has no roster to show). It is `position: fixed` at the right edge and
+          shifts clear of the docked panels with the same width variables they use
+          (styles.css), so it is never buried under one. */}
+      {/* THE CORNER: the chatbox and the rail, one flex row, the rail last so it is
+          always the rightmost thing. The container owns the position — see .dash-dock —
+          because two elements each anchoring themselves at the same corner is two
+          answers to one question, and the box has to sit BESIDE the rail rather than
+          on top of it at every width the rail can take. */}
+      <div className="dash-dock">
+        {messagesOpen && (
+          <MessagesPanel
+            preview={preview}
+            peer={messagesPeer}
+            peerHint={messagesPeerHint}
+            onOpenPeer={openMessages}
+            onClose={() => setMessagesOpen(false)}
+            onUnreadChange={setUnreadMessages}
+            onConnError={reportConn}
+          />
+        )}
+
+        <Chatheads
+          user={user}
+          preview={preview}
+          onOpen={(person) => openMessages(person.id, person)}
+          onUnreadChange={setUnreadMessages}
+          // THE COLLEAGUE YOU ARE TALKING TO LEAVES THE RAIL. Not just their unread mark
+          // — their whole circle, and it comes back when the box is closed. The rail
+          // answers "who might I be looking for"; once the conversation is open, that
+          // face has been found, and the press would do nothing the box is not already
+          // doing. It also frees the slot nearest the corner for somebody who has
+          // actually gone unread while you were typing.
+          //
+          // Null while the box is shut, or while it is showing the list rather than a
+          // thread — there is no "the colleague you are talking to" in either case.
+          openPeerId={messagesOpen ? messagesPeer : null}
+        />
+      </div>
 
       <main className="main ir-body">
         <ConnectionBanner state={connState} onRetry={retryConn} />
@@ -491,17 +601,29 @@ export default function Shell({
             user={user}
             notify={notify}
             onConnError={reportConn}
-            onOpenReports={(status) => setView({ kind: 'table', status })}
+            // The dashboard names the filter it wants the register opened with — a
+            // status from a KPI tile, or a day (and incident type) from the chart's
+            // right-click menu. It is passed through rather than interpreted here:
+            // the keys are the list's own query keys (`status`, `date_from`,
+            // `date_to`, `type`), so a new one needs no change in this file.
+            onOpenReports={(filters) => setView({ kind: 'table', ...filters })}
           />
         )}
         {view.kind === 'table' && (
           <ReportsTable
-            key={view.status ?? 'all'}
+            // The key is what RESEEDS the list, so every filter the dashboard can
+            // arrive with belongs in it: reaching the register twice with two
+            // different days has to be two different mounts, or the second one
+            // keeps the first one's range.
+            key={[view.status ?? 'all', view.date_from ?? '', view.date_to ?? '', view.type ?? ''].join('|')}
             user={user}
             notify={notify}
             onMutated={onReportMutated}
             onConnError={reportConn}
             initialStatus={view.status}
+            initialDateFrom={view.date_from}
+            initialDateTo={view.date_to}
+            initialType={view.type}
             // The list opens a report in its OWN editor panel, so the display
             // preference has to reach it from here as well: without it that
             // editor fell back to the document format, and a report opened
@@ -537,6 +659,7 @@ export default function Shell({
       {profileOpen && (
         <ProfilePanel
           user={user}
+          onUserPatch={onUserPatch}
           // The station the deployment is for. Shell already reads the
           // letterhead once for the whole workspace; the identity block takes
           // the station NAME out of it rather than issuing a second request for

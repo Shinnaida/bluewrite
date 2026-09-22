@@ -18,6 +18,8 @@ use PDOException;
  * Read-only aggregation endpoint. Contract:
  *   kpis{total,pending,submitted,finalized,periodDeltaPct}
  *   seriesOverTime[{date,count}] / categoryBreakdown[{type,count}]
+ *   seriesByType[{type,total,counts}] — the same days as seriesOverTime, cut by
+ *     incident_type and ordered by volume descending (see below)
  *   categoryDeltas{type:{current,previous}} / statusBreakdown{draft,submitted,final}
  *   hourHistogram[{hour,count}] / officerBreakdown[{officer,count}]
  *   finalizeTime{medianMinutes,finalizedCount} / recentActivity[...] / meta{...}
@@ -183,6 +185,57 @@ final class DashboardController
             $cursor = strtotime('+1 day', $cursor);
         }
 
+        // ---- The same series, cut by incident type ---------------------------
+        // Feeds the stacked "Reports over time" columns. It is a second
+        // dimension of the SAME fact rather than a second view of a different
+        // one: it shares $where and $params with the series above, so the
+        // stack's daily heights cannot disagree with the totals they replace.
+        //
+        // Only types with at least one report in range come back. An all-zero
+        // series would add a legend row that never draws a band, and over a
+        // 366-day range that is 14 rows of nothing.
+        //
+        // ORDERED BY VOLUME, DESCENDING, and the tie-break is deliberate. The
+        // client paints band N with ramp step N, so this order IS the colour
+        // assignment: rank 1 is the station's busiest type and gets the ramp's
+        // heaviest step. PHP's sort is stable, but an explicit secondary sort on
+        // the type name keeps the assignment identical across requests — the
+        // dashboard re-reads itself every 60 seconds, and two equal types
+        // swapping colours under a viewer would be a real defect, not a detail.
+        $typeStmt = $pdo->prepare(
+            "SELECT incident_type AS t, DATE(incident_datetime) AS d, COUNT(*) AS cnt
+             FROM reports {$where}
+             GROUP BY incident_type, DATE(incident_datetime)"
+        );
+        $typeStmt->execute($params);
+        $byTypeDay = [];
+        foreach ($typeStmt->fetchAll() as $r) {
+            $byTypeDay[(string) $r['t']][(string) $r['d']] = (int) $r['cnt'];
+        }
+        $seriesByType = [];
+        foreach ($byTypeDay as $typeName => $perDay) {
+            $counts = [];
+            $typeTotal = 0;
+            // Walked in the SAME zero-filled day order as $series, so count N of
+            // every type lines up with day N of the totals by construction
+            // rather than by a convention the client has to trust.
+            foreach ($series as $point) {
+                $c = $perDay[$point['date']] ?? 0;
+                $counts[] = $c;
+                $typeTotal += $c;
+            }
+            $seriesByType[] = [
+                'type' => (string) $typeName,
+                'total' => $typeTotal,
+                'counts' => $counts,
+            ];
+        }
+        usort(
+            $seriesByType,
+            static fn (array $a, array $b): int => ($b['total'] <=> $a['total'])
+                ?: strcmp($a['type'], $b['type'])
+        );
+
         // ---- Category breakdown (top 8) ------------------------------------
         $stmt = $pdo->prepare(
             "SELECT incident_type AS type, COUNT(*) AS count
@@ -247,6 +300,11 @@ final class DashboardController
 
         // ---- Reports by hour of day (0-23) ---------------------------------
         // Shift-planning signal: when do incidents actually land?
+        //
+        // Every day in the range is summed into the same 24 buckets, so this reads as
+        // "a day in this range" rather than any one day: 23:00 holding eleven reports
+        // over a month means eleven night-time incidents across that month. Counts, not
+        // rates, because there is one window here and nothing to normalise against.
         $hourStmt = $pdo->prepare(
             "SELECT HOUR(incident_datetime) AS h, COUNT(*) AS cnt
              FROM reports {$where}
@@ -336,6 +394,7 @@ final class DashboardController
                 'periodDeltaPct' => $delta,
             ],
             'seriesOverTime' => $series,
+            'seriesByType' => $seriesByType,
             'categoryBreakdown' => $categoryBreakdown,
             'categoryDeltas' => $categoryDeltas,
             'statusBreakdown' => [

@@ -38,16 +38,68 @@
      only has to be unmistakably not-the-track. Contrast on white is 5.1:1,
      so it carries both the ring and the white tick inside it. */
   --violet: #8444F2;
-  /* The body's half of the same idea. The rail says which STEP you are on; this
-     paints the whole header bar of every card that step OWNS, so a step that is
-     two cards (Parties Involved + the per-type block) reads as one.
+  /* The body's half of the same idea, and the SAME hue as the rail: the rail
+     says which STEP you are on, and this paints the whole header bar of every
+     card that step OWNS, so a step that is two cards (Parties Involved + the
+     per-type block) reads as one.
 
-     A solid bar, so the label on it has to be white — the house treatment for
-     ink on a filled colour (.ir-nav-link, .ir-profile-trigger, button.primary).
-     White on #6F79E8 measures 3.8:1: over the 3:1 a non-text cue needs, under
-     the 4.5:1 the 12px label wants as plain text. Darkening THIS token is the
-     one-line way back to AA (#4A55C8 gives 6.1:1) without touching any rule. */
-  --indigo: #6F79E8;
+     It used to be a third hue of its own (#6F79E8), which bought no meaning the
+     rail's violet did not already carry, and white on it measured 3.8:1 — under
+     the 4.5:1 the bar's 12px label wants as plain text. One hue, one meaning,
+     and a value that passes: white on this measures 5.1:1.
+
+     Light can share the rail's value between the two jobs. Dark cannot: a violet
+     bright enough to work as ink on near-black is far too bright to hold a white
+     label, which is the same ink/surface split the accent already makes. Dark
+     states its own value (see dark-theme.css). */
+  --step-bar: var(--violet);
+  /* ---- The incident-type ramp: the stacked "Reports over time" columns ----
+     ORDINAL, not categorical. The server ranks the types by volume and the stack
+     is drawn in that order from the baseline up, so a ramp step is a RANK: step 1
+     is the station's busiest incident type, and the ramp lightens and cools as
+     the type gets rarer. That is the question the panel exists to answer — "what
+     happens most often?" — readable without consulting the legend.
+
+     Deliberately NOT the status hues. `--amber`, `--cyan` and `--green-ok` mean
+     draft / submitted / final in the Status Breakdown pie one panel away, and a
+     hue that means a status there cannot also mean an incident type here. So the
+     ramp stays inside the cool register the document layer already owns — deep
+     blue, accent blue, teal, violet, slate — and borrows no status colour.
+
+     Steps 1-8 carry the types that actually move; 9-14 are the long tail, which
+     in practice is 1- and 2-report slivers. The steps sit close together ON
+     PURPOSE: the chart separates neighbouring bands with a 1px `--panel` stroke,
+     so the ramp can stay one coherent progression instead of fighting for
+     contrast it does not need on a band 15px tall.
+
+     THE VALUES ARE A LADDER, NOT FOURTEEN COLOURS PICKED ONE AT A TIME. Each step
+     was solved for a target contrast against this panel, descending from 11:1 to
+     2.4:1, so "a heavier band = a more frequent type" is literally true of the
+     pixels and not just of the ordering. The previous set was chosen by eye and
+     did not hold that: step 7 measured 6.46:1 against the panel while step 3
+     measured 3.85:1, so the seventh type was drawn more prominent than the third.
+     A reader takes the darkest band for the commonest incident, which is the
+     whole question this panel answers, so an eye-picked ramp was answering it
+     wrongly. Re-solved as a ladder, then checked for strict monotonicity.
+
+     Keeping the head blue matters more than matching `--blue` exactly: step 2 used
+     to BE #1F5FD0 and now sits a shade darker, because the ladder needs 8.2:1
+     there rather than its 5.82:1. The hue family is unchanged — the ramp still
+     reads as the same chart. */
+  --cat-1: #14397D;  /* 11:1 */
+  --cat-2: #1B4D98;  /* 8.2:1 */
+  --cat-3: #25619D;  /* 6.4:1 */
+  --cat-4: #2A777F;  /* 5.2:1 */
+  --cat-5: #2E837D;  /* 4.5:1 */
+  --cat-6: #348D7B;  /* 4:1 */
+  --cat-7: #8F79D2;  /* 3.6:1 */
+  --cat-8: #9C7ED8;  /* 3.3:1 */
+  --cat-9: #A981DE;  /* 3.05:1 */
+  --cat-10: #8894DF;  /* 2.85:1 */
+  --cat-11: #9197E5;  /* 2.7:1 */
+  --cat-12: #8CA3C1;  /* 2.58:1 */
+  --cat-13: #72AEBA;  /* 2.48:1 */
+  --cat-14: #B29ED4;  /* 2.4:1 */
   --green-ok: #15803D;
   --amber: #B26A00;
   --red: #B3261E;
@@ -125,18 +177,73 @@
      sans with letterspacing, matching the printed report. */
   --font-hud: var(--font-family);
   --font-body: var(--font-family);
-  /* THE one place a fixed-width face is right, and the only token for it: a
-     value somebody has to TRANSCRIBE. It is used for the second factor's
-     six-digit code and the address that code was sent to, where every character
-     lines up with what the officer reads in their inbox and a proportional face
-     makes a `1` and an `l` the same shape at a glance. Nothing else in the
-     application should use it — a monospace body font here would be a decision
-     about taste, and this is a decision about reading a code correctly.
-
-     The stack is deliberately system-only (no webfont): a station PC has one of
-     these, and a downloaded mono face would be another file to fail to load on
+  /* The fixed-width stack, with no webfont in it: a station PC has one of these
+     already, and a downloaded mono face would be another file to fail to load on
      the one screen where the officer is reading mail in the other window. */
   --font-mono: ui-monospace, 'Cascadia Mono', Consolas, 'Liberation Mono', 'Courier New', monospace;
+
+  /* The stamp face, and its one role: a value the SYSTEM produced rather than a
+     person typed — a timestamp, a report number, an IP, a badge number, an audit
+     entry number. It is `--font-mono` under a name that says what it is FOR, so a
+     rule asks for "machine value" rather than for "monospace".
+
+     Two properties earn it, and neither is taste. These values get TRANSCRIBED
+     (a code out of an inbox, an IP into another tool, a report number onto a
+     form) and a proportional face makes a `1` and an `l` the same shape at a
+     glance — the second factor's six-digit code was the original case. And they
+     are COLUMNAR: a column of timestamps lines up on the colon with no per-cell
+     tuning, which is the whole reason a printed blotter's columns work.
+
+     It is deliberately NOT a general "small data label" treatment. Names, prose
+     and headings are human work and keep League Spartan. Mono sprinkled over
+     every small label is a style tell; this is a distinction the subject itself
+     makes, since the station's own forms print their captions and their
+     typewriter-filled values in two visibly different faces. */
+  --font-stamp: var(--font-mono);
+
+  /* ---- The chatbox: a bubble is not a card -----------------------------------
+
+     WHY THESE EXIST RATHER THAN REUSING --panel AND --line. The window floats over the
+     register and so do the dashboard's cards, and they are not the same surface: a card
+     is a slice of the document and takes the document's own ink and hairlines, while a
+     bubble is CORRESPONDENCE — a transcript of a conversation, read top to bottom, with
+     two speakers to tell apart. Giving them the page's colours is what made this panel
+     read as a form with messages in it.
+
+     THEY ARE STILL TOKENS AND STILL BOTH THEMES. Dark tints these toward the navy the
+     department uses (see dark-theme.css) because the screenshot this was designed from
+     does; light keeps the app's own cool neutrals, because a dark-only palette dropped
+     into light mode is a dark slab on a white page. Nothing here is hard-coded at a call
+     site — the rules below ask for roles, so the theme switch needs no component to
+     know about it.
+
+     ICE AND FIRE, INK AND SURFACE: the outgoing bubble is a FILLED accent carrying
+     white, the incoming one is a quiet plate carrying the page's ink. That is the
+     ink/surface split every other filled control here already makes, applied to the one
+     place where two of them sit side by side. */
+  --msg-surface: #FFFFFF; /* the window itself */
+  --msg-line: var(--line-bright); /* its hairline, and the rail's */
+  --msg-well: #F4F6FA; /* the scrolling transcript behind the bubbles */
+  --msg-bubble: #EDF1F7; /* theirs: a plate, not a card */
+  --msg-bubble-line: #DCE1EA;
+  --msg-input: #F4F6FA; /* the composer's pill */
+  --msg-input-line: #D8DCE4;
+  --msg-meta: #6B7488; /* timestamps and read receipts — 4.6:1 on --msg-well */
+  --msg-typing: #C2C9D6; /* the three dots while somebody is writing */
+  --bw-face-from: #1E40AF; /* the initials gradient: blue */
+  --bw-face-to: #2563EB;
+  --bw-face-1-from: #1E40AF;
+  --bw-face-1-to: #2563EB;
+  --bw-face-2-from: #115E59;
+  --bw-face-2-to: #0F766E;
+  --bw-face-3-from: #5B21B6;
+  --bw-face-3-to: #7C3AED;
+  --bw-face-4-from: #92400E;
+  --bw-face-4-to: #B45309;
+  --bw-face-5-from: #164E63;
+  --bw-face-5-to: #155E75;
+  --bw-face-6-from: #9D174D;
+  --bw-face-6-to: #BE185D;
 }
 
 * { box-sizing: border-box; }
@@ -1878,12 +1985,103 @@ body.profile-panel-open {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--ir-navy);
+  /* Sized here, coloured by `.bw-avatar` — see the gradient block there. This is the face
+     an officer sees of THEMSELVES, and it is now the same one their colleagues see in the
+     rail, which is the whole point of having moved the colour. */
   color: #fff;
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
+/* THE PHOTO CONTROL. A row like the preference rows below it, but with a face in
+   the gutter where they have none — the control and its subject in one glance. */
+.profile-photo {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding-bottom: 0.85rem;
+}
+.profile-photo__face {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  font-size: 1rem;
+  color: #fff;
+  border: 1px solid var(--line);
+}
+.profile-photo__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.profile-photo__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+}
+/* The file input is visually hidden but NOT display:none — it stays in the tab
+   order and the label is its accessible name, so the picker opens from a keyboard
+   the same way it does from a click. */
+.profile-photo__pick {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.32rem 0.7rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 4px;
+  background: var(--panel-raised);
+  color: var(--paper);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.profile-photo__pick input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.profile-photo__pick:hover { border-color: var(--cyan); }
+.profile-photo__pick:focus-within { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.profile-photo__pick.is-busy {
+  cursor: progress;
+  color: var(--steel);
+}
+.profile-photo__remove {
+  padding: 0.32rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  /* The red TEXT token, not a red fill: "Remove" on this panel is a small quiet
+     action next to the primary one, not a destructive button shouting for the same
+     attention as "Add a photo". Both themes answer for it. */
+  color: var(--red-text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.profile-photo__remove:hover {
+  border-color: var(--line-bright);
+  background: var(--panel-raised);
+}
+.profile-photo__remove:disabled,
+.profile-photo__pick.is-busy { opacity: 0.6; }
+/* The outcome line, in the same vocabulary the rest of the panel uses for notes:
+   quiet for "saved", the attention ink for "that did not work". */
+.profile-photo__note {
+  margin: 0.35rem 0 0;
+  font-size: 0.76rem;
+  color: var(--steel);
+}
+.profile-photo__note.is-error { color: var(--red-text); }
+
 .profile-identity-text {
   flex: 1;
   min-width: 0;
@@ -2320,6 +2518,14 @@ body.profile-panel-open {
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
+}
+/* A machine value, for the screens that show one outside the audit trail (badge
+   numbers, sign-in stamps). It lives here with the other utilities because more
+   than one screen reads it; the audit trail sets its own columns' faces directly
+   (.audit-entry and the rest), since those columns each want their own size. */
+.stamp {
+  font-family: var(--font-stamp);
+  font-variant-numeric: tabular-nums;
 }
 .ai-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.7rem; }
 .ai-feedback { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
@@ -2803,7 +3009,13 @@ body.profile-panel-open {
 }
 
 /* ---- Audit trail browser (admin) ---- */
-.audits-page { max-width: 76rem; }
+/* No width cap, deliberately — unlike the report register and the settings page.
+   A six-column trail stops around 300px short of the right edge of a 1363px
+   window at 76rem, and a ruled table that ends in mid-air reads as a gap rather
+   than as a margin. It fills the panel instead: the slack lands in the Details
+   column (see below), so the width buys the details room rather than empty
+   page. */
+.audits-page { max-width: none; }
 .audits-table {
   width: 100%;
   border-collapse: collapse;
@@ -2823,13 +3035,85 @@ body.profile-panel-open {
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
+  /* One line per cell. Not cosmetic: this is what stops the absorbing Details
+     column below from compressing the other five to their MINIMUM content width
+     to satisfy its `width: 100%` claim — which wrapped an officer's name in the
+     middle of the two words. A column that cannot shrink below its content
+     cannot be squeezed by a neighbour's claim on the whole table. */
+  white-space: nowrap;
 }
-.audits-table tbody tr:hover { background: var(--cyan-bg); }
-.audit-when { font-family: var(--font-hud); font-size: 0.78rem; white-space: nowrap; color: var(--paper); }
+/* The date rules are headings, not records: they take no hover highlight. */
+.audits-table tbody tr:hover:not(.blotter-date) { background: var(--cyan-bg); }
+/* ONE flexible column, and it is Details. The table is `width: 100%` of a panel
+   that now runs the full width of the window, so the leftover has to go
+   somewhere. With every column sized to its content, the browser spreads that
+   remainder proportionally — and a column holding a single "1" ended up
+   carrying a dead band beside it as wide as the value itself, which is the gap
+   that made the rows read as spread out rather than ruled. Naming the column
+   that absorbs the slack puts all of it in the one place whose content actually
+   varies in length, and pushes IP out to the table's right edge where it
+   belongs.
+
+   SIXTH, not fifth: the entry-number margin was added ahead of When, so every
+   position after it moved one to the right. A stale index here would hand the
+   slack to the action chip instead, and starve the one column whose length is
+   not known in advance. */
+.audits-table th:nth-child(6),
+.audits-table td:nth-child(6) {
+  width: 100%;
+}
+/* The numbered margin of a bound blotter: the entry number, ruled off from the
+   record it numbers. It is the entry's own id — monotonic, never reused — so the
+   margin is a real log sequence rather than a row count that restarts at 1 on
+   every page.
+
+   `width: 1%` with the cells nowrap is what pins it to its content: the browser
+   gives it the least it can hold and hands the remainder to Details. */
+.audit-entry {
+  width: 1%;
+  text-align: right;
+  padding-right: 0.75rem;
+  border-right: 1px solid var(--line);
+  font-family: var(--font-stamp);
+  font-size: 0.72rem;
+  color: var(--cyan-dim);
+}
+/* The day, written once and ruled, with its entries running under it. That is how
+   a blotter rules a page, and it is why the When column carries a time and
+   nothing else: repeating a date on all 25 rows said the same thing 25 times.
+
+   Scoped with `.audits-table` in front so it outranks the table's own `th` rule
+   on specificity rather than on source order. That rule also styles column
+   headings (caps, cyan-dim, a brighter underline), and a bare `.blotter-date th`
+   would tie with it, leaving the winner to import order. */
+.audits-table .blotter-date th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  /* No rule ABOVE the band. A table with `border-collapse: collapse` settles two
+     equal 1px borders by cell precedence, not by which colour is brighter, so a
+     top rule here would lose to the previous row's bottom hairline and the day
+     would not read as a heavier break. The raised band separates the day on its
+     own, with no border to fight over. */
+  background: var(--panel-raised);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-stamp);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+.audit-when { font-family: var(--font-stamp); font-size: 0.78rem; white-space: nowrap; color: var(--paper); }
 .audit-system { color: var(--cyan-dim); font-style: italic; }
-.audit-entity { font-family: var(--font-hud); font-size: 0.78rem; }
-.audit-detail { max-width: 26rem; color: var(--paper); word-break: break-word; }
-.audit-ip { font-family: var(--font-hud); font-size: 0.75rem; color: var(--cyan-dim); }
+.audit-entity { font-family: var(--font-stamp); font-size: 0.78rem; }
+/* The flexible column (see above) and the only one that may wrap: every other
+   cell is nowrap so the table cannot be squeezed below its content, and a detail
+   is the one value whose length is not known in advance. It carries no
+   `max-width` of its own either — a cap here (it was 26rem) is smaller than the
+   space the table has to give, so the leftover went straight back to the narrow
+   columns as gaps. */
+.audit-detail { color: var(--paper); word-break: break-word; white-space: normal; }
+.audit-ip { font-family: var(--font-stamp); font-size: 0.75rem; color: var(--cyan-dim); }
 .audit-action {
   display: inline-block;
   padding: 0.1rem 0.5rem;
@@ -2844,13 +3128,27 @@ body.profile-panel-open {
 .audit-action.red { color: var(--red-text); border-color: var(--red-line); background: var(--red-bg); }
 .audit-action.amber { color: var(--amber); border-color: var(--amber-line); background: var(--amber-bg); }
 .audit-action.green { color: var(--green-ok); border-color: var(--green-line); background: var(--green-bg); }
-.audits-skeleton .skeleton-row {
+/* Placeholder rows for the table screens while their first read is in flight.
+   Standalone rather than nested under the audit trail: user management and
+   station settings render the same row, and no container had styling of its
+   own, so the nesting only hid the rule from the other two screens.
+
+   The animation named a `skeleton-shimmer` keyframe that exists nowhere in the
+   bundle — the rows sat perfectly still, so the loading state read as a table
+   that had finished loading and found nothing. It now drives the app's own
+   shimmer (`sk-shimmer`, the one the dashboard skeletons use), which animates
+   background-position, hence the `background-size` below staying at 200%.
+
+   The gradient stays here rather than being inherited from `.sk`: `.sk` paints
+   the HUD slate, and these rows sit on the document layer, where the paper
+   tokens belong. */
+.skeleton-row {
   height: 2.4rem;
   margin-bottom: 0.4rem;
   border: 1px solid var(--line);
   background: linear-gradient(90deg, var(--panel) 25%, var(--panel-raised) 50%, var(--panel) 75%);
   background-size: 200% 100%;
-  animation: skeleton-shimmer 1.4s infinite linear;
+  animation: sk-shimmer 1.4s ease infinite;
 }
 .pager {
   display: flex;
@@ -3298,6 +3596,25 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash-updated { color: var(--cyan-dim); font-variant-numeric: tabular-nums; }
 
 .dash-filters { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+/* TWO THINGS THIS ROW HAS TO UNDO, both of them inherited rather than intended.
+
+   The fields are `<label>`s, so they pick up the sheet's generic
+   `label { margin-bottom: .35rem }` — which is right for a COLUMN of stacked form
+   fields and wrong here. `align-items: flex-end` aligns each item's bottom MARGIN
+   edge, so that margin held all three labelled fields 5.25px above the two button
+   groups beside them: the row was aligned, to a line the margin had moved. The
+   row has a `gap` for spacing and does not need the margin as well. */
+.dash-filters .dash-field { margin-bottom: 0; }
+/* One control height for the whole row. Left alone, Chrome draws a date input at
+   37.5px and a select at 35px from the same padding, and because every field
+   stacks a label above its control, unequal controls also pull the three LABELS
+   out of line — which is what the row looked like. min-height rather than a fixed
+   height, so a control can still grow if a larger font ever needs it; the button
+   groups stretch to match, as flex items already do. */
+.dash-filters .dash-field input,
+.dash-filters .dash-field select,
+.dash-filters .dash-scope,
+.dash-filters .dash-presets { min-height: 38px; }
 .dash-scope,
 .dash-presets {
   display: flex;
@@ -3404,19 +3721,54 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   margin-bottom: 12px;
 }
 .dash-panel h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--steel); text-transform: uppercase; letter-spacing: 0.05em; }
-.dash-panel__aside { font-size: 12px; }
+/* The panel head's right side, which now carries TWO things on several panels: the
+   panel's own aside (a count, a flag) and the info control. A row rather than two
+   stacked boxes, so the control sits on the same line as the title — and `align-items:
+   center` because the control is a 22px circle and the text beside it is 12px. */
+.dash-panel__aside { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; }
 
 .dash-grid-main { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-bottom: 16px; }
+/* One column, by choice rather than by narrowness.
 
-.dash-flag {
-  color: var(--amber);
-  border: 1px solid var(--amber-line);
-  background: var(--amber-bg);
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 11.5px;
-  white-space: nowrap;
-}
+   The trend panel used to take 1.6fr of this row, which is about 610px inside the
+   station's window — roughly 19px per day across a 30-day range, and a day is not
+   legible as a stack in 19px. The same pair already collapsed to one column below
+   980px, so stacking is the layout's own answer to "not enough room"; this just
+   says the trend is not a share-the-row panel at any width.
+
+   Written with `.dash-grid-main` in front so it outranks the 980px media query on
+   specificity rather than on source order — that query sets one column too, but a
+   rule that only applied below 980px would leave the wide case behind.
+
+   Two rows use it now: the trend, and the incident-category list, which gave up
+   its partner to the pie's row. They are unrelated charts that happen to want the
+   same thing from the grid — the whole width, at every size. */
+.dash-grid-main.dash-grid-main--stack { grid-template-columns: 1fr; }
+
+/* The pie's row: the status card hugs its drawing against the row's LEFT EDGE —
+   which is the trend panel's own edge above it — and the hour chart beside it
+   takes everything else.
+
+   MIN-CONTENT IS THE WIDTH, and that is the whole trick. The pie's stage carries
+   PIE_BOX from src/lib/statusPie.js inline, so this panel's min-content IS the
+   drawing plus the card's padding: the column cannot be narrower than the chart,
+   and nothing else in the card has a larger minimum to stretch it past that. NO
+   SIZE IS RESTATED HERE — a max-width in this sheet would be a second copy of a
+   number src/lib/statusPie.js already owns, and the two would be free to drift
+   (the same reason .dash-pie__stage carries no width of its own; see the test
+   that asserts it).
+
+   One class deep ON PURPOSE, so the 980px query below wins on source order and
+   this row stacks like every other one on a narrow window. The pie over the hour
+   chart is this pair's narrow form rather than a fallback for it. */
+.dash-grid-main--pie { grid-template-columns: min-content 1fr; }
+/* The loading skeleton is the one thing in that row with no drawing to measure:
+   its chart block is `width: 100%`, which against a min-content column resolves to
+   nothing and would narrow the card for as long as it is up. So it states a width
+   — the only number in this pair, close enough to the ~286px the real card
+   resolves to, and it exists only to hold the column steady until data lands. */
+.dash-grid-main--pie > .is-skeleton:first-child { width: 300px; }
+
 
 /* ---- Chart ink ----------------------------------------------------------
    The charts are hand-drawn SVG, and an SVG PRESENTATION ATTRIBUTE
@@ -3426,82 +3778,544 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    which is what keeps the palette out of the component. */
 .chart-grid { stroke: var(--line); }
 .chart-axis { fill: var(--cyan-dim); }
-.chart-line { stroke: var(--cyan); }
-.chart-area { fill: var(--cyan-bg); }
-.chart-hover-line { stroke: var(--cyan); stroke-opacity: 0.35; }
-.chart-dot { fill: var(--cyan); }
-.chart-track { stroke: var(--line); }
-.chart-arc--draft { stroke: var(--amber); }
-.chart-arc--submitted { stroke: var(--cyan); }
-.chart-arc--final { stroke: var(--green-ok); }
 
-/* Line chart + hover tooltip */
-.dash-line-wrap { position: relative; }
-.dash-line { width: 100%; height: 220px; overflow: visible; display: block; }
-.dash-tip {
+/* ---- Stacked columns ("Reports over time") ----------------------------------
+   A day is a column; the bands inside it are that day's incident types, stacked
+   from the baseline up in the server's volume order, so the busiest type is the
+   one sitting on the axis.
+
+   The 1px `--panel` stroke on every band is the READING DEVICE, not decoration.
+   It is what separates two neighbours whose ramp steps sit close together, which
+   is in turn what lets the ramp stay a coherent progression instead of buying
+   contrast with hue on a band 15px tall. */
+.dash-plot-wrap { position: relative; }
+.dash-plot { width: 100%; height: 220px; overflow: visible; display: block; }
+.dash-seg { stroke: var(--panel); stroke-width: 1; }
+.dash-seg--1 { fill: var(--cat-1); }
+.dash-seg--2 { fill: var(--cat-2); }
+.dash-seg--3 { fill: var(--cat-3); }
+.dash-seg--4 { fill: var(--cat-4); }
+.dash-seg--5 { fill: var(--cat-5); }
+.dash-seg--6 { fill: var(--cat-6); }
+.dash-seg--7 { fill: var(--cat-7); }
+.dash-seg--8 { fill: var(--cat-8); }
+.dash-seg--9 { fill: var(--cat-9); }
+.dash-seg--10 { fill: var(--cat-10); }
+.dash-seg--11 { fill: var(--cat-11); }
+.dash-seg--12 { fill: var(--cat-12); }
+.dash-seg--13 { fill: var(--cat-13); }
+.dash-seg--14 { fill: var(--cat-14); }
+/* The hovered day's track. Painted behind the bands so it points at a column
+   without covering the data it is pointing at. */
+.dash-hover-band { fill: var(--cyan-bg); }
+/* While a day is hovered, every OTHER day steps back so the hovered column has
+   the plot to itself. It already widens (HOVER_GROWTH) and already sits on the
+   --cyan-bg track above, but on a busy window it was still one of thirty columns
+   of equal weight, which left the separating to the reader's eye.
+
+   0.4 is measured, not picked by eye. Blending each ramp step toward its own
+   panel at this opacity puts the muted bands between 1.38:1 and 2.19:1 on the
+   light panel and 1.57:1 to 3.07:1 on the dark one, against 2.40:1-10.99:1 and
+   3.43:1-12.50:1 at full strength: pushed back far enough to leave no doubt which
+   day is being read, not so far that the surrounding days stop being context.
+   The ramp also stays ORDINAL through the blend — fading toward the panel is
+   monotone in luminance — so inside the dimmed region the busiest type is still
+   its heaviest band.
+
+   Opacity rather than a black veil: what these bands recede toward is the panel
+   they are drawn on, which is near-black in dark theme and white in light, and
+   that is the same instruction read correctly on both surfaces. A scrim would be
+   right in one theme and plainly wrong in the other. */
+.dash-seg.is-muted { opacity: 0.4; }
+/* The change of state fades only for readers who have not asked for less motion.
+   The dim ITSELF is a state, not an animation, so it always applies — it just
+   snaps instead of fading. */
+@media (prefers-reduced-motion: no-preference) {
+  .dash-seg { transition: opacity 140ms ease; }
+  .dash-hour { transition: background-color 140ms ease; }
+  .dash-hour__bar { transition: opacity 140ms ease; }
+  /* Picking a line out is a state, not an animation — but a line that snaps to double
+     width reads as a glitch, so the width and the recession fade. */
+  .dash-rank__line { transition: stroke-width 140ms ease, opacity 140ms ease; }
+  .dash-peek { animation: dash-peek-in 110ms ease-out; }
+  /* 320ms on a slight-overshoot curve, not the 140ms beat: the lift is the pie's
+     one moment of theatre — a wedge coming toward the reader — and at 140ms it
+     arrived before it was seen. The dim stays on the 140ms beat because it is a
+     neighbour receding, not an arrival. The lift and the dim are STATES, so with
+     motion turned down they still apply — they just snap — which is why only the
+     transitions live in here. */
+  .dash-pie__slice { transition: transform 320ms cubic-bezier(0.34, 1.45, 0.5, 1), opacity 180ms ease; }
+  .dash-pie__top { transition: stroke 140ms ease, stroke-width 140ms ease; }
+  .dash-pie__stage { transition: transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1); }
+  .dash-pie__ground { transition: transform 320ms ease, opacity 320ms ease; }
+}
+/* The pointer's lean is PURE MOTION — parallax, no state carried — so under
+   reduced motion it does not happen at all and the stage is plain. The lift, the
+   dim and the outline still arrive (they are states, applied inline and above),
+   and the pop's own transition is already gated in the block above. */
+@media (prefers-reduced-motion: reduce) {
+  .dash-pie__stage { transform: none; }
+}
+/* ---- The magnified day, beside the hovered column ---------------------------
+   Hovering a column widens it (HOVER_GROWTH, Dashboard.jsx) and opens this card
+   next to it: the same day's stack, drawn large, with every incident type present
+   named and counted. It replaced a five-row tooltip that ended in "and 4 more
+   types" — which withheld exactly the detail the busiest days need.
+
+   The card MIRRORS the column, so a box in the chart and its row here sit at the
+   same relative height and the two read as one thing. The labels sit BESIDE the
+   colour blocks rather than on them: the ramp runs from a near-black navy to a
+   pale lilac, and no single ink is legible on all fourteen steps. Beside the block
+   the text sits on the card's own surface, which is one contrast to get right
+   instead of fourteen.
+
+   It does NOT accept pointer events. The chart's boxes are the input and this is
+   the display: every label is printed, so nothing here has to be hovered to be
+   read, and the card cannot intercept the pointer while the reader sweeps across
+   the columns. A card that took the pointer would sit between one day and the next
+   and swallow that sweep. */
+.dash-mag {
   position: absolute;
-  z-index: 5;
+  z-index: 7;
   pointer-events: none;
+  width: 250px; /* MAG_CARD_W — see the constant for why the two must agree */
+  /* ONE column width, shared by the header's date and by every row's count.
+     That sharing is the whole trick: the count sits DIRECTLY UNDER the date
+     rather than merely sharing its right edge, and the two only line up if the
+     count's cell is exactly as wide as the date's. Handing the date a box of
+     this width (instead of letting `margin-left: auto` push it against the
+     card's edge) makes each one centred in the same 30px strip, so the
+     alignment is true by construction and cannot drift with the date's text.
+     30px covers the date as this card formats it: "09-13" measures 25.7px at
+     11px, so ~2px of breathing room each side. A longer date format is the one
+     change that would break it — the box and `.slice(5)` travel together.
+     (`text-align: center` with `nowrap` means an over-wide date would spill
+     evenly from the centre rather than lose the alignment, so the failure mode
+     is an ugly date, not a misaligned count). */
+  --mag-num-w: 30px;
+  max-width: 92vw;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px 9px 9px;
   background: var(--panel-raised);
   border: 1px solid var(--line-bright);
-  border-radius: 6px;
-  padding: 6px 9px;
-  font-size: 12px;
-  color: var(--paper);
-  white-space: nowrap;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  box-shadow: var(--shadow-sm);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
 }
-.dash-tip strong { color: var(--cyan); font-variant-numeric: tabular-nums; }
-.dash-tip span { color: var(--steel); font-size: 11px; }
-
-/* Bar rows (categories + officers) */
-.dash-bars { display: flex; flex-direction: column; gap: 10px; }
-.dash-bar-row { display: grid; grid-template-columns: minmax(90px, 180px) 1fr 64px; align-items: center; gap: 10px; font-size: 13px; }
-.dash-bar-row__label { color: var(--steel); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dash-bar-row__track { background: var(--panel-raised); border-radius: 6px; height: 10px; overflow: hidden; }
-.dash-bar-row__fill { background: var(--cyan); height: 100%; border-radius: 6px; }
-.dash-bar-row__fill--officer { background: var(--green-ok); }
-.dash-bar-row__count { text-align: right; color: var(--paper); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dash-delta { font-style: normal; font-size: 11px; margin-left: 6px; color: var(--steel); }
-
-/* Status donut */
-.dash-donut-wrap { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
-.dash-donut { position: relative; width: 140px; height: 140px; flex-shrink: 0; }
-.dash-donut svg { width: 100%; height: 100%; }
-.dash-donut__center {
-  position: absolute;
-  inset: 0;
+.dash-mag__head {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--steel);
+}
+.dash-mag__head strong { font-size: 13px; color: var(--paper); font-variant-numeric: tabular-nums; }
+.dash-mag__date {
+  width: var(--mag-num-w);
+  margin-left: auto;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The card, pinned open by right-click. It says so, because a card that stays
+   after the pointer has left is otherwise indistinguishable from one that is
+   stuck; and it names both ways out, since a state an admin cannot see the end of
+   is a trap rather than a feature. Only rendered while the card on screen is the
+   pinned one — a hovered card needs no explanation of why it is there. */
+.dash-mag__pinned {
+  margin: 6px 0 0;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--steel);
+}
+
+/* One row per band: a full-height block of its ramp step, its name, its count.
+   The rows abut with no gap, so the column of blocks IS the magnified stack and
+   its silhouette matches the column in the plot. */
+.dash-mag__stack { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+/* The narrowest this card can get is set by the LONGEST TYPE NAME, not by taste:
+   "Property Damage / Malicious Mischief" has to stay on one line, because a row
+   that wrapped would grow taller than the band it stands for and the magnified
+   stack would stop being proportional — the one thing the card is for.
+
+   THE NUMBERS ARE MEASURED, not estimated. Rendering every canonical name in the
+   real League Spartan at 11px gives the longest one 170px, and the count column
+   9px, so the label column needs about 180px. At 240px wide this card gives it
+   189px — roughly 11% of slack, and it still fits (barely) if the self-hosted font
+   ever failed to load and the system fallback measured 185px. Below about 225px
+   the name wraps and the stack distorts, so this width is near the floor for
+   showing every type in full. */
+.dash-mag__stack li {
+  display: grid;
+  grid-template-columns: 14px 1fr var(--mag-num-w);
+  align-items: center;
+  gap: 5px;
+  border-radius: 4px;
+}
+/* Which box the pointer is on: set from the chart, matched here by the band's
+   rank. Ranks are window-wide, so the highlight follows the TYPE rather than its
+   position in this particular day. */
+.dash-mag__stack li.is-picked { background: var(--cyan-bg); }
+.dash-mag__chip { align-self: stretch; }
+/* Rounded only at the two ends of the stack, so the blocks still read as one
+   column rather than as six separate chips. */
+.dash-mag__stack li:first-child .dash-mag__chip { border-radius: 3px 3px 0 0; }
+.dash-mag__stack li:last-child .dash-mag__chip { border-radius: 0 0 3px 3px; }
+.dash-mag__name { font-size: 11px; color: var(--paper); }
+.dash-mag__n {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--steel);
+  font-variant-numeric: tabular-nums;
+  /* Centred in the shared strip, like the date above it. The em stretches to
+     fill its grid track, so this centres the digits rather than the box. */
+  text-align: center;
+}
+
+/* ---- The chart's key, behind the info control in the panel head ------------
+   The key used to be a wrapped row of chips under the plot (`.dash-legend--stack`),
+   spending three lines of the panel on every load. It now opens over the plot when
+   asked for, so the plot gets that height back.
+
+   Positioned from the trigger rather than the panel: the control sits in the panel
+   head, so anchoring the panel to it puts the key where the reader just clicked
+   rather than somewhere else in the card. */
+.dash-key { position: relative; display: flex; }
+.dash-key__trigger {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  pointer-events: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--panel-raised);
+  color: var(--steel);
+  cursor: pointer;
 }
-.dash-donut__center strong { font-size: 22px; color: var(--paper); font-variant-numeric: tabular-nums; line-height: 1.1; }
-.dash-donut__center small { font-size: 10.5px; color: var(--steel); text-transform: uppercase; letter-spacing: 0.06em; }
+.dash-key__trigger:hover { color: var(--cyan); border-color: var(--cyan); }
+/* Open is a state the control owns, so it looks held down while the key is up —
+   the same signal the trigger would give if this were a menu. */
+.dash-key__trigger[aria-expanded='true'] { color: var(--cyan); border-color: var(--cyan); background: var(--cyan-bg); }
+.dash-key__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 6;
+  width: 320px;
+  /* Never wider than the window: the control sits at the right edge of its panel and
+     the card grows LEFTWARD from there, so on the narrowest window this is what keeps
+     it on screen instead of hanging off the left edge. */
+  max-width: calc(100vw - 24px);
+  max-height: 60vh;
+  overflow: auto;
+  padding: 12px 14px;
+  background: var(--panel-raised);
+  border: 1px solid var(--line-bright);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+}
+.dash-key__note { margin: 0 0 10px; font-size: 11.5px; line-height: 1.45; color: var(--steel); }
+/* The one line in the key about the chart's BEHAVIOUR rather than its colours.
+   Tinted, so it reads as an instruction rather than as more of the paragraph. */
+.dash-key__note--hint { color: var(--cyan-dim); }
+/* One row per type — swatch, name, count. The count sits in its own column so the
+   numbers form a readable edge and never run into the name (the wrapped row this
+   replaced rendered "Theft30"). */
+.dash-key__panel .dash-legend { gap: 6px; font-size: 12.5px; }
+.dash-key__panel .dash-legend li { display: grid; grid-template-columns: 9px 1fr auto; align-items: center; gap: 8px; }
+.dash-key__panel .dash-legend .dot { margin-right: 0; }
+.dash-legend__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-key__panel .dash-legend__pct { font-variant-numeric: tabular-nums; }
+
+/* A chart that could not be drawn from a whole payload says so, under the plot.
+   The server builds the day axis and each type's counts from one list, so this
+   only appears if one of them changed shape without the other — and a chart that
+   is quietly short of a day is worse than one that admits it. */
+.dash-chart-note { margin: 10px 0 0; font-size: 11.5px; color: var(--amber); }
+
+/* Incident categories over time — rank lanes.
+
+   Rank 1 at the TOP of the plot, so a line rising means a type climbing. The plot is
+   measured in pixels by the component (viewBox 1:1) rather than scaled, because the type
+   labels sit at their line's own height in the column beside it: a scaled SVG would put
+   a label a few pixels off its line, and the label IS the chart's legend. */
+.dash-rank { position: relative; }
+/* The measured column comes FIRST and the legend second, and the measured column carries
+   `min-width: 0` — a grid item is otherwise floored at its content's minimum, and the
+   SVG it contains is as wide as the column, so without this the two trade places on
+   resize and the legend is pushed off the panel. */
+.dash-rank__body { display: grid; grid-template-columns: minmax(0, 1fr) 176px; gap: 12px; align-items: start; }
+.dash-rank__cell { min-width: 0; }
+.dash-rank__plot { display: block; }
+.dash-rank__plot:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; border-radius: 4px; }
+/* The rank lanes: a dashed rule per position, numbered down the left. They are the axis,
+   not the data — a solid rule at every rank reads as a line at every rank, and the whole
+   chart turns into a stack of horizontals with six real lines lost inside it. */
+.dash-rank__lane { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 5; opacity: 0.55; }
+.dash-rank__grid { stroke: var(--line); stroke-width: 1; opacity: 0.35; }
+.dash-rank__lanenum { fill: var(--cyan-dim); font-size: 9px; font-variant-numeric: tabular-nums; }
+/* The slice being read, as a band behind the lines — the same highlight the hour strip
+   and the trend chart use for "the column in question". */
+.dash-rank__band { fill: var(--cyan-bg); }
+.dash-rank__line { stroke-width: 1.8; fill: none; }
+/* Picked out: thicker AND brighter, because six overlapping strokes at 0.4 still read as
+   six overlapping strokes — width is what separates the chosen line, and the 0.4 is the
+   same recession value the rest of the dashboard uses for "not the mark being read". */
+.dash-rank__line.is-focused { stroke-width: 3.2; }
+.dash-rank__line.is-muted { opacity: 0.4; }
+.dash-rank__axis { fill: var(--cyan-dim); font-size: 9.5px; font-variant-numeric: tabular-nums; }
+/* The hit target: a transparent rect over a whole slice. `transparent` rather than `none`
+   because a fill of `none` takes no pointer events, and this is the entire pointer
+   surface of the plot. */
+.dash-rank__hit { fill: transparent; }
+
+/* The type list, one button per drawn line, each sitting at its line's own height — so
+   the column doubles as the chart's legend and as the control that picks a line out. */
+.dash-rank__labels { list-style: none; margin: 0; padding: 0; position: relative; height: 236px; }
+.dash-rank__labels li { position: absolute; left: 0; right: 0; }
+/* One label per drawn line: a swatch in the line's own colour, its name, its count. The
+   count is there because rank hides magnitude — a line at the top of the chart may be
+   there on four reports — and this is where the reader can check that. */
+.dash-rank__label {
+  display: grid;
+  grid-template-columns: 9px 1fr auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.dash-rank__label:hover { border-color: var(--line-bright); background: var(--panel-raised); }
+.dash-rank__label.is-focused { border-color: currentColor; background: var(--panel-raised); }
+/* `currentColor` is the line's own ramp colour, set inline — the swatch is what ties a
+   name to a line, and it must be the same ink the line is drawn in. */
+.dash-rank__swatch { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+.dash-rank__name { color: var(--paper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-rank__count { font-style: normal; color: var(--steel); font-variant-numeric: tabular-nums; }
+/* THE SENTENCE UNDER THE CHART — the panel's actual answer ("which type is climbing"),
+   and the one line a reader who has never learned to read a rank chart can take away
+   without learning one.
+
+   It was set as a footnote: 12.5px in --steel, the same weight as the axis labels it sits
+   under, which made the answer to "what is this panel for" the least visible thing in it.
+   So it is a callout now — full body size in the primary ink, on a raised surface, with
+   the dashboard's cyan edge marking it as the conclusion rather than as a caption that
+   fell off the chart.
+
+   Its height is RESERVED, because picking a type swaps the range's sentence for that
+   type's reading and the panel must not move while the reader moves along the lines —
+   and tabular figures, because every number in both sentences changes width. */
+.dash-rank__note {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--cyan);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  color: var(--paper);
+  font-size: 14px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+/* The subject of the sentence — the type the panel is talking about — carries the weight
+   as well as the ink, since the sentence around it is now in the primary colour too. */
+.dash-rank__note strong { color: var(--paper); font-weight: 700; }
+/* The cut the chart applied, in the chart's own words — a limit of what is DRAWN rather
+   than a number, so it reads as a footnote under the sentence rather than as part of it.
+   Read in the same glance as the sentence above, so it is set a step larger than the
+   axis labels it used to match. */
+.dash-rank__omitted { margin: 8px 0 0; font-size: 12.5px; color: var(--steel); }
+
+/* THE PEEK — the card that answers a hover, shared by the hour strip and the
+   category rows.
+
+   It is positioned from the mark it belongs to (see `peekAt` in Dashboard.jsx, which
+   measures rather than computes — these two charts lay their marks out differently,
+   and a second copy of either layout's arithmetic is how a card ends up beside the
+   wrong bar). The transform is set inline, because the flip and the centring are one
+   decision made from the measurement; left/top here are only the anchor.
+
+   It does NOT accept pointer events, which is what lets it be drawn over the chart it
+   describes: the mark underneath is still the input, so the card cannot get between
+   the pointer and the next mark — the same contract as `.dash-mag`. It is the same
+   SURFACE as `.dash-mag` too (raised panel, bright hairline, shadow) so the two
+   readouts are recognisably one device, and it is a sibling of the chart element
+   rather than a child, since both charts are `role="img"` and everything inside one
+   of those is presentational to assistive tech. */
+.dash-hours-wrap { position: relative; }
+.dash-peek {
+  position: absolute;
+  z-index: 7;
+  pointer-events: none;
+  width: 186px; /* PEEK_W — see the constant for why the two must agree */
+  max-width: 92vw;
+  padding: 7px 9px 8px;
+  background: var(--panel-raised);
+  border: 1px solid var(--line-bright);
+  border-radius: 9px;
+  box-shadow: var(--shadow-md);
+  font-size: 12px;
+  color: var(--steel);
+  font-variant-numeric: tabular-nums;
+}
+/* The mark's name and its count on one line, at either end — the head the trend
+   chart's card uses, so a reader learns one header and has it everywhere. */
+.dash-peek__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.dash-peek__head strong { font-size: 13px; color: var(--paper); }
+.dash-peek__head span { white-space: nowrap; }
+.dash-peek__sub { margin: 3px 0 0; font-size: 11.5px; line-height: 1.35; }
+/* Appearing is the one thing here with nothing to say — the card carries information,
+   not motion — so it arrives with the shortest fade that reads as an arrival rather
+   than a flash, and only for readers who have not asked for less. */
+@keyframes dash-peek-in { from { opacity: 0; } }
+
+/* Status pie — three extruded wedges, 1:1 with src/lib/statusPie.js.
+
+   The 3D is geometry, not a shadow: the top face is the ellipse a circle makes seen
+   from a tilt, and the front half of its rim is pulled straight down. So the wall
+   wears the wedge's OWN ink through a brightness filter, never a second hand-picked
+   hex per status — one token per status, and the extrusion follows it.
+
+   The 1px seam is the one the trend chart already uses on `.dash-seg`: the panel's
+   colour, which is a hairline on a near-black panel and on a white one, so the
+   wedges read as separate slices in either theme. It is stroked on the TOP face
+   only. On the wall the same stroke would be darkened by the filter with it and
+   turn into a dark outline — the opposite of what a seam is for. */
+/* The pie stands alone in its panel now that the key has gone, so it centres: a
+   232px chart hugging the left edge of a 1000px panel reads as a row that failed to
+   fill rather than as a panel with one thing in it. `align-items: center` is what
+   lines the caption up under the pie's own centre. */
+.dash-pie { display: flex; flex-direction: column; align-items: center; }
+/* The stage carries the pointer's lean: a small perspective tilt of the whole
+   drawing toward the cursor, driven by two custom properties Dashboard.jsx
+   writes onto this element. One transform on the stage is safe BECAUSE the 3D is
+   drawn in the paths rather than in any transform — the lean tips the whole
+   drawing at once, and the wedges' own lift transforms are children of it. */
+.dash-pie__stage {
+  display: block;
+  transform: perspective(820px) rotateX(var(--pie-tilt-x, 0deg)) rotateY(var(--pie-tilt-y, 0deg));
+}
+.dash-pie__stage svg { width: 100%; height: 100%; display: block; }
+.dash-pie__top { fill: var(--line); stroke: var(--panel); stroke-width: 1; }
+.dash-pie__wall { filter: brightness(0.66) saturate(1.08); }
+/* The wall's curvature: the same wall path again under a black falloff (the
+   gradient itself lives in the SVG's defs — a gradient has to), dark where the
+   rim turns away from the reader and clear where it faces them. Paint, not a
+   filter: see the clamp note two rules down, and one overlay serves every status
+   ink instead of three hand-picked shades. */
+.dash-pie__wall-shade { fill: url(#pie-wall-shade); }
+/* The ground the slab sits on: a soft pool of shadow that spreads when a slice is
+   lifted, because a wedge closer to the table casts a wider, softer shadow.
+   transform-box/origin so the CSS scale is about the ellipse's own centre rather
+   than the group's (which is the pie's centre, at the top face). */
+.dash-pie__ground {
+  fill: url(#pie-ground-shadow);
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0.75;
+}
+.dash-pie.is-lifted .dash-pie__ground { transform: scale(1.08); opacity: 1; }
+/* The wedges that are NOT being read step back while one is lifted — the same
+   device the trend chart uses on its columns. A STATE, not an animation: it
+   always applies and only its transition is gated above. Opacity rather than a
+   veil, because what a wedge recedes toward is the panel it is drawn on. */
+.dash-pie__slice.is-muted { opacity: 0.45; }
+.dash-pie__slice--final .dash-pie__top, .dash-pie__slice--final .dash-pie__wall { fill: var(--green-ok); }
+.dash-pie__slice--submitted .dash-pie__top, .dash-pie__slice--submitted .dash-pie__wall { fill: var(--cyan); }
+.dash-pie__slice--draft .dash-pie__top, .dash-pie__slice--draft .dash-pie__wall { fill: var(--amber); }
+/* The lifted wedge is OUTLINED, not brightened, and that is a measured decision
+   rather than a preference. Blink runs the filter of an SVG element through its
+   SVG filter pipeline, which clamps a brightening to nothing: the rule below
+   exists in the loaded sheet, the selector matches, and
+   getComputedStyle(...).filter still answers `brightness(1)` — an outline cannot
+   be swallowed that way, because it is a paint property and not a filter. The
+   darkening on the wall is fine for the same reason in reverse, and it is
+   verified from rendered pixels rather than from a computed value.
+
+   1.5px of --paper over the 1px --panel seam it replaces: the same edge, said
+   louder, in an ink that is near-white on the dark panel and near-black on the
+   light one. */
+.dash-pie__slice.is-active .dash-pie__top { stroke: var(--paper); stroke-width: 1.5; }
+
+/* The caption that stands in for the hole a pie does not have. Fixed height so the
+   panel does not jump when the pointer moves from one wedge to the next, and
+   tabular figures so the total does not shuffle sideways as it counts. */
+.dash-pie__caption {
+  margin: 2px 0 0;
+  min-height: 18px;
+  font-size: 12.5px;
+  color: var(--steel);
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.dash-pie__caption strong { color: var(--paper); font-size: 16px; font-variant-numeric: tabular-nums; }
+.dash-pie__caption-pct { font-variant-numeric: tabular-nums; }
+/* The pinned marker: a readout that stays after the pointer has left is otherwise
+   indistinguishable from one that is stuck, so the caption says which it is. */
+.dash-pie__caption-pin { color: var(--cyan-dim); font-size: 11px; }
+
 .dash-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; color: var(--paper); }
 .dash-legend .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 8px; }
 .dash-legend__pct { font-style: normal; color: var(--steel); }
 
-/* Hour-of-day histogram */
+
+/* Hour-of-day histogram — one strip of 24 bars.
+
+   132px rather than the 120px it was: the panel now shares its row with the pie, so it
+   is wide and short, and a strip that is wider than it is tall reads as a shape rather
+   than as a row of ticks once the bars have the height to have a silhouette. */
 .dash-hours {
   display: grid;
   grid-template-columns: repeat(24, 1fr);
   align-items: end;
   gap: 3px;
-  height: 120px;
+  height: 132px;
 }
-.dash-hour { display: flex; align-items: flex-end; height: 100%; }
+.dash-hour { display: flex; align-items: flex-end; height: 100%; border-radius: 3px; }
 .dash-hour__bar {
   width: 100%;
   background: var(--cyan);
   opacity: 0.75;
   border-radius: 2px 2px 0 0;
 }
-.dash-hour:hover .dash-hour__bar { opacity: 1; }
+/* THE HOUR BEING READ, as a track behind the bar — the device the trend chart uses
+   for the day under the pointer. It replaces a `:hover` rule that only brightened
+   the bar: now there is ONE highlight, driven by the same state the readout under
+   the chart reads, so the lit hour and the printed number cannot come from two
+   different places. */
+.dash-hour.is-active { background: var(--cyan-bg); }
+.dash-hour.is-active .dash-hour__bar { opacity: 1; }
+/* …and every other hour steps back while one is being read, exactly as the trend
+   chart's columns do.
+
+   0.4 is the SAME value `.dash-seg.is-muted` uses, on purpose: "a mark that is not
+   the one being read" should mean one thing across this dashboard, and two panels
+   inventing their own recession is how that stops being true. It is applied to the
+   BAR rather than to the column so it does not multiply with the bar's own resting
+   opacity (0.75) and leave the rest of the day at 0.3 — the muted hours are still
+   the SHAPE of the day, which is the context the readout is read against, and a
+   strip faded to nothing would answer "when does work arrive" with one bar. */
+.dash-hour.is-muted .dash-hour__bar { opacity: 0.4; }
 .dash-hours__axis {
   display: flex;
   justify-content: space-between;
@@ -3510,22 +4324,19 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   margin-top: 6px;
   font-variant-numeric: tabular-nums;
 }
-.dash-hours__note { margin: 10px 0 0; font-size: 12.5px; color: var(--steel); }
+/* min-height reserves the line, the way the pie's caption does: moving along the
+   strip swaps one sentence for another of the same kind, and the panel must not
+   twitch every time it does. Tabular figures for the same reason — the hour, its
+   count and its share all change width under the pointer. */
+.dash-hours__note {
+  margin: 10px 0 0;
+  min-height: 18px;
+  font-size: 12.5px;
+  color: var(--steel);
+  font-variant-numeric: tabular-nums;
+}
 .dash-hours__note strong { color: var(--paper); }
 
-.dash-activity { list-style: none; margin: 0; padding: 0; }
-.dash-activity li {
-  padding: 9px 0;
-  border-bottom: 1px solid var(--line);
-  font-size: 13.5px;
-  color: var(--paper);
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-.dash-activity li:last-child { border-bottom: none; }
-.dash-activity__actor { color: var(--steel); }
-.dash-activity__time { color: var(--steel); white-space: nowrap; font-size: 12.5px; }
 
 .dash-empty { color: var(--steel); font-size: 13.5px; margin: 8px 0; }
 
@@ -3552,7 +4363,10 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 @keyframes dash-settle { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .dash-kpi, .dash-panel { animation: none; }
+  /* Every placeholder in the app, including the table rows above: an infinite
+     shimmer is exactly the kind of loop this block exists to stop. */
   .sk { animation: none; }
+  .skeleton-row { animation: none; }
 }
 
 @media (max-width: 980px) {
@@ -3562,7 +4376,6 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 @media (max-width: 560px) {
   .dash { padding: 16px 14px 40px; }
   .dash-kpis { grid-template-columns: 1fr; }
-  .dash-bar-row { grid-template-columns: minmax(80px, 120px) 1fr 56px; }
 }
 
 /* ============================================================
@@ -3784,12 +4597,885 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   .print-overlay--review .finalize-bar-actions { justify-content: center; }
 }
 
+/* ============================================================
+   Presence rail (chatheads) and the shared avatar — Phase 8
+   ============================================================
+
+   ONE AVATAR, DRAWN IN THREE PLACES. This block owns the shape — a circle that
+   clips what is inside it — and each call site owns its own size and ink, because
+   they are three different pieces of furniture: a 26px face in the top bar, a 46px
+   one in the profile panel, and the rail's own 44px. Nothing here states a size,
+   which is what stops one of them resizing the other two.
+
+   The face is either an <img> wearing this class or a <span> of initials wearing
+   it; `object-fit` is what makes a photograph fill the circle rather than sit
+   inside it at its own aspect ratio. */
+.bw-avatar {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  user-select: none;
+  /* ONE FACE, SIX GRADIENTS, AND THE GRADIENT LIVES HERE rather than at each call site.
+     That is the whole point of the component: an officer's initials have to look like the
+     same person in the top bar, in the rail, in the message list and on their own profile,
+     and a per-call-site colour is four chances to disagree. `data-face` is set from the
+     account id (see Avatar.jsx), so the same person gets the same one everywhere.
+
+     WHITE INITIALS, IN BOTH THEMES. Every pair below measures 4.5:1 or better against
+     white, which is why these are the one group of colours the dark theme does not
+     restate — lifting them would lower that contrast rather than raise it. */
+  background-image: linear-gradient(135deg, var(--bw-face-from), var(--bw-face-to));
+  color: #fff;
+}
+.bw-avatar--photo { object-fit: cover; }
+.bw-avatar[data-face='1'] { --bw-face-from: var(--bw-face-1-from); --bw-face-to: var(--bw-face-1-to); }
+.bw-avatar[data-face='2'] { --bw-face-from: var(--bw-face-2-from); --bw-face-to: var(--bw-face-2-to); }
+.bw-avatar[data-face='3'] { --bw-face-from: var(--bw-face-3-from); --bw-face-to: var(--bw-face-3-to); }
+.bw-avatar[data-face='4'] { --bw-face-from: var(--bw-face-4-from); --bw-face-to: var(--bw-face-4-to); }
+.bw-avatar[data-face='5'] { --bw-face-from: var(--bw-face-5-from); --bw-face-to: var(--bw-face-5-to); }
+.bw-avatar[data-face='6'] { --bw-face-from: var(--bw-face-6-from); --bw-face-to: var(--bw-face-6-to); }
+
+/* THE CORNER: the rail, and the chatbox beside it when one is open.
+
+   ONE FIXED ANCHOR FOR BOTH, laid out as a flex ROW with the rail last — so the box
+   is always exactly to its left, whatever the rail's width happens to be. The
+   alternative was arithmetic (the box at `right: calc(18px + rail width)`, with the
+   rail's width written down somewhere), and it is wrong the moment the rail wraps
+   into a second column: a number that describes a layout can only ever describe one
+   of its states.
+
+   The row bottoms-align, so both hang UPWARD from the lower right corner and the
+   thing nearest the corner never moves as colleagues come and go.
+
+   z-index 40 is the deliberate middle: above the workspace and its own chrome, below
+   the docked panels (the AI panel at 95, the profile panel at 96) — chrome over a
+   docked panel would be a circle floating on a form. */
+.dash-dock {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 40;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+/* THE RAIL, as a row item rather than a fixed box: the corner belongs to .dash-dock
+   above, and a second element positioning itself at the same corner would be two
+   answers to one question.
+
+   NO TRANSFORM AND NO OVERFLOW HERE, and both absences are deliberate. `overflow`
+   would turn the five-circle cap into a scrollbar, and the whole point of the cap is
+   that a colleague is never scrolled off the edge. A transform would make this a
+   containing block for positioned descendants — which is exactly what would trap the
+   preview caption if anything is ever hung outside the rail again. */
+.dash-chatheads {
+  position: relative;
+}
+.dash-chatheads__list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  /* A station with more people on than fit gets a SECOND COLUMN running to the
+     left, rather than a scrollbar or an off-screen tail. Both of those lose a
+     colleague who is signed in, which is the one thing this rail exists to say:
+     the rail would rather be two circles wide than leave somebody out. */
+  flex-wrap: wrap-reverse;
+  align-content: flex-start;
+  gap: 10px;
+  /* The cap that makes the wrapping happen. `max-height` on its own never clips
+     anything, which is exactly why the card can still open past the left edge. */
+  max-height: min(72vh, 540px);
+}
+/* The slot is the card's coordinate frame: the card opens leftward from the circle,
+   so it has to be positioned inside the thing it belongs to. */
+.dash-chatheads__slot { position: relative; }
+
+.dash-chathead {
+  position: relative;
+  display: block;
+  padding: 0;
+  /* THE CIRCLE BELONGS TO THE CORNER THE BOX LIVES IN, so its ring and its plate use the
+     chatbox's own tokens rather than the page card's. In light this is the same white and
+     the same hairline it always was; in dark it is the navy the window beside it wears,
+     which is what stops the rail and the box from looking like two surfaces that happened
+     to land in the same corner. See the --msg-* block in :root. */
+  border: 2px solid var(--msg-line);
+  border-radius: 50%;
+  background: var(--msg-surface);
+  cursor: pointer;
+}
+/* The face itself. It used to be painted here (the app's navy) and no longer is: the
+   gradient comes from .bw-avatar, which is what makes an officer's initials the same
+   colour in this rail as in the top bar and the thread. Sizing stays, because the rail
+   is the one place a face is this big. */
+.dash-chathead__face {
+  width: 44px;
+  height: 44px;
+  font-size: 0.95rem;
+}
+/* The presence dot: the one circle in the rail that means something on its own.
+   Bottom-right, ringed in the panel's own colour so it reads as attached to the
+   face rather than as a hole in it. */
+.dash-chathead__dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--green-ok);
+  /* The SAME token as the circle's plate, and it has to be the same one: this ring is
+     what makes the dot read as attached to the face rather than as a hole punched in
+     it, and a ring a shade off the plate behind it draws a visible seam. */
+  border: 2px solid var(--msg-surface);
+}
+/* THE "+N" CHIP — the one slot on the rail that is not a person.
+   It has to read as "there are more of these", so it borrows the circle's shape and
+   borrows NOTHING else: no photograph, no initials, no presence dot, and a hint's
+   ink instead of a colleague's. The dashed ring is the same vocabulary the preview
+   marker uses for "not a real person", which is a happy accident rather than the
+   intent — here it means "a count", there "a mock" — but both say the same thing:
+   this circle is not a face. */
+.dash-chathead--more { border-style: dashed; background: none; }
+.dash-chathead--more:hover { border-color: var(--cyan); }
+.dash-chathead__more {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--steel);
+  font-size: 0.72rem;
+  font-weight: 700;
+  /* Tabular figures, because "+7" and "+11" sit in the same column and a proportional
+     font makes the wider one look like a different kind of chip. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- The DESIGN PREVIEW (src/mock-chatheads.js, in dev only) ----
+
+   MARKED BY THE RING, and nothing else on the rail. Every invented face wears a dashed
+   border, which is the one mark that survives being CROPPED — a screenshot of three
+   circles with no caption in frame still says these are not officers. The rail used to
+   carry a caption above the circles as well; it was removed by request, and it was also
+   the one part of this that could not work: absolutely positioned inside the rail, its
+   containing block is only as wide as a circle, so its `max-width` never applied and
+   the sentence wrapped into a tall narrow column.
+
+   The other two markers are not CSS: the group's accessible name says "Preview: N mock
+   colleagues, not real presence" (Chatheads.jsx), and an invented CONVERSATION carries
+   a note above its composer — which is the one that has to be read, because it is the
+   one stopping somebody typing into nothing. */
+.dash-chatheads.is-preview .dash-chathead { border-style: dashed; }
+
+/* NO CARD, NO OPEN STATE. The circle IS the control: pressing it opens that
+   colleague's conversation in the docked messages panel, so there is nothing here to
+   expand, nothing to dismiss and no `is-open` to style. The facts an officer card used
+   to carry are in the thread head the press leads to (name, role, badge), in this
+   circle's own tooltip (name, role, how long ago they moved, how long they have been
+   signed in), and in the accessible name. What the card had that nothing else does —
+   the idle line — is a value that goes stale the instant it is drawn, which is a poor
+   thing to keep an extra click and two dismissal listeners alive for. */
+.dash-chathead:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+
+/* THE UNREAD MARK. Top-right, because the presence dot owns bottom-right and the two
+   facts are not related: one says the officer is at a desk, the other says they have
+   said something nobody has read. Red rather than the accent, because it is the only
+   mark on this rail that is asking for something. `is-unread` rides the circle's ring
+   too, so the mark is still visible on a face whose corner is overlapped by the next
+   circle's ring in a tight column. */
+.dash-chathead__unread {
+  position: absolute;
+  right: -4px;
+  top: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--red);
+  border: 2px solid var(--panel);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.dash-chathead.has-unread { border-color: var(--red-line); }
+
+/* The corner keeps clear of the docked panels with the same width variables the
+   workspace reserves with, so the two cannot disagree about where the right edge is.
+   Below 900px a dock is a DRAWER over the workspace rather than a reflow (see the
+   profile panel's own rules), and a corner shifted left of a drawer would sit on top
+   of the form — so there it simply goes. */
+body.profile-panel-open .dash-dock { right: calc(18px + var(--profile-panel-w)); }
+body.ai-panel-open .dash-dock { right: calc(18px + min(var(--ai-panel-w, 420px), 92vw)); }
+body.profile-panel-open.ai-panel-open .dash-dock {
+  right: calc(18px + var(--profile-panel-w) + min(var(--ai-panel-w, 420px), 92vw));
+}
+/* A RAIL WITHOUT ITS CHATBOX IS NOT THE SAME THING AS A CORNER WITHOUT ITS RAIL. Below
+   900px the rail goes (a rail shifted left of a drawer would sit on top of the form it
+   just uncovered) — but the CHATBOX STAYS, and this is the one place the two are
+   deliberately separated: the box is where somebody is writing to a colleague, and
+   hiding a half-written conversation because the window got narrow would be losing
+   work to a breakpoint. Only the rail is dropped. */
+@media (max-width: 899.98px) {
+  body.profile-panel-open .dash-dock,
+  body.ai-panel-open .dash-dock { right: 18px; }
+  body.profile-panel-open .dash-chatheads,
+  body.ai-panel-open .dash-chatheads { display: none; }
+}
+/* A phone has no right edge to give away: the rail would cover the workspace it is
+   reporting on. Presence is a desk feature. */
+@media (max-width: 719.98px) {
+  .dash-chatheads { display: none; }
+}
+
+/* Motion is optional. The states above all exist without it; only the transitions
+   are behind the query, which is the rule the rest of this stylesheet follows. */
+@media (prefers-reduced-motion: no-preference) {
+  .dash-chathead { transition: border-color 140ms ease, transform 140ms ease; }
+  /* The lift is the press affordance now that the circle opens the conversation
+     directly: it is the only signal, before a click, that this is a control and not a
+     badge. Preview circles lift too — they open a preview conversation, and a mock
+     that behaved differently under the pointer would be a preview of the wrong thing. */
+  .dash-chathead:hover { transform: translateY(-1px); }
+}
+
+/* ---- The chatbox: a floating window beside the chatheads ------------------
+
+   NOT A DOCK, and the difference is the whole design. It was a third panel pinned to
+   the right edge, reserving its width with a margin on `.main` so the workspace
+   reflowed beside it. That is the right shape for the AI narrative and the profile
+   panel — surfaces you work IN, for a while, with the workspace still live next to
+   them — and the wrong one for this: a conversation is glanced at, answered, and
+   dismissed, and it was taking a permanent 24rem stripe out of the register to do it.
+
+   So it floats, in the corner the rail already occupies, and the workspace keeps its
+   width. Nothing publishes a `body` class any more and nothing reserves space: the
+   box is sized to its content's needs and laid over whatever is behind it, exactly
+   like the rail beside it.
+
+   WIDTH AND HEIGHT ARE BOTH CAPPED, and the caps are different kinds of number.
+   21.25rem is a READING measure — about 40 characters at this type size, which is the
+   short end of comfortable and the right end for a one-to-one chat: two replies read
+   side by side without either wrapping to four lines, and the box covers less of the
+   register it is floating over. The height is a fraction of the viewport with a floor
+   under it, because a conversation has no natural length — it is however much two
+   officers typed — and it hangs from the bottom edge, so its height is exactly how
+   much of the workspace above it gets covered.
+
+   28.75rem IS TALLER THAN IT WAS AND THAT IS A DECISION, not a drift back toward the
+   dock this window replaced. The window is 460px and the THREAD inside it is what grew:
+   the composer is a single pill rather than a 128px field, bubbles are tighter, and the
+   transcript is where the extra height went. A chat window is measured in how much of
+   the conversation you can read at once, and that number went up.
+
+   IT IS THE FLEX ROW'S FIRST ITEM and the rail's neighbour, so it sits to the rail's
+   LEFT without either of them knowing the other's width — see .dash-dock. */
+.messages-box {
+  display: flex;
+  flex-direction: column;
+  width: min(21.25rem, calc(100vw - 2.5rem));
+  height: min(28.75rem, calc(100dvh - 5rem));
+  max-height: calc(100dvh - 2.5rem);
+  /* A BUBBLE IS NOT A CARD: the window takes the chatbox's own surface rather than
+     --panel, because this floats over the register as a transcript rather than as one
+     more panel of it. See the --msg-* block in :root for what that buys. */
+  background: var(--msg-surface);
+  border: 1px solid var(--msg-line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  color: var(--paper);
+  overflow: hidden;
+}
+
+/* THE TITLE BAR: the navy the top bar wears and the avatar faces sit on, so the box
+   reads as part of the application rather than as a page floating over it.
+
+   NAVY RATHER THAN A TOKEN THAT FLIPS. `--ir-navy` is overridden in dark theme to a
+   LIFTED navy (#1E2E50) and the white text on it is correct in both — the same pair,
+   and the same argument, as the chathead faces: this is the department's colour rather
+   than a surface colour, so it is the one ink in the box that must NOT be a theme
+   token.
+
+   NOTHING IN THIS BAR MAY WRAP. The name is the one field whose length is not ours —
+   this station has officers with four names and a suffix — and the failure it causes is
+   the worst kind: a wrapped name makes the bar two lines tall, which pushes the close
+   button out of the position the hand already knows. So the text is a BLOCK that may
+   shrink and may not grow (`min-width: 0; flex: 1; overflow: hidden`) and each of its
+   two lines truncates on its own, while the action cluster is `flex: none` and keeps its
+   width whatever the name does. Truncating is a smaller lie than moving the button. */
+.messages-box-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 12px;
+  background: var(--ir-navy);
+  color: #fff;
+}
+.messages-box-who {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.messages-box-title {
+  margin: 0;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.messages-box-sub {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: #7C8598;
+  /* The design's muted grey, and the one ink here that is not white: the subtitle is a
+     caption on the name rather than a second title, so it stays under the name in both
+     themes — on the navy bar, which does not flip either. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.messages-box-face {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  font-size: 0.78rem;
+  /* A ring of the BAR'S OWN ink, so the face is cut out of the title bar rather than
+     sitting on it as a second surface. */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+/* THE ACTION CLUSTER IS FIXED-WIDTH, which is the other half of the no-wrap rule above:
+   `flex: none` on a wrapper means the buttons cannot be squeezed by a long name, and a
+   tight gap keeps them a cluster rather than three controls adrift in the bar. */
+.messages-box-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+/* The header's buttons: bare glyphs on the navy, the same treatment the top bar's
+   bell gets, because they are the same kind of control in the same kind of bar. */
+.messages-box-action {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+.messages-box-action:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.messages-box-action:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* ---- The list, the picker and the thread are the box's body; the head above and
+   the composer below are the only fixed furniture. `min-height: 0` on the scrolling
+   region is what makes a flex child shrink below its content. ---- */
+.messages-back {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+.messages-back:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.messages-back:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* ---- The thread itself. The one scrolling region, and the reason the panel is a
+   flex column: without `min-height: 0` a flex child refuses to shrink below its
+   content, so the thread would push the composer off the bottom of the screen
+   instead of scrolling — the classic docked-panel bug. */
+.messages-thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--msg-well);
+}
+
+.messages-day {
+  align-self: center;
+  margin: 0.35rem 0 0.15rem;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--msg-meta);
+}
+
+/* ONE LINE OF CONVERSATION: a face and a bubble for theirs, just a bubble for mine.
+
+   THE FACE IS WHY THIS IS A ROW rather than the bubble aligning itself. The avatar
+   belongs to the MESSAGE — it is how a long incoming stretch is attributed without
+   re-reading the name in the bar — and something has to hold the two side by side
+   while mine pushes to the other edge. `justify-content` on this row does that, which
+   is why the bubble no longer carries `align-self`. */
+.messages-line {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+.messages-line.is-mine { justify-content: flex-end; }
+.messages-line-face {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  font-size: 0.55rem;
+}
+
+/* Bubbles. Mine on the right in the accent, theirs on the left on the raised plate —
+   the oldest convention there is for this, and worth following: which half of the
+   screen a sentence sits on is how a thread is read at a glance.
+
+   14px with the corner nearest its speaker SQUARED OFF (4px), which is the one
+   decorative choice here that carries information: it says where the bubble came from
+   without a tail, and it survives the bubble being one word long. */
+.messages-bubble {
+  max-width: 84%;
+  min-width: 0;
+  padding: 8px 11px 5px;
+  border: 1px solid var(--msg-bubble-line);
+  border-radius: 14px 14px 14px 4px;
+  background: var(--msg-bubble);
+}
+.messages-line.is-mine .messages-bubble {
+  border-color: transparent;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+/* A message is written by somebody and can be longer than a sentence: the wrap has to
+   happen at word boundaries inside the bubble, and a long token (a URL, a plate
+   number) must not push the bubble wider than the panel. */
+.messages-bubble-body {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* The time and the receipt share a line under the words. `--msg-meta` rather than
+   `--steel`, because this text sits on a BUBBLE and not on the page — see the --msg-*
+   block, where that distinction is the whole reason those tokens exist. */
+.messages-bubble-foot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--msg-meta);
+}
+/* The clock, and only the clock, gets tabular figures — which is why this is a rule of
+   its own rather than one on the row it sits in. Fixed-width digits keep a column of
+   times aligned on the colon; applying it to the row would also fix the width of the
+   receipt glyph, which is not a number. */
+.messages-bubble-time { font-variant-numeric: tabular-nums; }
+.messages-line.is-mine .messages-bubble-foot {
+  justify-content: flex-end;
+  color: rgba(255, 255, 255, 0.72);
+}
+/* THE READ RECEIPT, AND WHY IT IS WHITE RATHER THAN BLUE. A double check on a filled
+   accent bubble cannot be blue — it would be blue on blue, which is the one thing the
+   design asks for that is not legible. So the axis is brightness, which is the only one
+   this surface has: one translucent tick means sent, a solid white tick means read.
+   The words are on the element too, for anybody who cannot see either. */
+.messages-receipt {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.5);
+}
+.messages-receipt.is-read { color: #fff; }
+
+/* THREE DOTS WHERE A SENTENCE IS BEING WRITTEN. Same geometry as an incoming bubble
+   so its arrival does not move the thread, and the dots pulse in sequence rather than
+   together: three lights blinking at once read as a loading state, and three lights
+   taking turns read as somebody doing something. */
+.messages-typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 12px;
+}
+.messages-typing-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--msg-typing);
+  animation: messages-pulse 1.2s infinite ease-in-out;
+}
+.messages-typing-dots span:nth-child(2) { animation-delay: 0.16s; }
+.messages-typing-dots span:nth-child(3) { animation-delay: 0.32s; }
+@keyframes messages-pulse {
+  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+/* Nothing here is information that the motion carries — the dots mean "typing" whether
+   they pulse or not — so an officer who has asked for less motion gets a still row. */
+@media (prefers-reduced-motion: reduce) {
+  .messages-typing-dots span { animation: none; opacity: 0.65; }
+}
+
+/* THE WAY BACK DOWN, and it is not decoration. Auto-follow PAUSES while somebody is
+   reading history (see MessageThreadView), and a paused thread with new traffic in it
+   would otherwise hide a message with no sign that it had arrived. Sticky rather than
+   fixed: it belongs to the bottom of the transcript it is offering to show you. */
+.messages-jump {
+  position: sticky;
+  bottom: 0;
+  align-self: center;
+  margin-top: auto;
+  padding: 4px 12px;
+  border: 1px solid var(--msg-line);
+  border-radius: 999px;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.messages-jump:hover { background: var(--accent-fill-hover); }
+.messages-jump:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+.messages-note {
+  margin: 0.5rem 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--steel);
+}
+.messages-note--more { align-self: center; font-style: italic; }
+
+/* ---- The composer: one pill and one round button ---- */
+.messages-composer {
+  flex: none;
+  padding: 10px 12px;
+  border-top: 1px solid var(--msg-line);
+  background: var(--msg-surface);
+}
+/* The field and the button on one line, bottom-aligned, so the button stays put as the
+   field grows rather than drifting down the panel with it. */
+.messages-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+.messages-draft {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  resize: none;
+  /* THE GLOBAL `textarea { min-height: 8rem }` HAS TO BE OVERRIDDEN, and this is not a
+     tidy-up. That rule is there for the report form's narrative box — a paragraph
+     somebody settles into — and it silently applied here too, so the composer was 128px
+     of flat empty box: a third of the whole window, with `rows={2}` and `resize: none`
+     both already saying it wanted two lines. A `min-height` inherited from an unrelated
+     corner of the stylesheet is exactly the kind of thing that survives every review.
+     Two lines is what a chat composer is: it grows as you type only in that it scrolls. */
+  min-height: 0;
+  /* AND A CEILING, which is the other half of the same argument: without it a pasted
+     paragraph grows the field until the transcript above it is a strip. Two rows of
+     typing, then it scrolls. */
+  max-height: 7rem;
+  overflow-y: auto;
+  padding: 9px 14px;
+  border: 1px solid var(--msg-input-line);
+  border-radius: 20px;
+  background: var(--msg-input);
+  color: var(--paper);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+/* DISABLED IS A STATE, NOT A GREYING. In the preview the box cannot be typed in, and
+   the honest way to draw that is the placeholder reading "Not available in the
+   preview" with the field visibly inert — not an enabled box that silently swallows
+   what somebody types. */
+.messages-draft:disabled {
+  background: var(--msg-input);
+  color: var(--steel);
+  cursor: not-allowed;
+}
+.messages-draft::placeholder { color: var(--placeholder); }
+.messages-draft:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.messages-composer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  min-height: 14px;
+  margin-top: 4px;
+}
+/* The counter appears only near the limit — a character count on every message is
+   noise about a rule nobody is close to breaking. */
+.messages-count { font-size: 11.5px; color: var(--steel); font-variant-numeric: tabular-nums; }
+.messages-count.is-near { color: var(--amber); font-weight: 600; }
+/* A round paper-plane rather than a labelled bar. The word "Send" is one the eye has to
+   read on every message; the icon is one the hand learns once — and the label is still
+   on the element, so a screen reader hears the same word. */
+.messages-send {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  cursor: pointer;
+}
+.messages-send:hover:not(:disabled) { background: var(--accent-fill-hover); }
+.messages-send:disabled { opacity: 0.45; cursor: not-allowed; }
+.messages-send:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+.messages-error {
+  flex: none;
+  margin: 0;
+  padding: 0.5rem 1rem 0.7rem;
+  background: var(--red-bg);
+  border-top: 1px solid var(--red-line);
+  color: var(--red-text);
+  font-size: 12.5px;
+}
+
+/* THE PREVIEW'S OWN MARK, above the composer it is explaining.
+
+   Amber, dashed and in the same vocabulary as the rail's preview caption, because it
+   is the same claim: nothing on this screen is real. It sits HERE rather than at the
+   top of the thread because the thing it has to prevent is somebody typing a sentence
+   into a conversation that cannot receive it — and by the time they have read down to
+   the bottom, that is the decision they are making. */
+.messages-preview-note {
+  flex: none;
+  margin: 0;
+  padding: 0.5rem 1rem 0.6rem;
+  border-top: 1px dashed var(--amber);
+  background: var(--amber-bg);
+  color: var(--steel);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.messages-preview-note strong {
+  color: var(--amber);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ---- The list of conversations ---- */
+.messages-list,
+.messages-picker {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.6rem 0.55rem 0.8rem;
+  background: var(--msg-well);
+}
+.messages-new {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 0.7rem;
+  border: 1px dashed var(--line-bright);
+  border-radius: 9px;
+  background: none;
+  color: var(--cyan);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.messages-new:hover { border-color: var(--cyan); background: var(--cyan-bg); }
+.messages-new:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+.messages-rows,
+.messages-contacts { list-style: none; margin: 0; padding: 0; }
+.messages-rows li + li,
+.messages-contacts li + li { margin-top: 2px; }
+
+.messages-row,
+.messages-contact {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.messages-row:hover,
+.messages-contact:hover { background: var(--panel); border-color: var(--line); }
+.messages-row:focus-visible,
+.messages-contact:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+/* A row with something waiting is lit, so the list can be read for "what needs me"
+   rather than only for who you have spoken to. */
+.messages-row.has-unread { background: var(--panel); border-color: var(--red-line); }
+
+.messages-row-face,
+.messages-contact-face { flex: none; width: 34px; height: 34px; font-size: 0.72rem; }
+.messages-row-text,
+.messages-contact-text { flex: 1; min-width: 0; display: block; }
+.messages-row-name,
+.messages-contact-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--paper);
+}
+.messages-row-count {
+  flex: none;
+  min-width: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.messages-row-preview {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--steel);
+  /* ONE LINE, always. The preview is already cut at a word boundary by
+     lib/messages.js; this is the belt to that braces, and it stops a long unbroken
+     token from making one row taller than the rest. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.messages-row-you { color: var(--cyan-dim); }
+.messages-row-time {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--icon-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.messages-contact-meta { display: block; margin-top: 2px; font-size: 11.5px; color: var(--steel); }
+.messages-contact-online {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--green-bg);
+  border: 1px solid var(--green-line);
+  color: var(--green-ink);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.messages-filter {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0.6rem;
+  padding: 7px 10px;
+  border: 1px solid var(--line-bright);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--paper);
+  font: inherit;
+  font-size: 13px;
+}
+.messages-filter::placeholder { color: var(--placeholder); }
+.messages-filter:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/* The composer's label, for a screen reader only — the placeholder is the visible
+   label, and a placeholder is not one. */
+.messages-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* On a narrow screen the box gives up the rail's width and the reading measure both,
+   and answers to the viewport instead: it is the one thing in this corner that must
+   stay usable when there is almost nothing beside it — see .dash-dock, where the RAIL
+   is what gets dropped and the conversation is what stays. */
+@media (max-width: 899.98px) {
+  .messages-box {
+    width: min(20rem, calc(100vw - 2rem));
+    height: min(28.75rem, calc(100dvh - 2.5rem));
+  }
+}
+
+/* MINIMIZED IS THE HEAD, AND ONLY THE HEAD — the whole window folding down to its own
+   title bar, the way every chat client since Windows Messenger has done it. Nothing is
+   hidden inside it: the transcript, the list and the composer are all still mounted, so
+   restoring is instant and a poll that was in flight is not thrown away. `display: none`
+   on the children rather than unmounting them, precisely so the conversation survives
+   being put away for a minute. */
+.messages-box.is-minimized { height: auto; }
+.messages-box.is-minimized > *:not(.messages-box-head) { display: none; }
+
+/* The top bar's messages button is the bell's twin and lives beside it in
+   src/incident-report.css, where the bar's own rules are — a second copy of the same
+   trigger here would be two declarations that start disagreeing about the icon's ink. */
+
 @media print {
-  /* The review chrome must not print — only the sheet itself. */
+  /* The review chrome must not print — only the sheet itself, and never the
+     presence rail. */
   .print-overlay--review { display: block; }
   .print-overlay--review .print-scroll {
     display: block;
     overflow: visible;
     padding: 0;
   }
+  .dash-chatheads { display: none; }
+  /* Neither does a conversation between two officers, or the button that opens one. */
+  .messages-box,
+  .ir-msg-trigger { display: none; }
 }

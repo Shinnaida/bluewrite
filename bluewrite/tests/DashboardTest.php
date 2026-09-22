@@ -87,11 +87,56 @@ final class DashboardTest extends BaseApiTestCase
         $this->assertSame('Robbery', $b['categoryBreakdown'][0]['type']);
         $this->assertSame('Robbery', $b['meta']['type']);
 
+        // The hour strip carries the same filter: two Robbery reports today means the
+        // strip totals two, whichever hours they landed in.
+        $this->assertSame(2, array_sum(array_column($b['hourHistogram'], 'count')));
+        $this->assertSame(['Robbery'], array_column($b['categoryBreakdown'], 'type'));
+
         // Unknown type values are rejected (allowlist), never trusted raw.
         $res2 = $this->request('GET', '/dashboard/stats?type=' . urlencode("Robbery'; DROP TABLE reports;--"), null, $cookie);
         $this->assertSame(200, $res2['status']);
         $this->assertNull($res2['body']['meta']['type']);
         $this->assertSame(3, $res2['body']['kpis']['total'], 'injection attempt must be ignored, not executed');
+    }
+
+    /**
+     * The hour panel draws the range's own shape: every day in the range summed into the
+     * same 24 buckets, so the strip reads as "a day in this range" rather than as any one
+     * day — and so a single busy night cannot move a bar on its own.
+     *
+     * Two things fail quietly on their own. The buckets must be ZERO-FILLED and in clock
+     * order: the client indexes the strip by hour, so a gap or a reordering would draw
+     * every number under the wrong axis while looking fine. And the hours must come from
+     * the INCIDENT time rather than the filing time, or the chart answers a different
+     * question that happens to have the same shape.
+     */
+    public function testHourHistogramIsZeroFilledAndCountsIncidentHours(): void
+    {
+        [$cookie, $csrf] = $this->login('t.admin');
+        $today = date('Y-m-d');
+        // Two in one incident hour, one in another — and filed in a third, which is the
+        // hour a created_at version of this query would have counted them in.
+        $this->createReport($cookie, $csrf, ['incident_datetime' => $today . 'T10:30']);
+        $this->createReport($cookie, $csrf, ['incident_datetime' => $today . 'T10:45']);
+        $this->createReport($cookie, $csrf, ['incident_datetime' => $today . 'T23:05']);
+
+        $res = $this->request('GET', '/dashboard/stats', null, $cookie);
+        $this->assertSame(200, $res['status'], json_encode($res['body']));
+        $hours = $res['body']['hourHistogram'];
+
+        $this->assertSame(range(0, 23), array_column($hours, 'hour'), 'every hour of the day, in clock order');
+        $this->assertSame(3, array_sum(array_column($hours, 'count')));
+        $this->assertSame(2, $hours[10]['count'], 'both 10:xx incidents land in the same bucket');
+        $this->assertSame(1, $hours[23]['count']);
+        for ($h = 0; $h <= 23; $h++) {
+            if ($h !== 10 && $h !== 23) {
+                $this->assertSame(0, $hours[$h]['count'], "hour {$h} must be a real 0, not a missing row");
+            }
+        }
+
+        // The strip totals the range, not a window of it: the same three reports are in
+        // the KPI, because both read the same WHERE.
+        $this->assertSame(3, $res['body']['kpis']['total']);
     }
 
     public function testOfficerAndStaffAreForbidden(): void
