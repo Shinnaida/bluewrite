@@ -59,6 +59,12 @@ require __DIR__ . '/../app/controllers/NarrativeController.php';
 require __DIR__ . '/../app/controllers/NotificationsController.php';
 require __DIR__ . '/../app/controllers/AuthController.php';
 require __DIR__ . '/../app/controllers/PresenceController.php';
+// Messages between officers. TWO ENTRY POINTS, not one: the /messages routes below,
+// and PresenceController::heartbeat, which constructs this controller to carry the
+// unread counts on the beat. With no autoloader, a class named on a request path but
+// not listed here is a fatal error at the point of use — which is exactly what a
+// missing line here produced while looking, from the outside, like a 500.
+require __DIR__ . '/../app/controllers/MessagesController.php';
 require __DIR__ . '/../app/controllers/UsersController.php';
 require __DIR__ . '/../app/controllers/ReportsController.php';
 require __DIR__ . '/../app/controllers/DashboardController.php';
@@ -69,6 +75,7 @@ require __DIR__ . '/../app/controllers/VerificationController.php';
 use App\Controllers\AuditsController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
+use App\Controllers\MessagesController;
 use App\Controllers\NarrativeController;
 use App\Controllers\NotificationsController;
 use App\Controllers\PresenceController;
@@ -261,6 +268,39 @@ try {
     // counts, so the marks land on the same faces as the roster they annotate.
     if ($seg0 === 'presence' && $seg1 === 'heartbeat' && $method === 'POST') {
         (new PresenceController())->heartbeat();
+    }
+
+    // Messages between officers. ANY signed-in role, and the scope is the
+    // session's own id on every route — there is no cross-account read, and no
+    // administrator route into somebody else's correspondence (see
+    // MessagesController). `/messages/contacts` sits under this prefix rather
+    // than under /users because /users is the ADMINISTRATION view and is
+    // admin-only by test: contacts is the shortest list that can address a
+    // message, not a staff record.
+    if ($seg0 === 'messages') {
+        $c = new MessagesController();
+        if ($seg1 === null && $method === 'GET') {
+            $c->index();
+        }
+        if ($seg1 === null && $method === 'POST') {
+            $c->send();
+        }
+        if ($seg1 === 'contacts' && $method === 'GET') {
+            $c->contacts();
+        }
+        if ($seg1 !== null && $seg1 !== 'contacts' && ($parts[2] ?? null) === null && $method === 'GET') {
+            $c->thread((string) $seg1);
+        }
+        if ($seg1 !== null && ($parts[2] ?? null) === 'seen' && !isset($parts[3]) && $method === 'POST') {
+            $c->seen((string) $seg1);
+        }
+        // "I am writing to you." A POST because it is a statement about the caller
+        // rather than a read, and it writes one latch row that expires on its own —
+        // there is no matching GET, because the answer rides the thread read that the
+        // screen showing it is already polling.
+        if ($seg1 !== null && ($parts[2] ?? null) === 'typing' && !isset($parts[3]) && $method === 'POST') {
+            $c->typing((string) $seg1);
+        }
     }
 
     // Station settings (spec §1.1): fixed agency header, type list, personnel.

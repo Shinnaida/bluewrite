@@ -88,6 +88,15 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // fails the presence tests as unknown-column 500s rather than as
         // assertions.
         $this->runSqlFile(__DIR__ . '/../migrations/014_presence_and_avatars.sql');
+        // 015 is the messages table. Messaging is one-to-one and reaches EVERY active
+        // account, not just the ones on the roster, so its tests need an account that
+        // has never beaten — see tests/MessagesTest.php.
+        $this->runSqlFile(__DIR__ . '/../migrations/015_messages.sql');
+        // 016 is the typing latch. It has no column in common with anything else, so it
+        // fails the same unhelpful way 014 does if it is not replayed: the thread read
+        // that carries `peer_typing` becomes an unknown-table 500, and the test that
+        // would have noticed is looking at a conversation that never opens.
+        $this->runSqlFile(__DIR__ . '/../migrations/016_message_typing.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         // Every account that OWES a second factor has an email address, because

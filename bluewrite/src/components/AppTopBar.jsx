@@ -27,7 +27,9 @@ import { IDLE_LIMIT_MIN } from '../lib/session.js';
 // The avatar's two letters. Read from lib/profile.js rather than recomputed
 // here, because the panel draws the same avatar for the same person and two
 // copies of a rule eventually disagree about a one-word name.
-import { initialsOf } from '../lib/profile.js';
+// The face in the bar: the photograph when the account has one, initials when it
+// does not — the same component the presence rail and the profile panel draw.
+import Avatar from './Avatar.jsx';
 import AboutSystem from './AboutSystem.jsx';
 import NotificationBell from './NotificationBell.jsx';
 // The brand mark (shield + report + pen). Square, transparent PNG padded so it
@@ -80,6 +82,13 @@ export default function AppTopBar({
   // bell asks for the screen change rather than reaching for the view itself —
   // the same contract every nav link above it uses.
   onOpenReport,
+  // Opens the messages panel, and how many messages are waiting. The count is a
+  // PROP rather than read here, because it arrives on the presence heartbeat that
+  // Shell's rail already owns: reading it again in the bar would be a second
+  // answer to "how much is waiting", and the two would disagree on the same
+  // screen.
+  onOpenMessages,
+  unreadMessages = 0,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // The About panel is a dialog, not another fold: it says things, it does not
@@ -106,8 +115,6 @@ export default function AppTopBar({
       document.removeEventListener('keydown', onKey);
     };
   }, [menuOpen]);
-
-  const initials = initialsOf(user.full_name);
 
   return (
     <header className="ir-nav">
@@ -148,6 +155,48 @@ export default function AppTopBar({
             own here too). */}
         <NotificationBell onOpenReport={onOpenReport} />
 
+        {/* ---- Messages: the officers, rather than the reports ----
+            The bell above is scoped to what happened to the session's own
+            reports; this is the other half of "what do I need to look at", and
+            the only doorway to the panel that is always in the same place. The
+            rail's cards open a specific colleague; this opens the list of them,
+            which is what an officer wants when they are the one starting the
+            conversation. Rendered for every role — everybody on the station can
+            be messaged. */}
+        <button
+          type="button"
+          className="ir-msg-trigger"
+          aria-haspopup="dialog"
+          aria-label={
+            unreadMessages > 0
+              ? `Messages, ${unreadMessages} unread`
+              : 'Messages'
+          }
+          title={unreadMessages > 0 ? `${unreadMessages} unread messages` : 'Messages'}
+          onClick={onOpenMessages}
+        >
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.9 8.9 0 0 1-2.9-.5L3 21l1.7-4.6A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4Z" />
+          </svg>
+          {/* The same cap as the rail's mark, for the same reason: a hint that
+              something is waiting, not a count anybody reads to the digit. */}
+          {unreadMessages > 0 && (
+            <span className="ir-msg-badge" aria-hidden="true">
+              {unreadMessages > 9 ? '9+' : unreadMessages}
+            </span>
+          )}
+        </button>
+
         {/* ---- Profile: identity + the single sign-out action ---- */}
         <div className="ir-profile-wrap" ref={wrapRef}>
           {menuOpen && (
@@ -171,7 +220,7 @@ export default function AppTopBar({
                   onOpenProfile();
                 }}
               >
-                <span className="ir-profile-avatar" aria-hidden="true">{initials}</span>
+                <Avatar user={user} className="ir-profile-avatar" />
                 <span className="ir-profile-id">
                   <span className="ir-profile-name">{user.full_name}</span>
                   <span className="ir-profile-meta">
@@ -266,7 +315,7 @@ export default function AppTopBar({
             onClick={() => setMenuOpen((v) => !v)}
             title={`${user.full_name} — Badge ${user.badge_number} · ${user.role}`}
           >
-            <span className="ir-profile-avatar" aria-hidden="true">{initials}</span>
+            <Avatar user={user} className="ir-profile-avatar" />
             <span className="ir-profile-trigger-name">{user.full_name}</span>
             <svg className="ir-profile-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="m6 9 6 6 6-6" />
