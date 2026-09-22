@@ -19,6 +19,7 @@ import {
   AGE_RELATIVE_MAX_SECONDS,
   BADGE_MAX,
   DAY_GROUP_LABELS,
+  FILTER_EMPTY_NEVER,
   FILTERS,
   LIFECYCLE_HEADLINES,
   badgeLabel,
@@ -342,6 +343,23 @@ test('each filter has its own empty state, and an unknown one still speaks', () 
   }
   assert.equal(filterEmpty('unread').lead, 'Nothing unread.');
   assert.equal(filterEmpty('nonsense').lead, filterEmpty('all').lead);
+});
+
+test('an empty feed that has never carried anything does not claim a backlog', () => {
+  // Now that the panel reads the real feed, this is the state most officers meet
+  // first: the feed is empty until somebody ELSE acts on their reports. "All
+  // caught up" would there claim a backlog the watermark cannot support — NULL
+  // means nothing has ever been marked read, so nothing has ever arrived.
+  assert.equal(filterEmpty('all', false), FILTER_EMPTY_NEVER);
+  assert.notEqual(FILTER_EMPTY_NEVER.lead, filterEmpty('all').lead);
+  assert.ok(FILTER_EMPTY_NEVER.lead.length > 0);
+  assert.ok(FILTER_EMPTY_NEVER.note.length > 0);
+  // Only the unfiltered view has a never-arrived case: a filter that came up
+  // empty is still answering about its own filter.
+  assert.equal(filterEmpty('unread', false).lead, 'Nothing unread.');
+  assert.equal(filterEmpty('disputes', false).lead, filterEmpty('disputes').lead);
+  // The default is unchanged, so every existing caller keeps today's wording.
+  assert.equal(filterEmpty('all').lead, filterEmpty('all', true).lead);
 });
 
 // --- the tab title -----------------------------------------------------------

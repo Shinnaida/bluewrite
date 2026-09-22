@@ -54,9 +54,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
-// TEMPORARY MOCK — delete this import with src/mock-notifications.js. See that
-// file's header for the whole removal, which is three lines here and no more.
-import { MOCK_FEED_ENABLED, mockFeed, mockMarkSeen } from '../mock-notifications.js';
 import {
   FILTERS,
   badgeLabel,
@@ -180,8 +177,11 @@ export default function NotificationBell({ onOpenReport }) {
 
   const load = useCallback(async () => {
     try {
-      // TEMPORARY MOCK: sample items instead of the real feed.
-      const data = MOCK_FEED_ENABLED ? await mockFeed() : await api('/notifications');
+      // The real feed. The server DERIVES it from report_verifications and
+      // report_history and counts unread against this account's own watermark,
+      // so there is no events table behind this call and nothing here to keep
+      // in sync with the report, its History panel or the audit trail.
+      const data = await api('/notifications');
       if (!aliveRef.current) return;
       setItems(Array.isArray(data.items) ? data.items : []);
       setUnread(Number(data.unread) || 0);
@@ -282,7 +282,11 @@ export default function NotificationBell({ onOpenReport }) {
     [items, filter, seenAt],
   );
   const sections = useMemo(() => groupItemsByDay(visible), [visible]);
-  const empty = filterEmpty(filter);
+  // `seenAt === null` means this account has never read the bell, which is the
+  // only way to tell a feed that has been cleared from one that has never
+  // carried anything. On the real feed the second case is the common first
+  // impression, and the two must not share a sentence — see FILTER_EMPTY_NEVER.
+  const empty = filterEmpty(filter, seenAt !== null);
 
   /**
    * Advance the watermark to the newest act that was on screen.
@@ -299,15 +303,15 @@ export default function NotificationBell({ onOpenReport }) {
     // mark read events the officer never saw.
     if (!newest) return;
     try {
-      // TEMPORARY MOCK: same call, answered in memory. The real rule it keeps is
-      // the one that matters here — the newest event SHOWN is what is marked,
-      // not "now".
-      const res = MOCK_FEED_ENABLED
-        ? await mockMarkSeen(newest.happened_at)
-        : await api('/notifications/seen', {
-            method: 'POST',
-            body: { seen_through: newest.happened_at },
-          });
+      // What is sent is the newest event that was SHOWN, never "now". The
+      // server takes that value only ever forward, so a stale second tab cannot
+      // bring the badge back, and an act recorded between the read and this call
+      // stays unread rather than being marked seen without having been shown —
+      // see markSeen on why the comparison runs on the database's clock.
+      const res = await api('/notifications/seen', {
+        method: 'POST',
+        body: { seen_through: newest.happened_at },
+      });
       if (!aliveRef.current) return;
       setSeenAt(res.seen_at ?? newest.happened_at);
       load();

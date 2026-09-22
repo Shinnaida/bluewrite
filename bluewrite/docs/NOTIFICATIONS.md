@@ -17,9 +17,14 @@ Until that runs, `GET /notifications` answers 500 on that database. (The test
 harness replays every migration, so the suite is unaffected — see
 `tests/BaseApiTestCase.php`.)
 
-What is *temporary* is only the SAMPLE DATA: `src/mock-notifications.js`, kept
-on purpose so the panel can be demonstrated before real reviews exist — see the
-end of this document for what it is and how to take it out.
+The bell runs on the real feed. It was built against a marked set of sample items
+(`src/mock-notifications.js`) so the panel could be demonstrated before any
+review existed; that file is now removed, and both of its call sites in
+`NotificationBell.jsx` read the API.
+
+One consequence worth knowing before you open it: **an empty panel is a real
+answer, not a fault.** See "Where the feed comes from" below on why nothing
+appears until a second account acts on your reports.
 
 ## What it is
 
@@ -218,7 +223,6 @@ applying a new one — so it can never produce `(3) (3) Title`.
 | `src/incident-report.css` | section **7b**, the bell and its panel |
 | `tests/NotificationsTest.php` | **new** — the feed's rules and the watermark over HTTP |
 | `tests/rules/notifications.test.mjs` | **new** — the wording, the ages, and that nothing overclaims |
-| `src/mock-notifications.js` | **temporary** — sample items for looking at the panel; delete when done |
 
 `age_seconds` is computed by the **server** and sent instead of only a
 timestamp: a `YYYY-MM-DD HH:MM:SS` with no offset is read as local time by most
@@ -235,31 +239,42 @@ server-side for that one reason:
 | `happened_label` | the absolute fallback ("Aug 10, 2026"); formatted here so the panel never prints the database's `Y-m-d H:i:s`, and single-digit days are not left space-padded by MySQL's `%e` |
 | `day_group` | `today` / `yesterday` / `earlier`, from the database's calendar |
 
-## The sample data (the only temporary part)
+## Where the feed comes from
 
-`src/mock-notifications.js` is **sample data, not a prototype**: six items, in
-the server's own payload shape and using the server's own note strings, so the
-panel, the badge, the tab count and the filters can be demonstrated before real
-reviews exist. It holds its state in memory, so the badge comes back on reload —
-otherwise the panel could be seen once per session.
+There is no events table and no second copy of anything. Every item the bell
+reports is already stored permanently by the feature that performed it, so the
+feed is a READ:
 
-It is kept deliberately, and marked so nobody sweeps it away as scaffolding. The
-thing it stands in for is the real feed, which is already built and working
-(`GET /notifications`); nothing about the bell depends on it beyond the two
-marked call sites in `NotificationBell.jsx`, and setting
-`MOCK_FEED_ENABLED = false` switches to the real API without deleting anything.
+- a **review** is a row in `report_verifications` (migration 009);
+- a **finalize, archive or restore** is the `report_history` row's own
+  `change_note`.
 
-**To remove it when the real feed is in use:** remove the file, then remove the
-import of
-`MOCK_FEED_ENABLED` / `mockFeed` / `mockMarkSeen` and the two `MOCK_FEED_ENABLED`
-ternaries in `NotificationBell.jsx` (each is marked `TEMPORARY MOCK`), leaving
-the plain `api()` calls. That is the whole of it: no route, no migration, no
-database row, no CSS. Setting `MOCK_FEED_ENABLED = false` runs against the real
-API without deleting anything.
+The only thing the bell itself stores is the watermark,
+`users.notifications_seen_at` (migration 011). A second copy of these facts would
+be a second place for them to disagree with the report, its History panel and the
+audit trail.
 
-Clicking a sample row opens `report_id` for real, so with placeholder ids a
-click can land on "Report not found" — or on an unrelated real report holding
-that id. That is the mock's, not the bell's, doing.
+Two consequences worth stating plainly, because both look like faults and are
+not:
+
+**The feed is empty until somebody else acts on your reports.** The controller
+leaves out your own acts on purpose (`verifier_id <> me`, `changed_by <> me`): a
+bell that reports back what you just did yourself is noise, and the report's own
+History panel is where that sequence belongs. So the way to exercise the bell is
+two accounts — file a report as one, then review, finalize, archive or restore it
+as the other.
+
+**The archive event is the one row that is a statement rather than a link.** An
+archived report cannot be opened by anyone but an admin (every read path filters
+`deleted_at IS NULL`), so suppressing that event would let a report vanish with
+no word to the officer who wrote it. It is kept and flagged `report_archived`;
+the panel renders it as a statement, because there is nothing left to open.
+
+`report_history` is also filtered, on the note's own wording: `snapshot()` runs on
+every update, so the raw table carries a `'Report updated.'` row per autosave and
+a feed built on it would be a wall of "somebody saved a draft". Only the acts an
+officer needs told about are read, and an unknown future note is silently not a
+notification, which fails safe.
 
 ## Applying it
 

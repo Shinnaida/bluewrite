@@ -43,7 +43,27 @@
    Applied to the component's own root rather than to this wrapper so the whole
    subtree composites as one group. Dark mode is left alone — there the shader is
    already transparent with an additive-looking numerator, which is how the
-   component was designed to sit on a dark page. */
+   component was designed to sit on a dark page.
+
+   …AND IN LIGHT THE WHOLE PASS IS HELD DOWN TO A BLUEPRINT WHISPER. The light
+   pass does not paint ink at the strength it was lit at: it normalises every
+   pixel to its hue and keys its coverage off the UN-faded line mask, so a
+   hairline two metres down the room lands with the same force as one under the
+   camera and the sweep's band lands as a slab of near-pure accent hue. On the
+   dark page that reads as a scan room; on the light document page it read as a
+   saturated blue tunnel driven through the middle of the form — the one thing
+   on this screen louder than the passcode field.
+
+   The shader is vendored and stays byte-faithful, so the strength it refuses to
+   fade is taken back HERE, on the same element that blends: `opacity` scales
+   the frame's alpha, and under multiply a partial white is still the identity
+   (1 − a + a·1 = 1), so the ONLY thing this number touches is the ink —
+   coverage becomes this number, which is the knob the light pass lacks. At
+   0.45 the hairlines land as pale slate-blue ruling and the sweep as a soft
+   blue wash: a blueprint behind a document, which is what light mode wanted.
+   One number, wanting a look/feel pass like the timings below. Dark has no
+   `data-light`, keeps its full-strength room, and is untouched by this rule. */
 .gate-gridscan[data-light] > .gridscan {
   mix-blend-mode: multiply;
+  opacity: 0.45;
 }

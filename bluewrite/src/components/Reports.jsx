@@ -6,10 +6,10 @@ import React, {
   useRef,
   useState,
 } from 'react';
-// The row menu is portaled to <body>: it is positioned at the pointer, and the
-// register's own scroll box would otherwise clip it.
-import { createPortal } from 'react-dom';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
+// The row menu lives in its own file now: the dashboard chart offers the same
+// right-click menu on a day of "Reports over time".
+import RowMenu from './RowMenu.jsx';
 import { AI_ADVISORY } from '../lib/appInfo.js';
 import ReportPrint from './ReportPrint.jsx';
 // The two station seals, for the sheet format's page. The same files the printed
@@ -3915,113 +3915,6 @@ export function ReportEditor({
 }
 
 // ===========================================================================
-// RowMenu — the register's per-row actions, at the pointer.
-//
-// The row used to carry four ghost buttons in an ACTIONS column. On a blotter
-// that runs to hundreds of rows that is four hundred buttons of chrome competing
-// with the data the officer came to read, so the column is gone: the actions
-// open on right-click, where the officer is already pointing, and a double-click
-// goes straight to the one action that was ever the common case (Open).
-//
-// Portaled to <body> for two reasons: .table-wrap is a scroll box and would clip
-// a menu positioned inside it, and the menu's coordinates are the pointer's,
-// which are viewport coordinates. It is measured before it is shown so a
-// right-click on the last row of a page does not open a menu off the bottom of
-// the screen — where the item the officer wanted would be unreachable.
-// ===========================================================================
-
-function RowMenu({ at, items, label, onClose }) {
-  const ref = useRef(null);
-  // Starts at the pointer and is nudged inside the viewport by the layout effect
-  // below, which is why the first paint has no transition to animate.
-  const [pos, setPos] = useState(at);
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const box = el.getBoundingClientRect();
-    const margin = 8;
-    setPos({
-      x: Math.max(margin, Math.min(at.x, window.innerWidth - box.width - margin)),
-      y: Math.max(margin, Math.min(at.y, window.innerHeight - box.height - margin)),
-    });
-  }, [at]);
-
-  // Land on the first USABLE item: the menu has to be operable from the keyboard,
-  // because Shift+F10 / the Menu key is the only way to reach it without a mouse.
-  useEffect(() => {
-    ref.current?.querySelector('.row-menu-item:not(:disabled)')?.focus();
-  }, []);
-
-  useEffect(() => {
-    // A press anywhere outside dismisses. On the menu itself it must not, or the
-    // item's own click would never arrive.
-    const onDown = (e) => {
-      if (!ref.current?.contains(e.target)) onClose();
-    };
-    const onKey = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-    // A scroll moves the rows out from under the menu (the table scrolls in its
-    // own box, so this has to be captured rather than waited for on the window).
-    const onMove = () => onClose();
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onMove, true);
-    window.addEventListener('resize', onMove);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onMove, true);
-      window.removeEventListener('resize', onMove);
-    };
-  }, [onClose]);
-
-  // Arrow keys walk the items and wrap at both ends — a menu's own idiom, and
-  // the reason a keyboard user does not have to Tab out of the last one to get
-  // back to the first. Handled here rather than at the window: it is only right
-  // while focus is inside the menu.
-  function onKeyDown(e) {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    e.preventDefault();
-    const items = [...(ref.current?.querySelectorAll('.row-menu-item:not(:disabled)') ?? [])];
-    if (items.length === 0) return;
-    const at = items.indexOf(document.activeElement);
-    const step = e.key === 'ArrowDown' ? 1 : -1;
-    items[(at + step + items.length) % items.length].focus();
-  }
-
-  return createPortal(
-    <div
-      ref={ref}
-      className="row-menu"
-      role="menu"
-      aria-label={label}
-      style={{ left: pos.x, top: pos.y }}
-      onKeyDown={onKeyDown}
-    >
-      {items.map((item) => (
-        <button
-          key={item.label}
-          type="button"
-          role="menuitem"
-          className={item.danger ? 'row-menu-item danger' : 'row-menu-item'}
-          disabled={item.disabled}
-          title={item.hint}
-          onClick={() => {
-            onClose();
-            item.onSelect?.();
-          }}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>,
-    document.body,
-  );
-}
-
-// ===========================================================================
 // ReportsTable — the full blotter with search/filters/sort/pagination.
 // Officers see their own reports; admins see everything.
 // ===========================================================================
@@ -4071,6 +3964,16 @@ export function ReportsTable({
   onMutated,
   onConnError,
   initialStatus,
+  // The day, and the incident type, the register was asked to open on — set by the
+  // dashboard chart's right-click menu. They are the SAME keys the query below
+  // already carries, seeded on mount rather than filtered by a new mechanism, so
+  // the two controls in the filter bar show them and the officer can clear them
+  // like any other filter. Only the mount value is read: after that the bar owns
+  // them (Shell keys the component on these, which is what makes a second visit
+  // with another day a second mount).
+  initialDateFrom = '',
+  initialDateTo = '',
+  initialType = '',
   formFormat = 'document',
   // Forwarded to the editor this list opens, for the same reason formFormat is
   // (see Shell): a sign-out must save the open draft however it was opened, and
@@ -4121,7 +4024,17 @@ export function ReportsTable({
   // shows translated reports with no review yet, scoped by the server to the
   // languages the account is recorded as reading. Empty = no filter, so an
   // ordinary register is unchanged.
-  const [query, setQuery] = useState({ q: '', type: '', status: initialStatus ?? '', date_from: '', date_to: '', sort: 'incident_datetime', dir: 'desc', page: 1, verification: '' });
+  const [query, setQuery] = useState({
+    q: '',
+    type: initialType || '',
+    status: initialStatus ?? '',
+    date_from: initialDateFrom || '',
+    date_to: initialDateTo || '',
+    sort: 'incident_datetime',
+    dir: 'desc',
+    page: 1,
+    verification: '',
+  });
   const [pagination, setPagination] = useState(null);
   const [search, setSearch] = useState('');
   const [flashId, setFlashId] = useState(null);

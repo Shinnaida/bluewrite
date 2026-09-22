@@ -257,8 +257,36 @@ export const FILTER_EMPTY = {
   },
 };
 
-export function filterEmpty(filterId) {
-  return FILTER_EMPTY[normaliseFilter(filterId)];
+/**
+ * What the unfiltered panel says when the feed is empty AND the account has
+ * never read the bell — so nothing has ever ARRIVED, rather than everything
+ * having been cleared.
+ *
+ * The distinction is the whole reason this constant exists. On the real feed an
+ * officer's first look is routinely an empty panel: it is empty until somebody
+ * else acts on their reports (the controller leaves out their own acts on
+ * purpose). "You're all caught up" would claim a backlog the system has no
+ * evidence of — the panel cannot tell "read and cleared" from "never used" on
+ * an empty list alone. The watermark can: NULL means no act has ever been marked
+ * read. Same rule as the rest of this module: say only what is known (Invariant
+ * 7).
+ */
+export const FILTER_EMPTY_NEVER = {
+  lead: 'Nothing has arrived yet.',
+  note: 'This feed reports what other people do to the reports you record. It fills as the station uses the system.',
+};
+
+/**
+ * The empty state for a filter.
+ *
+ * `everRead` defaults to true so a caller that has not been asked to think about
+ * it gets the wording it always got; only the unfiltered view has a
+ * never-arrived case to tell apart, so no filter needs the second argument.
+ */
+export function filterEmpty(filterId, everRead = true) {
+  const id = normaliseFilter(filterId);
+  if (id === 'all' && !everRead) return FILTER_EMPTY_NEVER;
+  return FILTER_EMPTY[id];
 }
 
 /**

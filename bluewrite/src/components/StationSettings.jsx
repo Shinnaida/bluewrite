@@ -116,7 +116,7 @@ export default function StationSettings({ notify, onConnError, onSaved }) {
 
   if (error && !station) {
     return (
-      <>
+      <div className="st-page">
         <div className="ir-page-head">
           <h1 className="ir-title">STATION SETTINGS</h1>
           <div className="ir-meta">
@@ -127,11 +127,30 @@ export default function StationSettings({ notify, onConnError, onSaved }) {
         <div className="alert error" role="alert">
           {error}
         </div>
-      </>
+      </div>
     );
   }
 
-  if (!station) return <p>Reading station settings…</p>;
+  // Same treatment as the failure branch above and as user management: the
+  // screen keeps its page head while the read is in flight, so the title, the
+  // meta block and the working surface do not appear and disappear around the
+  // load. Placeholder rows stand where the blocks will be.
+  if (!station) {
+    return (
+      <div className="st-page">
+        <div className="ir-page-head">
+          <h1 className="ir-title">STATION SETTINGS</h1>
+          <div className="ir-meta">
+            <div>LOADING…</div>
+            <div>DEPLOYMENT DATA</div>
+          </div>
+        </div>
+        <div aria-hidden="true">
+          {Array.from({ length: 5 }, (_, i) => <div key={i} className="skeleton-row" />)}
+        </div>
+      </div>
+    );
+  }
 
   const headerDirty = Object.keys(changedHeaderFields(header, savedHeader)).length > 0;
   const headerProblem = headerError(header);
@@ -160,9 +179,11 @@ export default function StationSettings({ notify, onConnError, onSaved }) {
   }
 
   return (
-    <>
-      {/* Same page grammar as every other screen: serif document title, a
-          right-aligned meta block, then the working surface. */}
+    <div className="st-page">
+      {/* Same page grammar as every other screen: document title, a right-aligned
+          meta block, then the working surface — except that all of it sits in
+          one centered measure (see `.st-page`), so the blocks line up under the
+          title rather than under empty page. */}
       <div className="ir-page-head">
         <h1 className="ir-title">STATION SETTINGS</h1>
         <div className="ir-meta">
@@ -171,8 +192,11 @@ export default function StationSettings({ notify, onConnError, onSaved }) {
         </div>
       </div>
 
+      {/* No role badge: the nav only offers this screen to an Admin, so a badge
+          saying so restated the gate. The sentence stays, because it is the one
+          thing about this page that reading the form cannot tell you — an edit
+          here leaves a trail. */}
       <div className="ir-status">
-        <span className="badge active">Admin</span>
         <span>Changes here apply to the whole station and are recorded in the audit trail.</span>
       </div>
 
@@ -334,7 +358,7 @@ export default function StationSettings({ notify, onConnError, onSaved }) {
           </p>
         </section>
       </div>
-    </>
+    </div>
   );
 }
 

@@ -31,7 +31,8 @@ import './GateGridScan.css';
  *                     sweep is the brand blue on both, lifted in dark for the
  *                     same reason every other ink is.
  *
- *  - THE LIGHT THEME IS COMPOSITED, NOT RECOLOURED. GridScan has a lightMode
+ *  - THE LIGHT THEME IS COMPOSITED, NOT RECOLOURED — AND THEN HELD DOWN.
+ *    GridScan has a lightMode
  *    prop (it is supported in the source but absent from the component's own
  *    props table) and it is not a recolour: it makes the shader paint an OPAQUE
  *    frame, white wherever there is no grid energy. Dropped straight onto the
@@ -100,6 +101,13 @@ const GRID_SCALE = 0.1;
 const LINE_JITTER = 0.08;
 /** The sweep. The default, and already the restrained end of the range. */
 const SCAN_OPACITY = 0.4;
+/** …and light mode's sweep, quieter still. The beam is the one part of the
+   frame the light pass paints in a near-pure hue (it normalises the pixel to
+   its chroma), so on the light page the band reads as accent-coloured glass
+   sliding down the room. Halving it here — with the layer's own strength held
+   down in GateGridScan.css — leaves a sweep that says "the surface is alive"
+   without becoming the loudest thing beside the passcode field. */
+const SCAN_OPACITY_LIGHT = 0.25;
 /** Slower than the 2.0/2.0 defaults: a scan, not a strobe. */
 const SCAN_DURATION = 3.2;
 const SCAN_DELAY = 3.2;
@@ -184,7 +192,7 @@ export default function GateGridScan() {
         lineThickness={LINE_THICKNESS}
         gridScale={GRID_SCALE}
         lineJitter={LINE_JITTER}
-        scanOpacity={SCAN_OPACITY}
+        scanOpacity={ink.light ? SCAN_OPACITY_LIGHT : SCAN_OPACITY}
         scanDuration={SCAN_DURATION}
         scanDelay={SCAN_DELAY}
         enablePost={false}

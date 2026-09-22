@@ -195,23 +195,48 @@ export default function Users({ notify }) {
     }
   }
 
-  if (users === null && !error) return <p>Loading users…</p>;
+  if (users === null && !error) {
+    // The screen keeps its page head while the directory is being read. It used
+    // to return a bare "Loading users…" line first, which took the title and the
+    // meta block off the page and put them back once the read landed, so the
+    // screen changed shape twice on every visit. Placeholder rows stand where
+    // the table will be instead, so nothing moves when it arrives.
+    return (
+      <>
+        <div className="ir-page-head">
+          <h1 className="ir-title">USER MANAGEMENT</h1>
+          <div className="ir-meta">
+            <div>LOADING…</div>
+            <div>STATION DIRECTORY</div>
+          </div>
+        </div>
+        <div aria-hidden="true">
+          {Array.from({ length: 6 }, (_, i) => <div key={i} className="skeleton-row" />)}
+        </div>
+      </>
+    );
+  }
+
+  // What the meta block reports, in three states rather than two. A failed read
+  // leaves the list undefined, and the old two-way test then printed "LOADING…"
+  // for as long as the screen stayed open — the one thing the screen was no
+  // longer doing. The error itself is stated by the alert below.
+  const accountLine = error
+    ? 'UNAVAILABLE'
+    : users
+      ? `${users.length} ACCOUNT${users.length === 1 ? '' : 'S'}`
+      : 'LOADING…';
 
   return (
     <>
-      {/* Same page grammar as every other screen: serif document title, a
+      {/* Same page grammar as every other screen: document title, a
           right-aligned meta block, then the working surface. */}
       <div className="ir-page-head">
         <h1 className="ir-title">USER MANAGEMENT</h1>
         <div className="ir-meta">
-          <div>{users ? `${users.length} ACCOUNT${users.length === 1 ? '' : 'S'}` : 'LOADING…'}</div>
+          <div>{accountLine}</div>
           <div>STATION DIRECTORY</div>
         </div>
-      </div>
-
-      <div className="ir-status">
-        <span className="badge active">Admin</span>
-        <span>Administer officer, staff, and administrator accounts.</span>
       </div>
 
       {error && (
@@ -346,7 +371,7 @@ export default function Users({ notify }) {
                   users.map((u) => (
                     <tr key={u.id}>
                       <td>{u.full_name}</td>
-                      <td className="num">{u.badge_number}</td>
+                      <td className="num stamp">{u.badge_number}</td>
                       <td>{u.username}</td>
                       <td>{u.email || '—'}</td>
                       <td>{u.role}</td>
@@ -363,7 +388,7 @@ export default function Users({ notify }) {
                           );
                         })()}
                       </td>
-                      <td>{u.last_login_at ? u.last_login_at.replace('T', ' ') : 'Never'}</td>
+                      <td className="stamp">{u.last_login_at ? u.last_login_at.replace('T', ' ') : 'Never'}</td>
                       <td>
                         <button onClick={() => startEdit(u)}>Edit</button>{' '}
                         <button onClick={() => askResetPassword(u)}>Reset password</button>{' '}
@@ -445,10 +470,12 @@ export default function Users({ notify }) {
             className="dialog"
             role="dialog"
             aria-modal="true"
+            aria-labelledby="confirm-title"
+            aria-describedby="confirm-message"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2>{confirm.title}</h2>
-            <p>{confirm.message}</p>
+            <h2 id="confirm-title">{confirm.title}</h2>
+            <p id="confirm-message">{confirm.message}</p>
             <div className="actions">
               <button onClick={() => setConfirm(null)}>Cancel</button>
               <button className="danger" onClick={runConfirm}>

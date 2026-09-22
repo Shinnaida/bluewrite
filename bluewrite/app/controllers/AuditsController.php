@@ -27,6 +27,12 @@ final class AuditsController
         // attempt from a session nobody should have had is exactly what a trail
         // is for.
         'user.password_change', 'user.password_change_failed',
+        // The officer's own avatar, set or cleared. Cosmetic-looking, and kept
+        // for one reason: the presence roster draws FACES, so an avatar is the
+        // one identity field a colleague recognises without reading a name. A
+        // trail that could not say who changed the picture the station sees would
+        // be missing exactly the record a spoofed avatar would want it to miss.
+        'user.photo_set', 'user.photo_remove',
         // The second factor. `login.password_ok` is the important one to keep
         // apart from `login.success`: it records a password that was accepted
         // with NOTHING signed in, so a trail without it would show a gap where a
