@@ -65,6 +65,45 @@ export async function api(path, { method = 'GET', body, keepalive = false } = {}
     keepalive,
   });
 
+  return readResponse(res);
+}
+
+/**
+ * `api` for a request whose body is a FILE (multipart/form-data).
+ *
+ * ONE DIFFERENCE, and it is the reason this is a separate function rather than a
+ * flag on `api`: the browser sets the Content-Type itself, because it has to put
+ * the multipart boundary in it. Setting `application/json` — or anything else —
+ * would make the server see a body it cannot parse, and the failure would look
+ * like a rejected upload rather than a mislabelled one.
+ *
+ * Everything else (credentials, the CSRF header, the error classification, the
+ * CSRF token the response may carry) is shared with `api` through readResponse,
+ * so the two cannot drift apart about what a failed request means.
+ */
+export async function apiUpload(path, formData, { method = 'POST' } = {}) {
+  const headers = {};
+  if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+
+  const res = await fetch(`${API}${path}`, {
+    method,
+    credentials: 'same-origin',
+    headers,
+    body: formData,
+  });
+
+  return readResponse(res);
+}
+
+/**
+ * One response, read the one way: decode it, keep the CSRF token it may carry,
+ * and turn a failure into the classified Error every screen already handles.
+ *
+ * Shared by `api` and `apiUpload` because a failed upload has to fail the way a
+ * failed save does — an officer whose connection dropped mid-upload should see the
+ * same "can't reach the server" state as anywhere else, not a raw message.
+ */
+async function readResponse(res) {
   let data = null;
   try {
     data = await res.json();
@@ -104,5 +143,6 @@ export async function api(path, { method = 'GET', body, keepalive = false } = {}
     }
     throw err;
   }
+
   return data;
 }

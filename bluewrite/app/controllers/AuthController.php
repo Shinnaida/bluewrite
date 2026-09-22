@@ -5,6 +5,10 @@ namespace App\Controllers;
 
 use App\Core\Audit;
 use App\Core\Auth;
+// The officer's own face: the upload rules, the stored file, and the URL shape.
+// Named here because /me/photo and /me/password are both "my own record" — see
+// setPhoto for why an avatar is a self-service field and never an admin one.
+use App\Core\AvatarPhoto;
 use App\Core\Config;
 use App\Core\Database;
 // The second factor is an emailed one-time code; the mailer is how it travels.
@@ -155,6 +159,14 @@ final class AuthController
                 'badge_number' => $user['badge_number'],
                 'username' => $user['username'],
                 'role' => $user['role'],
+                // The same sentence as /me's: the workspace is handed its own face
+                // at sign-in rather than a second request for one image, and null
+                // means there is none to draw.
+                'photo_url' => AvatarPhoto::url(
+                    (int) $user['id'],
+                    $user['photo_path'] ?? null,
+                    $user['photo_updated_at'] ?? null
+                ),
             ],
             // Phase 6 Stage 5 (Track A, D3) — the registry also rides the
             // login response, because the client establishes its session from
@@ -631,6 +643,14 @@ final class AuthController
             'last_login_at' => $user['last_login_at'],
             'created_at' => $user['created_at'],
             'languages' => self::languageRegistryPayload(),
+            // The session's own face, as a URL to ask for (null when the account
+            // has none, and its initials are drawn instead). Assembled by
+            // AvatarPhoto so the path and the cache key have one home.
+            'photo_url' => AvatarPhoto::url(
+                (int) $user['id'],
+                $user['photo_path'] ?? null,
+                $user['photo_updated_at'] ?? null
+            ),
             'csrf_token' => \App\Core\Csrf::token(),
             // Item 5: real idle-timeout deadline (server clock) so the client
             // countdown reflects actual remaining time across reloads.
@@ -750,6 +770,107 @@ final class AuthController
         Auth::logout();
 
         Response::json(200, ['ok' => true, 'signed_out' => true]);
+    }
+
+    /**
+     * POST /me/photo — the officer's own photograph.
+     *
+     * WHY IT LIVES HERE, under /me, and not under /users/:id. A photo is part of
+     * an account's identity, and identity is the one thing this API lets every
+     * role change ABOUT THEMSELVES and nobody change about somebody else. There
+     * is no route for an admin to set an officer's face, deliberately: the
+     * roster shows a person, and a person's face is theirs to choose. The same
+     * convention as /me/password, one method over.
+     *
+     * MULTIPART, not JSON, because it is a file. The rules about what is
+     * acceptable live in AvatarPhoto (see the class note for why the type is
+     * decided by decoding rather than by what the client says it sent).
+     *
+     * THE COLUMN IS UPDATED BEFORE THE OLD FILE IS DELETED, and that order is the
+     * whole point: a crash between the two leaves yesterday's photograph on disk
+     * with today's row pointing at it — harmless and invisible — where the
+     * reverse order would leave a row naming a file that is gone, which is a
+     * broken image on every roster in the station until someone re-uploads.
+     */
+    public function setPhoto(): void
+    {
+        $user = Auth::requireUser();
+        $uid = (int) $user['id'];
+
+        $error = AvatarPhoto::check($_FILES['photo'] ?? []);
+        if ($error !== null) {
+            Response::json(422, ['error' => $error, 'field' => 'photo']);
+        }
+
+        $tmp = (string) $_FILES['photo']['tmp_name'];
+        // Non-null: check() already refused anything it cannot decode.
+        $mime = (string) AvatarPhoto::detect($tmp);
+
+        try {
+            $name = AvatarPhoto::store($uid, $tmp, $mime);
+        } catch (\Throwable $e) {
+            // The filesystem, not the upload: the officer gets the honest
+            // sentence, and the detail goes to the server log through the
+            // front controller's handler rather than into the response.
+            error_log('[BlueWrite] avatar store failed: ' . $e->getMessage());
+            Response::json(500, ['error' => 'The image could not be saved on the server. Try again.']);
+        }
+
+        $pdo = Database::pdo();
+        $pdo->prepare('UPDATE users SET photo_path = :p, photo_updated_at = NOW() WHERE id = :id')
+            ->execute([':p' => $name, ':id' => $uid]);
+
+        // Now that the row no longer names it, the previous file can go.
+        AvatarPhoto::delete($user['photo_path'] === null ? null : (string) $user['photo_path']);
+
+        // Audited, like a password change and for the same reason: this is a
+        // change to the account's own identity record. An avatar is not a report
+        // and carries no case history, so the trail records the act and the
+        // filename rather than a diff.
+        Audit::log($uid, 'user.photo_set', 'user', (string) $uid, $name);
+
+        Response::json(200, [
+            'ok' => true,
+            'photo_url' => AvatarPhoto::url($uid, $name, $this->photoStamp($pdo, $uid)),
+        ]);
+    }
+
+    /**
+     * DELETE /me/photo — back to initials.
+     *
+     * The row is cleared first and the file removed after, the same order as
+     * setPhoto and for the same reason. Clearing is idempotent: an account with
+     * no photo that asks again is answered 200, because "there is no photo" is
+     * the state it asked for, not a failure to reach it.
+     */
+    public function clearPhoto(): void
+    {
+        $user = Auth::requireUser();
+        $uid = (int) $user['id'];
+
+        $pdo = Database::pdo();
+        $pdo->prepare('UPDATE users SET photo_path = NULL, photo_updated_at = NULL WHERE id = :id')
+            ->execute([':id' => $uid]);
+
+        AvatarPhoto::delete($user['photo_path'] === null ? null : (string) $user['photo_path']);
+        Audit::log($uid, 'user.photo_remove', 'user', (string) $uid);
+
+        Response::json(200, ['ok' => true, 'photo_url' => null]);
+    }
+
+    /**
+     * users.photo_updated_at for the account, re-read rather than assumed: the
+     * cache key in the URL has to be the stamp the DATABASE wrote with NOW(),
+     * not one this process guessed (see NotificationsController on why a PHP
+     * clock is a different clock from the one the column was stamped with).
+     */
+    private function photoStamp(PDO $pdo, int $userId): ?string
+    {
+        $stmt = $pdo->prepare('SELECT photo_updated_at FROM users WHERE id = :id');
+        $stmt->execute([':id' => $userId]);
+        $value = $stmt->fetchColumn();
+
+        return ($value === false || $value === null) ? null : (string) $value;
     }
 
     /**

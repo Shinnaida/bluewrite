@@ -5,6 +5,10 @@ namespace App\Controllers;
 
 use App\Core\Audit;
 use App\Core\Auth;
+// The stored avatar: its rules, its path and the Content-Type it is served
+// under. Named here because GET /users/:id/photo is the only route in the API
+// that answers with an image rather than a JSON document.
+use App\Core\AvatarPhoto;
 use App\Core\Database;
 use App\Core\LanguageRegistry;
 // The second factor's state. Its rules (which roles need one) are read here so
@@ -320,6 +324,66 @@ final class UsersController
 
         Audit::log((int) $admin['id'], 'user.deactivate', 'user', (string) $userId, "username: {$existing['username']}");
         Response::json(200, ['ok' => true]);
+    }
+
+    /**
+     * GET /users/:id/photo — anybody's avatar, to anybody signed in.
+     *
+     * WHY THIS IS NOT ADMIN-ONLY, unlike every other route in this controller.
+     * An avatar is drawn on the presence roster, which every role can see; a
+     * photograph that only an admin could fetch would be a circle that works for
+     * some of the station and 403s for the rest. What is being protected is the
+     * STATION's roster, not a secret: the name beside the photo is already shown,
+     * and this endpoint adds no field that the roster does not carry.
+     *
+     * WHAT IT CANNOT DO. It serves a file that AvatarPhoto names from our own
+     * column and refuses any name that is not a plain filename, so the id in the
+     * URL cannot be made to reach outside storage/avatars/. An account with no
+     * photo answers 404, which is a real answer rather than an error: the client
+     * only asks for a URL it was given, and null is what it was given when there
+     * is nothing to draw.
+     *
+     * CACHING. Avatars are small, immutable and change rarely, so this is the one
+     * image in the app worth caching — and the URL carries `?v=<photo_updated_at>`
+     * (see AvatarPhoto::url), which means a re-upload is a new URL and this can
+     * safely be a private, five-minute cache per browser. The ETag is the same
+     * stamp, so a conditional request that gets there anyway is a cheap 304.
+     */
+    public function photo(string $id): void
+    {
+        Auth::requireUser();
+
+        $userId = (int) $id;
+        $pdo = Database::pdo();
+        $stmt = $pdo->prepare('SELECT photo_path, photo_updated_at FROM users WHERE id = :id');
+        $stmt->execute([':id' => $userId]);
+        $row = $stmt->fetch();
+
+        $name = ($row === false || $row['photo_path'] === null) ? '' : (string) $row['photo_path'];
+        $path = AvatarPhoto::path($name);
+        if ($path === null) {
+            Response::json(404, ['error' => 'No photo on file for that account.']);
+        }
+
+        $stamp = $row['photo_updated_at'] === null ? null : (string) $row['photo_updated_at'];
+        $etag = '"' . sha1($name . '|' . (string) $stamp) . '"';
+
+        // 304 before any body work: the browser already has these bytes.
+        $ifNoneMatch = trim((string) ($_SERVER['HTTP_IF_NONE_MATCH'] ?? ''));
+        header('ETag: ' . $etag);
+        header('Cache-Control: private, max-age=300');
+        if ($ifNoneMatch !== '' && str_contains($ifNoneMatch, $etag)) {
+            http_response_code(304);
+            return;
+        }
+
+        // Replaces the JSON Content-Type and the no-store set by the front
+        // controller: this is the one route on the API that answers with bytes
+        // instead of a document, and a cached photograph that is never re-read is
+        // the point rather than an oversight.
+        header('Content-Type: ' . AvatarPhoto::mimeFor($name));
+        header('Content-Length: ' . (string) filesize($path));
+        readfile($path);
     }
 
     private function fetchUser(PDO $pdo, int $id): ?array

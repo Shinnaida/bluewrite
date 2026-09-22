@@ -1,0 +1,84 @@
+-- BlueWrite migration 014: who is at a desk right now, and what they look like.
+--
+-- TWO QUESTIONS THE STATION HAS NEVER BEEN ABLE TO ANSWER.
+--
+--   1. "Who else is on shift with me?" Every officer who signs in is gone from
+--      the screen the moment the password is accepted. There is no roster, and
+--      the app is a LAN tool with no message bus: nothing is pushed anywhere.
+--      So presence has to be something the SERVER knows, not something a
+--      browser claims — a client cannot be trusted to say "I am still here"
+--      beyond the one fact it can honestly report, which is that it is still
+--      making requests.
+--
+--   2. "Who is this?" Every face in this app is two letters. An avatar that is
+--      a photograph needs somewhere to put the file, and that somewhere has to
+--      survive a deploy.
+--
+-- THE PRESENCE MODEL, AND WHY IT IS A TIMESTAMP RATHER THAN A FLAG.
+--
+--   last_seen_at is written by the SERVER, from the session's own account, when
+--   the open workspace asks (POST /presence/heartbeat). "Online" is then a
+--   WINDOW over that column — somebody seen in the last couple of minutes — and
+--   never a `is_online` boolean. A flag would have to be cleared by something,
+--   and the thing that would have to clear it is a browser that has already
+--   gone away: close the lid, kill the tab, cut the Wi-Fi, and the station would
+--   show a colleague who is not there for the rest of the day. A window expires
+--   on its own, and its failure mode is the honest one (a chathead that fades a
+--   minute late) rather than a permanent lie.
+--
+--   It is also deliberately NOT the session table. PHP's sessions live in files
+--   on the server with an idle timeout, and reading them to draw a roster would
+--   mean parsing the session store of every other request — a coupling that
+--   would break the first time the deployment moved to Redis or two app servers.
+--   One column on the account is portable, and it is the account the roster is
+--   about.
+--
+-- THE PHOTO, AND WHY THE PATH IS A COLUMN RATHER THAN A CONVENTION.
+--
+--   The obvious shortcut is to serve avatars by CONVENTION — always
+--   `/uploads/avatars/{id}.jpg`, no column, no state. It was rejected because a
+--   convention cannot express "no photo": every account without one would fall
+--   through to a 404 on every render, and the client would have to treat a
+--   failed request as the normal case. Storing the filename makes the absence a
+--   fact (NULL) and keeps the file it names as the only thing that can go
+--   missing.
+--
+--   The file itself does NOT live under public/. That directory is Vite's build
+--   output and is emptied on every production build (see package.json: `vite
+--   build && cp -r public-assets/. public/`), so a user's photograph stored
+--   there would be deleted by the next deploy. It lives in storage/avatars/ at
+--   the project root, outside the web root, and is served through the API so
+--   that access stays subject to the session like everything else.
+--
+--   photo_updated_at exists to be a CACHE KEY, and for nothing else: the image
+--   URL carries it, so a re-upload is a new URL to the browser and to the LAN
+--   proxy in front of it. Without it, an officer who changes their photo would
+--   keep seeing the old one wherever the image had been cached, which is
+--   exactly the kind of bug that gets reported as "the upload is broken".
+--
+-- COLUMNS
+--   last_seen_at     — when this account's workspace last said it was there.
+--                      NULL means "not since the migration", so nobody is
+--                      online at upgrade: an empty roster until the first
+--                      heartbeat, which is the honest starting state.
+--   photo_path       — the stored filename under storage/avatars/, or NULL for
+--                      no photo (the initials are then drawn in its place).
+--   photo_updated_at — when the current photo was stored; the cache key.
+--
+-- INDEX. idx_users_last_seen is on the roster's own predicate. The table is a
+-- station's staff — tens of rows — so this index buys nothing today and costs
+-- nothing either; it is here because the query is `WHERE last_seen_at >= ?` on
+-- every heartbeat, of every open tab, every thirty seconds.
+--
+-- Rollback: migrations/014_presence_and_avatars.down.sql — drops the three
+-- columns and the index. It does NOT delete the stored images, and cannot: they
+-- are files, named by rows that no longer exist. The rollback says so, and the
+-- maintenance note is that storage/avatars/ may then hold orphans — harmless,
+-- and recoverable only by hand.
+
+ALTER TABLE users
+  ADD COLUMN last_seen_at DATETIME NULL DEFAULT NULL AFTER last_login_at,
+  ADD COLUMN photo_path VARCHAR(255) NULL DEFAULT NULL AFTER last_seen_at,
+  ADD COLUMN photo_updated_at DATETIME NULL DEFAULT NULL AFTER photo_path;
+
+CREATE INDEX idx_users_last_seen ON users (last_seen_at);

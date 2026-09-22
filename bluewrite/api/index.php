@@ -30,6 +30,13 @@ require __DIR__ . '/../app/core/Validator.php';
 // answered 500 while looking, from the outside, like a server fault rather than
 // the missing line it is.
 require __DIR__ . '/../app/core/PasswordPolicy.php';
+// Phase 8 — the avatar: what an upload is allowed to be, the 256px file that is
+// stored, and the URL shape the roster and /me both carry. Required HERE, with
+// the rest, for this project's usual reason: there is no autoloader, so a class
+// named on a request path but not listed here is a fatal error at the point of
+// use rather than at boot. Three controllers reach it (AuthController's
+// /me/photo, UsersController's /users/:id/photo, PresenceController's roster).
+require __DIR__ . '/../app/core/AvatarPhoto.php';
 require __DIR__ . '/../app/core/LegacyNormalizer.php';
 require __DIR__ . '/../app/core/Station.php';
 require __DIR__ . '/../app/core/ReportVerification.php';
@@ -51,6 +58,7 @@ require __DIR__ . '/../app/ai/NarrativeService.php';
 require __DIR__ . '/../app/controllers/NarrativeController.php';
 require __DIR__ . '/../app/controllers/NotificationsController.php';
 require __DIR__ . '/../app/controllers/AuthController.php';
+require __DIR__ . '/../app/controllers/PresenceController.php';
 require __DIR__ . '/../app/controllers/UsersController.php';
 require __DIR__ . '/../app/controllers/ReportsController.php';
 require __DIR__ . '/../app/controllers/DashboardController.php';
@@ -63,6 +71,7 @@ use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\NarrativeController;
 use App\Controllers\NotificationsController;
+use App\Controllers\PresenceController;
 use App\Controllers\ReportsController;
 use App\Controllers\StationController;
 use App\Controllers\UsersController;
@@ -152,6 +161,19 @@ try {
         (new AuthController())->changePassword();
     }
 
+    // The officer's own face. Under /me for the same reason the password is:
+    // an avatar is part of an account's identity, and identity is the one thing
+    // every role may change about THEMSELVES and nobody may change about somebody
+    // else — there is deliberately no admin route that sets another officer's
+    // photograph. POST replaces it (multipart/form-data), DELETE goes back to
+    // initials; both are audited, like the password change above.
+    if ($seg0 === 'me' && $seg1 === 'photo' && $method === 'POST') {
+        (new AuthController())->setPhoto();
+    }
+    if ($seg0 === 'me' && $seg1 === 'photo' && $method === 'DELETE') {
+        (new AuthController())->clearPhoto();
+    }
+
     if ($seg0 === 'users') {
         $c = new UsersController();
         if ($seg0 === 'users' && $seg1 === null && $method === 'GET') {
@@ -169,6 +191,16 @@ try {
         }
         if ($seg1 !== null && !isset($parts[2]) && $method === 'DELETE') {
             $c->destroy((string) $seg1);
+        }
+        // GET /users/:id/photo — the stored avatar, as bytes rather than JSON, and
+        // the only route in this controller that is not admin-only: the presence
+        // roster draws every signed-in colleague's face, so every role has to be
+        // able to fetch one. (The report CSV export is the API's other non-JSON
+        // response; this is the one that is rendered INLINE in a page rather than
+        // downloaded, which is why it carries an explicit Content-Type and an
+        // ETag of its own.) See UsersController::photo.
+        if ($seg1 !== null && ($parts[2] ?? null) === 'photo' && !isset($parts[3]) && $method === 'GET') {
+            $c->photo((string) $seg1);
         }
         // POST /users/:id/mfa-reset — clear an outstanding sign-in code and the
         // attempt lock that comes with it. Admin-only inside the controller (not
@@ -219,6 +251,16 @@ try {
         if ($seg1 === 'seen' && $method === 'POST') {
             $c->markSeen();
         }
+    }
+
+    // Presence: who is at a desk right now. ANY signed-in role may call it, and
+    // it is one route rather than two because a heartbeat and the roster it
+    // returns happen on the same beat — see PresenceController for why the write
+    // and the read cannot be separated without the station showing officers who
+    // are watching and never seen. The beat also carries the unread message
+    // counts, so the marks land on the same faces as the roster they annotate.
+    if ($seg0 === 'presence' && $seg1 === 'heartbeat' && $method === 'POST') {
+        (new PresenceController())->heartbeat();
     }
 
     // Station settings (spec §1.1): fixed agency header, type list, personnel.

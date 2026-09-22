@@ -68,8 +68,12 @@ final class Auth
             // code sent to this address, so whether the address exists IS
             // whether the account can sign in. It is a plain column on the row
             // rather than a join, which keeps the gate at one round trip.
+            // photo_path and photo_updated_at ride every request for the same
+            // reason email does: /me answers with the session's own face, and the
+            // cache key for it lives in the row. Two more columns on a row this
+            // process was already reading.
             'SELECT u.id, u.role_id, u.full_name, u.badge_number, u.username, u.email, u.status, u.last_login_at,
-                    u.created_at, u.languages_read, r.name AS role
+                    u.created_at, u.languages_read, u.photo_path, u.photo_updated_at, r.name AS role
              FROM users u JOIN roles r ON r.id = u.role_id
              WHERE u.id = :id'
         );

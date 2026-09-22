@@ -13,6 +13,12 @@ config/mfa.key
 # Machine-local Gemini cache state (CachedInstructionStore)
 resources/ai/.cache_state.json
 
+# Uploaded avatars (migration 014). These are OFFICER PHOTOGRAPHS, and they are user
+# data rather than source: one file per account, written by POST /me/photo, and
+# outside public/ precisely so a build cannot wipe them (see AvatarPhoto). The
+# folder is created on demand, so an empty checkout has nothing here at all.
+storage/avatars/
+
 # Dependencies & build
 node_modules/
 public/assets/

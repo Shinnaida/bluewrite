@@ -81,6 +81,13 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // suite — the same dependency a real deployment has, and the reason the
         // migration ships with the code that reads it.
         $this->runSqlFile(__DIR__ . '/../migrations/013_email_otp.sql');
+        // 014 adds users.last_seen_at, photo_path and photo_updated_at. The
+        // scratch DB must carry them for the same reason as everything above:
+        // the heartbeat writes last_seen_at on every POST /presence/heartbeat
+        // and the roster READS it on every one, so a suite without the column
+        // fails the presence tests as unknown-column 500s rather than as
+        // assertions.
+        $this->runSqlFile(__DIR__ . '/../migrations/014_presence_and_avatars.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         // Every account that OWES a second factor has an email address, because
@@ -163,17 +170,108 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
         }
         $raw = curl_exec($ch);
-        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        $headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        $result = $this->splitResponse($ch, $raw);
         curl_close($ch);
 
+        return $result;
+    }
+
+    /**
+     * A multipart POST carrying a FILE — the one request shape on this API that is
+     * not JSON, used by the avatar endpoints.
+     *
+     * $bytes is written to a temp file first because CURLFile uploads a PATH, and
+     * the temp file is removed before returning: a test that writes an avatar
+     * cannot leave a stray image in the system temp folder.
+     *
+     * The content type is the CALLER's to choose and is deliberately not derived
+     * from the filename — that is the whole point of the avatar tests, which send
+     * a .png that is not a PNG and a .jpg full of text to prove the server decides
+     * the type by decoding rather than by what the multipart body claims.
+     */
+    protected function upload(
+        string $path,
+        string $field,
+        string $filename,
+        string $bytes,
+        ?string $cookie,
+        ?string $csrf,
+        string $contentType = 'image/jpeg',
+        string $method = 'POST'
+    ): array {
+        $tmp = tempnam(sys_get_temp_dir(), 'bwupl');
+        file_put_contents($tmp, $bytes);
+
+        $ch = curl_init(self::BASE . $path);
+        $headers = [];
+        if ($csrf !== null) {
+            $headers[] = "X-CSRF-Token: $csrf";
+        }
+        curl_setopt_array($ch, [
+            CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_COOKIE => $cookie ?? '',
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_POSTFIELDS => [$field => new \CURLFile($tmp, $contentType, $filename)],
+        ]);
+        $raw = curl_exec($ch);
+        $result = $this->splitResponse($ch, $raw);
+        curl_close($ch);
+
+        @unlink($tmp);
+
+        return $result;
+    }
+
+    /**
+     * Fetch a URL that answers with BYTES rather than JSON — the avatar route is
+     * the only one on this API — and hand back what a browser would receive.
+     *
+     * request() decodes and discards the body, which is right for every document
+     * endpoint and useless for an image: the assertions worth making about an
+     * avatar are about the bytes themselves (is it a JPEG, is it 256px square).
+     *
+     * @return array{status:int, bytes:string, contentType:string}
+     */
+    protected function download(string $path, ?string $cookie = null): array
+    {
+        $ch = curl_init(self::BASE . $path);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADER => false,
+            CURLOPT_COOKIE => $cookie ?? '',
+            CURLOPT_TIMEOUT => 10,
+        ]);
+        $bytes = curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $type = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+        curl_close($ch);
+
+        return ['status' => $status, 'bytes' => (string) $bytes, 'contentType' => $type];
+    }
+
+    /**
+     * The status, the decoded JSON body and the cookies of one curl handle —
+     * shared by request() and upload() so the two cannot disagree about how a
+     * response is read.
+     *
+     * @return array{status:int, body:array, setCookies:array<int,string>}
+     */
+    private function splitResponse(\CurlHandle|false $ch, string|bool $raw): array
+    {
+        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $headerSize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        $raw = (string) $raw;
+
         $setCookies = [];
-        foreach (explode("\r\n", substr((string) $raw, 0, $headerSize)) as $line) {
+        foreach (explode("\r\n", substr($raw, 0, $headerSize)) as $line) {
             if (stripos($line, 'Set-Cookie:') === 0) {
                 $setCookies[] = trim(substr($line, 11));
             }
         }
-        $bodyRaw = substr((string) $raw, $headerSize);
+        $bodyRaw = substr($raw, $headerSize);
         $decoded = json_decode($bodyRaw, true);
 
         return [

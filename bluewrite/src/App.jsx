@@ -83,6 +83,16 @@ export default function App() {
     setUser(null);
   }, []);
 
+  // A field of the signed-in account changed while the workspace was open — today
+  // that is the profile photo, and it is the one identity field an officer can
+  // change about themselves (see AuthController::setPhoto). App holds the session's
+  // own record, so the patch lands HERE: one update repaints every face that is not
+  // the roster's own (the top bar, the profile panel), and nothing has to re-fetch
+  // /me to see a picture the server has already acknowledged.
+  const onUserPatch = useCallback((patch) => {
+    setUser((u) => (u ? { ...u, ...patch } : u));
+  }, []);
+
   // A notice belongs to the visit it was written for, so signing in retires it:
   // whatever the officer does next, they have seen it, and a stale "your
   // password was changed" on the gate tomorrow would be a lie about today.
@@ -120,6 +130,7 @@ export default function App() {
         user={user}
         onLogout={onLogout}
         onPasswordChanged={onPasswordChanged}
+        onUserPatch={onUserPatch}
         notify={notify}
         theme={theme}
         onTheme={setTheme}

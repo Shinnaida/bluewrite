@@ -25,7 +25,12 @@
 // the fetch, and the docking.
 
 import React, { useEffect, useRef, useState } from 'react';
-import { api, isUnreachable } from '../lib/api.js';
+import { api, apiUpload, isUnreachable } from '../lib/api.js';
+// The avatar: the shared face component, and the browser-side rules that turn a
+// 5 MB photograph into a 60 KB square before it is sent (see lib/avatar.js for why
+// that is the client's job and not the server's).
+import Avatar from './Avatar.jsx';
+import { checkAvatarFile, prepareAvatar } from '../lib/avatar.js';
 import { THEME_HINTS, useResolvedTheme, useThemeSpread } from '../lib/theme.js';
 import { DENSITY_HINTS } from '../lib/density.js';
 import {
@@ -41,7 +46,6 @@ import {
   dbDateLabel,
   DEFAULT_OPEN_SECTIONS,
   identitySummary,
-  initialsOf,
   preferencesSummary,
   securitySummary,
   standingOf,
@@ -195,12 +199,15 @@ export default function ProfilePanel({
   // to sign out of — this tells the workspace to save what is open and hand the
   // officer back to the gate. Shell owns that sequence.
   onPasswordChanged,
+  // A field of the session's own account changed and App's copy must follow — the
+  // profile photo today. Passed up rather than kept here because the top bar draws
+  // the same face, and two copies of it would disagree the moment one changed.
+  onUserPatch,
 }) {
   const counts = useActivityCounts(onConnError);
   const rows = activityRows(counts);
   const scope = activityScope(user.role);
   const standing = standingOf(user.status);
-  const initials = initialsOf(user.full_name);
 
   // Which sections are unfolded. Seeded from lib/profile.js, where the choice is
   // written down and tested (record open, settings folded), and kept in COMPONENT
@@ -209,6 +216,65 @@ export default function ProfilePanel({
   // folded the block they are now looking for. Persisting it would be a key and a
   // validator; say the word and it is three lines.
   const [openSections, setOpenSections] = useState(DEFAULT_OPEN_SECTIONS);
+
+  // ---- The profile photo ----------------------------------------------------
+  //
+  // The file never leaves this function untouched: it is decoded, centre-cropped and
+  // re-encoded by lib/avatar.js before it is sent, because PHP on this deployment
+  // accepts 2 MB and a photograph off a phone is larger than that. `busy` covers the
+  // whole sequence (decode, encode, upload) — the parts the officer can see are
+  // quick, and the decode is the slow one on a big image.
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoNote, setPhotoNote] = useState(null);
+
+  const choosePhoto = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    // Cleared before anything else so choosing the SAME file again re-fires this
+    // handler: otherwise "Replace photo" would do nothing the second time, which
+    // reads as a broken button.
+    e.target.value = '';
+    if (!file) return;
+
+    const rejected = checkAvatarFile(file);
+    if (rejected) {
+      setPhotoNote({ kind: 'error', text: rejected });
+      return;
+    }
+
+    setPhotoBusy(true);
+    setPhotoNote(null);
+    try {
+      const blob = await prepareAvatar(file);
+      const form = new FormData();
+      form.append('photo', blob, 'avatar.jpg');
+      const saved = await apiUpload('/me/photo', form);
+      // The URL comes back with its cache key (?v=…), and it is the SERVER's — the
+      // same string /me and the roster will hand out, so the face that appears here
+      // is the one colleagues are about to see rather than a locally invented one.
+      onUserPatch?.({ photo_url: saved.photo_url });
+      setPhotoNote({ kind: 'ok', text: 'Photo saved.' });
+    } catch (err) {
+      if (isUnreachable(err)) onConnError?.(err);
+      setPhotoNote({ kind: 'error', text: err.message || 'That photo could not be saved.' });
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const removePhoto = async () => {
+    setPhotoBusy(true);
+    setPhotoNote(null);
+    try {
+      await api('/me/photo', { method: 'DELETE' });
+      onUserPatch?.({ photo_url: null });
+      setPhotoNote({ kind: 'ok', text: 'Photo removed. Your initials are shown instead.' });
+    } catch (err) {
+      if (isUnreachable(err)) onConnError?.(err);
+      setPhotoNote({ kind: 'error', text: err.message || 'That photo could not be removed.' });
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   // Same appearance control as the sign-in gate and the top bar's menu, and the
   // same resolution rule: 'system' has no icon of its own, so it draws whichever
@@ -425,7 +491,11 @@ export default function ProfilePanel({
           onToggle={() => toggleSection('identity')}
         >
           <div className="profile-identity">
-            <span className="profile-panel-avatar" aria-hidden="true">{initials}</span>
+            {/* The face as the RECORD has it — the photograph when the officer has
+                set one, initials when they have not. It is shown here but changed
+                in Preferences, because this block is what the department issued
+                and that is the answer to "why is there no edit control here". */}
+            <Avatar user={user} className="profile-panel-avatar" />
             <div className="profile-identity-text">
               <p className="profile-identity-name">{user.full_name}</p>
               <p className="profile-identity-meta">
@@ -503,6 +573,55 @@ export default function ProfilePanel({
           open={openSections.preferences}
           onToggle={() => toggleSection('preferences')}
         >
+          {/* THE AVATAR IS THE ONE THING IN THIS BLOCK THAT IS NOT LOCAL, so it is
+              stated separately and first. Everything below it is a device
+              preference (the block says so); a photograph silently written to the
+              station's server, filed under a heading that promises the opposite,
+              is exactly the kind of surprise this panel is careful about. */}
+          <div className="profile-photo">
+            <Avatar user={user} className="profile-photo__face" />
+            <div className="profile-photo__text">
+              <span className="ir-pref-name">Profile photo</span>
+              <span className="ir-pref-hint">
+                Saved on your account, and shown to colleagues on the presence rail.
+              </span>
+              <div className="profile-photo__actions">
+                {/* A LABEL WRAPPING THE INPUT, not a button beside it: the file
+                    picker is a browser dialog, and a styled button would have to
+                    forward the click anyway. The input is visually hidden and
+                    still the thing focus lands on — the text is its label. */}
+                <label className={`profile-photo__pick${photoBusy ? ' is-busy' : ''}`}>
+                  {photoBusy ? 'Saving…' : user.photo_url ? 'Replace photo' : 'Add a photo'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={choosePhoto}
+                    disabled={photoBusy}
+                  />
+                </label>
+                {user.photo_url && (
+                  <button
+                    type="button"
+                    className="profile-photo__remove"
+                    onClick={removePhoto}
+                    disabled={photoBusy}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              {/* One line, and it appears only when there is something to say —
+                  a permanent "no error" line would be a row of the panel spent
+                  on nothing. Polite rather than assertive because the failure of
+                  a photograph must not interrupt the field somebody is typing in. */}
+              {photoNote && (
+                <p className={`profile-photo__note is-${photoNote.kind}`} role="status">
+                  {photoNote.text}
+                </p>
+              )}
+            </div>
+          </div>
+
           <p className="profile-block-note">Saved on this device.</p>
 
           <div className="ir-pref-row ir-pref-row--stack">
