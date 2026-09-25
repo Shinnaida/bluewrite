@@ -68,12 +68,13 @@ AI-assisted police incident report system for the Naga City Police Station, Cebu
    of colleagues, so it is the cheapest table here to add or drop.
 
 
-   Optional: insert a fully filled SAMPLE Theft report to try the AI
-   narrative generator end-to-end — see
-   `docs/sample-report-walkthrough.md`:
+   Optional: insert two fully filled SAMPLE draft reports (a Theft and a
+   Traffic Accident) to try the AI narrative generator end-to-end — see
+   `docs/sample-report-walkthrough.md`. Pass a name to add just one of them:
 
    ```bash
-   php database/sample_report.php
+   php database/sample_report.php            # both
+   php database/sample_report.php traffic    # or: theft
    ```
 
 4. Frontend dev server (proxies `/api` to PHP):
@@ -151,8 +152,8 @@ emailed to the account's own address. Staff accounts are unchanged.
   `Resend code` on the same screen issues a new one after a short throttle.
 - **Five wrong codes lock the factor** for the same window as the password
   lockout, announced at sign-in rather than at the code screen.
-- **Locked out or mailbox changed** → an Admin runs `Reset verification` in User
-  Management, which is audited. It clears the outstanding code and the lock, and
+- **Locked out or mailbox changed** → an Admin runs `Reset verification` from the
+  account's row in User Management (right-click the row), which is audited. It clears the outstanding code and the lock, and
   leaves the address and password alone. There are no recovery codes to print.
 - **The mailer** is a Gmail sender configured in `config/config.php`
   (`mail` block) with an App Password. Read `docs/EMAIL_OTP.md` before you need
@@ -164,11 +165,56 @@ emailed to the account's own address. Staff accounts are unchanged.
 |---|---|---|---|
 | Two-factor authentication | required | required | — |
 | User management | ✔ | — | — |
+| Set another account's photograph | ✔ | — | — |
 | Create/edit own reports | ✔ | ✔ | ✔ |
 | Finalize reports | ✔ | ✔ | — |
 | Edit finalized reports | ✔ | — | — |
 | Archive own reports | ✔ | ✔ | ✔ |
-| See all reports in list | ✔ | ✔ | ✔ |
+| See all reports in the blotter | ✔ | — | — |
+| Read one officer's reports (`?created_by=`) | ✔ | — | — |
+
+Everyone may set **their own** profile photograph (upload or camera) from their
+Profile; only an Admin may set somebody else's, which the account form offers for
+accounts that have not signed in yet. Both are audited (`user.photo_set`), with
+whoever made the change as the actor.
+
+An Officer and Staff see **only the reports they recorded** — the restriction is in
+the query, not in the list's UI (`ReportsController::listQueryFilters`). The one
+exception is the **awaiting verification** view, which shows translated reports in the
+source languages the account reads, so a second officer can open a translation they
+did not write.
+
+Opening a row in User Management shows the **account rather than the edit form**: who
+they are, what they have recorded, their sign-ins out of the audit trail, and when they
+were last seen — the question an administrator actually has about a colleague. Editing
+is one deliberate step from there, the pen on the photograph. The page reads one
+officer's blotter through the **Admin-only `created_by` filter** on the reports list
+(`GET /reports?created_by=N`), and that filter is **refused with 403** for an Officer or
+Staff rather than silently intersected with their own scoping: an empty list would read
+as "that colleague has recorded nothing" instead of "you may not ask that".
+
+The account page also carries the **activity sheet** (`GET /users/:id/activity`, Admin
+only): a year of squares, one per day, with a switch between the two readings the record
+supports — **time at a desk** and **what was recorded for them**.
+
+**Time at a desk** is a duration, not a count of sign-ins (three sign-ins in a morning is
+not three times the attendance of one). It is measured by the workspace's own thirty-second
+heartbeat, tallied per day in `presence_days` — consecutive beats merged into sittings,
+breaks excluded, first and last seen kept beside the sum — so an officer who closes the tab
+or walks away is still measured, and one who leaves a PC signed in over lunch is not. It
+requires **migration 017** (see `migrations/017_presence_days.sql`).
+
+**For the days before that tally existed** there is no measurement, so the day is
+*estimated* from the trail's own sign-ins: a session runs from its `login.success` to the
+sign-out that ended it, or otherwise to the last thing the account did in that session plus
+the idle timeout the server enforces. Every day says which it is (`basis`), the endpoint
+reports where the measurement starts (`window.presence_from`), and the page prints the split
+in words under the summary — an inference that cannot be told from a measurement is the one
+thing this sheet must not do.
+
+The shading is scaled to that account's own busiest day, so two officers' sheets are not
+comparable square for square — the absolute numbers are printed above the sheet, where they
+are.
 
 All permissions are enforced **server-side** in every API endpoint, never in the UI alone.
 

@@ -52,7 +52,13 @@
      bright enough to work as ink on near-black is far too bright to hold a white
      label, which is the same ink/surface split the accent already makes. Dark
      states its own value (see dark-theme.css). */
-  --step-bar: var(--violet);
+  /* The rail's / the section headers' accent. It used to read --violet; the
+     Write Report screen now paints its section bars with the top bar's NAVY
+     (--ir-navy, see incident-report.css), so the progress rail follows the same
+     value or the two would disagree on one screen. In dark the same job reads
+     --cyan instead — --ir-navy is a BAR fill there (#1E2E50) and would be
+     invisible as an ink on a near-black panel. */
+  --step-bar: var(--ir-navy);
   /* ---- The incident-type ramp: the stacked "Reports over time" columns ----
      ORDINAL, not categorical. The server ranks the types by volume and the stack
      is drawn in that order from the baseline up, so a ramp step is a RANK: step 1
@@ -103,6 +109,59 @@
   --green-ok: #15803D;
   --amber: #B26A00;
   --red: #B3261E;
+  /* ---- The activity sheet: a year, one square per day ----------------------
+     TWO RAMPS, ONE PER READING, because the sheet is a switch between two
+     questions and the colour is how a reader knows which one they are looking
+     at without re-reading the label: BLUE for the days an officer SIGNED IN
+     (attendance — the station's primary, and the calmer of the two), VIOLET for
+     the days ANYTHING was recorded for them (activity).
+
+     WHY THOSE TWO HUES. Green is the obvious borrow (GitHub's own calendar is
+     green) and it is the one hue this app cannot spend here: `--green-ok`
+     already means a *state* on every chip in the system — active, finalized,
+     verified — so a green ramp would read as "these days are finished" rather
+     than as "these days had work in them". Amber and red are spoken for the
+     same way (warnings and refusals). That leaves the app's cool register,
+     where violet is the only family that is distinct from the accent blue at
+     11px: a teal ramp (`--cat-4`…) is a shade of difference away from the blue
+     one, and two ramps a reader cannot tell apart are worse than one ramp —
+     the switch would look broken rather than informative. Violet is used
+     elsewhere only as "the step you are on" in the report wizard, a different
+     screen and a bar rather than a square, so it carries no meaning into here.
+
+     EACH IS A LADDER, not four colours picked one at a time, exactly as the
+     incident-type ramp is (see `--cat-1`): step 4 is the busiest day and is the
+     most prominent, and every step is a real step away from the last, so "a
+     deeper square = more that day" is true of the pixels and not only of the
+     ordering. Verified monotonic by a test, in both themes.
+
+     STEP 0 IS SHARED, and that is deliberate: a day with nothing in it is empty
+     in BOTH readings, so flipping the switch must not repaint it. It is the
+     page's own sunken panel rather than a tint of either ramp — a day with
+     nothing in it is not a shade of "a little", and at 11px the difference has
+     to survive being looked at from a metre away. */
+  --sheet-0: #EBEEF3;
+  /* Sign-ins — the accent blue's ladder. */
+  --sheet-ins-1: #C7D8F2;
+  --sheet-ins-2: #8FB2E8;
+  --sheet-ins-3: #4A80DC;
+  --sheet-ins-4: #1F5FD0;
+  /* Activity — the violet's ladder, light enough at step 1 to be quiet and deep
+     enough at step 4 to hold its own beside the blue. */
+  --sheet-act-1: #E0D5FA;
+  --sheet-act-2: #C0A9F5;
+  --sheet-act-3: #9C77EE;
+  --sheet-act-4: #8444F2;
+  /* The switch's pressed fill, one per reading, and THE ONE PLACE a ramp colour
+     carries text: white has to hold on it, which is why these are stated
+     separately from the squares rather than taken from step 4 — the darkest
+     STEP is chosen to read as a square, not to hold a label. Both measure
+     above 4.5:1 for white. */
+  --sheet-ins-fill: #1F5FD0;
+  --sheet-act-fill: #8444F2;
+  /* The square's own size, because the component lays out a year of columns inline and the width of the sheet is therefore this number times 53. Declared as a token so the month labels, the weekday labels and the squares cannot be laid out against three different sizes. */
+  --sheet-cell: 11px;
+  --sheet-gap: 3px;
   --red-text: #B3261E;
   --red-bg: rgba(179, 38, 30, 0.07);
   --paper: #1F2733;
@@ -1145,13 +1204,17 @@ button.brand.brand-home:focus-visible {
   --density-row-y: 0.6rem; /* table / list row height */
   --density-row-x: 0.75rem;
   --density-field-gap: 1rem; /* between form fields */
-  --density-doc-gap: 0.9rem; /* between fields in the report document */
+  /* Between fields in the REPORT document. This is the row rhythm of all five
+     sections (the label/control pair, the sub-grid's rows, the section 5 pair),
+     so tightening it here tightens the whole form at once — see .ir-sub and
+     .ir-field in incident-report.css. */
+  --density-doc-gap: 0.75rem;
 }
 :root[data-density='compact'] {
   --density-row-y: 0.4rem;
   --density-row-x: 0.6rem;
   --density-field-gap: 0.7rem;
-  --density-doc-gap: 0.6rem;
+  --density-doc-gap: 0.55rem;
 }
 
 /* ---- Tables: ruled HUD style ---- */
@@ -1334,11 +1397,69 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 /* ---- Phase 3: AI narrative — slide-in side panel ---- */
 .ai-panel { margin-bottom: 0.25rem; margin-top: 0.5rem; position: relative; }
 
+/* ---- The block the officer FILLS IN --------------------------------------
+   The assistant is not one more row of chrome under the form: it is ONE
+   highlighted block — its name, the box to write in, and the actions that use
+   what was written. The accent edge and the tint are what say "this is a place
+   to work" at a glance, in the same cyan the account receipt below it uses; the
+   border keeps it from reading as an error or a warning (both of which are
+   amber here).
+
+   It wraps the panel's whole ready state, so everything inside it — the source
+   choice, the guided row, the receipt — is visibly part of the same thing
+   rather than loose controls scattered on the report. In the sheet format this
+   is on the desk under the page, where the block has to be legible on its own:
+   an officer sees it with none of the report's fields around it. */
+.ai-assist {
+  border: 1px solid var(--line-bright);
+  border-left: 3px solid var(--cyan);
+  border-radius: 4px;
+  /* `--cyan-bg` rather than `--panel-soft`: this has to read as highlighted in
+     both themes, and a tint of the accent does that where another shade of the
+     panel would not. */
+  background: var(--cyan-bg, var(--panel-soft));
+  padding: 0.7rem 0.8rem 0.55rem;
+}
+
+.ai-assist-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+
+/* The badge is decoration with a job: it names the block as the assistant's, so
+   the ⓘ beside it is read as THIS block's explanation. The radius floors at a
+   pill because the mark is two letters wide and never grows. */
+.ai-assist-badge {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.55rem;
+  height: 1.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  /* A FILLED control, so it takes the accent's surface pair rather than the
+     accent ink: white on `--cyan` is 5:1 in light and fails in dark, where
+     `--cyan` is the bright ink used for links and labels. */
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.ai-assist-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--paper);
+}
+
 /* ONE toolbar row, not two stacked pairs.
 
    Generate and Tighten are the two things an officer can ask the AI for, and
    each of them used to cost the panel a button PLUS a hint paragraph under it.
-   The paragraphs are on the ⓘ marker now (see .ai-hint), so the row that is
+   The paragraphs are on the ⓘ marker now (see .info-mark), so the row that is
    left is what the officer actually reads: a control, and the control beside
    it. In the sheet format this panel sits on the desk under the page, where
    every line it takes is a line of the report pushed off the screen. */
@@ -1353,17 +1474,36 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 /* Generate wears the app's own primary fill (`button.primary`) at the size this
    row needs. It is NOT the sidebar's "New report" button (.side-new) any more:
    that one carries the sidebar's own margins — 0.85rem above it and 1rem either
-   side — which inside a panel row are a gap and a stray indent. */
+   side — which inside a panel row are a gap and a stray indent.
+
+   It is also the ONE control in the form that is not report data, so it is
+   given more weight than a report control: a taller hit area, the bold ink the
+   other buttons reserve for hover, and the accent's own halo. The halo is what
+   makes the row read as the assistant's even before the pointer reaches it —
+   the panel's left rail says "AI" in words (see .ai-assist), and this says it
+   on the button itself. */
 .ai-run {
   margin: 0;
-  padding: 0.4rem 0.8rem;
-  font-size: 0.82rem;
+  padding: 0.5rem 0.95rem;
+  font-size: 0.84rem;
+  box-shadow: 0 0 0 3px var(--cyan-bg);
+}
+/* `button.primary:hover` clears the shadow at (0,2,1); this has to out-specify
+   it or the halo pops off the moment the officer points at the button. */
+.ai-run.primary:hover,
+.ai-run.primary:focus-visible {
+  box-shadow: 0 0 0 3px var(--cyan-bg-strong);
 }
 
-/* The ⓘ explanation marker: one circle, a tooltip, and the same sentence as the
-   accessible name — so the words are still there for a screen reader and for a
-   pointer, and there for a keyboard because the marker takes focus. */
-.ai-hint {
+/* THE ⓘ EXPLANATION MARKER: one circle, a tooltip, and the same sentence in the
+   accessible text — so the words are still there for a screen reader and for a pointer,
+   and there for a keyboard because the marker takes focus.
+
+   It lives beside the AI panel because that is where it was first needed, and it is
+   named for what it is rather than for that screen: the account form wears the same
+   marker on every field whose sentence used to be a paragraph under it (see
+   components/InfoHint.jsx, which is the one definition both screens render). */
+.info-mark {
   flex: none;
   display: inline-grid;
   place-items: center;
@@ -1378,35 +1518,29 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   line-height: 1;
   cursor: help;
 }
-.ai-hint:hover,
-.ai-hint:focus-visible {
+.info-mark:hover,
+.info-mark:focus-visible {
   border-color: var(--cyan);
   color: var(--cyan);
   outline: none;
 }
 
-.ai-notes { flex: 1 1 14rem; min-width: 10rem; font-size: 0.85rem; }
+/* THE ROUGH-NOTES BOX IS GONE, by request — the officer fills the REPORT and
+   presses Generate, so the block has no field to offer before the draft exists.
+   The `ai-notes-*` rules that dressed that box (field, label, "optional" tag,
+   help line, the box itself, the Bisaya/Tagalog note beside it) went with it.
+   What the draft DOES offer is a box of its own, once it arrives: the editable
+   draft below.
 
-/* Phase 6 Stage 3 — the notes box is a textarea (native accounts are longer
-   than one line invites). The declared notes-language selector that used to sit
-   beside it is gone: notes are read as English (see NOTES_ARE_ENGLISH in
-   AiNarrativePanel), so there is no language left to pick. */
-.ai-notes-row {
-  display: flex;
-  gap: 0.45rem;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: 0.25rem;
-}
-
-/* In the selector's place, the one sentence that keeps the multilingual path
-   findable: where to put an account written in Bisaya or Tagalog instead. */
-.ai-notes-note {
-  margin: 0 0 0.5rem;
-  font-size: 0.74rem;
-  line-height: 1.4;
+   One sentence replaces the source-choice radios (D3), because the source is
+   no longer a choice: a narrative in another language is the account and is
+   translated. The same line dresses the block's other state — "a draft is
+   waiting" — so the two read as one block in two states. */
+.ai-assist-note {
+  margin: 0 0 0.55rem;
+  font-size: 0.76rem;
+  line-height: 1.45;
   color: var(--steel);
-  opacity: 0.85;
 }
 
 /* Phase 7 — the receipt for the account read (see Reports.readAccountForForm).
@@ -1446,21 +1580,15 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   font-weight: 600;
 }
 
-/* D3 — exactly one source per Apply. The choice is explicit and the ignored
-   side is named, so a native narrative and native notes are never merged. */
-.ai-source-choice {
-  border: 1px solid var(--line, #e5e7eb);
-  border-radius: 0.5rem;
-  padding: 0.5rem 0.65rem;
-  margin-bottom: 0.6rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-.ai-source-choice label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
+/* D3 — exactly one source per Apply, and the `ai-source-choice` radios that
+   used to make the officer name it are gone: with the notes box removed there
+   is one candidate (the report's own narrative), and a one-option radiogroup
+   asks a question with one answer. A native narrative reads the sentence in
+   .ai-assist-note instead. */
 
-/* The "understood as" gloss pair — labelled as a reading to check, never
-   presented as verification. */
+/* AI Understanding — the gloss pair, labelled and framed as a VERIFICATION AID
+   (a reading to check before the draft is accepted), never presented as an
+   official finding or as independently verified information. */
 .ai-gloss {
   border-left: 3px solid var(--accent, #2563eb);
   background: var(--surface-2, #f8fafc);
@@ -1469,6 +1597,7 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   margin: 0.6rem 0;
 }
 .ai-gloss h4 { margin: 0 0 0.3rem; font-size: 0.85rem; }
+.ai-gloss-note { margin: 0 0 0.4rem; }
 .ai-gloss-native { font-style: italic; margin: 0 0 0.35rem; }
 .ai-gloss p { margin: 0.2rem 0; }
 
@@ -1482,7 +1611,7 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 .ai-apply-note { font-size: 0.85rem; }
 
 /* Phase 5 — "Tighten my draft": runs the economy rules over the narrative the
-   OFFICER wrote (Generate works from the notes field instead). A peer of
+   OFFICER wrote (Generate works from the report itself instead). A peer of
    Generate rather than a competitor, so it is styled as a secondary action —
    and the two now share ONE row (.ai-toolbar above) instead of one each. */
 .ai-tighten {
@@ -2025,7 +2154,11 @@ body.profile-panel-open {
 /* The file input is visually hidden but NOT display:none — it stays in the tab
    order and the label is its accessible name, so the picker opens from a keyboard
    the same way it does from a click. */
-.profile-photo__pick {
+/* The camera wears the picker's look because it IS the same decision — where the
+   bytes come from is the only difference, and two buttons that do the same thing to
+   the same record must not look like two different kinds of action. */
+.profile-photo__pick,
+.profile-photo__camera {
   display: inline-flex;
   align-items: center;
   padding: 0.32rem 0.7rem;
@@ -2048,9 +2181,15 @@ body.profile-panel-open {
   white-space: nowrap;
   border: 0;
 }
-.profile-photo__pick:hover { border-color: var(--cyan); }
-.profile-photo__pick:focus-within { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.profile-photo__pick:hover,
+.profile-photo__camera:hover:not(:disabled) { border-color: var(--cyan); }
+.profile-photo__pick:focus-within,
+.profile-photo__camera:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .profile-photo__pick.is-busy {
+  cursor: progress;
+  color: var(--steel);
+}
+.profile-photo__camera:disabled {
   cursor: progress;
   color: var(--steel);
 }
@@ -2328,15 +2467,810 @@ body.profile-panel-open {
 .user-mfa--off { color: var(--red-text); }
 .user-mfa--na { color: var(--steel); font-weight: 500; }
 
+/* ---- User management: the directory itself --------------------------------
+
+   ONE LINE PER CELL, and it is the fix rather than a tidy-up. The table had an
+   ACTIONS column carrying four buttons, which needed more width than the eight
+   data columns had to spare, so the last button wrapped onto a second line and
+   put a \"Deactivate Account\" under every other row — while a wrapped name
+   (\"Juan Dela / Cruz\") made a different row taller again. The answer is the
+   register's own: the action column is gone and the row menu has it (see
+   UsersTable), which leaves every cell room to hold its whole value on one line. The register keeps this rule for its
+   numbers alone because the blotter's Details column is allowed to absorb; a
+   directory has no such column, so it applies to all of them.
+
+   The table scrolls sideways inside .table-wrap when the values need it, which
+   is the same trade the blotter makes: a horizontal scroll is recoverable, a
+   row that re-flows under the pointer is not. */
+.users-table td,
+.users-table th {
+  white-space: nowrap;
+}
+/* THE ONE VALUE ALLOWED TO GIVE WAY. An email address is the longest string in
+   the table and the one nobody reads in full at a glance; the full text is on
+   `title`, and the address that matters at a sign-in is on the account's own
+   Edit form. An ellipsis is the honest way to keep a column narrow. */
+.users-email {
+  display: inline-block;
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+/* AN ABSENT VALUE SAYS SO IN WORDS. This cell used to be an em dash — a glyph
+   that reads as a value in a column of values, and which an administrator has to
+   translate every time: \"none\", \"not applicable\", or \"not loaded\"? For the
+   address a sign-in code needs there is no room for that guess. Muted ink rather
+   than a lighter grey, so \"there is nothing here\" is still readable. */
+.users-none { color: var(--cyan-dim); }
+/* ---- The account form: one column of sections, each one a card ------------
+
+   IT USED TO BE FIVE BARE FIELDS AND A LOT OF SILENCE. They ran across the top of an
+   otherwise empty screen, the password stretched the full width of a 1300px window,
+   and nothing on the page said which fields were required or what a role was for. The
+   form is now two cards of sections (`.st-block`, the vocabulary Station Settings
+   already uses) under a title that names the screen's state.
+
+   ONE COLUMN, AND IT WAS TWO FOR A WHILE. There was a panel beside the form listing
+   what the selected role could reach; it is gone, and what an administrator needs from
+   it now sits on the control it describes — the role's own line, under the select. So
+   the layout container stays a grid with a single track: the second column was the only
+   thing `.acct-grid` ever meant.
+
+   CENTRED, AND TITLE INCLUDED. A centred card under a page title pinned to the left
+   edge is two alignments on one screen — the argument `.st-page` makes, and it
+   resolves the same way here: while the form is open the title and the meta line move
+   into the centred column with it, so the page has one left edge instead of two.
+   `Users.jsx` puts this class on the page only while the form is open; the directory
+   keeps the full window, because a table is the one thing on this screen that wants
+   all of it. */
+.acct-page {
+  max-width: 64rem;
+  margin-inline: auto;
+}
+
+.acct-head {
+  margin-bottom: 1.1rem;
+}
+
+/* THE MARKER BESIDE A HEADING, NOT INSIDE IT. In a field's LABEL the sentence belongs
+   IN the field's own name — that is what makes a hint reach everybody. A heading is the
+   opposite case: a sentence folded into one makes every entry in a screen reader's
+   heading list a paragraph long, and that list is how a screen-reader user moves around
+   a screen at all. So the circle sits next to the heading, on the heading's own line,
+   and the heading stays a heading. It is used by the form's title and by both cards. */
+.acct-headline {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* ===========================================================================
+   The account page — one colleague, read before edited
+
+   What an administrator sees when they open a row: the person, what they have
+   recorded, and when they were last at a desk. It is a PAGE and not a panel because
+   it has three cards of its own and is read top to bottom, and it wears the form's
+   own centred column (`.acct-page`) because the two are states of one screen — the
+   title stays where it was and the body under it changes.
+   ========================================================================= */
+
+/* The way back, first on the page and the quietest thing on it: the administrator
+   arrived by a double-click and leaves by pressing this, or Escape. */
+.acct-back {
+  margin-bottom: 0.5rem;
+}
+.acct-back__btn {
+  padding: 0.2rem 0;
+  border: 0;
+  background: none;
+  color: var(--ink-dim, #9CA3AF);
+  font-family: var(--font-hud);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.acct-back__btn:hover { color: var(--cyan); }
+
+/* The line under the name: role, badge and status, which are the three things that
+   decide what this account is. The status chip is the directory's own `.badge`. */
+.acct-subtitle {
+  margin: 0.3rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  color: var(--steel);
+}
+.acct-dot { color: var(--line-bright); }
+
+/* THE FACE AND THE WAY TO EDIT IT. The pen is ON the photograph because that is where
+   a hand reaches for "change this person" — and because the form behind it is a
+   deliberate step rather than the accident of opening a row. */
+.acct-profile {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.4rem;
+}
+.acct-profile__face {
+  position: relative;
+  flex: none;
+}
+
+/* THE BIGGEST FACE IN THE APP, and the only one an administrator opens a row to look
+   at. Sized here; coloured by `.bw-avatar` like every other face.
+
+   IT IS A PORTRAIT RATHER THAN A CHIP, and the size is the point of the block: this
+   page exists to answer "who is this account", and a face is the fastest answer on it.
+   At a row height it read as another field; at 176px it is the thing the eye lands on
+   first, the name beside it reads as its caption, and a photograph that was uploaded
+   badly is visible as badly uploaded instead of surviving at thumbnail size. */
+.acct-profile__avatar {
+  width: 176px;
+  height: 176px;
+  font-size: 3.2rem;
+  border: 1px solid var(--line-bright);
+}
+
+/* `--accent-fill` rather than `--cyan`: this is a filled control that carries white
+   ink, which is the distinction the accent tokens were split for (a blue bright
+   enough to be ink on a dark page is too bright to hold white). */
+.acct-profile__edit {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+.acct-profile__edit:hover { background: var(--accent-fill-hover); }
+.acct-profile__edit:active { transform: translateY(1px); }
+
+/* The facts: a label and its value, in the definition-list grammar `.profile-facts`
+   already uses on the officer's own panel — one home for "a label and a value". */
+.acct-facts {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.7rem 1.6rem;
+  margin: 0;
+}
+.acct-fact { min-width: 0; }
+.acct-fact dt {
+  font-family: var(--font-hud);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+}
+.acct-fact dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.86rem;
+  color: var(--paper);
+  overflow-wrap: anywhere;
+}
+.acct-fact__note { color: var(--amber); }
+/* An absent value reads in words and in the quieter ink — the same distinction
+   `.users-none` draws in the directory, which is where an administrator first met
+   "Not recorded". */
+.acct-none { color: var(--cyan-dim); }
+/* A sentence about the block above it — a footnote, not a field hint. Deliberately NOT
+   named after the note panel this screen used to carry: a test refuses that retired
+   vocabulary by name, and a comment quoting those selectors would satisfy the check on
+   prose rather than on rules. */
+.acct-footnote {
+  margin: 1rem 0 0;
+  font-size: 0.76rem;
+  color: var(--cyan-dim);
+}
+
+/* What they have recorded. A count first — the question is "how much", and a list
+   alone makes the reader count rows. */
+.acct-count {
+  margin: 0 0 0.7rem;
+  font-size: 0.88rem;
+  color: var(--steel);
+}
+.acct-count strong { color: var(--paper); font-size: 1.1rem; }
+.acct-subhead {
+  margin: 1.2rem 0 0.4rem;
+  font-family: var(--font-hud);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+}
+.acct-quiet {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--steel);
+}
+.acct-retry {
+  margin-left: 0.5rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.76rem;
+}
+
+/* One row per fact of the record: when, what, and the stamp the server sent. A LIST
+   rather than a table, because these are two columns of prose in most rows and a table
+   would be a grid of empty cells to hold them. */
+.acct-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.acct-list__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  font-size: 0.82rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--line);
+}
+.acct-list__row:last-child { border-bottom: 0; padding-bottom: 0; }
+.acct-list__when {
+  flex: none;
+  width: 11.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--cyan-dim);
+  white-space: nowrap;
+}
+.acct-list__what { flex: 1; min-width: 0; color: var(--paper); }
+.acct-list__stamp {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--steel);
+}
+
+/* ===========================================================================
+   The activity sheet — a year, one square per day
+
+   The account page's own calendar: 53 columns of seven days, shaded by what the
+   officer did that day, with a switch between the two readings the trail supports
+   (days they signed in, and everything recorded for them). It answers the one
+   question the two lists under it answer only line by line — "is this person
+   actually here?" — in one glance.
+
+   IT SCROLLS RATHER THAN SHRINKS. 53 columns of 11px squares is a fixed width:
+   the squares have to stay square and stay big enough to read the ramp, so the
+   sheet is the one block on this page that may scroll sideways on a narrow
+   window. A shrunk year would make the deep days indistinguishable from the
+   shallow ones, which is the entire content of the drawing.
+   ========================================================================= */
+.sheet {
+  margin-bottom: 1.2rem;
+  /* A safety net rather than a mapping: the two modifiers below are what map a
+     reading to its ramp, and this keeps the switch legible if a third reading is
+     ever added without one. */
+  --sheet-fill: var(--accent-fill);
+}
+
+/* ONE PLACE DECIDES WHICH RAMP A READING WEARS, and everything else in this block
+   reads `--sheet-1`…`--sheet-4` without knowing which reading it is drawing. That
+   indirection is the point: the squares, the legend's four samples and the
+   switch's pressed fill all follow from these two rules, so a third reading is a
+   ramp and two lines rather than five edits across the drawing. */
+.sheet--attendance {
+  --sheet-1: var(--sheet-ins-1);
+  --sheet-2: var(--sheet-ins-2);
+  --sheet-3: var(--sheet-ins-3);
+  --sheet-4: var(--sheet-ins-4);
+  --sheet-fill: var(--sheet-ins-fill);
+}
+.sheet--activity {
+  --sheet-1: var(--sheet-act-1);
+  --sheet-2: var(--sheet-act-2);
+  --sheet-3: var(--sheet-act-3);
+  --sheet-4: var(--sheet-act-4);
+  --sheet-fill: var(--sheet-act-fill);
+}
+.sheet-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.7rem;
+}
+.sheet-summary {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--steel);
+}
+.sheet-summary--failed { color: var(--red-text); }
+/* The measured-or-estimated line under it: a caveat about the numbers above, in the
+   quietest ink on the card — read when somebody is checking the figure, invisible when
+   they are only looking at the shape of the year. */
+.sheet-basis {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  color: var(--cyan-dim);
+}
+
+/* The switch: two buttons, one of them pressed. A segmented control rather than
+   a select, because both readings are always on screen and one is always
+   current — which is what a pressed state says and a dropdown cannot. */
+.sheet-switch {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--panel-raised);
+  transition: border-color 140ms ease;
+}
+
+/* THE RING FOLLOWS THE SELECTION. Two halves filling the same pill means the filled
+   half alone has to carry "this one is current", and against a dark pill a mid blue
+   does most of that — but the border is a second signal in the same colour, so the
+   state is legible in a screenshot, at a glance, and to a reader who cannot separate
+   the fill from the pill's own background. `:has` because the pressed state is a
+   child's business and the pill is what wears the ring. */
+.sheet-switch:has([aria-pressed='true']) {
+  border-color: var(--sheet-fill, var(--line-bright));
+}
+
+.sheet-switch__btn {
+  padding: 0.25rem 0.85rem;
+  border: 0;
+  background: none;
+  color: var(--steel);
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.sheet-switch__btn:hover { color: var(--paper); }
+
+/* THE RING IS DRAWN INSIDE THE BUTTON (`outline-offset: -2px`), because the pill
+   CLIPS (`overflow: hidden`) and an outline outside the button would be cut off —
+   which would leave a keyboard user with no way to see where they are. A pressed
+   state is not a focus state: this one says which reading is current, that one says
+   which control the next key press lands on. */
+.sheet-switch__btn:focus-visible {
+  outline: 2px solid var(--focus-ring-strong);
+  outline-offset: -2px;
+}/* THE PRESSED HALF WEARS THE READING'S OWN COLOUR, so the switch and the squares
+   are the same colour at the same moment: an administrator who flips it can see
+   which reading they are in without reading the label again, and a screenshot of
+   the sheet carries the answer with it. `--sheet-fill` rather than the ramp's step
+   4, because in dark the deepest square is a light blue chosen to glow and white
+   ink does not hold on it (see the token's note).
+
+   THE FALLBACK IS NOT DECORATION. This rule is the ONLY thing marking which of the
+   two readings is current, so if the token chain ever failed to resolve the switch
+   would come up with both halves looking identical — the one failure mode that
+   makes the control silently useless rather than visibly broken. `var(--sheet-fill,
+   var(--accent-fill))` means a missing reading token still leaves a filled half.
+
+   HOVER IS STATED, not inherited: the app's own `button:hover` sets a panel-grey
+   background, and while this rule outranks it on specificity, saying it here means a
+   later global change cannot quietly put a hole in this control. */
+.sheet-switch__btn[aria-pressed='true'],
+.sheet-switch__btn[aria-pressed='true']:hover {
+  background: var(--sheet-fill, var(--accent-fill));
+  color: var(--on-accent);
+}
+/* THE HOVER IS A WHITE VEIL, NOT A BRIGHTENING FILTER. On a button either would
+   work, but the app already refuses `brightness(>1)` anywhere in this stylesheet —
+   Blink clamps a brightening filter on an SVG element to a no-op, so that rule is a
+   file-wide guard against a shade that silently does nothing (see the pie chart's own
+   test). An inset veil is the same lightening with no filter involved, so the
+   selection keeps its response and the guard keeps its teeth. */
+.sheet-switch__btn[aria-pressed='true']:hover {
+  box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.08);
+}
+
+.sheet-grid {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+}
+
+/* The three weekday labels, each on its own row's line: the grid is 53 columns
+   wide, so this column has to be sized by its own text rather than by a track. */
+.sheet-days {
+  display: grid;
+  grid-template-rows: 1.2rem repeat(7, var(--sheet-cell));
+  row-gap: var(--sheet-gap);
+  flex: none;
+  font-size: 0.62rem;
+  color: var(--cyan-dim);
+}
+.sheet-days__cell {
+  line-height: var(--sheet-cell);
+  height: var(--sheet-cell);
+  white-space: nowrap;
+}
+
+.sheet-body { min-width: 0; }
+
+/* The month labels share the squares' own column track, so a label can never
+   drift from the column it names — both grids are laid out with the same
+   `repeat(N, var(--sheet-cell))`, set inline by the component because N is the
+   window the server chose. */
+.sheet-months {
+  display: grid;
+  column-gap: var(--sheet-gap);
+  height: 1.2rem;
+  font-size: 0.62rem;
+  color: var(--cyan-dim);
+}
+.sheet-months__cell {
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.sheet-weeks {
+  display: grid;
+  column-gap: var(--sheet-gap);
+}
+.sheet-week {
+  display: grid;
+  grid-template-rows: repeat(7, var(--sheet-cell));
+  row-gap: var(--sheet-gap);
+}
+
+/* THE SQUARE. Rounded a little, never a circle: a circle reads as a dot on a
+   chart, and these are days that tile a year. */
+.sheet-cell {
+  width: var(--sheet-cell);
+  height: var(--sheet-cell);
+  border-radius: 2px;
+  background: var(--sheet-0);
+}
+.sheet-cell--l1 { background: var(--sheet-1); }
+.sheet-cell--l2 { background: var(--sheet-2); }
+.sheet-cell--l3 { background: var(--sheet-3); }
+.sheet-cell--l4 { background: var(--sheet-4); }
+
+/* A DAY THAT HAS NOT HAPPENED YET, drawn as an outline rather than as a filled
+   zero: the server's window runs to the end of the current week, and a square
+   with nothing in it and a square that is not yet due mean opposite things. */
+.sheet-cell--future {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.sheet-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+.sheet-foot__hint {
+  font-size: 0.72rem;
+  color: var(--cyan-dim);
+}
+.sheet-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: none;
+  font-size: 0.7rem;
+  color: var(--cyan-dim);
+}
+/* Inside the legend the squares are its own scale, so they take the gap without
+   the grid's row spacing. */
+.sheet-legend .sheet-cell { display: block; }
+/* Which reading's ramp this is, in words — the two are two colours, and the legend
+   has to survive being read on its own. */
+.sheet-legend__name {
+  margin-right: 0.25rem;
+  color: var(--paper);
+  font-family: var(--font-hud);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* THE LEADS ARE ON MARKERS NOW, so the gap they used to leave under a card's heading is
+   the heading's own. Scoped to this form, because `.st-block-head` is Station Settings'
+   vocabulary too — that screen still carries its leads as paragraphs. */
+.acct-page .st-block-head {
+  margin-bottom: 1rem;
+}
+
+/* Smaller than the page's own h1 and larger than a section heading: the screen is
+   still the directory, and this is the state it is in. */
+.acct-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--ir-head-ink);
+}
+
+.acct-grid {
+  display: grid;
+  /* `minmax(0, 1fr)` and not `1fr`: a grid track's default `auto` minimum is sized by
+     its contents, and one wide `<input>` would then widen the whole column past the
+     page it is in. */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.acct-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+/* THE ONE FIELD THAT DOES NOT FILL ITS ROW. Everything else in this form is content,
+   where a wide field is more room to read; a password is not, and a field the width of
+   the card is one whose end an administrator has to go looking for. Capped at the
+   width the rule under it needs. */
+.acct-pass {
+  max-width: 30rem;
+}
+
+/* THE ⓘ MARKER, SITTING INLINE AFTER A LABEL. The shared rule (`.info-mark`) is written
+   for a flex row, where the row owns the gap; in a label the marker is inline, so the
+   spacing and the baseline are this screen's business rather than the panel's.
+
+   `.acct-photo__label` is in the list because the photo block's label is a SPAN rather
+   than a <label> — it names a group of controls (a button, a camera, a Remove) rather
+   than one input, so it must not be clickable-through to any single one of them. */
+.acct-page label .info-mark,
+.acct-page .acct-photo__label .info-mark {
+  margin-left: 0.3rem;
+  vertical-align: middle;
+}
+
+/* ===========================================================================
+   The face on the account form
+
+   A circle, two ways to fill it, and the way back to initials — the same three
+   things the Profile panel offers an officer, on the form an administrator uses
+   BEFORE the officer has ever signed in. That is the case /me/photo could not
+   answer: an account being created has no owner at the keyboard, so if nobody can
+   set a face here, the roster draws a blank circle for however many days pass
+   before that officer first signs in.
+
+   THE BUTTONS ARE REAL BUTTONS. The Profile panel hides a file input inside a
+   label, which is right there because that block is its own island; here the
+   camera and Remove sit beside it and must look like the app's own controls (they
+   ARE the app's own controls — see the neutral chain in incident-report.css), so
+   the picker is a button that clicks a hidden input. One look, three controls,
+   nothing mimicked.
+   ========================================================================= */
+.acct-photo {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Sized here, coloured by `.bw-avatar` — one component owns what a face looks like,
+   and this owns how big it is on this card (the reason ProfilePanel's rule gives).
+
+   LARGE, BECAUSE THIS IS THE ONE CONTROL ON THE SCREEN THAT IS A PERSON. It was 56px,
+   which is a thumbnail beside three buttons that are taller than it — the face read as
+   a preview of something rather than as the thing being set. At 96px it is the size of
+   the row it sits in, and the initials of a new account are legible in it. */
+.acct-photo__face {
+  flex: none;
+  width: 96px;
+  height: 96px;
+  font-size: 1.7rem;
+}
+
+.acct-photo__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+/* The form's own label treatment (see the global `label` rule), on a span: same ink,
+   same face of the HUD font, so "Photograph" reads as a field name and not as prose.
+   The margin-bottom the global rule carries is dropped — the gap above belongs to the
+   flex column this sits in. */
+.acct-photo__label {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-hud);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-dim, #9CA3AF);
+}
+
+.acct-photo__hint {
+  font-size: 0.78rem;
+  color: var(--steel);
+}
+
+.acct-photo__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+}
+
+/* The file input the picker button clicks. Visually hidden with the clip-path
+   technique rather than `display: none`, so it stays a real, focusable input that a
+   browser will open a dialog for — and out of the tab order, because the button
+   beside it is the thing that has a name. */
+.acct-photo__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.acct-photo__note {
+  margin: 0.35rem 0 0;
+  font-size: 0.76rem;
+  color: var(--steel);
+}
+.acct-photo__note.is-error { color: var(--red-text); }
+
+/* ===========================================================================
+   The camera dialog
+
+   Same frame as every other dialog in the app (`.dialog`), widened for a video: a
+   440px box would show a 4:3 preview 400px wide, which is enough to see whether your
+   face is in it and not much else.
+   ========================================================================= */
+.camera-dialog { max-width: min(520px, 100%); }
+
+.camera-stage {
+  position: relative;
+  margin: 0.5rem 0 0;
+  border: 1px solid var(--line-bright);
+  border-radius: 4px;
+  background: #000;
+  overflow: hidden;
+  /* The frame the photograph will be cropped from, so what is on screen while it is
+     being framed is the same shape as what is kept. */
+  aspect-ratio: 1 / 1;
+}
+
+.camera-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* MIRRORED, AND THE PIXELS ARE NOT — see CameraCapture for why the two differ:
+     the officer sees themselves the way a mirror shows them, and the photograph is
+     stored the way the station sees them. This is the only place the flip exists; the
+     canvas that captures the frame never sees it. */
+  transform: scaleX(-1);
+}
+
+/* The state lines sit OVER the black stage rather than pushing the layout around: a
+   card that grows and shrinks as the camera starts is worse than a dark square with a
+   sentence in it. */
+.camera-note {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--steel);
+}
+.camera-note.is-error { color: var(--red-text); }
+
+.camera-hint {
+  margin: 0.6rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--steel);
+}
+
+/* `.st-actions` brings its own top margin, and this form's column already spaces its
+   children with `gap` — so the row would sit 2.1rem below the last section instead of
+   the 1.1rem every other gap uses. Written with the parent in the selector rather than
+   as a bare `.acct-actions`: `.st-actions` lives in incident-report.css, which this
+   screen does not import and whose position in the bundle is decided by the module
+   graph, so an equal-specificity override would be a coin toss between two stylesheets
+   in different builds. */
+.acct-main .acct-actions {
+  margin-top: 0;
+}
+
+/* THE PASSWORD LINE TURNS INTO THE COMPLAINT rather than gaining a second line
+   under it (see the markup): same element, same `aria-describedby`, one ink swap. */
+.field-hint.is-problem {
+  color: var(--red-text);
+}
+
+/* THE SCREEN'S ONE PRIMARY ACTION IS A CIRCLE IN THE CORNER, held over the table
+   rather than parked under the page head.
+
+   IT IS EXCLUDED FROM THE NEUTRAL-BUTTON RULE RATHER THAN FIGHTING IT. That chain
+   in incident-report.css (`:not(.ir-submit):not(...):not(.primary):not(.danger)`)
+   is what made every variant in the workspace render as the same ghost button once
+   already, because a specificity collision is invisible until somebody looks; the
+   way out of it here is not to enter it, so the chain also carries
+   `:not(.users-fab)`.
+
+   56px AGAINST THE RAIL'S 44px, deliberately. The corner now holds two kinds of
+   thing — a colleague, and the way to add one — and the control that creates
+   something should not be the same size as the one that reports a desk is
+   occupied.
+
+   `--fab-size` IS NOT DECLARED HERE. It is set on the body class that publishes
+   this button (see `body.users-fab-open`, beside the dock rules) because the
+   chathead dock has to read the same number and live in a different box; the
+   fallback here is what the button is if that class is ever missing. */
+.users-fab {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  /* Inside `.main`, which is its own stacking context, so this competes only with
+     the page's own chrome — above the content and its sticky heading row, below the
+     dialogs at 40, so a confirmation is never under a create button. */
+  z-index: 30;
+  width: var(--fab-size, 56px);
+  height: var(--fab-size, 56px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ir-blue);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+.users-fab:hover { background: var(--ir-blue-hi); }
+/* THE PRESS. This circle has no label under the finger to confirm it was hit, so the
+   press is the whole of the feedback: the same 1px travel the chatheads use. Without
+   motion it is still a state — it simply arrives instantly. */
+.users-fab:active { transform: translateY(1px); }
+/* The transition for both states lives with the corner's other transitions, in the
+   `no-preference` block beside the chatheads — which is where this file keeps every
+   fade, and the only place it can go: three of this suite's tests read the FIRST such
+   block in the sheet as the dashboard charts' own. */
+
 @media (prefers-reduced-motion: reduce) {
   .profile-side-panel { animation: none; }
 }
 
 /* Backdrop no longer used — the panel is docked, not a modal overlay. */
 
-/* The side panel itself: fixed to the right edge, full height, slides in.
-   Resize/collapse behaviour mirrors the left sidebar: drag the edge handle,
-   collapse into a slim rail, hover the rail to float it open. */
+/* RETIRED, and kept as a record rather than as a live style: the AI draft used
+   to be a fixed column docked to the right edge, with the rail / hover-peek /
+   edge-resize behaviour below. It renders INLINE in the assistant's card now
+   (see .ai-inline), so nothing mounts these classes any more — and the
+   body.ai-panel-open class that reserved the column is no longer set, which
+   leaves the few reservations that still read it dormant. Delete this group,
+   and the ai-panel-open rules it belongs to, when the dashboard dock's own
+   reservation is rewritten without them. */
 .ai-side-panel {
   position: fixed;
   top: 0;
@@ -2475,6 +3409,113 @@ body.profile-panel-open {
   font-size: 0.8rem;
   color: var(--steel, #8fa3c8);
 }
+
+/* ---- The AI draft, INLINE (AiNarrativePanel.jsx) -------------------------
+   The draft opens in the assistant's own card, directly under the row that
+   asked for it, instead of docking a column to the right edge of the
+   workspace. So nothing here is fixed, sized against the viewport, or scrolled
+   on its own: the box is one more block of the report's column, and the page's
+   single scroll carries it exactly as it carries every other field. */
+.ai-inline {
+  margin-top: 0.7rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 4px;
+  /* The card the assistant owns tints its ready state; the draft reads as a
+     surface ON it, so it takes the raised panel rather than the tint again. */
+  background: var(--panel-raised, var(--panel));
+}
+.ai-inline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--line-bright);
+}
+/* Same face as the docked panel's head (.ai-side-head h3) — the title did not
+   change with the placement, so neither should the way it is set. */
+.ai-inline-head h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-family: var(--font-hud, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--steel, #8fa3c8);
+}
+.ai-inline-body { padding: 0.9rem; }
+
+/* The three parts of the draft, under the names the printed sheet gives the
+   same three things. FACTS OF THE CASE is the label on the editable box below
+   it; NOTABLE FINDINGS and ACTION TAKEN / STATUS are the read-only blocks in
+   .ai-draft-detail. One face for all three headings, so the draft reads as the
+   document it is about to become rather than as three unrelated blocks. */
+.ai-draft-label {
+  margin: 0.9rem 0 0.3rem;
+  font-size: 0.72rem;
+  font-family: var(--font-hud, monospace);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--steel, #8fa3c8);
+}
+
+/* The other two parts of the draft: the formalised NOTABLE FINDINGS and ACTION
+   TAKEN / STATUS. They sit under the narrative they belong with, set apart by a
+   hairline rather than a box — they are part of the same draft, not a second
+   review surface — and each is an editable box (.ai-draft-sub) whose every
+   keystroke lands in the report's own field, which is the copy that saves,
+   snapshots and prints. */
+.ai-draft-detail {
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--line-bright);
+}
+.ai-draft-block { margin-top: 0.75rem; }
+.ai-draft-block h4 {
+  margin: 0 0 0.3rem;
+  font-size: 0.72rem;
+  font-family: var(--font-hud, monospace);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--steel, #8fa3c8);
+}
+
+/* The draft's parts arrive in the order the sheet prints them. ALL THREE type
+   themselves in (NarrativeReveal — see REVEAL_STAGES in AiNarrativePanel.jsx);
+   this is the fade that brings each block's box and heading up as its turn
+   comes round, so the typing starts on a surface that is already there rather
+   than on one that appears under the text.
+
+   It carries no delay on purpose: the sequence IS the stage machine, and a
+   second timing mechanism in CSS would be a second thing to keep in step. A
+   draft restored from the tab's session store gets no class at all (the
+   component only adds it while a reveal is running), so it simply draws. */
+.ai-draft-arrive { animation: ai-draft-arrive 0.4s ease-out both; }
+@keyframes ai-draft-arrive {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-draft-arrive { animation: none; }
+}
+
+/* The two formalised blocks type in the SMALLER type they are edited in
+   (.ai-draft-sub), not the narrative's reading size. NarrativeReveal's own
+   stylesheet matches itself to `.ai-draft` — right for the facts, wrong here:
+   without this the findings would type at 1.08rem and then shrink to 0.95rem
+   the moment the box became editable. */
+.ai-draft-block .narrative-reveal__typing,
+.ai-draft-block .narrative-reveal__text {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  padding: 0.4rem 0.5rem;
+  /* The box the text is typing INTO is already drawn — same metrics and the
+     same dashed edge as .ai-draft-sub, so the swap to the editable box at the
+     end of the turn changes nothing on screen, exactly as the narrative's does
+     inside .ai-draft. */
+  border: 1px dashed var(--line-bright);
+  border-radius: 3px;
+}
+
 .ai-draft {
   /* Large, easy-to-read reading experience for the officer reviewing the
      draft — generous leading, comfortable size. */
@@ -2493,6 +3534,58 @@ body.profile-panel-open {
   overflow: visible;
   position: relative;
 }
+/* ---- The draft, once it is the officer's to edit -------------------------
+   The reveal plays while the text arrives; after that the SAME box holds a
+   textarea (see AiNarrativePanel). Its typography is copied from the reveal's
+   and the panel's own padding is left to `.ai-draft`, so the two states occupy
+   the same box at the same size — the swap from arriving text to editable text
+   must not look like the draft reloaded.
+
+   Resizing is off: the component grows the box to its content instead (the
+   whole panel body scrolls as one, which is the promise `.ai-draft` above
+   makes), and a drag handle inside the draft would be a second, contradictory
+   way to make room. */
+.ai-draft-edit {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 1.08rem;
+  line-height: 1.85;
+  letter-spacing: 0.01em;
+  resize: none;
+  overflow: hidden;
+}
+.ai-draft-edit:focus { outline: none; }
+.ai-draft-edit:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* The draft's two formalised blocks, editable where they are read. They carry
+   the same auto-growing contract as the narrative box above them (.ai-draft-edit)
+   but a quieter, smaller face: they are the draft's parts, not the draft. The
+   field's own border is the thing that says "type here" — no separate box
+   around them, so the whole draft still reads as one document. */
+.ai-draft-sub {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  border: 1px dashed var(--line-bright);
+  border-radius: 3px;
+  background: none;
+  color: var(--paper);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  resize: none;
+  overflow: hidden;
+}
+.ai-draft-sub:focus { outline: none; border-color: var(--cyan); }
+.ai-draft-sub:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
 /* (Typing-reveal overlay styles removed — the reveal is now the
    self-contained NarrativeReveal/TextType component.) */
 .ai-advice-fade { animation: ai-fade-in 0.35s ease-out; }
@@ -4638,6 +5731,33 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .bw-avatar[data-face='5'] { --bw-face-from: var(--bw-face-5-from); --bw-face-to: var(--bw-face-5-to); }
 .bw-avatar[data-face='6'] { --bw-face-from: var(--bw-face-6-from); --bw-face-to: var(--bw-face-6-to); }
 
+/* THE BLANK FACE — an account with no photograph AND no name yet, which is the
+   account form before anybody has typed anything.
+
+   NO GRADIENT, AND THAT IS THE POINT. The six faces are for PEOPLE: a coloured
+   circle is how this app says "this is somebody, and here is how you tell them
+   apart". An empty field is not somebody, and a blue circle with nothing in it reads
+   as a photograph that failed to load — the one thing it must not look like. So the
+   circle goes neutral and the silhouette is drawn in the muted ink the app already
+   uses for "nothing here yet" (the same distinction `.users-none` draws).
+
+   TWO INKS, NOT ONE, and neither is a literal: `--panel-raised` is a raised surface
+   in both themes and `--steel` reads against it in both, so the silhouette is a light
+   grey on grey in daylight and a lifted grey on slate at night. The stock image this
+   follows assumes a pale background and would be invisible on the dark theme. */
+.bw-avatar--blank {
+  background: var(--panel-raised);
+  border: 1px solid var(--line-bright);
+  color: var(--steel);
+}
+
+/* The glyph fills its circle and is clipped by it: `.bw-avatar` already carries the
+   `border-radius` and `overflow: hidden` that turn the shoulders into an arc. */
+.bw-avatar__glyph {
+  width: 100%;
+  height: 100%;
+}
+
 /* THE CORNER: the rail, and the chatbox beside it when one is open.
 
    ONE FIXED ANCHOR FOR BOTH, laid out as a flex ROW with the rail last — so the box
@@ -4671,10 +5791,62 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    NO TRANSFORM AND NO OVERFLOW HERE, and both absences are deliberate. `overflow`
    would turn the five-circle cap into a scrollbar, and the whole point of the cap is
    that a colleague is never scrolled off the edge. A transform would make this a
-   containing block for positioned descendants — which is exactly what would trap the
-   preview caption if anything is ever hung outside the rail again. */
+   containing block for positioned descendants — which is exactly what would trap
+   anything ever hung outside the rail, since the rail is a shrink-to-fit box and any
+   such marker would inherit a width of one circle.
+
+   AND THE ONE TRANSFORM IT DOES CARRY IS THE REVEAL'S OWN. The rail slides out for the
+   pointer (a `pointermove` listener decides — see RAIL_EDGE_PX in Chatheads.jsx,
+   because an element that takes no pointer events cannot be hovered and so cannot be
+   the thing that brings itself back), and a slide is a transform. That was refused here
+   once, for a real reason that has since gone: a transform makes this element the
+   containing block for positioned descendants, which would have trapped the officer
+   card that used to open leftward out of a circle — and that card is gone (clicking a
+   circle opens the conversation directly). What is left inside the rail that is
+   positioned at all is the presence dot, and it resolves against the CIRCLE, which is
+   nearer to it than this element is. The refusal is retired rather than forgotten, and
+   what replaces it is narrow: the slide, and `transform: none` the moment the rail is
+   out. */
 .dash-chatheads {
   position: relative;
+  /* HIDDEN UNTIL WANTED. `opacity` and NOT `visibility` or `display`, and that is the
+     accessibility decision in this rule rather than a styling one: an opacity-zero
+     element is still in the tab order, so the roster survives for anyone without a
+     pointer. Tab reaches the first circle, `:focus-within` below opens the rail, and
+     the faces, names and unread counts are all read out — where `visibility: hidden`
+     would have taken the rail out of the tab order AND the accessibility tree, making
+     the roster a mouse-only feature. The cost is that the box still holds its place in
+     the corner while invisible, which is deliberate: an invisible box that keeps its
+     place is cheaper than a chatbox that jumps right the moment somebody touches the
+     edge. */
+  opacity: 0;
+  pointer-events: none;
+  /* OUT FROM THE EDGE, not from a few pixels to the left of it: 22px is the rail's own
+     18px inset plus a little, so the tucked-away rail is a sliver past the viewport
+     edge and the motion starts off-screen. Nothing is clipped by this — the corner is
+     `position: fixed`, so a child past the right edge contributes no scrollbar — and
+     the rail is invisible in this state anyway. The travel is what makes the arrival
+     read as "coming out of the edge" rather than as a fade at a fixed position. */
+  transform: translateX(22px);
+}
+/* OUT: the pointer has reached the edge, the pointer is on the rail, or a keyboard has
+   landed in it. The `:focus-within` half is what keeps the rail reachable without a
+   mouse, and it is not a nicety — it is the only keyboard route to the roster. */
+.dash-chatheads.is-revealed,
+.dash-chatheads:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  /* Back to no containing block at rest, so the slide exists only while it is moving. */
+  transform: none;
+}
+/* A TOUCH SCREEN HAS NO EDGE TO STRUM, and this is the guard that keeps the reveal from
+   becoming a deletion. `pointermove` never fires for a finger, so the listener that
+   opens the rail on a desktop does not exist there — and a rail that is invisible and
+   cannot be hovered cannot be tapped into view either. Where the device cannot hover,
+   the rail is simply drawn, which is what it did everywhere before this rule existed.
+   (Below 720px there is no rail to draw at all; this matters on a tablet.) */
+@media (hover: none) {
+  .dash-chatheads { opacity: 1; pointer-events: auto; }
 }
 .dash-chatheads__list {
   list-style: none;
@@ -4759,22 +5931,6 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- The DESIGN PREVIEW (src/mock-chatheads.js, in dev only) ----
-
-   MARKED BY THE RING, and nothing else on the rail. Every invented face wears a dashed
-   border, which is the one mark that survives being CROPPED — a screenshot of three
-   circles with no caption in frame still says these are not officers. The rail used to
-   carry a caption above the circles as well; it was removed by request, and it was also
-   the one part of this that could not work: absolutely positioned inside the rail, its
-   containing block is only as wide as a circle, so its `max-width` never applied and
-   the sentence wrapped into a tall narrow column.
-
-   The other two markers are not CSS: the group's accessible name says "Preview: N mock
-   colleagues, not real presence" (Chatheads.jsx), and an invented CONVERSATION carries
-   a note above its composer — which is the one that has to be read, because it is the
-   one stopping somebody typing into nothing. */
-.dash-chatheads.is-preview .dash-chathead { border-style: dashed; }
-
 /* NO CARD, NO OPEN STATE. The circle IS the control: pressing it opens that
    colleague's conversation in the docked messages panel, so there is nothing here to
    expand, nothing to dismiss and no `is-open` to style. The facts an officer card used
@@ -4821,6 +5977,43 @@ body.ai-panel-open .dash-dock { right: calc(18px + min(var(--ai-panel-w, 420px),
 body.profile-panel-open.ai-panel-open .dash-dock {
   right: calc(18px + var(--profile-panel-w) + min(var(--ai-panel-w, 420px), 92vw));
 }
+
+/* THE TWO OCCUPANTS OF ONE CORNER, KEPT OFF EACH OTHER'S SQUARE.
+
+   User Management puts its create circle in the bottom-right corner (`.users-fab`),
+   and the chathead rail hangs UPWARD from that same corner — so without this the
+   button would sit on a colleague's face. The dock is lifted by exactly the button's
+   height plus the gap between them, and `--fab-lift` is the whole of that arithmetic,
+   written once: two rules that both need to know the button's size read one number,
+   which is the difference between a pair that agrees and a pair that used to agree.
+
+   THE VARIABLES LIVE ON THE CLASS, not on `.users-fab`, because the dock is Shell's
+   box and has to read them too. The class is published by the screen while it is open
+   (Users.jsx), so the corner belongs to presence on every other screen in the app.
+
+   NO MEDIA QUERY HERE, and this is the one place a breakpoint would be wrong: below
+   720px the rail is already gone (see above), and the class costs nothing when there
+   is no rail to lift. */
+body.users-fab-open {
+  --fab-size: 56px;
+  --fab-lift: calc(var(--fab-size) + 12px);
+}
+body.users-fab-open .dash-dock { bottom: calc(18px + var(--fab-lift)); }
+/* THE CHATBOX IS BOUNDED BY THE WINDOW, so lifting it without saying so would push
+   its title bar off the top of a short one: `100dvh` minus the lift is the same
+   subtraction the box already makes for the corner, moved up. */
+body.users-fab-open .messages-box {
+  height: min(28.75rem, calc(100dvh - 5rem - var(--fab-lift)));
+  max-height: calc(100dvh - 2.5rem - var(--fab-lift));
+}
+/* AND THE PAGE KEEPS A FLOOR. The circle floats over the last row of the table, so
+   the workspace's own bottom gutter grows by the same number: the lowest row stays
+   readable and the last account can still be reached without the button on top of
+   it. `--ir-gutter-bottom` is incident-report.css's, declared on this same element
+   (`main.ir-body`) and read here rather than restated. */
+body.users-fab-open .main {
+  padding-bottom: calc(var(--ir-gutter-bottom) + var(--fab-lift));
+}
 /* A RAIL WITHOUT ITS CHATBOX IS NOT THE SAME THING AS A CORNER WITHOUT ITS RAIL. Below
    900px the rail goes (a rail shifted left of a drawer would sit on top of the form it
    just uncovered) — but the CHATBOX STAYS, and this is the one place the two are
@@ -4840,14 +6033,25 @@ body.profile-panel-open.ai-panel-open .dash-dock {
 }
 
 /* Motion is optional. The states above all exist without it; only the transitions
-   are behind the query, which is the rule the rest of this stylesheet follows. */
+   are behind the query, which is the rule the rest of this stylesheet follows. The
+   circle that CREATES an account on the directory screen (`.users-fab`) is part of
+   this corner now, so its two fades are written here with the rest — a state belongs
+   where the component is drawn, and the fade between two of them belongs by kind. */
 @media (prefers-reduced-motion: no-preference) {
   .dash-chathead { transition: border-color 140ms ease, transform 140ms ease; }
   /* The lift is the press affordance now that the circle opens the conversation
      directly: it is the only signal, before a click, that this is a control and not a
-     badge. Preview circles lift too — they open a preview conversation, and a mock
-     that behaved differently under the pointer would be a preview of the wrong thing. */
+     badge. Every circle is a control, so every circle lifts. */
   .dash-chathead:hover { transform: translateY(-1px); }
+  .users-fab { transition: background-color 140ms ease, transform 140ms ease; }
+  /* The rail's reveal: the slide carries the motion and the fade covers its tail, so
+     the rail is already translucent while it is still travelling and there is no moment
+     where a fully opaque column is moving over the table. The house 140ms beat is right
+     for a state that changes under a pointer that is still moving; a rail arriving from
+     off the edge is a slightly slower, more deliberate gesture, and 180ms is where the
+     travel reads as travel rather than as a flicker when the pointer clips the edge in
+     passing. */
+  .dash-chatheads { transition: opacity 160ms ease, transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1); }
 }
 
 /* ---- The chatbox: a floating window beside the chatheads ------------------
@@ -5178,11 +6382,12 @@ body.profile-panel-open.ai-panel-open .dash-dock {
   border-top: 1px solid var(--msg-line);
   background: var(--msg-surface);
 }
-/* The field and the button on one line, bottom-aligned, so the button stays put as the
-   field grows rather than drifting down the panel with it. */
+/* The field and the button on one line and on one centre line: they are the same height
+   (see .messages-draft and .messages-send, which carry the same number), so the composer
+   reads as one shape rather than as a box with a circle stuck to its corner. */
 .messages-composer-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.5rem;
 }
 .messages-draft {
@@ -5197,14 +6402,21 @@ body.profile-panel-open.ai-panel-open .dash-dock {
      of flat empty box: a third of the whole window, with `rows={2}` and `resize: none`
      both already saying it wanted two lines. A `min-height` inherited from an unrelated
      corner of the stylesheet is exactly the kind of thing that survives every review.
-     Two lines is what a chat composer is: it grows as you type only in that it scrolls. */
+     It stays written even though the field states a height of its own, because
+     `min-height` beats `height`: drop this line and the global 8rem wins again.
+
+     ONE LINE, AND EXACTLY AS TALL AS THE BUTTON BESIDE IT. The field was two rows —
+     55px against a 34px circle — which made the composer a box with a button on its
+     corner and put the paper plane below the words it sends. The number is stated here
+     rather than left to `rows`, because the button's size and this one have to be the
+     same number, and a field sized by its rows lands a pixel or two off it. Six pixels
+     of padding above and below leaves the twenty a 13.5px line needs; anything longer
+     SCROLLS INSIDE THE FIELD rather than growing it, which is what keeps a pasted
+     paragraph from eating the transcript above. */
   min-height: 0;
-  /* AND A CEILING, which is the other half of the same argument: without it a pasted
-     paragraph grows the field until the transcript above it is a strip. Two rows of
-     typing, then it scrolls. */
-  max-height: 7rem;
+  height: 34px;
   overflow-y: auto;
-  padding: 9px 14px;
+  padding: 6px 14px;
   border: 1px solid var(--msg-input-line);
   border-radius: 20px;
   background: var(--msg-input);
@@ -5268,29 +6480,6 @@ body.profile-panel-open.ai-panel-open .dash-dock {
   border-top: 1px solid var(--red-line);
   color: var(--red-text);
   font-size: 12.5px;
-}
-
-/* THE PREVIEW'S OWN MARK, above the composer it is explaining.
-
-   Amber, dashed and in the same vocabulary as the rail's preview caption, because it
-   is the same claim: nothing on this screen is real. It sits HERE rather than at the
-   top of the thread because the thing it has to prevent is somebody typing a sentence
-   into a conversation that cannot receive it — and by the time they have read down to
-   the bottom, that is the decision they are making. */
-.messages-preview-note {
-  flex: none;
-  margin: 0;
-  padding: 0.5rem 1rem 0.6rem;
-  border-top: 1px dashed var(--amber);
-  background: var(--amber-bg);
-  color: var(--steel);
-  font-size: 12px;
-  line-height: 1.45;
-}
-.messages-preview-note strong {
-  color: var(--amber);
-  font-weight: 700;
-  letter-spacing: 0.02em;
 }
 
 /* ---- The list of conversations ---- */
@@ -5475,7 +6664,7 @@ body.profile-panel-open.ai-panel-open .dash-dock {
     padding: 0;
   }
   .dash-chatheads { display: none; }
-  /* Neither does a conversation between two officers, or the button that opens one. */
-  .messages-box,
-  .ir-msg-trigger { display: none; }
+  /* Neither does a conversation between two officers. (The bar's messages button
+     used to be hidden here with it; the button no longer exists.) */
+  .messages-box { display: none; }
 }

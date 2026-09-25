@@ -146,7 +146,12 @@
      so this is the same ink/surface split the accent makes one block up, and the
      surface value has to be stated for dark rather than inherited. */
   --violet: #A78BFA;
-  --step-bar: #6A4AD8; /* white on it measures 5.9:1, and 3.1:1 against --panel */
+  /* The rail's / the section headers' accent, in dark. NOT --ir-navy: that is
+     the top bar's FILL here (#1E2E50), and used as an ink on this panel it
+     measures 1.5:1 — the rail would disappear. --cyan is this theme's blue ink
+     (links, focus, active nav), so the progress reads as the same official
+     blue while staying legible: 7.3:1 for the dot's number and for the track. */
+  --step-bar: var(--cyan);
 
   /* ---- The incident-type ramp (what it MEANS is documented in styles.css) ----
      THE RAMP HAS TO BE RESTATED HERE, and inheriting light's was not a near-miss.
@@ -177,6 +182,31 @@
   --cat-12: #5777A2;  /* 3.8:1 */
   --cat-13: #417A85;  /* 3.6:1 */
   --cat-14: #7E5DB6;  /* 3.42:1 */
+
+  /* ---- The activity sheet: both ladders, solved upward -------------------
+     A square has to be LIGHTER than the near-black panel to be visible at all,
+     which is the inversion every ramp in this file faces (see the note above).
+     So each reading gets its own ladder again: the shared empty day is a lifted
+     panel (not the page, which would be invisible), and the four working steps
+     climb to a colour bright enough to read as "the most" on a dark card. The
+     HUE FAMILIES are light's own — accent blue and violet — for the reason the
+     light theme gives for not spending green here: `--green-ok` already means a
+     state on every chip. */
+  --sheet-0: #232A35;
+  --sheet-ins-1: #24395C;
+  --sheet-ins-2: #2E5391;
+  --sheet-ins-3: #4176C9;
+  --sheet-ins-4: #74A6F0;
+  --sheet-act-1: #35275C;
+  --sheet-act-2: #4F3A8F;
+  --sheet-act-3: #7357C9;
+  --sheet-act-4: #A98BF5;
+  /* The switch's pressed fill. NOT the deepest step: in dark that step is a
+     light blue chosen to glow as a square, and white on it measures about
+     2.4:1 — so each reading states its own fill, one step down and still
+     recognisably its family, verified above 4.5:1 for white. */
+  --sheet-ins-fill: #2F62CF;
+  --sheet-act-fill: #6B45C9;
 
   /* ---- Veils and elevation ----
      A shadow has to be darker than what it falls on, and a scrim darker than
@@ -229,6 +259,17 @@
      and still reads as navy rather than as grey. */
   --ir-navy: #1E2E50;
   --ir-navy-hi: #22355C;
+  /* …and the two values light measures against a WHITE well. Inherited as they
+     are they would both fail here: #8E93A0 is 1.7:1 on this #12161D input and
+     #6E7787 about 2.4:1, so the field would lose its edge and its placeholder
+     its text. Both are re-measured against the dark well (3.2:1 / 5.1:1). */
+  --ir-field-border: #5E6778;
+  --ir-placeholder: var(--cyan-dim);
+  /* The DRAFT flag's fill/ink pair in dark: the light #9A5B00 would be a muddy
+     smear on this page, so the flag takes this theme's amber as the PLATE and
+     the page's own near-black as the ink — 8.1:1, and unmistakably "unfiled". */
+  --ir-flag-fill: var(--amber);
+  --ir-flag-ink: var(--void);
 }
 
 /* The bar is delimited by its own colour in light (navy against a light-grey
@@ -243,3 +284,14 @@
    card in dark; the left-edge signal is what carries the row, so keep the rule
    that already draws it and let the wash stay quiet. Nothing to restate — this
    comment marks the decision, not a rule. */
+
+/* ---- The option cards are drawn by the app, so the theme just carries --------
+
+   This block used to hold a `color-scheme` flip: `<input list="…">` opened a menu the
+   browser painted from the option VALUES — not a DOM node — so the document had to
+   answer as light while one of those fields was engaged, or the menu came up near-black
+   over a field that looked fine. Every option list on the Write Report screen is now a
+   real element drawn by Dropdown.jsx, painted from `--ir-input`, `--ir-border` and
+   `--ir-blue`, which are already mapped for this theme above. Nothing has to be flipped
+   and no attribute has to be put on and taken off while a field is engaged.
+*/

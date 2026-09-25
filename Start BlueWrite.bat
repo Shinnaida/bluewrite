@@ -77,9 +77,22 @@ if errorlevel 1 (
 )
 
 start "" http://localhost:%UI_PORT%
+rem ---- TWO OFFICERS, ONE MACHINE, ONE BROWSER ----------------------------
+rem The session cookie is host-only, so the SAME app under a DIFFERENT hostname is a
+rem second, independent session: localhost and 127.0.0.1 are two cookie jars. Vite
+rem serves both. Sign in as somebody else in the second window and the rail in each
+rem window shows the other officer. See bluewrite/docs/DEVELOPMENT_STARTUP.md.
+rem Remove this one line if you would rather not have the second window open.
+start "" http://127.0.0.1:%UI_PORT%
 echo.
 echo BlueWrite is running in your browser.
-echo   Sign in:  m.santos  /  Passw0rd!23
+echo.
+rem Each window is its own sign-in. Use a DIFFERENT account in each, or the rail
+rem stays empty - it draws everybody but you.
+echo Window 1  http://localhost:%UI_PORT%    sign in as  m.santos    (Admin)
+echo Window 2  http://127.0.0.1:%UI_PORT%    sign in as  j.delacruz  (Officer)
+echo   ...or e.ramos (Staff), or the same pair the other way round.
+echo   Password for all three: Passw0rd!23
 echo.
 echo To stop: close the two minimized windows named
 echo   "BlueWrite API" and "BlueWrite UI".

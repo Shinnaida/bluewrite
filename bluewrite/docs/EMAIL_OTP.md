@@ -113,8 +113,9 @@ In order of likelihood:
 3. **The factor is locked** after five wrong codes. It clears on its own after
    `app.lockout_minutes`, or an Admin runs `Reset verification`.
 
-`User Management` → `Reset verification` deletes the outstanding code and the
-attempt counter and nothing else: the address and the password are untouched, and
+`User Management` → the account's row → `Reset verification` (right-click the row,
+or press the Menu key on it; the row's tooltip says so) deletes the outstanding code
+and the attempt counter and nothing else: the address and the password are untouched, and
 the account is **not** a session — the officer still receives and enters a code
 like everyone else. It is audited (`mfa.reset_by_admin`).
 
