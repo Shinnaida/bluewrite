@@ -168,12 +168,16 @@ try {
         (new AuthController())->changePassword();
     }
 
-    // The officer's own face. Under /me for the same reason the password is:
-    // an avatar is part of an account's identity, and identity is the one thing
-    // every role may change about THEMSELVES and nobody may change about somebody
-    // else — there is deliberately no admin route that sets another officer's
-    // photograph. POST replaces it (multipart/form-data), DELETE goes back to
+    // The officer's own face. Under /me for the same reason the password is: an
+    // avatar is part of an account's identity, and the ordinary way it is chosen
+    // is by its owner. POST replaces it (multipart/form-data), DELETE goes back to
     // initials; both are audited, like the password change above.
+    //
+    // THE ADMIN'S COPY OF THIS IS /users/:id/photo, registered below with the rest
+    // of the directory. Both exist on purpose: this one is how an officer maintains
+    // their own face, and that one is how an administrator gives a face to an
+    // account whose owner has not signed in yet. Anything an admin sets is audited
+    // with the admin as the actor, so which one happened is never a guess.
     if ($seg0 === 'me' && $seg1 === 'photo' && $method === 'POST') {
         (new AuthController())->setPhoto();
     }
@@ -208,6 +212,28 @@ try {
         // ETag of its own.) See UsersController::photo.
         if ($seg1 !== null && ($parts[2] ?? null) === 'photo' && !isset($parts[3]) && $method === 'GET') {
             $c->photo((string) $seg1);
+        }
+        // POST /users/:id/photo — an admin setting somebody's face, and DELETE
+        // taking it back to initials. Both are Admin-only inside the controller
+        // and audited against the officer's id with the admin as the actor (see
+        // UsersController::setPhoto on why this route exists at all when /me/photo
+        // already did). Note the ORDER of the two guards: the GET above answers
+        // with bytes and the POST here consumes multipart, so the method is what
+        // separates them rather than the path — which is why the GET is matched
+        // before this and for the same subpath.
+        if ($seg1 !== null && ($parts[2] ?? null) === 'photo' && !isset($parts[3]) && $method === 'POST') {
+            $c->setPhoto((string) $seg1);
+        }
+        if ($seg1 !== null && ($parts[2] ?? null) === 'photo' && !isset($parts[3]) && $method === 'DELETE') {
+            $c->clearPhoto((string) $seg1);
+        }
+        // GET /users/:id/activity — one account's own year, counted per day: the
+        // two readings the account page's sheet draws (days they signed in, and
+        // everything the trail recorded for them). Admin-only inside the
+        // controller, like the account page it feeds. Read-only, and not audited:
+        // reading a page is not an act this trail records.
+        if ($seg1 !== null && ($parts[2] ?? null) === 'activity' && !isset($parts[3]) && $method === 'GET') {
+            $c->activity((string) $seg1);
         }
         // POST /users/:id/mfa-reset — clear an outstanding sign-in code and the
         // attempt lock that comes with it. Admin-only inside the controller (not

@@ -9,6 +9,10 @@ use App\Core\Auth;
 // under. Named here because GET /users/:id/photo is the only route in the API
 // that answers with an image rather than a JSON document.
 use App\Core\AvatarPhoto;
+// The idle timeout, read by the account page's session estimate: it is the rule by
+// which an unsigned-out session really ended, so it is read from the configuration
+// that enforces it rather than copied as a number here.
+use App\Core\Config;
 use App\Core\Database;
 use App\Core\LanguageRegistry;
 // The second factor's state. Its rules (which roles need one) are read here so
@@ -33,14 +37,37 @@ final class UsersController
         // factor now depends on the ADDRESS: an Admin has to be able to see which
         // accounts have nowhere to send a code, and which are currently locked
         // out, without asking each officer or reading the audit trail.
+        // `photo_path` and `photo_updated_at` are read so the row can carry a
+        // `photo_url`, and the URL is built HERE rather than on the client for the
+        // reason AvatarPhoto gives: the `v=` cache key comes from the stamp, and a
+        // client that assembled the URL itself would be handed the version
+        // separately — the copy that then goes stale is the one showing a
+        // colleague's old photograph. The two columns themselves are not returned:
+        // they name a file on the server's disk, and no client has any use for that.
+        // `created_at` and `last_seen_at` ride along for the account page — the two
+        // facts about a colleague that the directory's columns do not carry: how long
+        // the account has existed, and whether they have been at a desk recently. Both
+        // are raw stamps rather than "3 days ago", for the reason the Last sign-in
+        // column gives: a station PC's clock is whatever somebody set it to.
         $rows = $pdo->query(
             'SELECT u.id, u.full_name, u.badge_number, u.username, u.email, u.status, u.last_login_at,
-                    u.languages_read, r.name AS role,
-                    eo.locked_until AS otp_locked_until
+                    u.created_at, u.last_seen_at, u.languages_read, u.photo_path, u.photo_updated_at,
+                    r.name AS role, eo.locked_until AS otp_locked_until
              FROM users u JOIN roles r ON r.id = u.role_id
              LEFT JOIN email_otp_codes eo ON eo.user_id = u.id
              ORDER BY u.full_name'
         )->fetchAll();
+
+        foreach ($rows as &$row) {
+            $row['photo_url'] = AvatarPhoto::url(
+                (int) $row['id'],
+                $row['photo_path'] === null ? null : (string) $row['photo_path'],
+                $row['photo_updated_at'] === null ? null : (string) $row['photo_updated_at']
+            );
+            unset($row['photo_path'], $row['photo_updated_at']);
+        }
+        unset($row);
+
         Response::json(200, ['users' => $rows]);
     }
 
@@ -243,6 +270,126 @@ final class UsersController
     }
 
     /**
+     * POST /users/:id/photo — an ADMIN setting an officer's face.
+     *
+     * THE RULE THIS REVERSES, AND WHY IT IS NOW RIGHT. /me/photo was once the only
+     * photo route, and the note there said a face is its owner's to choose. That is
+     * still true of the ORDINARY case, and /me/photo is still the route an officer
+     * uses for it. What it could not answer is the case this station actually has:
+     * an account being CREATED, whose owner has not signed in yet and may not for
+     * days, on a roster where everybody else already has a face. "Their face is
+     * theirs to choose" left an administrator choosing a blank circle instead.
+     *
+     * SO IT IS AN ADMIN ACTION, AND IT IS AUDITED AS ONE. Every call records
+     * `user.photo_set` (or `user.photo_remove`) against the officer's id with the
+     * ADMIN as the actor, exactly like the password reset one method over — so the
+     * trail can always answer who put that photograph there. An officer who
+     * replaces it afterwards with /me/photo does not erase that entry: the trail
+     * records acts, and this one happened.
+     *
+     * THE SAME RULES AS THE OFFICER'S OWN UPLOAD, all of them: the type is decided
+     * by DECODING, the stored file is a re-encoded 256px square, and the row is
+     * updated before the previous file is deleted (see AuthController::setPhoto).
+     * An admin route is not a weaker one.
+     */
+    public function setPhoto(string $id): void
+    {
+        $admin = Auth::requireRole('Admin');
+        $userId = (int) $id;
+
+        $pdo = Database::pdo();
+        $existing = $this->fetchUser($pdo, $userId);
+        if ($existing === null) {
+            Response::json(404, ['error' => 'Account not found.']);
+        }
+
+        $error = AvatarPhoto::check($_FILES['photo'] ?? []);
+        if ($error !== null) {
+            Response::json(422, ['error' => $error, 'field' => 'photo']);
+        }
+
+        $tmp = (string) $_FILES['photo']['tmp_name'];
+        // Non-null: check() already refused anything it cannot decode.
+        $mime = (string) AvatarPhoto::detect($tmp);
+
+        try {
+            $name = AvatarPhoto::store($userId, $tmp, $mime);
+        } catch (\Throwable $e) {
+            // The filesystem, not the upload: the detail goes to the server log
+            // through the front controller's handler rather than into the response.
+            error_log('[BlueWrite] avatar store failed: ' . $e->getMessage());
+            Response::json(500, ['error' => 'The image could not be saved on the server. Try again.']);
+        }
+
+        $pdo->prepare('UPDATE users SET photo_path = :p, photo_updated_at = NOW() WHERE id = :id')
+            ->execute([':p' => $name, ':id' => $userId]);
+
+        // Now that the row no longer names it, the previous file can go.
+        AvatarPhoto::delete($existing['photo_path'] === null ? null : (string) $existing['photo_path']);
+
+        Audit::log(
+            (int) $admin['id'],
+            'user.photo_set',
+            'user',
+            (string) $userId,
+            'username: ' . $existing['username'] . ', file: ' . $name
+        );
+
+        Response::json(200, [
+            'ok' => true,
+            'photo_url' => AvatarPhoto::url($userId, $name, $this->photoStamp($pdo, $userId)),
+        ]);
+    }
+
+    /**
+     * DELETE /users/:id/photo — an admin taking an officer's face back to initials.
+     *
+     * The row is cleared first and the file removed after, the same order as every
+     * other path that touches this column, and clearing is idempotent: an account
+     * with no photo that is asked again is answered 200, because "there is no
+     * photo" is the state it asked for rather than a failure to reach it.
+     */
+    public function clearPhoto(string $id): void
+    {
+        $admin = Auth::requireRole('Admin');
+        $userId = (int) $id;
+
+        $pdo = Database::pdo();
+        $existing = $this->fetchUser($pdo, $userId);
+        if ($existing === null) {
+            Response::json(404, ['error' => 'Account not found.']);
+        }
+
+        $pdo->prepare('UPDATE users SET photo_path = NULL, photo_updated_at = NULL WHERE id = :id')
+            ->execute([':id' => $userId]);
+
+        AvatarPhoto::delete($existing['photo_path'] === null ? null : (string) $existing['photo_path']);
+        Audit::log(
+            (int) $admin['id'],
+            'user.photo_remove',
+            'user',
+            (string) $userId,
+            'username: ' . $existing['username']
+        );
+
+        Response::json(200, ['ok' => true, 'photo_url' => null]);
+    }
+
+    /**
+     * users.photo_updated_at for the account, re-read rather than assumed: the
+     * cache key in the URL has to be the stamp the DATABASE wrote with NOW(), not
+     * one this process guessed (see AuthController::photoStamp for the same rule).
+     */
+    private function photoStamp(PDO $pdo, int $userId): ?string
+    {
+        $stmt = $pdo->prepare('SELECT photo_updated_at FROM users WHERE id = :id');
+        $stmt->execute([':id' => $userId]);
+        $value = $stmt->fetchColumn();
+
+        return ($value === false || $value === null) ? null : (string) $value;
+    }
+
+    /**
      * POST /users/:id/mfa-reset — clear somebody's outstanding sign-in code and
      * the attempt lock that comes with it.
      *
@@ -386,10 +533,367 @@ final class UsersController
         readfile($path);
     }
 
+    /**
+     * GET /users/:id/activity — one account's own year: time at a desk, and what they
+     * did.
+     *
+     * WHAT THIS ANSWERS, and why the account page cannot work it out for itself. The
+     * page draws a contribution-style sheet: one square per day, deeper on the days an
+     * officer did more. The audit trail is the only attendance record this system keeps
+     * (there is no clock-in table), and the trail endpoint paginates at 100 rows — so a
+     * year of an active officer's entries is several hundred rows, most of them on the
+     * same handful of days, and a client that fetched them all to count them would be
+     * moving the aggregation to the browser for no reason.
+     *
+     * SO IT IS TWO READINGS PER DAY rather than two lists to be counted:
+     *
+     *   minutes   HOW LONG THE OFFICER WAS AT A DESK. This is the attendance reading, and
+     *             it is a DURATION rather than a count: three sign-ins in a morning is not
+     *             three times the attendance of one, and a station asking "was he here on
+     *             the 14th" is asking about time. It comes from `presence_days` — the
+     *             workspace's own thirty-second heartbeat, tallied per day (migration 017;
+     *             see PresenceController::tally) — which is a MEASUREMENT: consecutive beats
+     *             merged, breaks excluded, first seen to last seen kept beside it.
+     *
+     *             FOR THE DAYS BEFORE THAT TABLE EXISTED there is no measurement, so the
+     *             day is ESTIMATED from the trail's own sign-ins (`basis: sessions`): a
+     *             session runs from its `login.success` to the sign-out that ended it when
+     *             there is one, and otherwise to the last thing the account did in that
+     *             session plus the idle timeout the server itself enforces — the rule by
+     *             which the session really did end. The two are never mixed for one day:
+     *             where a tally row exists it IS the answer, and `window.presence_from`
+     *             tells the client which days are which so the sheet can say so.
+     *
+     *             It is deliberately NOT a count of `login.success` (three sign-ins is not
+     *             three times the time), not `login.password_ok` (a password accepted with
+     *             nothing signed in), and not `mfa.verified` (the same sign-in, one step
+     *             later) — counting any of those would report an abandoned attempt as
+     *             attendance.
+     *   events    every entry for the account, whatever it was — reports filed and
+     *             finalized, passwords changed, photographs set, sign-ins. The
+     *             activity reading, and a count because acts are countable.
+     *
+     * ZERO-FILLED, over `created_at` rather than over the server's clock, so the
+     * squares line up with the dates the trail itself recorded (the same reason
+     * DashboardController zero-fills its series: the client must not be asked to walk
+     * dates, and a hole in the middle of a series is a bug that looks like a quiet
+     * week).
+     *
+     * ADMIN-ONLY, for the reason the reports filter is: this is another officer's
+     * record, and it is reached from the account page, which is an administrative view.
+     * It is NOT audited — reading a page is not an act this trail records — and it
+     * writes nothing.
+     */
+    public function activity(string $id): void
+    {
+        Auth::requireRole('Admin');
+        $userId = (int) $id;
+
+        $pdo = Database::pdo();
+        if ($this->fetchUser($pdo, $userId) === null) {
+            Response::json(404, ['error' => 'Account not found.']);
+        }
+
+        // THE WINDOW IS WHOLE WEEKS, so the sheet is a rectangle of 7-row columns with
+        // no ragged first column. Sunday-first, matching the calendar the station's own
+        // printed reports use; `weeks` is what the client is told to draw, because the
+        // number of columns is the one thing it cannot derive from the dates without
+        // re-doing this arithmetic.
+        $weeks = min(53, max(4, (int) ($_GET['weeks'] ?? 53)));
+        $today = new \DateTimeImmutable('today');
+        $weekStart = $today->modify('sunday this week');
+        // `modify('sunday this week')` is Sunday of the CURRENT week in some PHP builds
+        // and the Sunday BEFORE it in others; normalize to "the Sunday on or before
+        // today" so the last column always contains today.
+        if ($weekStart > $today) {
+            $weekStart = $weekStart->modify('-7 days');
+        }
+        $from = $weekStart->modify('-' . ($weeks - 1) . ' weeks');
+        $to = $weekStart->modify('+6 days');
+
+        $stmt = $pdo->prepare(
+            "SELECT DATE(created_at) AS d,
+                    SUM(CASE WHEN action = 'login.success' THEN 1 ELSE 0 END) AS sign_ins,
+                    COUNT(*) AS events
+             FROM audit_logs
+             WHERE user_id = :uid AND created_at >= :from AND created_at < :until
+             GROUP BY DATE(created_at)"
+        );
+        $stmt->execute([
+            ':uid' => $userId,
+            ':from' => $from->format('Y-m-d') . ' 00:00:00',
+            // Half-open: `to` is Saturday, so "until" is the Sunday after it. Strings
+            // rather than an interval, because the bound is a date the client was told.
+            ':until' => $to->modify('+1 day')->format('Y-m-d') . ' 00:00:00',
+        ]);
+
+        $byDay = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $byDay[(string) $r['d']] = ['sign_ins' => (int) $r['sign_ins'], 'events' => (int) $r['events']];
+        }
+
+        // THE MEASUREMENT, where the tally has one. A day is drawn from this row and
+        // nothing else — see the note above on why the two sources are never mixed for one
+        // day. `seconds` is time at the desk with breaks excluded and `beats` is kept
+        // because a day with a single beat is a day somebody was there and would otherwise
+        // sum to zero seconds.
+        $presence = [];
+        $presenceFrom = null;
+        try {
+            $p = $pdo->prepare(
+                'SELECT day, first_seen, last_seen, seconds, beats FROM presence_days
+                 WHERE user_id = :uid AND day >= :from AND day <= :to'
+            );
+            $p->execute([
+                ':uid' => $userId,
+                ':from' => $from->format('Y-m-d'),
+                ':to' => $to->format('Y-m-d'),
+            ]);
+            foreach ($p->fetchAll() as $r) {
+                $day = (string) $r['day'];
+                $presence[$day] = $r;
+                if ($presenceFrom === null || $day < $presenceFrom) {
+                    $presenceFrom = $day;
+                }
+            }
+        } catch (\Throwable $e) {
+            // A database that has not had migration 017 applied yet still answers this
+            // endpoint: with no tally the whole window is estimated from the trail, which is
+            // exactly what the client draws for the days before the table existed.
+            error_log('presence_days unreadable, estimating the whole window: ' . $e->getMessage());
+        }
+
+        // THE ESTIMATE, for the days the tally cannot cover. Read once for the whole
+        // window rather than per day: a session can cross midnight, and cutting it per day
+        // before it is built would credit the wrong side of the boundary.
+        $estimated = $this->sessionSeconds($pdo, $userId, $from, $to);
+
+        // The series, zero-filled, and both summaries computed from the SAME walk — so a
+        // total cannot disagree with the squares that produce it.
+        $days = [];
+        $summary = [
+            'attendance' => [
+                'total_minutes' => 0,
+                'active_days' => 0,
+                'busiest_minutes' => 0,
+                // How the window splits between the two sources, so the sheet can SAY which
+                // part of the year is measured and which part is inferred instead of
+                // drawing them identically and letting the reader assume.
+                'measured_days' => 0,
+                'estimated_days' => 0,
+            ],
+            'events' => ['total' => 0, 'active_days' => 0, 'busiest' => 0],
+        ];
+        for ($d = $from; $d <= $to; $d = $d->modify('+1 day')) {
+            $key = $d->format('Y-m-d');
+            $counts = $byDay[$key] ?? ['sign_ins' => 0, 'events' => 0];
+
+            $row = $presence[$key] ?? null;
+            // A day is measured when the tally reaches it AT ALL — a day inside the tally's
+            // range with no row is a measured ZERO (nobody was here), which is a different
+            // fact from a day nobody could have measured.
+            $measured = $presenceFrom !== null && $key >= $presenceFrom;
+
+            $minutes = 0;
+            $basis = null;
+            $first = null;
+            $last = null;
+            if ($measured) {
+                $summary['attendance']['measured_days']++;
+                if ($row !== null) {
+                    $seconds = (int) $row['seconds'];
+                    // Rounded UP to the minute, and never below one for a day with a beat: a
+                    // workspace open for a single beat is time at a desk, and a zero-second
+                    // day would draw it as a day the officer was not there at all.
+                    $minutes = $seconds > 0 ? (int) ceil($seconds / 60) : ((int) $row['beats'] > 0 ? 1 : 0);
+                    if ($minutes > 0) {
+                        $basis = 'presence';
+                        $first = (string) $row['first_seen'];
+                        $last = (string) $row['last_seen'];
+                    }
+                }
+            } else {
+                $summary['attendance']['estimated_days']++;
+                $seconds = (int) ($estimated[$key] ?? 0);
+                if ($seconds > 0) {
+                    $minutes = (int) ceil($seconds / 60);
+                    $basis = 'sessions';
+                }
+            }
+
+            $days[] = [
+                'date' => $key,
+                // The sign-in COUNT is still sent, as context for the tooltip ("3h 10m at
+                // a desk, 2 sign-ins") rather than as the measure.
+                'sign_ins' => $counts['sign_ins'],
+                'events' => $counts['events'],
+                'minutes' => $minutes,
+                'basis' => $basis,
+                'first_seen' => $first,
+                'last_seen' => $last,
+            ];
+
+            $summary['attendance']['total_minutes'] += $minutes;
+            if ($minutes > 0) {
+                $summary['attendance']['active_days']++;
+                $summary['attendance']['busiest_minutes'] = max($summary['attendance']['busiest_minutes'], $minutes);
+            }
+
+            $n = $counts['events'];
+            $summary['events']['total'] += $n;
+            if ($n > 0) {
+                $summary['events']['active_days']++;
+                $summary['events']['busiest'] = max($summary['events']['busiest'], $n);
+            }
+        }
+
+        Response::json(200, [
+            'window' => [
+                'from' => $from->format('Y-m-d'),
+                'to' => $to->format('Y-m-d'),
+                'weeks' => $weeks,
+                // THE SERVER'S OWN CLOCK, sent because the sheet's last column runs to
+                // the end of the current week and the days after today are NOT squares
+                // with nothing in them — they are days that have not happened. The
+                // client cannot decide which is which without being told, and a station
+                // PC's clock is whatever somebody set it to.
+                'today' => $today->format('Y-m-d'),
+                // THE FIRST DAY THE TALLY COVERS, or null where it covers none of the
+                // window. This is what tells the sheet where the year stops being measured
+                // and starts being inferred — the boundary is a fact about the record, and
+                // a client that guessed it would draw an estimate as a measurement.
+                'presence_from' => $presenceFrom,
+            ],
+            'days' => $days,
+            'summary' => $summary,
+        ]);
+    }
+
+    /**
+     * What the trail can say about time at a desk, for the days the tally cannot cover.
+     *
+     * AN ESTIMATE, AND THE LAST RESORT RATHER THAN THE METHOD. `presence_days` (migration
+     * 017) measures this directly; this exists so the year BEFORE that table still draws
+     * something true rather than blank, and so a database without it still answers at all.
+     *
+     * THE RULE, and every part of it comes from the system's own behaviour rather than from
+     * a convenient assumption:
+     *
+     *   - a session begins at its `login.success`;
+     *   - it ends at the `logout` that closed it, when one was recorded — exact;
+     *   - otherwise it ends at the LAST THING THE ACCOUNT DID in that session plus the idle
+     *     timeout the server enforces (`app.session_idle_minutes`). That is not a guess: a
+     *     session really does survive that long after its last request, and the trail's own
+     *     entries are the evidence of when the requests were. A session with nothing but a
+     *     sign-in in it is therefore its login plus the idle window;
+     *   - and it can never run past the next sign-in, because the next sign-in is a new
+     *     session — without that bound the two would overlap and the same hour would be
+     *     counted twice.
+     *
+     * WHAT IT CANNOT KNOW is a workspace left open on a signed-in PC: no sleep, no lock, no
+     * walk-away leaves a mark until the idle timeout takes the session, and the estimate is
+     * bounded by the last audited act rather than by the last breath. The measured tally
+     * does not have that blind spot (the heartbeat keeps beating), which is the whole reason
+     * the estimate is retired day by day as the tally fills in.
+     *
+     * @return array<string,int> day (Y-m-d) => seconds, only for the days with any
+     */
+    private function sessionSeconds(PDO $pdo, int $userId, \DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        $until = $to->modify('+1 day')->format('Y-m-d') . ' 00:00:00';
+        $stmt = $pdo->prepare(
+            'SELECT action, created_at FROM audit_logs
+             WHERE user_id = :uid AND created_at >= :from AND created_at < :until
+             ORDER BY created_at ASC, id ASC'
+        );
+        $stmt->execute([
+            ':uid' => $userId,
+            ':from' => $from->format('Y-m-d') . ' 00:00:00',
+            ':until' => $until,
+        ]);
+
+        // THE WHOLE TRAIL IS READ, not a filtered list of the two actions that bound a
+        // session: every entry is evidence of a request, and the last of them is what the
+        // tail is measured from. One pass, three arrays, and the trail is small enough for
+        // one account over a year that this is cheaper than a second query.
+        $logins = [];
+        $logouts = [];
+        $acts = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $ts = strtotime((string) $r['created_at']);
+            if ($ts === false) {
+                continue;
+            }
+            $acts[] = $ts;
+            if ($r['action'] === 'login.success') {
+                $logins[] = $ts;
+            } elseif ($r['action'] === 'logout') {
+                $logouts[] = $ts;
+            }
+        }
+
+        $grace = 60 * max(1, (int) Config::get('app.session_idle_minutes', 30));
+        $seconds = [];
+        $loginCount = count($logins);
+
+        for ($i = 0; $i < $loginCount; $i++) {
+            $start = $logins[$i];
+            $nextLogin = $logins[$i + 1] ?? null;
+
+            $end = null;
+            foreach ($logouts as $logout) {
+                if ($logout > $start && ($nextLogin === null || $logout <= $nextLogin)) {
+                    $end = $logout;
+                    break;
+                }
+            }
+            if ($end === null) {
+                $last = $start;
+                foreach ($acts as $act) {
+                    if ($act >= $start && ($nextLogin === null || $act < $nextLogin)) {
+                        $last = $act;
+                    }
+                }
+                $end = $last + $grace;
+            }
+            if ($nextLogin !== null && $end > $nextLogin) {
+                $end = $nextLogin;
+            }
+            if ($end <= $start) {
+                continue;
+            }
+
+            // A SESSION CAN CROSS MIDNIGHT, so its time is cut at the day boundaries rather
+            // than attributed to the day it began: a shift that starts at 22:00 belongs to
+            // both dates, in the hours it occupied each.
+            $cursor = new \DateTimeImmutable(date('Y-m-d', $start));
+            while (true) {
+                $dayStart = strtotime($cursor->format('Y-m-d') . ' 00:00:00');
+                $dayEnd = $dayStart + 86400;
+                $overlap = min($end, $dayEnd) - max($start, $dayStart);
+                if ($overlap > 0) {
+                    $key = $cursor->format('Y-m-d');
+                    $seconds[$key] = ($seconds[$key] ?? 0) + $overlap;
+                }
+                if ($dayEnd >= $end) {
+                    break;
+                }
+                $cursor = $cursor->modify('+1 day');
+            }
+        }
+
+        return $seconds;
+    }
+
     private function fetchUser(PDO $pdo, int $id): ?array
     {
+        // `photo_path` is read with the rest because the two photo routes have to
+        // know which file they are replacing or removing — the row is the only
+        // place that name exists. Nothing else about a photograph is fetched here:
+        // `photo_url` is built for the list, where a client draws faces.
         $stmt = $pdo->prepare(
-            'SELECT u.id, u.full_name, u.badge_number, u.username, u.email, u.status, u.languages_read, r.name AS role
+            'SELECT u.id, u.full_name, u.badge_number, u.username, u.email, u.status, u.languages_read,
+                    u.photo_path, r.name AS role
              FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = :id'
         );
         $stmt->execute([':id' => $id]);
