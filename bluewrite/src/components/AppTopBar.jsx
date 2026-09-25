@@ -82,13 +82,6 @@ export default function AppTopBar({
   // bell asks for the screen change rather than reaching for the view itself —
   // the same contract every nav link above it uses.
   onOpenReport,
-  // Opens the messages panel, and how many messages are waiting. The count is a
-  // PROP rather than read here, because it arrives on the presence heartbeat that
-  // Shell's rail already owns: reading it again in the bar would be a second
-  // answer to "how much is waiting", and the two would disagree on the same
-  // screen.
-  onOpenMessages,
-  unreadMessages = 0,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // The About panel is a dialog, not another fold: it says things, it does not
@@ -155,47 +148,18 @@ export default function AppTopBar({
             own here too). */}
         <NotificationBell onOpenReport={onOpenReport} />
 
-        {/* ---- Messages: the officers, rather than the reports ----
-            The bell above is scoped to what happened to the session's own
-            reports; this is the other half of "what do I need to look at", and
-            the only doorway to the panel that is always in the same place. The
-            rail's cards open a specific colleague; this opens the list of them,
-            which is what an officer wants when they are the one starting the
-            conversation. Rendered for every role — everybody on the station can
-            be messaged. */}
-        <button
-          type="button"
-          className="ir-msg-trigger"
-          aria-haspopup="dialog"
-          aria-label={
-            unreadMessages > 0
-              ? `Messages, ${unreadMessages} unread`
-              : 'Messages'
-          }
-          title={unreadMessages > 0 ? `${unreadMessages} unread messages` : 'Messages'}
-          onClick={onOpenMessages}
-        >
-          <svg
-            width="17"
-            height="17"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.9 8.9 0 0 1-2.9-.5L3 21l1.7-4.6A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4Z" />
-          </svg>
-          {/* The same cap as the rail's mark, for the same reason: a hint that
-              something is waiting, not a count anybody reads to the digit. */}
-          {unreadMessages > 0 && (
-            <span className="ir-msg-badge" aria-hidden="true">
-              {unreadMessages > 9 ? '9+' : unreadMessages}
-            </span>
-          )}
-        </button>
+        {/* ---- Messages: REMOVED BY REQUEST ----
+            The bar used to carry a second icon here, beside the bell — the
+            officers rather than the reports. The request was to take it off the
+            bar, so the bar now ends at the bell and the profile pill.
+
+            The messages panel is untouched, and so is the rail it lives beside:
+            the presence rail is on every signed-in screen and each colleague's
+            circle on it opens that conversation. What is gone is the
+            always-there shortcut to the LIST of conversations — so an officer
+            starting one with somebody who is not on the rail (or not among the
+            circles it has room for) reaches for the `+` inside the window,
+            which searches the roster by name, badge or role. */}
 
         {/* ---- Profile: identity + the single sign-out action ---- */}
         <div className="ir-profile-wrap" ref={wrapRef}>

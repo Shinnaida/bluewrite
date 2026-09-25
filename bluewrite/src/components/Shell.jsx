@@ -9,10 +9,6 @@ import ProfilePanel from './ProfilePanel.jsx';
 // Who is at a desk right now, down the right edge — see the component for why the
 // heartbeat lives there rather than here.
 import Chatheads from './Chatheads.jsx';
-// The one place the design-preview flag is decided: it changes what the rail draws
-// AND what pressing one of those circles opens, so both surfaces are handed the same
-// answer. See below for the two conditions.
-import { chatheadPreview } from '../lib/presence.js';
 // The messages panel — the third dock on the right edge. Opened from the rail's
 // officer card or from the top bar's messages button, both of which are wired up
 // here because both are surfaces Shell already owns.
@@ -249,21 +245,6 @@ export default function Shell({
   // arrangement as the shortcut sheet above, for the same reason.
   const [profileOpen, setProfileOpen] = useState(false);
 
-  // THE DESIGN PREVIEW, read ONCE for the whole workspace. It decides the presence
-  // rail's roster AND what the messages panel does when one of those circles is
-  // pressed, so it is read in one place rather than by each surface: two reads of one
-  // URL is how a mock officer ends up on a rail whose panel refuses their id.
-  //
-  // Two conditions, and only one of them is negotiable. `import.meta.env.DEV` is
-  // replaced with `false` by Vite at build time, so a SHIPPED bundle cannot reach the
-  // mock whatever the URL says; in dev the mocks are the default (the real rail is a
-  // roster of OTHER people, so it is empty on a machine with one account signed in),
-  // and `?chatheads=off` is how you see the live one. Read on the first render: this
-  // is not a thing to toggle without a reload.
-  const [preview] = useState(
-    () => import.meta.env.DEV && chatheadPreview(window.location.search)
-  );
-
   // THE MESSAGES PANEL, and it is one piece of state rather than two. `messagesOpen`
   // is whether the dock is on screen; `messagesPeer` is the conversation inside it
   // (or null for the list). They live here, not in the panel, because the panel is
@@ -278,10 +259,12 @@ export default function Shell({
   const [messagesPeer, setMessagesPeer] = useState(null);
   const [messagesPeerHint, setMessagesPeerHint] = useState(null);
 
-  // ONE COUNT, TWO PLACES. The top bar's badge and the rail's marks are the same
-  // number from the same heartbeat, held here because both surfaces are drawn here —
-  // a second read inside the bar would be a second answer to "how much is waiting".
-  const [unreadMessages, setUnreadMessages] = useState(0);
+  // (The unread count used to be held here for the top bar's badge, which shared it
+  // with the rail's marks. That badge is gone — the bar's messages icon was removed
+  // by request — and the rail's own marks are computed inside Chatheads from the
+  // roster it already holds, so nothing above needed the total any more. A state
+  // whose only reader is gone is a second source of truth waiting to disagree with
+  // the first.)
 
   // Opening the panel and opening a conversation are separate because they lead to
   // different screens of the same dock, and the bar only ever wants the first.
@@ -489,8 +472,6 @@ export default function Shell({
         // the register's own rows (“report”, by id) — so the bell hands the id
         // up to the one place that owns the screen rather than routing itself.
         onOpenReport={(reportId) => setView({ kind: 'report', id: reportId })}
-        onOpenMessages={() => openMessages(null)}
-        unreadMessages={unreadMessages}
       />
 
       {/* THE PRESENCE RAIL. Rendered by Shell because Shell is the signed-in frame
@@ -506,21 +487,17 @@ export default function Shell({
       <div className="dash-dock">
         {messagesOpen && (
           <MessagesPanel
-            preview={preview}
             peer={messagesPeer}
             peerHint={messagesPeerHint}
             onOpenPeer={openMessages}
             onClose={() => setMessagesOpen(false)}
-            onUnreadChange={setUnreadMessages}
             onConnError={reportConn}
           />
         )}
 
         <Chatheads
           user={user}
-          preview={preview}
           onOpen={(person) => openMessages(person.id, person)}
-          onUnreadChange={setUnreadMessages}
           // THE COLLEAGUE YOU ARE TALKING TO LEAVES THE RAIL. Not just their unread mark
           // — their whole circle, and it comes back when the box is closed. The rail
           // answers "who might I be looking for"; once the conversation is open, that
