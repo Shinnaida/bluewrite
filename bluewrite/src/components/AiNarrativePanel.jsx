@@ -1,26 +1,39 @@
 // BlueWrite — Phase 3 AI narrative panel (UC-006/007/008).
-// Generate opens a slide-in SIDE PANEL (like a document reviewer): the AI
-// draft appears beside the report instead of inline, so the officer can
-// compare it against the form while the report stays fully visible.
+// Generate opens the draft INLINE, in the assistant's own card and directly
+// under the Generate row: the officer asked for it there, so it comes back
+// there rather than docking a second column onto the right edge of the
+// workspace (which squeezed the report they were reading it against).
 //
-// Panel behaviour mirrors the LEFT sidebar: drag the edge handle to resize,
-// drag below the minimum (or click the chevron) to collapse it into a slim
-// right rail, hover the rail to float it open, Ctrl+J toggles it. Actions:
-// Accept (copies draft into the editable narrative), Regenerate (with
+// The draft body shows while a request is running, while an error is on
+// screen, and while a draft is waiting to be reviewed; ✕ (or Escape) hides it
+// again and keeps the draft — "A draft is ready" is the way back to it.
+// Actions: Accept (copies the WHOLE draft into the report), Regenerate (with
 // feedback note), Close. The AI NEVER writes the report directly; generation
 // is always an explicit officer action. On 503 the panel shows the
 // persistent manual-mode banner and hides Generate entirely.
+//
+// The draft is REVIEWED in the three parts the printed sheet names — FACTS OF
+// THE CASE (the narrative), NOTABLE FINDINGS and ACTION TAKEN / STATUS (what
+// Generate formalised into the report's own two fields) — and all three are
+// editable boxes in the panel. Nothing reaches the report until Accept: a
+// generated draft is a PROPOSAL, and the narrative alone is only a third of
+// what one contains.
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import NarrativeReveal from './NarrativeReveal.jsx';
+// The ⓘ marker that carries this panel's explanations. It is a component rather than a
+// private function here because the account form uses the same marker for the sentences
+// under its fields — see InfoHint.jsx for the whole of its contract.
+import InfoHint from './InfoHint.jsx';
 import { useRotatingStatus, holdVerifyPhase, VERIFY_PHRASE, THINKING_PHRASES } from '../lib/useRotatingStatus.js';
 // Phase 6 Stage 4/5 — the language vocabulary all comes from the registry
 // (never a list held here), and the one wording for a language whose AI
 // translation is switched off. `narrativeLanguageOptions` is NOT read here any
-// more: the notes box has no language selector (notes are read as English —
-// see NOTES_ARE_ENGLISH in generate()), so no control in this panel lists the
-// codes. The registry function stays for the callers that still offer them.
+// more: nothing in this panel offers a language to pick. The narrative's own
+// language is DETECTED from the text (src/lib/reportLanguages.js), so there is
+// no selector to fill and no codes to list. The registry function stays for the
+// callers that still offer them.
 import { languageLabel } from '../lib/reportLanguages.js';
 import { translationEnabled, translationDisabledNotice } from '../lib/languageRegistry.js';
 // Phase 6 Stage 5 (Track C) — the guided "Translate & tighten" flow. The rule
@@ -35,8 +48,6 @@ import {
   guidedStepLabel,
 } from '../lib/guidedFlow.js';
 
-// AI panel resize bounds — collapse below the minimum into the rail,
-// mirroring the sidebar's SIDEBAR_MIN/COLLAPSE_BELOW pattern.
 // Phase 5 economy kinds → the officer's label. The server sends a `kind` as
 // well as a sentence so the label stays short here and the sentence stays
 // available to anything that only renders text.
@@ -52,14 +63,9 @@ const REDUNDANCY_LABEL = {
 // them instead (see InfoHint). Same words, one line of the panel instead of
 // three — the panel is chrome beside the report, not a second page of it.
 const AI_TOOLBAR_HINT =
-  'Generate writes a formal draft from your rough notes — or, when the report is written in another language, from that narrative itself. Tighten runs the economy rules over the narrative you wrote: repeated propositions merged, padding and closing formulas removed. Nothing is written into the report until you review and accept it.';
+  'Generate writes a formal draft from the report you have filled in — or, when the report is written in another language, translates that narrative into formal English. The draft arrives in a box you can edit before accepting it. Tighten runs the economy rules over the narrative you wrote: repeated propositions merged, padding and closing formulas removed. Nothing is written into the report until you review and accept it.';
 const AI_GUIDED_HINT =
   'Step 1 translates your narrative into formal English; you check it against the glosses and apply it. Step 2 then offers a tightened version of that English text as a proposal — nothing is written into the report until you click.';
-
-const PANEL_MIN = 320;
-const PANEL_MAX = 560;
-const COLLAPSE_BELOW = 280;
-const RAIL_W = 44;
 
 // The account read is ONE attempt server-side by design (nothing to queue a
 // retry against — see NarrativeService::classifyAccount), so a service that is
@@ -72,40 +78,62 @@ const RAIL_W = 44;
 const READ_ATTEMPTS = 2;
 const READ_RETRY_WAIT_MS = 5000;
 
-// Pushpin icon for the pin/unpin control (filled = pinned). Inline SVG so it
-// inherits the button color and needs no asset pipeline.
-function PinIcon({ filled }) {
+// THE THREE PARTS OF A DRAFT, in the order the printed sheet prints them, plus
+// where the arrival sequence ends. The reveal walks this list: each part types
+// itself in (NarrativeReveal) and then hands over to the next, so what the
+// officer watches is the draft being written in the order it will be read —
+// what happened, what was found, what was done about it.
+//
+// A part the draft has nothing for is SKIPPED, never played empty (see
+// stageAfter below): a report with no notable findings goes straight from the
+// facts to the action taken rather than pausing on a blank heading.
+const REVEAL_STAGES = ['facts', 'findings', 'status', 'done'];
+
+// The two formalised blocks get a much shorter ceiling than the narrative.
+// NarrativeReveal's own 3.5s is right for a paragraph an officer reads against
+// the form, and absurd for a single finding — three 3.5s turns back to back
+// would hold the panel for ten seconds before a button appeared. At this cap a
+// one- or two-line block lands in about a second; the component's own per-char
+// floor keeps a long one readable rather than strobing.
+const SUB_REVEAL_CAP_MS = 1200;
+
+// The block's head: the badge, the name, and the ⓘ that carries what both
+// actions do. ONE definition, because the block has two states (ready, and
+// "a draft is waiting") and the two must not drift into naming themselves
+// differently.
+function AssistHead() {
   return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill={filled ? 'currentColor' : 'none'}
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 17v5" />
-      <path d="M7 3h10l-1.5 7 3 3.5c.5.6.1 1.5-.7 1.5H6.2c-.8 0-1.2-.9-.7-1.5l3-3.5L7 3z" />
-    </svg>
+    <div className="ai-assist-head">
+      <span className="ai-assist-badge" aria-hidden="true">AI</span>
+      <span className="ai-assist-title">Writing assistant</span>
+      <InfoHint text={AI_TOOLBAR_HINT} />
+    </div>
   );
 }
 
-/**
- * The ⓘ marker: a small circle whose explanation is a tooltip, not a paragraph.
- *
- * Focusable on purpose — a tooltip that only opens under a pointer is a tooltip
- * half the officers cannot read — and the same sentence is the accessible name,
- * so a screen reader hears the explanation where a sighted officer sees it.
- */
-function InfoHint({ text }) {
+// A draft box that grows to its own content instead of scrolling inside a
+// scroller. THREE of the panel's fields are like this — the narrative and the
+// two formalised blocks — and the rule is the same for all of them: the panel
+// body is the one scroll, because a document being reviewed must not be a
+// window with a scrollbar of its own.
+function GrowTextarea({ value, onChange, ariaLabel, rows = 4 }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // `auto` first: without it the box can only ever grow, never shrink.
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
   return (
-    <span className="ai-hint" tabIndex={0} title={text}>
-      <span aria-hidden="true">i</span>
-      <span className="sr-only">{text}</span>
-    </span>
+    <textarea
+      ref={ref}
+      className="ai-draft-sub"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      rows={rows}
+      aria-label={ariaLabel}
+    />
   );
 }
 
@@ -154,17 +182,26 @@ export default function AiNarrativePanel({
   // The form's current Notable Findings text: shown in the Generate row so
   // the officer knows it is what the AI formalises into the draft.
   notableFindings = '',
+  // ACCEPT — the ONE action that moves a draft into the report, called with the
+  // whole draft: `{ narrative, findingsText, statusText }` (and the source meta
+  // for a translated draft). Generating writes nothing, and neither does
+  // editing the blocks in the panel, so this is where all three parts of a
+  // draft land — together, by one rule. A part the draft does not carry is
+  // simply absent from the object: a tighten result hands over its narrative
+  // alone (see acceptDraft).
   onAccept,
   // Phase 6 Stage 5 (Track C) — Apply for the guided flow's step 1: the editor
-  // applies the translation to the form AND saves it, because the second step
+  // applies the reviewed draft to the form AND saves it, because the second step
   // is refused by the server while the STORED report still declares a
   // non-English narrative (that guard is deliberately not weakened). Falls back
-  // to onAccept when the editor does not provide it.
+  // to onAccept when the editor does not provide it. Same parts argument.
   onApplyGuided,
-  // Called automatically with the drafted NOTABLE FINDINGS lines as soon as
-  // a draft lands — no second button: generating the report IS the action.
-  // The editor writes them into the form field (the record the sheet prints
-  // from); it never blanks a field the draft left empty.
+  // TIGHTEN'S TWO PROPOSALS for the officer's own fields — the only callers left
+  // now that generating a draft writes nothing. Each is reached by its own
+  // button (“Apply merged findings”, “Apply trimmed status”), and the button is
+  // only offered when it actually proposes a change. The editor writes the text
+  // into the form field (the record the sheet prints from) and never blanks a
+  // field the proposal is empty for.
   onApplyFindings,
   // Same rule for the formalised ACTION TAKEN / STATUS line.
   onApplyActionTaken,
@@ -205,21 +242,26 @@ export default function AiNarrativePanel({
 }) {
   const [mode, setMode] = useState('idle'); // idle|ready|loading|done|error|manual
   const [draft, setDraft] = useState(null); // { narrative, suggestions, possibleGaps, addedContentWarnings, gloss, sourceGloss, ambiguities, pinnedTerms }
-  const [notes, setNotes] = useState('');
   // Phase 6 Stage 5 (Track C) — the guided flow's current step, or null when
   // no guided flow is running. Every move goes through moveGuided().
   const [guided, setGuided] = useState(GUIDED_IDLE);
-  // Phase 6 Stage 3 — which source the officer wants translated, and the source
-  // text captured at generate time so Apply can state and store it.
+  // Phase 6 Stage 3 — the source text captured at generate time so Apply can
+  // state and store it.
   //
-  // There is no notes-language state any more. The notes box carried a language
-  // SELECTOR whose value the officer declared and nothing could check, so a
-  // stale or wrong value silently turned a translation into a grammar fix of
-  // native text. Notes are read as English now, the field is gone from the
-  // request, and an account written in another language goes in through the
-  // narrative ("Translate my narrative"), where the language is DETECTED from
-  // the text rather than claimed.
-  const [sourceChoice, setSourceChoice] = useState(null); // null = auto, 'notes' | 'narrative'
+  // THE ACCOUNT IS THE REPORT. The rough-notes box is gone: what the AI works
+  // from is the account the officer has already written into the report — the
+  // narrative above all, and the fields around it. The box was a SECOND place
+  // to write the same incident, and it was the one control that had to be
+  // filled in BEFORE any AI work existed — which read as the assistant asking
+  // for homework instead of writing from the form the officer just completed.
+  //
+  // What went with it is the declared notes LANGUAGE, and that is the older
+  // removal (Phase 6 Stage 3): the box carried a selector whose value the
+  // officer asserted and nothing could check, so a stale or wrong one silently
+  // turned a translation into a grammar fix of native text. The narrative's
+  // language is DETECTED from the text, which is why an account written in
+  // Bisaya or Tagalog goes in through the narrative — "Translate my
+  // narrative" — and nowhere else.
   const [lastSource, setLastSource] = useState(null); // { kind, text, language }
   // Phase 7 — what the last account read changed, for the one-line receipt.
   const [fillNote, setFillNote] = useState(null);
@@ -237,21 +279,12 @@ export default function AiNarrativePanel({
   // button itself.
   const [lastPress, setLastPress] = useState(null);
   const [residual, setResidual] = useState([]);
-  const [panelOpen, setPanelOpen] = useState(false); // slide-in side panel
+  // Whether the draft body is SHOWING in the assistant's card. It is inline
+  // chrome, not a window: hiding it keeps the draft (which lives in this tab,
+  // keyed by report id) and "A draft is ready" is the way back in.
+  const [panelOpen, setPanelOpen] = useState(false);
   const draftRef = useRef(null);
   draftRef.current = draft;
-  // Collapsed-right-rail state + hover-to-expand + user width (all mirroring
-  // the left sidebar's behaviour).
-  const [rail, setRail] = useState(false);
-  const [hoverOpen, setHoverOpen] = useState(false);
-  const hoverTimer = useRef(null);
-  const [panelWidth, setPanelWidth] = useState(() => {
-    const v = parseInt(window.localStorage.getItem('bw-ai-panel-w') ?? '', 10);
-    return Number.isFinite(v) ? Math.min(PANEL_MAX, Math.max(PANEL_MIN, v)) : null;
-  });
-  const [resizing, setResizing] = useState(false);
-  const widthRef = useRef(panelWidth);
-  widthRef.current = panelWidth;
   const lastPayloadRef = useRef(null); // for regenerate
 
   // Reveal state (NarrativeReveal-based): revealOn is true ONLY for a draft
@@ -261,8 +294,24 @@ export default function AiNarrativePanel({
   // Regenerate cleanly remounts the reveal with no stale animation.
   const [revealOn, setRevealOn] = useState(false);
   const [genCounter, setGenCounter] = useState(0);
-  const [revealDone, setRevealDone] = useState(false);
-  const handleRevealComplete = useCallback(() => setRevealDone(true), []);
+  // WHICH PART IS TYPING RIGHT NOW (see REVEAL_STAGES). One piece of state for
+  // the whole sequence rather than a flag per block: each reveal's completion
+  // moves it on, so "what is animating" and "what still has to be waited for"
+  // can never disagree. 'done' means the draft has fully arrived.
+  const [revealStage, setRevealStage] = useState('done');
+  // The editable draft (see the draft textarea below) grows to its own content
+  // rather than scrolling inside itself: the panel BODY is the one scroll, which
+  // is the promise .ai-draft makes, and a draft the officer is reading must not
+  // be a window with a scrollbar of its own. Re-measured whenever the text
+  // changes — including while they type in it.
+  const draftEditRef = useRef(null);
+  useEffect(() => {
+    const el = draftEditRef.current;
+    if (!el) return;
+    // `auto` first: without it the box can only ever grow, never shrink.
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft?.narrative, revealStage]);
   // "Thinking" status phases (addendum): 'waiting' = Phase A rotation
   // during the real network wait; 'verifying' = Phase B (the REAL server-
   // side safety gate result, held ~600ms for legibility).
@@ -299,12 +348,10 @@ export default function AiNarrativePanel({
     }
   }, [reportId]);
 
-  // Single source of truth for whether the panel is actually VISIBLE: the
-  // body class that reserves layout space (body.ai-panel-open → .main
-  // margin-right) MUST use the same condition the renderer uses, or the
-  // form stays squeezed next to an empty gap (the bug seen when the two
-  // drifted apart). Panel content exists while loading, on error, or when
-  // there is a draft to show.
+  // Single source of truth for whether the draft body is actually VISIBLE.
+  // Content exists while loading, on error, or when there is a draft to show:
+  // an inline box with nothing inside it is the one thing this must not draw,
+  // so the renderer's own guard below reads this and nothing else.
   const panelHasContent = mode === 'loading' || mode === 'error' || (mode === 'done' && !!draft);
 
   // Keep the session store in sync with the current draft; clear it when
@@ -321,91 +368,34 @@ export default function AiNarrativePanel({
     }
   }, [draft, reportId]);
 
-  // Docked-panel layout (Claude-sidebar style): while the panel is open in
-  // full mode, publish its width so Shell's .main reserves that space via
-  // margin-right and the report form compresses instead of being overlaid.
-  // The rail is thin, so it stays an overlay (no compression) as before.
-  useEffect(() => {
-    const open = panelOpen && !rail && panelHasContent;
-    document.body.classList.toggle('ai-panel-open', open);
-    if (open) {
-      document.body.style.setProperty('--ai-panel-w', `${panelWidth ?? 420}px`);
-    }
-    return () => {
-      document.body.classList.remove('ai-panel-open');
-    };
-  }, [panelOpen, rail, panelWidth, panelHasContent]);
-
-  // Escape closes the panel entirely; Ctrl+J toggles it (keyboard parity
-  // with the sidebar's Ctrl+B): closed → open, open → close, rail → expand.
+  // Escape hides the draft body — the same thing the ✕ does, and the same key
+  // that dismissed the docked panel before the draft moved inline. Kept because
+  // the body is a large part of the card: the key that puts it away should not
+  // depend on reaching for the corner of it.
   useEffect(() => {
     const onKey = (e) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'j' || e.key === 'J')) {
-        e.preventDefault();
-        if (!panelOpen) {
-          setPanelOpen(true);
-          setRail(false);
-        } else if (rail) {
-          setRail(false);
-          setHoverOpen(false);
-        } else {
-          setPanelOpen(false);
-        }
-      } else if (e.key === 'Escape' && panelOpen) {
-        setPanelOpen(false);
-        setRail(false);
-        setHoverOpen(false);
-      }
+      if (e.key === 'Escape' && panelOpen) setPanelOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [panelOpen, rail]);
-
-  // Edge drag on the panel's LEFT border: resize; below COLLAPSE_BELOW the
-  // panel collapses into the rail (same feel as the sidebar's handle).
-  function startPanelDrag(e) {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startW = e.currentTarget.closest('.ai-side-panel').getBoundingClientRect().width;
-    setResizing(true);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const onMove = (ev) => {
-      const w = startW - (ev.clientX - startX); // dragging left widens
-      if (w < COLLAPSE_BELOW) {
-        setRail(true);
-        return;
-      }
-      setRail(false);
-      setHoverOpen(false);
-      setPanelWidth(Math.min(PANEL_MAX, Math.max(PANEL_MIN, w)));
-    };
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      setResizing(false);
-      if (widthRef.current) {
-        window.localStorage.setItem('bw-ai-panel-w', String(widthRef.current));
-      }
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }
+  }, [panelOpen]);
 
   // Phase 6 Stage 3 — a non-English narrative on the form is a translatable
   // source (D3/D4), so Generate is NOT refused by language here any more.
   const nativeNarrative = narrativeLanguage !== 'en' && String(narrative || '').trim() !== '';
-  const effectiveSource = sourceChoice ?? (nativeNarrative ? 'narrative' : 'notes');
+  // ONE source, and the form already holds it: a narrative in another language
+  // is TRANSLATED (D3 — exactly one source per Apply), everything else is
+  // drafted from. There is no second candidate for the officer to choose
+  // between because there is no second box to write one in (see the state note
+  // above): the report IS the account.
+  const effectiveSource = nativeNarrative ? 'narrative' : 'notes';
   // Phase 6 Stage 5 (Track A, D4) — the language actually being translated for
   // this request. When its registry entry has translation_enabled=false, no
   // model call is made for it: the officer is told plainly and can still write
   // and file. The server enforces this too; the disable is so the officer is
   // not offered a control whose only answer would be no.
-  // The notes are English by definition, so the narrative is the only source
-  // that can be in another language — and the only one this guard can fire for.
+  // Only the narrative can be in another language, so it is the only source
+  // this guard can fire for.
   const translationSourceLanguage = effectiveSource === 'narrative' ? narrativeLanguage : 'en';
   const translationOff = String(translationSourceLanguage) !== 'en'
     && !translationEnabled(translationSourceLanguage);
@@ -439,22 +429,21 @@ export default function AiNarrativePanel({
   const generate = async (feedbackText = '', asGuidedStep = false) => {
     if (!asGuidedStep) setLastPress({ kind: 'generate', feedback: feedbackText });
     // THE ACCOUNT — the officer's own words, read ONCE and used for both the
-    // read below and the generation request further down. Two places hold them:
-    // the notes box, and the form's own narrative field. The notes box wins when
-    // the officer used it (it is the control that says "the AI writes from
-    // these"); otherwise the account is what they typed on the form. On the
-    // sheet that second case is the NORMAL one: the officer types the whole
-    // incident onto the page and never opens the notes box at all, so the page
-    // IS the account. Reading it in one place is what keeps the read and the
-    // draft from working on different text.
-    const accountText = String(notes || '').trim() !== '' ? String(notes) : String(narrative || '');
-    // Nothing typed anywhere is the one precondition the AI call itself has —
+    // read below and the generation request further down. There is exactly one
+    // place they live: the report's own narrative field. In the sheet format
+    // that is the page itself (the officer types the whole incident onto it, so
+    // the page IS the account); in the other formats it is the narrative the
+    // officer wrote before asking the assistant for anything. Reading it in one
+    // place is what keeps the read and the draft from working on different
+    // text.
+    const accountText = String(narrative || '');
+    // Nothing written anywhere is the one precondition the AI call itself has —
     // NOT the field verification the sheet deliberately skips (see
     // ReportEditor's onBeforeGenerate). A request with no text in it would come
     // back as an invented narrative, and an officer cannot tell that from a real
     // one.
     if (accountText.trim() === '') {
-      setMessage('Write what happened first — there is nothing for the AI to work from yet.');
+      setMessage('Write what happened first, in “Detailed Description of Events” — there is nothing yet for the AI to work from.');
       setMode('error');
       setPanelOpen(true);
       return;
@@ -477,7 +466,6 @@ export default function AiNarrativePanel({
       setMessage('Reading your account…');
       setThinkPhase('reading');
       setMode('loading');
-      setRail(false);
       setPanelOpen(true);
       setFillNote(null);
       try {
@@ -538,8 +526,7 @@ export default function AiNarrativePanel({
     setThinkPhase('waiting'); // Phase A: rotating thinking phrases
     setMessage(null);
     setResidual([]);
-    setRail(false); // loading always shows the full panel
-    setPanelOpen(true); // open the side panel immediately (shows the spinner)
+    setPanelOpen(true); // open the draft body immediately (it shows the spinner)
     // The officer's CURRENT Notable Findings and Action Taken / Status text is
     // sent with the request, not left to the server's stored row: autosave
     // only ticks every 30s, so a note typed right before clicking Generate
@@ -548,18 +535,16 @@ export default function AiNarrativePanel({
     // these live values when they are present.
     const sourceMeta = effectiveSource === 'narrative'
       ? { kind: 'narrative', text: String(narrative || ''), language: narrativeLanguage }
-      // NOTES_ARE_ENGLISH — the notes source is English, always. No language
-      // field is sent: the server reads this path as English by construction
-      // (see NarrativeController::generate), and a source pair is therefore
-      // never recorded for a notes draft — there is no original text in
-      // another language to keep.
+      // The English path. The server reads this source as English by
+      // construction (see NarrativeController::generate) and the report's own
+      // text rides the request's free-text slot, so no source pair is recorded
+      // for it: there is no original text in another language to keep.
       : { kind: 'notes', text: accountText, language: 'en' };
     setLastSource(sourceMeta);
     const body = {
-      // The ACCOUNT, not the notes box: on the sheet the officer's words are on
-      // the page, and the request that formalises them has to be made of the
-      // same text the read was. On the Translate-narrative path the server
-      // replaces this with the narrative it is translating (see
+      // The ACCOUNT — the report's own text (see accountText above), which is
+      // the server's free-text slot by this name. On the Translate-narrative
+      // path the server replaces it with the narrative it is translating (see
       // NarrativeController::generate), so sending it is always correct.
       notes: accountText,
       source: effectiveSource,
@@ -585,25 +570,33 @@ export default function AiNarrativePanel({
         // fast), then hand off to the typing reveal (§3).
         setThinkPhase('verifying');
         await holdVerifyPhase();
-        setDraft(out);
+        // The two formalised blocks are edited IN the draft (see draftDetail),
+        // so the text the officer types is kept beside the narrative rather than
+        // re-derived from the arrays on every keystroke — a round trip through
+        // an array would silently drop the empty line they are mid-way through.
+        setDraft({
+          ...out,
+          findingsText: (Array.isArray(out.notableFindings) ? out.notableFindings : [])
+            .filter((l) => String(l).trim() !== '')
+            .join('\n'),
+          statusText: String(out.actionTaken || ''),
+        });
         // Track C — the translation landed: the flow is now in the REVIEW step,
         // where nothing is applied until the officer presses the guided apply
         // button. Marked before the draft paints so no frame shows the plain
         // (non-guided) accept button on a guided translation.
         if (asGuidedStep) moveGuided('translation-ok');
         setResidual(out.residualRisk ?? []);
-        // Auto-apply the formalised findings to the report's own field: one
-        // action (this generation) produces the whole draft, and the field —
-        // never the panel — is what saves, snapshots and prints.
-        const draftedFindings = Array.isArray(out.notableFindings) ? out.notableFindings : [];
-        if (draftedFindings.length > 0) {
-          onApplyFindings?.(draftedFindings);
-        }
-        const draftedDisposition = String(out.actionTaken || '').trim();
-        if (draftedDisposition !== '') {
-          onApplyActionTaken?.(draftedDisposition);
-        }
-        setRevealDone(false); // suggestions/gaps wait for the new reveal
+        // GENERATION WRITES NOTHING INTO THE REPORT. The formalised findings and
+        // the disposition used to be pushed into the form's own fields the
+        // moment this response landed, which meant the three parts of one draft
+        // arrived by two different rules — and left the Accept button below them
+        // meaning less than it said, because the fields it promised to fill were
+        // already filled when the officer first saw them. A draft is a PROPOSAL:
+        // all three parts wait in this panel and reach the report together, on
+        // Accept (see acceptDraft). Closing the panel therefore leaves the
+        // report exactly as the officer wrote it.
+        setRevealStage('facts'); // suggestions/gaps wait for the draft to arrive
         setMode('done');
         setThinkPhase('waiting'); // reset for the next generation
         setRevealOn(true); // play the NarrativeReveal for THIS generation
@@ -613,8 +606,9 @@ export default function AiNarrativePanel({
         // the latency and token cost) and the draft applied three times.
         return;
       } catch (err) {
-        setThinkPhase('waiting'); // failure path: no thinking text (addendum §2)
-        setRevealOn(false); // never reveal a failed response
+      setThinkPhase('waiting'); // failure path: no thinking text (addendum §2)
+      setRevealOn(false); // never reveal a failed response
+      setRevealStage('done');
         const retryable = err.status === 503 && typeof err.retryIn === 'number';
         if (retryable && attempt < MAX_TRIES) {
           setMessage(`The AI service is busy — retrying automatically (attempt ${attempt + 1} of ${MAX_TRIES})…`);
@@ -681,7 +675,6 @@ export default function AiNarrativePanel({
     setThinkPhase('waiting');
     setMessage(null);
     setResidual([]);
-    setRail(false);
     setPanelOpen(true);
     try {
       const out = await api(`/reports/${rid}/narrative/tighten`, {
@@ -700,16 +693,20 @@ export default function AiNarrativePanel({
       setDraft({ ...out, tighten: true });
       moveGuided('tighten-ok');
       setResidual(out.residualRisk ?? []);
-      setRevealDone(false);
       setMode('done');
       setThinkPhase('waiting');
       // Replay the typing reveal only when the prose actually changed — an
-      // untouched copy animating itself would claim work it did not do.
+      // untouched copy animating itself would claim work it did not do. No
+      // stage is set for an unchanged copy: nothing is animating, so the
+      // sequence is already over. A tighten result has no findings or status
+      // blocks either, so its one reveal ends the sequence on its own.
       setRevealOn(out.tightened === true);
+      setRevealStage(out.tightened === true ? 'facts' : 'done');
       setGenCounter((g) => g + 1);
     } catch (err) {
       setThinkPhase('waiting');
       setRevealOn(false);
+      setRevealStage('done');
       // Track C — a failed tighten step ends the flow with the translation
       // already applied and saved: nothing is half-done, and the officer can
       // still file. (moveGuided is a no-op for a plain, non-guided tighten.)
@@ -743,12 +740,22 @@ export default function AiNarrativePanel({
     // Advance only if the machine allows it; the apply is guarded by the same
     // check, so a forbidden call (e.g. from a stale handler) changes nothing.
     if (!moveGuided('apply').ok) return;
+    // The WHOLE reviewed draft goes over, not the narrative alone: the two
+    // blocks under the translation are part of the same reviewed response, and
+    // this press is the guided flow's accept. Half a draft applied would leave
+    // the record holding one part in English and two in the officer's own
+    // language. Read before `setDraft(null)` — the parts come from this render.
+    const parts = {
+      narrative: draft.narrative,
+      findingsText: draftFindingsText,
+      statusText: draftStatusText,
+    };
     setDraft(null);
     try {
       // The editor applies it to the form AND saves it, so the record the
       // server holds is English before the economy engine is asked to run.
-      if (onApplyGuided) await onApplyGuided(draft.narrative, meta);
-      else onAccept(draft.narrative, meta);
+      if (onApplyGuided) await onApplyGuided(parts, meta);
+      else onAccept(parts, meta);
     } catch (err) {
       // The translation IS in the form (that is what the officer clicked) but
       // the save did not land, so the tighten step cannot run against an
@@ -763,7 +770,7 @@ export default function AiNarrativePanel({
 
   const acceptTightened = () => {
     if (!moveGuided('accept').ok) return;
-    onAccept(draft.narrative, null);
+    acceptDraft(null);
     setDraft(null);
     setMode('ready');
     closePanel();
@@ -804,15 +811,180 @@ export default function AiNarrativePanel({
     && String(draft.actionTaken || '').trim() !== ''
     && String(draft.actionTaken || '').trim() !== String(actionTaken || '').trim();
 
+  // THE REST OF WHAT THE DRAFT WROTE. Generate formalises THREE things — the
+  // facts of the case (the narrative, shown in the labelled box above), the
+  // Notable Findings, and the Action Taken / Status, which are what the record
+  // saves, snapshots and prints. The panel used to show only the narrative, so
+  // the other two were nowhere in the draft the officer was reviewing: it read
+  // as narrative-only, and the formalised wording turned up later, in the sheet.
+  // They are shown under the draft here, under the sheet's own names, so the
+  // whole draft is reviewed before it is accepted.
+  //
+  // EDITABLE, like the narrative above them — the officer asked to be able to
+  // fix the draft where they read it — and, like the narrative, the edit is
+  // DRAFT-LOCAL: it lands in the box's own `findingsText` / `statusText` (see
+  // generate above) and reaches the report only when Accept carries all three
+  // parts over together. Keeping the text beside the draft is also what lets the
+  // box hold what the officer is typing: re-deriving it from the server's array
+  // on every keystroke would silently eat a blank line they are midway through.
+  //
+  // A TIGHTEN result is excluded: its two fields are PROPOSALS with their own
+  // buttons below, and a tighten draft carries no formalised values of its own.
+  const draftedFindings = !tightenDraft && Array.isArray(draft?.notableFindings)
+    ? draft.notableFindings.filter((l) => String(l).trim() !== '')
+    : [];
+  // One line per line — the sheet prints the status the same way, so a second
+  // sentence does not run into the first here any more than it does there.
+  const draftedStatusLines = !tightenDraft
+    ? String(draft?.actionTaken || '').split('\n').map((l) => l.trim()).filter(Boolean)
+    : [];
+  // What the boxes hold: the text the officer is editing when there is one, and
+  // otherwise the draft as the server sent it (a draft restored from an older
+  // tab's session store carries the arrays only).
+  const draftFindingsText = draft && typeof draft.findingsText === 'string'
+    ? draft.findingsText
+    : draftedFindings.join('\n');
+  const draftStatusText = draft && typeof draft.statusText === 'string'
+    ? draft.statusText
+    : draftedStatusLines.join('\n');
+  // THE DRAFT IS WRITTEN IN FRONT OF THE OFFICER, ONE PART AT A TIME. All three
+  // parts type themselves in (NarrativeReveal) in the sheet's own order — the
+  // facts, then the findings, then the action taken — each handing over to the
+  // next as it finishes. A part the draft has nothing for is skipped rather than
+  // played empty, and a draft with neither of the two formalised blocks ends the
+  // sequence when the narrative does.
+  const hasFindings = !tightenDraft && draftedFindings.length > 0;
+  const hasStatus = !tightenDraft && draftedStatusLines.length > 0;
+  // Which part is typing, and which have already been typed in. Both read the
+  // ONE stage, so a block can never be typing and finished at the same time.
+  const typing = (stage) => revealOn && revealStage === stage;
+  // A part is on screen from the moment its turn starts and stays afterwards.
+  // With no reveal running (a draft restored from this tab's store) every part
+  // is simply in — there is no sequence to be part of.
+  const arrived = (stage) => !revealOn || REVEAL_STAGES.indexOf(revealStage) >= REVEAL_STAGES.indexOf(stage);
+  // The part that follows one that has just finished, skipping whatever this
+  // draft has nothing for — so an absent block never costs a turn.
+  const stageAfter = (stage) => {
+    for (const next of REVEAL_STAGES.slice(REVEAL_STAGES.indexOf(stage) + 1)) {
+      if (next === 'done') return 'done';
+      if (next === 'findings' && !hasFindings) continue;
+      if (next === 'status' && !hasStatus) continue;
+      return next;
+    }
+    return 'done';
+  };
+  // WHILE THE DRAFT IS STILL ARRIVING, THE DRAFT IS ALL THAT IS ON SCREEN. The
+  // reveal replays verified text at a readable pace, and everything else this
+  // panel shows about a draft — the notes, the warnings, the “no suggestions”
+  // hint and the buttons — describes text the officer has not finished being
+  // shown yet. A warning about the names in the narrative, for instance, is
+  // worth nothing before the sentence holding them has been typed. So they all
+  // wait, and `revealing` is the single condition they wait on (it is the same
+  // test the suggestion lists below have always used).
+  //
+  // It runs until the LAST part lands, so the buttons arrive once the whole
+  // draft has been read out — and Skip typing, inside whichever part is
+  // playing, is the way to cut that short.
+  //
+  // A draft restored from this tab's store plays no reveal, so nothing waits:
+  // revealOn false means `revealing` is false and the whole panel draws at once.
+  const revealing = revealOn && revealStage !== 'done';
+  // Each block fades up as its own turn arrives; the sequence itself is the
+  // stage machine above, so there are no animation delays to keep in step.
+  const arriveClass = (base) => (revealOn ? `${base} ai-draft-arrive` : base);
+  // Reaching for "Skip typing" means "show me the draft", so it ends the WHOLE
+  // sequence rather than the part it is sitting in: three presses of the same
+  // button would be three ways to ask for one thing. The panels below render
+  // their editable boxes the moment the stage is past them, so the rest of the
+  // draft is simply there.
+  const skipToEnd = () => setRevealStage('done');
+  // The block — hairline, hint and boxes — belongs to the FORMALISED parts, so
+  // it opens with the first of them and not a moment earlier. Without this the
+  // frame and its sentence would sit under the facts while the narrative was
+  // still typing, which is the one thing this sequence exists to avoid.
+  const detailShown = arrived('findings') || arrived('status');
+  const draftDetail = !detailShown || (!hasFindings && !hasStatus) ? null : (
+    <div className={arriveClass('ai-draft-detail')}>
+      <p className="field-hint">
+        Applied to the report with the facts above when you accept — the two
+        fields then carry “Formalised by the AI — Undo”, so your own wording
+        can be put back.
+      </p>
+      {hasFindings && arrived('findings') && (
+        <div className={arriveClass('ai-draft-block')}>
+          <h4>Notable findings</h4>
+          {/* Its own turn, then its own editable box — exactly what happens to
+              the narrative above, in the smaller type these two blocks use. */}
+          {typing('findings') ? (
+            <NarrativeReveal
+              text={draftFindingsText}
+              resetKey={`findings-${genCounter}`}
+              outerDurationCapMs={SUB_REVEAL_CAP_MS}
+              onComplete={() => setRevealStage(stageAfter('findings'))}
+              onSkip={skipToEnd}
+            />
+          ) : (
+            <GrowTextarea
+              value={draftFindingsText}
+              rows={2}
+              ariaLabel="Notable findings — one per line, applied to the report when you accept"
+              onChange={(text) => setDraft((d) => (d ? { ...d, findingsText: text } : d))}
+            />
+          )}
+        </div>
+      )}
+      {hasStatus && arrived('status') && (
+        <div className={arriveClass('ai-draft-block')}>
+          <h4>Action taken / status</h4>
+          {typing('status') ? (
+            <NarrativeReveal
+              text={draftStatusText}
+              resetKey={`status-${genCounter}`}
+              outerDurationCapMs={SUB_REVEAL_CAP_MS}
+              onComplete={() => setRevealStage('done')}
+              onSkip={skipToEnd}
+            />
+          ) : (
+            <GrowTextarea
+              value={draftStatusText}
+              rows={2}
+              ariaLabel="Action taken / status, applied to the report when you accept"
+              onChange={(text) => setDraft((d) => (d ? { ...d, statusText: text } : d))}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   const closePanel = () => {
     setRevealOn(false); // unmounts NarrativeReveal — cancels its timer
-    setRevealDone(false);
+    setRevealStage('done'); // reopened, the draft draws whole (see `revealing`)
     setPanelOpen(false);
-    setRail(false);
-    setHoverOpen(false);
   };
 
-  const expanded = !rail || hoverOpen || mode === 'loading' || resizing;
+  // ACCEPT — the one action that moves a draft into the report, and it moves the
+  // WHOLE draft: the facts of the case, and the two formalised blocks the
+  // officer has just read (and possibly corrected in place). One draft, one
+  // rule, so no part of it can reach the report by a quieter route than the
+  // others — which is what the auto-apply used to give the findings and the
+  // disposition, at the cost of this button meaning less than it said.
+  //
+  // A TIGHTEN result is the exception, and deliberately so: it rewrites the
+  // officer's OWN narrative, and the two field proposals it brings have their
+  // own buttons above. Accepting the wording must not smuggle them in, so only
+  // the narrative is handed over — the editor applies whatever parts it is
+  // given, and this object simply has no findingsText / statusText key.
+  const acceptDraft = (meta) => onAccept(
+    draft?.tighten
+      ? { narrative: draft.narrative }
+      : {
+        narrative: draft.narrative,
+        findingsText: draftFindingsText,
+        statusText: draftStatusText,
+      },
+    meta,
+  );
 
   // Phase 7 — the receipt for the account read, in one line. It states what was
   // filled and — because the endpoint's own contract is that they are reported
@@ -901,7 +1073,14 @@ export default function AiNarrativePanel({
       )}
 
       {mode === 'ready' && (
-        <>
+        // The highlighted block the officer works in: what this is, then the two
+        // things they can ask for. There is no field to fill in (see below) —
+        // the report IS the input — so the block is an action bar with a name,
+        // and the accent edge and tint are what make it read as the assistant's
+        // own place rather than as one more row of chrome under the form (see
+        // .ai-assist).
+        <section className="ai-assist" aria-label="AI writing assistance">
+          <AssistHead />
           {/* Phase 6 Stage 3 — the reason Tighten is off is stated where the
               control is, not only on its tooltip. Generate is NOT blocked for
               a native source: translating it is exactly what this stage adds. */}
@@ -911,36 +1090,19 @@ export default function AiNarrativePanel({
               “Translate my narrative” below.
             </div>
           )}
-          {/* D3 — exactly ONE source per Apply. A native narrative on the form
-              is offered as the source; the officer chooses, and is told the
-              other side is ignored. */}
+          {/* D3 — exactly ONE source per Apply, and there is nothing to pick:
+              the report's narrative is the source. This block used to be a
+              radio pair ("My narrative" / "My notes below") because two places
+              could hold an account; with the notes box gone the choice is
+              unmakeable, and a one-option radiogroup is a control that asks a
+              question with one answer. A native narrative says what will happen
+              on the button itself ("Translate my narrative"). */}
           {nativeNarrative && (
-            <div className="ai-source-choice" role="radiogroup" aria-label="What should be translated?">
-              <p className="field-hint">You have a {languageLabel(narrativeLanguage)} narrative. What should the AI translate?</p>
-              <label>
-                <input
-                  type="radio"
-                  name="ai-source"
-                  checked={effectiveSource === 'narrative'}
-                  onChange={() => setSourceChoice('narrative')}
-                />{' '}
-                My narrative (kept as the source)
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="ai-source"
-                  checked={effectiveSource === 'notes'}
-                  onChange={() => setSourceChoice('notes')}
-                />{' '}
-                My notes below
-              </label>
-              <p className="field-hint">
-                Only one is used. {effectiveSource === 'narrative'
-                  ? 'Your notes will not be used. '
-                  : 'Your narrative will not be used. '}
-              </p>
-            </div>
+            <p className="ai-assist-note">
+              Your {languageLabel(narrativeLanguage)} narrative is the source — it will be
+              translated into formal English. Tighten stays off until then, because the
+              economy rules only run over English text.
+            </p>
           )}
           {/* D4 — a language the system cannot translate yet says so here, in
               the approved words, and the control below is disabled. The text is
@@ -950,13 +1112,22 @@ export default function AiNarrativePanel({
               {translationDisabledNotice()}
             </div>
           )}
+          {/* THE ROUGH-NOTES BOX IS GONE (by request), and what it leaves behind
+              is the rule this block now states once: there is nothing to fill
+              in here. The officer completes the report — the account lives in
+              "Detailed Description of Events" — and presses Generate; the
+              draft comes back in a box that CAN be edited (see the draft
+              textarea in the panel below), which is where any rough wording
+              belongs. A field that had to be filled before the assistant would
+              do anything read as homework, not as help. */}
           {/* ONE row for the two things an officer can ask for: Generate
-              (which writes from the notes below) and Tighten (which works on
+              (which writes from the report) and Tighten (which works on
               the narrative THEY wrote). Sits beside Generate because it is the
               other thing an officer can ask for; disabled while that text is
               empty, because a live button that can only refuse is a dead
-              click. The long explanation of both is on the ⓘ marker, so this
-              row is a toolbar rather than two buttons under two paragraphs. */}
+              click. The long explanation of both is on the ⓘ marker in this
+              block's head, so this row is a toolbar rather than two buttons
+              under two paragraphs. */}
           <div className="ai-toolbar">
             <button
               type="button"
@@ -975,7 +1146,6 @@ export default function AiNarrativePanel({
             >
               Tighten my draft
             </button>
-            <InfoHint text={AI_TOOLBAR_HINT} />
           </div>
           {fillLine}
           {/* Phase 6 Stage 5 (Track C) — the guided flow's ONE entry point. It
@@ -997,33 +1167,6 @@ export default function AiNarrativePanel({
               <InfoHint text={AI_GUIDED_HINT} />
             </div>
           )}
-          {effectiveSource === 'notes' && (
-            <>
-              <div className="ai-notes-row">
-                {/* Two rows, not three: the notes are rough by definition, and
-                    the box grows as it is typed into. */}
-                <textarea
-                  className="ai-notes"
-                  rows={2}
-                  placeholder="Rough notes (optional) — the AI writes from these"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </div>
-              {/* Where the Notes-language selector used to be. The notes are
-                  read as English now, so the officer writing in Bisaya or
-                  Tagalog is sent to the ONE place a native source is still
-                  welcome — the narrative, where the language is DETECTED from
-                  the text instead of declared by hand. Without this line the
-                  capability would simply disappear from the screen, which is
-                  exactly the silent version of the bug the selector caused. */}
-              <p className="ai-notes-note">
-                Notes are read as English. Writing in Bisaya or Tagalog? Put that
-                account in “Detailed Description of Events” above and use
-                “Translate my narrative”.
-              </p>
-            </>
-          )}
           {/* What the draft will be written against, on ONE line: each quote
               is truncated to the measure (the full text is on its tooltip via
               `title`), so two field-length quotes cost two short lines instead
@@ -1044,7 +1187,7 @@ export default function AiNarrativePanel({
               )}
             </div>
           )}
-        </>
+        </section>
       )}
 
       {mode === 'error' && !panelOpen && (
@@ -1054,120 +1197,58 @@ export default function AiNarrativePanel({
         </div>
       )}
 
-      {/* ---- Slide-in side panel --------------------------------------
-          Never render a docked panel with nothing inside (the empty-column
-          bug seen after reloads): it only shows when there is actual
-          content — a draft, a loading state, or an error to display. The
-          SAME condition drives body.ai-panel-open, so the form never
-          reserves space for an invisible panel. */}
+      {/* A DRAFT IS WAITING AND ITS BODY IS HIDDEN. Without this the card would
+          be an empty box with a title on it — the state the officer lands in
+          when they hide the draft to read the report underneath it (✕, or
+          Escape): the draft is not gone (it lives in this tab, keyed by report
+          id), so the block has to say so and offer the way back in. Same head
+          as the ready state, one line, one control. */}
+      {mode === 'done' && draft && !panelOpen && (
+        <section className="ai-assist" aria-label="AI writing assistance">
+          <AssistHead />
+          <p className="ai-assist-note">
+            A draft is ready — review it before accepting. Nothing is written into the
+            report until you do.
+          </p>
+          <div className="ai-toolbar">
+            <button
+              type="button"
+              className="ai-run primary"
+              onClick={() => setPanelOpen(true)}
+            >
+              Open the AI draft
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* ---- The draft, INLINE in the assistant's card --------------------
+          The draft opens WHERE IT WAS ASKED FOR — under the Generate row, in
+          the AI assistance card — instead of docking a second column onto the
+          right edge, which squeezed the report the officer was reading it
+          against.
+
+          Never render a body with nothing inside it (the empty-box bug seen
+          after reloads): it only opens when there is actual content — a draft,
+          a loading state, or an error to display. */}
       {panelOpen && panelHasContent && (
-        <aside
-            className={[
-              'ai-side-panel',
-              expanded ? 'open' : 'rail',
-              !rail && hoverOpen ? 'hover-open' : '',
-              resizing ? 'is-resizing' : '',
-            ].join(' ')}
-            style={{ width: `min(${expanded ? (panelWidth ?? 420) : RAIL_W}px, 92vw)` }}
-            onMouseEnter={() => {
-              if (rail && !resizing) {
-                hoverTimer.current = window.setTimeout(() => setHoverOpen(true), 180);
-              }
-            }}
-            onMouseLeave={() => {
-              window.clearTimeout(hoverTimer.current);
-              setHoverOpen(false);
-            }}
-            role="dialog"
-            aria-label="AI narrative draft"
-            title={rail && !hoverOpen ? 'Hover to expand — Ctrl+J toggles the panel' : undefined}
-          >
-            {/* Left-edge drag handle: resize / collapse into the rail. */}
-            {!rail && (
-              <div
-                className="ai-resizer"
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize AI panel. Drag, or use arrow keys. Drag fully left or press Ctrl+J to collapse."
-                aria-valuenow={panelWidth ?? 420}
-                aria-valuemin={PANEL_MIN}
-                aria-valuemax={PANEL_MAX}
-                tabIndex={0}
-                onMouseDown={startPanelDrag}
-                onKeyDown={(e) => {
-                  const step = e.shiftKey ? 32 : 16;
-                  let next = null;
-                  if (e.key === 'ArrowLeft') next = (panelWidth ?? 420) + step;
-                  if (e.key === 'ArrowRight') next = (panelWidth ?? 420) - step;
-                  if (e.key === 'Home') next = PANEL_MIN;
-                  if (e.key === 'End') next = PANEL_MAX;
-                  if (next === null) return;
-                  e.preventDefault();
-                  if (next < COLLAPSE_BELOW) {
-                    setRail(true);
-                    return;
-                  }
-                  setRail(false);
-                  const clamped = Math.min(PANEL_MAX, Math.max(PANEL_MIN, next));
-                  setPanelWidth(clamped);
-                  window.localStorage.setItem('bw-ai-panel-w', String(clamped));
-                }}
-                title="Drag to resize — drag fully left to collapse (Ctrl+J toggles)"
-              />
-            )}
+        <section className="ai-inline" aria-label="AI narrative draft">
+          <header className="ai-inline-head">
+            <h3>AI draft</h3>
+            <button
+              type="button"
+              className="ai-side-close"
+              onClick={closePanel}
+              aria-label="Hide the AI draft"
+              title="Hide (Esc) — the draft is kept"
+            >
+              ✕
+            </button>
+          </header>
 
-            <header className="ai-side-head">
-              {/* Pinned (docked): the panel pushes the form aside and stays.
-                  Unpinning collapses to the rail; hover floats it open. */}
-              {!rail && (
-                <button
-                  type="button"
-                  className="ai-side-pin pinned"
-                  onClick={() => { setRail(true); setHoverOpen(false); }}
-                  aria-label="Unpin panel — collapse to rail"
-                  title="Unpin — collapses to a rail; hover it to peek (Ctrl+J toggles)"
-                >
-                  <PinIcon filled />
-                </button>
-              )}
-              {rail && expanded && (
-                <button
-                  type="button"
-                  className="ai-side-pin"
-                  onClick={() => { setRail(false); setHoverOpen(false); }}
-                  aria-label="Pin panel open"
-                  title="Pin open — docks the panel and compresses the form"
-                >
-                  <PinIcon />
-                </button>
-              )}
-              <h3>AI draft</h3>
-              {!rail && (
-                <button
-                  type="button"
-                  className="ai-side-close"
-                  onClick={closePanel}
-                  aria-label="Close AI panel"
-                  title="Close (Esc)"
-                >
-                  ✕
-                </button>
-              )}
-            </header>
-
-            {rail && !expanded ? (
-              <button
-                type="button"
-                className="ai-rail-expand"
-                onClick={() => { setRail(false); setHoverOpen(false); }}
-                aria-label="Expand AI panel"
-                title="Expand (Ctrl+J toggles)"
-              >
-                <span className="ai-rail-label">AI DRAFT</span>
-                <span className="ai-rail-chevron">‹</span>
-              </button>
-            ) : (
-              <div className="ai-side-body">
+          {/* The body keeps the indentation it had inside the docked panel, so
+              the diff of moving it inline is the wrapper and nothing else. */}
+          <div className="ai-inline-body">
                 {/* Phase 7 — what the read filled, above everything else: it is
                     about the REPORT, not about the draft below it. */}
                 {fillLine}
@@ -1247,10 +1328,12 @@ export default function AiNarrativePanel({
 
                 {mode === 'done' && draft && (
                   <>
+                    {!revealing && (
                     <p className="ai-side-note">
                       Not saved — review before accepting. It is never written
                       into the report automatically.
                     </p>
+                    )}
 
                     {/* Tighten edits the officer's OWN text, so there is no
                         auto-apply here (generate applies its own findings
@@ -1259,7 +1342,7 @@ export default function AiNarrativePanel({
                         wording was deliberately left alone — and the two
                         proposals for the officer's fields get their own
                         buttons. Undo is the existing aiUndo snapshot. */}
-                    {tightenDraft && (
+                    {!revealing && tightenDraft && (
                       <div className="ai-tighten-result">
                         <p className="field-hint">{draft.note}</p>
                         {(findingsProposed || statusProposed) && (
@@ -1287,9 +1370,9 @@ export default function AiNarrativePanel({
                       </div>
                     )}
 
-                    {residual.length > 0 && (
+                    {!revealing && residual.length > 0 && (
                       <div className="alert error" role="alert">
-                        These names appear in your notes but are not listed as
+                        These names appear in your narrative but are not listed as
                         parties above and were possibly sent unmasked:{' '}
                         {residual.join(', ')}. Add them as parties and regenerate
                         if privacy is a concern.
@@ -1298,37 +1381,98 @@ export default function AiNarrativePanel({
 
                     {/* Reveal (integration brief §2/§3): NarrativeReveal
                         replays the verified narrative; its own aria-live
-                        region carries the full text to AT immediately and
-                        is the SINGLE completion announcement. revealOn
-                        gates the replay — restored/accepted drafts show
-                        statically. Safety-gate ordering is structural:
+                        region carries the full text to AT immediately.
+                        revealOn gates the replay — restored/accepted drafts
+                        show statically. Safety-gate ordering is structural:
                         the server never sends a failed draft, so the
-                        reveal can only mount on verified text. */}
+                        reveal can only mount on verified text.
+
+                        It is the FIRST of three turns now (see
+                        REVEAL_STAGES): when it finishes, the sequence moves
+                        on to the findings and then the action taken, each of
+                        those replaying its own text the same way. Every part
+                        therefore carries its own live region — one
+                        announcement per part, in the order it is read, which
+                        is the honest structure for a draft that is read in
+                        three pieces. */}
+                    {/* THE DRAFT, AND THE ONE PLACE IT IS EDITABLE — by request,
+                        after generation rather than before it. It plays the
+                        reveal while it arrives (verified text only: the server
+                        never sends a failed draft), and once that has played
+                        out the text becomes a textarea: the model's wording and
+                        the officer's are one field, so a phrase they want
+                        changed is changed HERE, on the text they are about to
+                        accept, instead of being accepted first and then chased
+                        in the narrative. Accept writes whatever the box holds —
+                        `draft.narrative` IS the live value, never a copy kept
+                        beside it (which is why the edit writes it back into the
+                        draft and every apply path reads it unchanged). */}
+                    {/* The draft is shown under the three names the printed
+                        sheet uses for the same three things — FACTS OF THE
+                        CASE, NOTABLE FINDINGS, ACTION TAKEN / STATUS — so the
+                        officer reviews the draft as the document it is about
+                        to become, and sees every part Generate wrote rather
+                        than the narrative alone. */}
+                    <h4 className="ai-draft-label">Facts of the case</h4>
                     <div className="ai-draft">
-                      {revealOn ? (
+                      {typing('facts') ? (
                         <NarrativeReveal
                           text={draft.narrative}
                           resetKey={genCounter}
-                          onComplete={handleRevealComplete}
+                          onComplete={() => setRevealStage(stageAfter('facts'))}
+                          onSkip={skipToEnd}
                         />
                       ) : (
-                        draft.narrative
+                        <textarea
+                          ref={draftEditRef}
+                          className="ai-draft-edit"
+                          value={draft.narrative}
+                          onChange={(e) => setDraft((d) => (d ? { ...d, narrative: e.target.value } : d))}
+                          rows={10}
+                          aria-label="AI draft — edit before accepting"
+                        />
                       )}
                     </div>
 
-                    {/* Phase 6 Stage 3 — the "understood as" gloss pair. A
-                        SELF-REPORT for the officer to check the READING before
-                        applying, never presented as verification. Shown only
-                        when the source was non-English. */}
-                    {(draft.gloss || draft.sourceGloss) && (
+                    {/* What else this draft wrote, directly under the narrative
+                        it belongs with (see draftDetail above). NOT gated on
+                        `revealing` — unlike every other note on this panel,
+                        these two blocks are part of the sequence, not a
+                        comment on it: each one appears when its own turn
+                        starts (the `arrived` test inside draftDetail) and
+                        types itself in, so the wait here would hide the very
+                        thing the sequence is playing. */}
+                    {draftDetail}
+
+                    {/* AI UNDERSTANDING — the gloss pair (Phase 6 Stage 3), now
+                        headed and framed as a VERIFICATION AID: a reading to
+                        check before the AI draft is accepted, never an official
+                        finding and never independently verified information.
+                        The reading it holds is a SELF-REPORT of what the model
+                        understood from the officer's OWN input, under the
+                        user-input-only principle (THE GLOSS PAIR in
+                        narrative_system_prompt.txt): what the record does not
+                        state is left out, never guessed, and nothing here is
+                        written into the report. It only appears when the source
+                        was non-English, which is the only case the server
+                        returns a reading for. */}
+                    {!revealing && (draft.gloss || draft.sourceGloss) && (
                       <div className="ai-gloss">
-                        <h4>What the system understood — check this</h4>
+                        <h4>AI Understanding — For Verification Only</h4>
+                        <p className="field-hint ai-gloss-note">
+                          This summary is based only on the information entered in the report.
+                          Review it for accuracy before accepting the AI-generated draft.
+                        </p>
                         {draft.sourceGloss && <p className="ai-gloss-native">{draft.sourceGloss}</p>}
                         {draft.gloss && <p>{draft.gloss}</p>}
-                        <p className="field-hint">A reading to help you check the meaning — not a proof, and not written into the report.</p>
+                        <p className="field-hint">
+                          A verification aid, not an official police finding: it restates only
+                          what your report states, adds nothing that was not entered, and is not
+                          written into the report.
+                        </p>
                       </div>
                     )}
-                    {(draft.ambiguities?.length ?? 0) > 0 && (
+                    {!revealing && (draft.ambiguities?.length ?? 0) > 0 && (
                       <div className="alert info">
                         <h4>Unclear or least-committal ({draft.ambiguities.length})</h4>
                         <ul>
@@ -1338,7 +1482,7 @@ export default function AiNarrativePanel({
                     )}
                     {/* Computed by the APP (deterministic matching), not the
                         model — the approved terms that shaped this draft. */}
-                    {(draft.pinnedTerms?.length ?? 0) > 0 && (
+                    {!revealing && (draft.pinnedTerms?.length ?? 0) > 0 && (
                       <div className="ai-pinned">
                         <h4>Approved terms applied</h4>
                         <ul>
@@ -1358,14 +1502,14 @@ export default function AiNarrativePanel({
                         review surface and the officer is the reviewer. */}
                     {/* D2 — say plainly what Apply will store, in the words the
                         plan approved, before the button is pressed. */}
-                    {lastSource && lastSource.language !== 'en' && !tightenDraft && (
+                    {!revealing && lastSource && lastSource.language !== 'en' && !tightenDraft && (
                       <p className="alert info ai-apply-note" role="status">
                         Applying this replaces your narrative with the English text. Your original{' '}
                         {languageLabel(lastSource.language)}{' '}
                         text will be kept as this report's source, and the report will be marked as written in English.
                       </p>
                     )}
-                    {tightenDraft && (draft.factLoss?.length ?? 0) > 0 && (
+                    {!revealing && tightenDraft && (draft.factLoss?.length ?? 0) > 0 && (
                       <div className="alert error" role="alert">
                         The rewrite no longer states:{' '}
                         <strong>{draft.factLoss.join(', ')}</strong>. Tightening
@@ -1374,6 +1518,9 @@ export default function AiNarrativePanel({
                       </div>
                     )}
 
+                    {/* The controls wait as well: nothing here can sensibly be
+                        pressed on text that has not finished arriving. */}
+                    {!revealing && (
                     <div className="ai-actions">
                       {guided === 'review' ? (
                         /* Track C, step 1 — the REVIEW state. The only forward
@@ -1418,7 +1565,7 @@ export default function AiNarrativePanel({
                               // source with it, so Apply can store the officer's
                               // verbatim words and mark the report English.
                               const meta = lastSource && lastSource.language !== 'en' ? lastSource : null;
-                              onAccept(draft.narrative, meta);
+                              acceptDraft(meta);
                               setDraft(null);
                               setMode('ready');
                               closePanel();
@@ -1426,10 +1573,18 @@ export default function AiNarrativePanel({
                             disabled={tightenDraft && !draft.tightened}
                             title={tightenDraft && !draft.tightened ? 'Your wording was not changed, so there is nothing to accept.' : undefined}
                           >
-                            Accept into narrative
+                            {/* The label says what THIS draft will write, which is
+                                not the same thing on both results. A generated
+                                draft carries all three parts and Accept gives
+                                the report all three; a tighten draft rewrites
+                                the narrative only — its two field proposals
+                                have their own buttons above — so promising the
+                                report there would be the same over-claim this
+                                button used to make in the other direction. */}
+                            {tightenDraft ? 'Accept into narrative' : 'Accept into report'}
                           </button>
                           {/* Each result offers to repeat ITSELF: a generated draft
-                              regenerates from the notes, a tightened draft is
+                              regenerates from the report, a tightened draft is
                               tightened again. Offering "Regenerate" on a tighten
                               result would swap the officer's own prose for an
                               AI-written one under a button they did not mean to
@@ -1443,11 +1598,12 @@ export default function AiNarrativePanel({
                         </>
                       )}
                     </div>
+                    )}
 
                     {/* Not offered in the tighten-review state: there is no
                         translation to regenerate there, and the machine refuses
                         the event, so the button could only do nothing. */}
-                    {showFeedback && guided !== 'tighten-review' && (
+                    {!revealing && showFeedback && guided !== 'tighten-review' && (
                       <div className="ai-feedback">
                         <input
                           type="text"
@@ -1470,10 +1626,12 @@ export default function AiNarrativePanel({
                       </div>
                     )}
 
-                    {/* §4/§5: lists appear as soon as the reveal completes
-                        (naturally OR via skip — both paths fire the same
-                        onComplete) with a simple fade, no char reveal. */}
-                    {(revealDone || !revealOn) && (draft.suggestions.length > 0 || draft.possibleGaps.length > 0 || (draft.addedContentWarnings?.length ?? 0) > 0 || (draft.redundancy?.length ?? 0) > 0 || (draft.narrativeRepetition?.length ?? 0) > 0) && (
+                    {/* §4/§5: lists appear once the reveal is done (naturally
+                        OR via skip — both paths fire the same onComplete) with
+                        a simple fade, no char reveal. The wait is `revealing`
+                        above, the same condition every other review note on
+                        this panel waits on. */}
+                    {!revealing && (draft.suggestions.length > 0 || draft.possibleGaps.length > 0 || (draft.addedContentWarnings?.length ?? 0) > 0 || (draft.redundancy?.length ?? 0) > 0 || (draft.narrativeRepetition?.length ?? 0) > 0) && (
                       <div className="ai-advice ai-advice-fade">
                         {draft.suggestions.length > 0 && (
                           <>
@@ -1561,14 +1719,14 @@ export default function AiNarrativePanel({
                         )}
                       </div>
                     )}
-                    {draft.suggestions.length === 0 && draft.possibleGaps.length === 0 && (draft.addedContentWarnings?.length ?? 0) === 0 && (draft.redundancy?.length ?? 0) === 0 && (draft.narrativeRepetition?.length ?? 0) === 0 && !draft.narrativeRepaired && (
+                    {!revealing && draft.suggestions.length === 0 && draft.possibleGaps.length === 0 && (draft.addedContentWarnings?.length ?? 0) === 0 && (draft.redundancy?.length ?? 0) === 0 && (draft.narrativeRepetition?.length ?? 0) === 0 && !draft.narrativeRepaired && (
                       <p className="field-hint">No suggestions or gaps detected for this draft.</p>
                     )}
+
                   </>
                 )}
-              </div>
-            )}
-          </aside>
+          </div>
+        </section>
       )}
     </div>
   );

@@ -233,6 +233,16 @@ final class SystemInstructionTest extends TestCase
         // used…" is meta-framing the block must not contain.
         $this->assertStringContainsString('Write the observation ITSELF', $instruction);
         $this->assertStringContainsString('no "The officer noted that…"', $instruction);
+        // A field that merely holds a value is not a finding, and the block is
+        // generated from the whole record even when the officer typed nothing
+        // in the Notable Findings box.
+        $this->assertStringContainsString('NOT EVERY FILLED FIELD IS A FINDING', $instruction);
+        $this->assertStringContainsString('does NOT have to type anything', $instruction);
+        // CCTV and recovery are stated only as far as the fields state them,
+        // and no unsupported investigative conclusion may be drawn.
+        $this->assertStringContainsString('CCTV AND RECOVERY', $instruction);
+        $this->assertStringContainsString('pre-planned', $instruction);
+        $this->assertStringContainsString('familiar with the warehouse', $instruction);
     }
 
     /**
