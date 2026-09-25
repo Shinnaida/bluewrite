@@ -103,13 +103,13 @@ export function canSend(body) {
 /**
  * Whether this officer's composer should be telling the other end that they are typing.
  *
- * THREE WAYS TO BE WRONG, all of them things a separate condition would have got wrong:
- * a preview conversation must never touch the network at all; there is nothing to
- * announce once the send is in flight (the message itself is on its way); and a draft of
- * spaces is not somebody writing — the same test `canSend` makes, for the same reason.
+ * TWO WAYS TO BE WRONG, both of them things a separate condition would have got wrong:
+ * there is nothing to announce once the send is in flight (the message itself is on its
+ * way); and a draft of spaces is not somebody writing — the same test `canSend` makes,
+ * for the same reason.
  */
-export function shouldAnnounceTyping({ draft, sending = false, preview = false } = {}) {
-  if (preview || sending) return false;
+export function shouldAnnounceTyping({ draft, sending = false } = {}) {
+  if (sending) return false;
 
   return typeof draft === 'string' && draft.trim() !== '';
 }

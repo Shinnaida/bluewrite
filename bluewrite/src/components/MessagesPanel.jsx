@@ -60,11 +60,6 @@ import {
   threadPollMs,
   threadRows,
 } from '../lib/messages.js';
-// The design preview's invented conversations. `mockThreadFor` doubles as the
-// predicate: it answers with a thread for a mock officer's id and null for anybody
-// else, so there is no second id-range rule that could drift out of step with the
-// roster in that file.
-import { mockThreadFor } from '../mock-chatheads.js';
 import Avatar from './Avatar.jsx';
 
 // ---------------------------------------------------------------------------
@@ -270,7 +265,6 @@ export function MessageThreadView({
   error = null,
   draft = '',
   sending = false,
-  preview = false,
   peerTyping = false,
   onDraft,
   onSend,
@@ -367,20 +361,15 @@ export function MessageThreadView({
   };
 
   // The panel was opened to say something, so the caret starts in the box. A step that
-  // exists for no reason is a step officers learn to resent. NOT in a preview: there is
-  // no box to type in, and putting the caret in a disabled control is a focus ring on
-  // nothing.
+  // exists for no reason is a step officers learn to resent.
   useEffect(() => {
-    if (!preview) composerRef.current?.focus();
-  }, [peerId, preview]);
+    composerRef.current?.focus();
+  }, [peerId]);
 
   const trimmed = draft.trim();
   const bodyError = trimmed === '' ? null : messageBodyError(draft);
   const nearLimit = trimmed.length > MAX_BODY - 120;
-  // Nothing may be submitted in a preview — see the composer's own note. Both halves
-  // are closed on purpose: `disabled` on the input is the visible answer, and this is
-  // the one that holds if a keyboard event ever finds its way past it.
-  const canSubmit = !preview && canSend(draft) && !sending;
+  const canSubmit = canSend(draft) && !sending;
 
   // Enter sends; Shift+Enter is a newline. A message is a sentence, not a paragraph,
   // and the button is there for anybody who would rather press it.
@@ -450,17 +439,6 @@ export function MessageThreadView({
         )}
       </div>
 
-      {/* THE PREVIEW'S ONE HONEST LIMIT, stated where the writing would happen rather
-          than in a caption at the top. An enabled composer in an invented conversation
-          invites an officer to type a sentence into nothing; a disabled one says so
-          without a line of explanation. */}
-      {preview && (
-        <p className="messages-preview-note" role="status">
-          <strong>Preview</strong> — this conversation is invented for design work.
-          Nothing here is sent, and nothing here is real.
-        </p>
-      )}
-
       <form
         className="messages-composer"
         onSubmit={(event) => {
@@ -476,13 +454,12 @@ export function MessageThreadView({
             id="messages-draft"
             ref={composerRef}
             className="messages-draft"
-            rows={2}
+            rows={1}
             value={draft}
-            placeholder={preview ? 'Not available in the preview' : `Message ${peerName}…`}
+            placeholder={`Message ${peerName}…`}
             onChange={(e) => onDraft(e.target.value)}
             onKeyDown={onKeyDown}
             maxLength={MAX_BODY * 2}
-            disabled={preview}
           />
           {/* A ROUND PAPER PLANE, and its name is on the element rather than in it: the
               word "Send" is one every eye has to read on every message, and the icon is
@@ -633,15 +610,11 @@ export function ContactPickerView({ contacts = [], filter = '', loading = false,
  * handed while the first load is in flight — so a thread opened from a chathead draws
  * that person's face immediately rather than after a round trip.
  *
- * `preview` is the design-preview flag read once by Shell. It does exactly one thing
- * here: when the open peer is one of the mock officers, the thread comes from
- * `mockThreadFor` instead of the API and NOTHING in this component touches the
- * network for it — no read, no poll, no seen-mark. The conversation LIST is still
- * real: the preview invents a thread, not a mailbox, and hiding real conversations
- * behind it would be inventing away work an officer had actually done.
+ * EVERY THREAD COMES FROM THE SERVER. There is one path here — the read, the poll and
+ * the seen-mark — and no second one for a conversation drawn from invented data. See
+ * the note at the top of this file on what that rules out.
  */
 export default function MessagesPanel({
-  preview = false,
   peer = null,
   peerHint = null,
   onOpenPeer,
@@ -679,17 +652,7 @@ export default function MessagesPanel({
   // in its own temporal dead zone and throw on the first paint.
   const peerId = peer === null || peer === undefined ? null : Number(peer);
 
-  // THE INVENTED THREAD, if this peer is one of the mock officers — computed once, and
-  // recomputed only when the open conversation changes. It answers null for every real
-  // id, which is what makes it safe to treat as the predicate rather than keeping a
-  // second rule about which ids are mock.
-  const mockThread = useMemo(
-    () => (preview && peerId !== null ? mockThreadFor(peerId) : null),
-    [preview, peerId]
-  );
-  const shownThread = mockThread ?? thread;
-
-  const peerInfo = shownThread?.peer ?? (Number(peerHint?.id) === peerId ? peerHint : null);
+  const peerInfo = thread?.peer ?? (Number(peerHint?.id) === peerId ? peerHint : null);
 
   // THE POLL'S RATE, HELD IN A REF SO THAT CHANGING IT DOES NOT RESTART THE THREAD. The
   // effect that owns the conversation reads this on every turn; if the rate were a
@@ -770,10 +733,9 @@ export default function MessagesPanel({
 
   // ---- the thread ------------------------------------------------------------
   useEffect(() => {
-    // A PREVIEW THREAD GOES NOWHERE. No read, and therefore no poll and no seen-mark
-    // either: the three are one effect on purpose (see below), so returning here is
-    // what keeps every request off the wire for an id the server has never heard of.
-    if (peerId === null || mockThread !== null) {
+    // No open conversation: there is nothing to read, and the thread from the one that
+    // was open is dropped rather than left to reappear behind the list.
+    if (peerId === null) {
       setThread(null);
       setPeerTyping(false);
       return undefined;
@@ -848,7 +810,7 @@ export default function MessagesPanel({
       alive = false;
       clearTimeout(timer);
     };
-  }, [peerId, mockThread, onConnError, onUnreadChange]);
+  }, [peerId, onConnError, onUnreadChange]);
 
   // ---- telling the other end that somebody is writing -------------------------
   //
@@ -875,7 +837,7 @@ export default function MessagesPanel({
   }, [peerId]);
 
   useEffect(() => {
-    if (peerId === null || mockThread !== null) return undefined;
+    if (peerId === null) return undefined;
     if (!shouldAnnounceTyping({ draft, sending })) return undefined;
 
     const now = Date.now();
@@ -885,7 +847,7 @@ export default function MessagesPanel({
     api(`/messages/${peerId}/typing`, { method: 'POST' }).catch(() => {});
 
     return undefined;
-  }, [draft, sending, peerId, mockThread]);
+  }, [draft, sending, peerId]);
 
   // ---- the contacts picker ---------------------------------------------------
   useEffect(() => {
@@ -908,10 +870,7 @@ export default function MessagesPanel({
   }, [picker, contacts, onConnError]);
 
   const send = useCallback(async () => {
-    // The composer is disabled in a preview, so this cannot be reached from the screen
-    // — it is refused here too because "the button is disabled" is a property of one
-    // render and this is a property of the function that would POST.
-    if (mockThread !== null || !canSend(draft) || sending || peerId === null) return;
+    if (!canSend(draft) || sending || peerId === null) return;
 
     setSending(true);
     setError(null);
@@ -931,7 +890,7 @@ export default function MessagesPanel({
     } finally {
       setSending(false);
     }
-  }, [draft, sending, peerId, mockThread, onConnError, loadList]);
+  }, [draft, sending, peerId, onConnError, loadList]);
 
   return (
     <aside
@@ -955,16 +914,13 @@ export default function MessagesPanel({
         <MessageThreadView
           peerId={peerId}
           peerInfo={peerInfo}
-          messages={shownThread?.messages ?? []}
-          // A preview thread is never "loading": it was composed on this render, and a
-          // spinner over an array that already exists is a lie about where it came from.
-          loading={shownThread === null}
-          hasMore={Boolean(shownThread?.has_more)}
+          messages={thread?.messages ?? []}
+          loading={thread === null}
+          hasMore={Boolean(thread?.has_more)}
           error={error}
           draft={draft}
           sending={sending}
-          preview={mockThread !== null}
-          peerTyping={peerTyping && mockThread === null}
+          peerTyping={peerTyping}
           onDraft={setDraft}
           onSend={send}
         />

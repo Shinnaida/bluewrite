@@ -246,9 +246,8 @@ test('the window opens on the right screen, with a title bar that agrees', async
   assert.match(thread, /aria-label="All messages"/);
   // Nothing has answered yet, so the thread says so rather than showing an empty box.
   assert.match(thread, /Loading the conversation/);
-  // And the composer is live: this is a real conversation, not a preview.
+  // And the composer is live: Send is dead only because the box is empty.
   assert.match(thread, /<button type="submit" class="messages-send" disabled="" aria-label="Send message"/);
-  assert.doesNotMatch(thread, /messages-preview-note/);
 
   // OPENED FROM THE TOP BAR: the list, naming itself, with no face and no back arrow.
   const list = renderBox();
@@ -257,14 +256,8 @@ test('the window opens on the right screen, with a title bar that agrees', async
   assert.doesNotMatch(list, /bw-avatar/);
   assert.doesNotMatch(list, /aria-label="All messages"/);
 
-  // A MOCK PEER IN PREVIEW MODE: still a thread, already drawn, marked as invented.
-  const mock = renderBox({ peer: 9001, preview: true });
-  assert.match(mock, /Maria Santos/);
-  assert.match(mock, /messages-preview-note/);
-  assert.doesNotMatch(mock, /Loading the conversation/);
-
   // The box is one window with one title bar, whichever screen it is on.
-  for (const html of [thread, list, mock]) {
+  for (const html of [thread, list]) {
     assert.equal((html.match(/messages-box-head/g) || []).length, 1);
     assert.equal((html.match(/aria-label="Close messages"/g) || []).length, 1);
   }
@@ -502,15 +495,37 @@ test('the composer does not inherit the report form\u2019s 8rem min-height', asy
 
   const draft = declarationsOnly(css.slice(css.indexOf('.messages-draft {'), css.indexOf('.messages-draft:disabled {')));
   assert.match(draft, /min-height: 0;/);
-  // And it stays a composer rather than a form field: fixed two rows, no resize grip.
+  // And it stays a composer rather than a form field: no resize grip, and a fixed height
+  // it scrolls inside. A composer sized by its content with no cap is the failure in the
+  // other direction — one pasted paragraph and the thread above it is gone.
   assert.match(draft, /resize: none;/);
+  assert.match(draft, /overflow-y: auto;/);
   assert.doesNotMatch(draft, /min-height:\s*8rem/);
 
-  // The markup asks for two rows and no more. A composer sized by its content with no
-  // cap is the failure in the other direction — one pasted paragraph and the thread is
-  // gone — so both halves are asserted.
   const view = await load();
-  assert.match(view.renderThread(), /class="messages-draft"[^>]*rows="2"/);
+  assert.match(view.renderThread(), /class="messages-draft"[^>]*rows="1"/);
+});
+
+test('the composer field is the send button\u2019s height, and they share a centre line', async () => {
+  const css = await readFile(path.join(root, 'src/styles.css'), 'utf8');
+
+  // ONE SHAPE, NOT A BOX WITH A CIRCLE ON ITS CORNER. The field was two rows — about 55px
+  // against a 34px button — so the composer had two heights and the paper plane sat below
+  // the words it sends. Both numbers are read from the rules that state them rather than
+  // assumed here, because the thing worth pinning is the PAIRING: moving either one is a
+  // change to the composer, and a test holding one of them fixed would let the other
+  // drift. The height regex is anchored so it does not read `min-height` by accident.
+  const draft = declarationsOnly(css.slice(css.indexOf('.messages-draft {'), css.indexOf('.messages-draft:disabled {')));
+  const send = declarationsOnly(css.slice(css.indexOf('.messages-send {'), css.indexOf('.messages-send:hover')));
+  const heightOf = (block) => (block.match(/(?:^|[;{\s])height:\s*([0-9.]+)px;/) ?? [])[1];
+
+  assert.ok(heightOf(send), 'the send button states a height in px');
+  assert.equal(heightOf(draft), heightOf(send));
+
+  // And the row CENTRES them rather than bottom-aligning a pair that no longer differs in
+  // height — the alignment is what makes them one shape, not the arithmetic.
+  const row = declarationsOnly(css.slice(css.indexOf('.messages-composer-row {'), css.indexOf('.messages-draft {')));
+  assert.match(row, /align-items: center;/);
 });
 
 test('the box floats in the corner and takes no width from the workspace', async () => {
@@ -540,7 +555,12 @@ test('the box floats in the corner and takes no width from the workspace', async
 
   // And the rail is no longer positioned at all: a second element anchoring itself at
   // the same corner would be two answers to one question.
-  const rail = css.slice(css.indexOf('.dash-chatheads {'), css.indexOf('.dash-chatheads__list {'));
+  const rail = css
+    .slice(css.indexOf('.dash-chatheads {'), css.indexOf('.dash-chatheads__list {'))
+    // COMMENTS OFF FIRST. The rail's rule explains itself at length, and a sentence about
+    // what a `position: fixed` descendant would do must not be read as one of them — an
+    // assertion about DECLARATIONS has no business reading prose.
+    .replace(/\/\*[\s\S]*?\*\//g, '');
   assert.match(rail, /position: relative/);
   assert.doesNotMatch(rail, /position: fixed/);
   assert.doesNotMatch(rail, /right: 18px/);
@@ -552,113 +572,19 @@ test('the box floats in the corner and takes no width from the workspace', async
 });
 
 // ---------------------------------------------------------------------------
-// The design preview
+// One kind of conversation
 // ---------------------------------------------------------------------------
 
-test('the preview conversation is composed like a real one, relative to now', async () => {
-  const { mockThreadFor } = await import('../../src/mock-chatheads.js');
-  const { MOCK_CHATHEADS } = await import('../../src/mock-chatheads.js');
-
-  // A pinned clock, so "3h ago" and "09:05" can be checked against each other. The
-  // point of composing this rather than baking it: a canned `sent_label` next to a
-  // canned age is a preview that contradicts itself the moment somebody reads both.
-  const now = new Date('2026-09-22T14:00:00').getTime();
-  const thread = mockThreadFor(9001, now);
-
-  assert.equal(thread.peer.id, 9001);
-  assert.equal(thread.peer.full_name, 'Maria Santos');
-  assert.equal(thread.has_more, false);
-  // Nothing waiting, and that is deliberate: the rail's unread marks come from the
-  // heartbeat, which has nothing to say about somebody who does not exist.
-  assert.equal(thread.unread, 0);
-  assert.ok(thread.messages.length >= 4);
-
-  for (const message of thread.messages) {
-    // Every field the thread view reads. A missing one is not a crash here — it is a
-    // bubble that silently draws nothing, which is worse.
-    for (const field of ['id', 'body', 'mine', 'age_seconds', 'created_at', 'sent_label', 'day_group', 'day_label']) {
-      assert.ok(message[field] !== undefined, `${message.id} is missing ${field}`);
-    }
-    assert.match(message.sent_label, /^\d{2}:\d{2}$/);
-    assert.match(message.created_at, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
-    assert.equal(typeof message.mine, 'boolean');
-    // THE AGE AND THE CLOCK HAVE TO AGREE, which is the whole reason this is composed:
-    // the label is the server's clock and the age is how long ago it was.
-    const fromAge = new Date(now - message.age_seconds * 1000);
-    const [hh, mm] = message.sent_label.split(':').map(Number);
-    assert.equal(fromAge.getHours(), hh, `sent_label disagrees with age_seconds on ${message.id}`);
-    assert.equal(fromAge.getMinutes(), mm, `sent_label disagrees with age_seconds on ${message.id}`);
-  }
-
-  // Ids unique and ascending, so the bubbles have stable keys and read in order.
-  const ids = thread.messages.map((m) => m.id);
-  assert.deepEqual(ids, [...ids].sort((a, b) => a - b));
-  assert.equal(new Set(ids).size, ids.length);
-
-  // BOTH DAYS, because the day heading appears once per day and a one-day thread
-  // never shows the thing that is easiest to get wrong. 29 hours back is always
-  // yesterday; 3.5 hours back is today whenever the preview is opened after 03:30.
-  assert.ok(ids.some((id, i) => thread.messages[i].day_group === 'yesterday'));
-  assert.ok(ids.some((id, i) => thread.messages[i].day_group === 'today'));
-
-  // Both sides speak: a conversation of only the colleague's lines would not show the
-  // accent bubbles, which are half the design.
-  assert.ok(thread.messages.some((m) => m.mine));
-  assert.ok(thread.messages.some((m) => !m.mine));
-});
-
-test('every mock officer has a conversation, and no real id has one', async () => {
-  const { mockThreadFor, MOCK_CHATHEADS } = await import('../../src/mock-chatheads.js');
-
-  // All twelve: the rail hands over whichever circle was pressed, so a cast member
-  // without a thread would be a circle that opens an empty panel.
-  for (const person of MOCK_CHATHEADS) {
-    const thread = mockThreadFor(person.id);
-    assert.ok(thread, `${person.full_name} has no conversation`);
-    assert.equal(thread.peer.full_name, person.full_name);
-  }
-
-  // And it answers NULL for everything else — real ids, junk, nothing. That null is
-  // the panel's whole test for "is this a mock", so a loose answer here would put
-  // invented words in a real officer's conversation.
-  for (const id of [1, 7, 9, 42, 9000, 9001 + MOCK_CHATHEADS.length, 0, -1]) {
-    assert.equal(mockThreadFor(id), null, `${id} should not be a mock officer`);
-  }
-  assert.equal(mockThreadFor(null), null);
-  assert.equal(mockThreadFor('nonsense'), null);
-  assert.equal(mockThreadFor(undefined), null);
-});
-
-test('the preview conversation renders, marked, with nothing able to be sent', async () => {
-  const { renderThread, previewThread } = await load();
-  const html = renderThread({ peerInfo: previewThread.peer, messages: previewThread.messages, preview: true });
-
-  // The words are there, both days are there, nothing is loading.
-  assert.equal((html.match(/messages-bubble-body/g) || []).length, previewThread.messages.length);
-  assert.equal((html.match(/messages-day/g) || []).length, 2);
-  assert.doesNotMatch(html, /Loading the conversation/);
-
-  // MARKED, at the composer rather than at the top: the thing to prevent is somebody
-  // typing into a conversation that cannot receive it.
-  assert.match(html, /messages-preview-note/);
-  assert.match(html, /<strong>Preview<\/strong> — this conversation is invented/);
-
-  // NOTHING CAN BE SENT, and both halves of that are asserted: the field is disabled
-  // and says why, and Send is dead even though the box has focus in a real thread.
-  assert.match(html, /placeholder="Not available in the preview"/);
-  assert.match(html, /<textarea[^>]*disabled/);
-  assert.match(html, /<button type="submit" class="messages-send" disabled="" aria-label="Send message"/);
-});
-
-test('a real thread is not marked and can be written in', async () => {
+test('every thread is a real one: the field is writable and Send is live', async () => {
   const { renderThread } = await load();
   const html = renderThread({ draft: 'On my way.' });
 
-  // The same component, without the flag: no note, an enabled field, a live Send. If
-  // the preview state leaked into the real one, officers would lose the ability to
-  // reply and the CSS test above would still pass.
-  assert.doesNotMatch(html, /messages-preview-note/);
+  // THERE IS ONE KIND OF CONVERSATION IN THIS PANEL, and it is the server's. Nothing is
+  // drawn disabled, nothing is captioned as an invention, and the field takes what an
+  // officer types — a thread that silently refused a reply would leave the rest of this
+  // render looking exactly right.
   assert.doesNotMatch(html, /disabled/);
+  assert.doesNotMatch(html, /messages-preview-note/);
   // The placeholder names the recipient, which is the design's own wording and also the
   // more useful one: "Write a message…" on a window whose title bar has scrolled behind
   // the reader's eye is a form field, and this is a conversation with a person.
@@ -684,18 +610,3 @@ test('no escape sits bare in JSX text, where it would draw six characters', asyn
   }
 });
 
-test('a preview thread never reaches the server', async () => {
-  const src = await readFile(path.join(root, 'src/components/MessagesPanel.jsx'), 'utf8');
-
-  // The three requests a thread makes — the read, the poll it starts, and the
-  // seen-mark it fires after the read — are one effect, and the preview returns before
-  // any of them. Checked on the source because a render cannot see an effect at all:
-  // this is exactly the class of thing a render test is blind to.
-  assert.match(src, /if \(peerId === null \|\| mockThread !== null\) \{\s*\n\s*setThread\(null\);\s*\n\s*setPeerTyping\(false\);\s*\n\s*return undefined;/);
-  // And the send, refused by something wider than a disabled attribute.
-  assert.match(src, /if \(mockThread !== null \|\| !canSend\(draft\)/);
-  // The composer's submit path is closed on both sides in the view, too.
-  const view = src.slice(src.indexOf('export function MessageThreadView'), src.indexOf('export function ConversationListView'));
-  assert.match(view, /const canSubmit = !preview && canSend\(draft\) && !sending;/);
-  assert.match(view, /disabled=\{preview\}/);
-});

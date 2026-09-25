@@ -24,6 +24,31 @@ import { ROOT as root, loadFixture } from './renderHarness.mjs';
 /** The rail's render fixture — see renderHarness.mjs for why it has to be bundled. */
 const loadRail = () => loadFixture('tests/fixtures/chatheadRender.jsx');
 
+/**
+ * A station's worth of colleagues, in the shape the heartbeat sends them.
+ *
+ * The rail takes its roster as a prop, which is the only way to get twelve circles on
+ * screen without twelve accounts signed in — the cap and the `+N` chip below are the
+ * two things that need more people than a test file has.
+ */
+/**
+ * A rule with its comments removed.
+ *
+ * These rules explain themselves at length, and an assertion about which DECLARATIONS
+ * are present must not be reading the prose next to them: a comment that says "no
+ * `position: fixed` in here" is not a `position: fixed` declaration, and the moment the
+ * two are confused a test stops checking the stylesheet and starts checking spelling.
+ */
+const decls = (block) => block.replace(/\/\*[\s\S]*?\*\//g, '');
+
+const station = (count) => Array.from({ length: count }, (_, i) => ({
+  id: 900 + i + 1,
+  full_name: `Officer ${i + 1}`,
+  role: 'Officer',
+  badge_number: String(1000 + i),
+  idle_seconds: 10,
+}));
+
 test('the rail paints every colleague it is handed, and never the session itself', async () => {
   const { renderRail } = await loadRail();
   const html = renderRail();
@@ -52,6 +77,83 @@ test('a station with one officer signed in draws no rail at all', async () => {
   // nobody, so there is nothing to draw. It is filtered BEFORE the empty check, so
   // the rail does not hand the officer their own face back as a consolation.
   assert.equal(renderRail({ online: [{ id: 7, full_name: 'Maria Santos', role: 'Admin' }] }), '');
+});
+
+test('the rail is hidden until the pointer reaches the edge of the window', async () => {
+  const { renderRail } = await loadRail();
+  const css = await readFile(path.join(root, 'src/styles.css'), 'utf8');
+  const src = await readFile(path.join(root, 'src', 'components', 'Chatheads.jsx'), 'utf8');
+
+  // HIDDEN IS THE DEFAULT, and it is one class on the root rather than a different
+  // tree: a render with no pointer gets the tucked-away rail.
+  assert.match(renderRail(), /<div class="dash-chatheads" role="group"/);
+  assert.doesNotMatch(renderRail(), /is-revealed/);
+  // AND THE ROSTER IS IDENTICAL IN BOTH STATES — the reveal is a state of the same
+  // drawing, not a second way of drawing it. Stated as a subtraction so it cannot pass
+  // by both states having drifted somewhere new together.
+  assert.equal(
+    renderRail({ revealed: true }).replace('dash-chatheads is-revealed', 'dash-chatheads'),
+    renderRail()
+  );
+  assert.match(renderRail({ revealed: true }), /<div class="dash-chatheads is-revealed" role="group"/);
+
+  // THE CSS SIDE: hidden is opacity, never `visibility` or `display` — an invisible
+  // element that is out of the tab order is a roster only a mouse can read, which is
+  // the accessibility half of this decision rather than a styling one.
+  const rule = decls(css.slice(css.indexOf('.dash-chatheads {')).split('}')[0]);
+  assert.match(rule, /opacity: 0/);
+  assert.match(rule, /pointer-events: none/);
+  assert.doesNotMatch(rule, /visibility/);
+  assert.doesNotMatch(rule, /display:/);
+  // OUT: the pointer, or a keyboard. The focus-within half is the only keyboard route
+  // to the roster, so it is as load-bearing as the edge listener.
+  const out = css.slice(css.indexOf('.dash-chatheads.is-revealed,'));
+  const outRule = out.slice(0, out.indexOf('}'));
+  assert.match(outRule, /\.dash-chatheads:focus-within/);
+  assert.match(outRule, /opacity: 1/);
+  assert.match(outRule, /pointer-events: auto/);
+  // IT SLIDES OUT OF THE EDGE, and the transform it travels on is reset the moment it
+  // arrives: the rail carries no transform at rest, which is what keeps it out of the
+  // containing-block business the rail's own rule explains.
+  assert.match(rule, /transform: translateX\(22px\)/);
+  assert.match(outRule, /transform: none/);
+  assert.match(css, /\.dash-chatheads \{ transition: opacity 160ms ease, transform 180ms/);
+  // AND A DEVICE THAT CANNOT HOVER IS NOT LEFT WITHOUT A RAIL. `pointermove` never
+  // fires for a finger, so without this the reveal would be a deletion on a tablet:
+  // invisible, and impossible to tap into view.
+  const touch = css.slice(css.indexOf('@media (hover: none)'));
+  assert.match(touch.slice(0, 120), /\.dash-chatheads \{ opacity: 1; pointer-events: auto; \}/);
+
+  // THE WIRING, which no render can fire: the edge, the hold, and the cleanups.
+  assert.match(src, /const RAIL_EDGE_PX = 26;/);
+  assert.match(src, /e\.clientX >= window\.innerWidth - RAIL_EDGE_PX/);
+  // The band stops short of the scrollbar (`clientWidth`), so a drag on the page's own
+  // scrollbar does not open the rail on its way past.
+  assert.match(src, /e\.clientX < document\.documentElement\.clientWidth/);
+  assert.match(src, /window\.addEventListener\('pointermove', onMove\);/);
+  assert.match(src, /window\.removeEventListener\('pointermove', onMove\);/);
+  // A pointer that leaves the window at the edge produces no further move event, so
+  // the last one has to be corrected by the leave itself.
+  assert.match(src, /document\.addEventListener\('pointerleave', onLeave\);/);
+  assert.match(src, /document\.removeEventListener\('pointerleave', onLeave\);/);
+  // Held open while the pointer crosses from the edge onto a face — without this the
+  // rail would close on the frame the pointer reached it and the click would miss.
+  assert.match(src, /onPointerEnter=\{\(\) => setOverRail\(true\)\}/);
+  assert.match(src, /onPointerLeave=\{\(\) => setOverRail\(false\)\}/);
+
+  // AND IT STAYS OUT FOR A MINUTE, counted from the last interaction rather than from
+  // the first: both live states arm the dwell, and the dwell is the fourth thing that
+  // can hold the rail open — the two cursor states alone would close it the instant the
+  // pointer moved off the face it was just read.
+  assert.match(src, /const RAIL_DWELL_MS = 60000;/);
+  assert.match(src, /const revealed = defaultRevealed \|\| atEdge \|\| overRail \|\| held;/);
+  assert.match(src, /const timer = setTimeout\(\(\) => setHeld\(false\), RAIL_DWELL_MS\);/);
+  // Re-armed, not merely armed: `held` is in the dependency list, which is the difference
+  // between "a minute since the last interaction" and "a minute since the first one".
+  assert.match(src, /\}, \[atEdge, overRail, held, defaultRevealed\]\);/);
+  // A render test's rail listens to nothing: the window it would be listening to
+  // belongs to the runner.
+  assert.match(src, /if \(defaultRevealed\) return undefined;/);
 });
 
 test('somebody else\u2019s face is drawn whether or not this account can be matched', async () => {
@@ -165,43 +267,6 @@ test('an empty roster draws nothing at all', async () => {
   assert.equal(renderEmpty(), '');
 });
 
-test('the design preview draws the invented roster, and says that it has', async () => {
-  const { renderRail } = await loadRail();
-  const html = renderRail({ preview: true, online: [], expanded: true });
-  const cssInStyles = await readFile(path.join(root, 'src/styles.css'), 'utf8');
-
-  // The preview ignores the live roster entirely (it is handed an empty one here) and
-  // draws the cast in src/mock-chatheads.js instead — otherwise it could only ever be
-  // seen on a station with a full shift signed in, which is what it exists to avoid.
-  // Expanded, so this is all twelve; the collapsed rail is five plus a chip, below.
-  assert.equal((html.match(/class="dash-chathead"/g) || []).length, 12);
-  // A MOCK CIRCLE IS A REAL CONTROL, and it announces itself like one. It opens a
-  // preview conversation (see mock-chatheads.js), so the name, the role and the age
-  // are as useful to a screen reader here as they are on the live rail — a circle that
-  // announced nothing would be a press with no stated destination.
-  assert.match(html, /aria-label="Maria Santos — Officer · active just now"/);
-  assert.equal((html.match(/<button type="button" class="dash-chathead"/g) || []).length, 12);
-  // One of them has a photograph, the rest fall back to initials.
-  assert.equal((html.match(/<img/g) || []).length, 1);
-  assert.equal((html.match(/dash-chathead__face/g) || []).length, 12);
-
-  // MARKED, WITHOUT A CAPTION. There used to be one above the circles and it has been
-  // removed — but the marking itself is not gone, and that has to stay true: a mock that
-  // looks exactly like the product is a screenshot somebody later believes, of officers
-  // who do not exist. Two markers carry it now, and they are the two that survive the
-  // ways a rail gets looked at — one cropped, one read aloud.
-  assert.match(html, /class="dash-chatheads is-preview"/);
-  // 1. The dashed ring on every face, asserted as the CLASS that draws it: this is the
-  //    one that survives a crop, because it is in the image rather than beside it.
-  assert.match(cssInStyles, /\.dash-chatheads\.is-preview \.dash-chathead \{ border-style: dashed; \}/);
-  // 2. The group's own name, for anybody not looking at it.
-  assert.match(html, /aria-label="Preview: 12 mock colleagues, not real presence"/);
-  // And nothing else: the caption is gone from the markup and its rules are gone from
-  // the stylesheet, so it cannot come back as dead CSS that a later edit re-attaches.
-  assert.doesNotMatch(html, /dash-chatheads__preview/);
-  assert.doesNotMatch(cssInStyles, /dash-chatheads__preview/);
-});
-
 test('the rail stops at five and offers the rest with a count', async () => {
   const { renderRail } = await loadRail();
   const html = renderRail();
@@ -209,7 +274,7 @@ test('the rail stops at five and offers the rest with a count', async () => {
   // Two colleagues on this roster, so no chip: the cap only speaks when it bites.
   assert.equal((html.match(/\+\d/g) || []).length, 0);
 
-  const twelve = renderRail({ preview: true, online: [] });
+  const twelve = renderRail({ online: station(12) });
   // TWELVE COLLEAGUES, FIVE CIRCLES, and one chip that says so. This replaced a
   // layout that drew all twelve by wrapping into a second column: the rail ran from
   // the corner to the middle of the dashboard, and NOTHING on screen said the list
@@ -233,14 +298,14 @@ test('the rail stops at five and offers the rest with a count', async () => {
 
   // THE BOUNDARY IS THE CAP, not one past it: a roster of exactly five is five
   // circles and no chip, because there is nothing being held back to announce.
-  const five = renderRail({ online: [1, 2, 3, 4, 5].map((n) => ({ id: 900 + n, full_name: `Officer ${n}`, role: 'Officer' })) });
+  const five = renderRail({ online: station(5) });
   assert.equal((five.match(/class="dash-chathead"/g) || []).length, 5);
   assert.doesNotMatch(five, /dash-chathead--more/);
 });
 
 test('pressing the chip unfolds the rest, and the control that opened it closes it', async () => {
   const { renderRail } = await loadRail();
-  const html = renderRail({ preview: true, online: [], expanded: true });
+  const html = renderRail({ online: station(12), expanded: true });
 
   // Expanded, everybody is drawn and there is no "+N" left to press — the number
   // cannot outlive the truncation it was describing.
@@ -256,85 +321,28 @@ test('pressing the chip unfolds the rest, and the control that opened it closes 
   assert.match(html, /dash-chathead__more" aria-hidden="true">/);
 });
 
-test('the preview roster is shaped like the payload it stands in for', async () => {
-  const { MOCK_CHATHEADS } = await import('../../src/mock-chatheads.js');
-
-  // A preview drawn from shapes the server cannot send is a design for a state this
-  // system has no way to produce. The roles table holds three rows, and that is all.
-  const roles = new Set(MOCK_CHATHEADS.map((p) => p.role));
-  for (const role of roles) assert.ok(['Admin', 'Officer', 'Staff'].includes(role), role);
-  assert.equal(roles.size, 3, 'every role should appear, so the card is seen at its longest');
-
-  // users.badge_number is NOT NULL UNIQUE, so every real roster entry has one.
-  for (const person of MOCK_CHATHEADS) {
-    assert.ok(String(person.badge_number ?? '').length > 0, person.full_name);
-    assert.ok(String(person.full_name ?? '').length > 0, 'a face with no name');
-  }
-
-  // Ids far above AUTO_INCREMENT, so a mock can never be mistaken for a real account
-  // and `withoutSelf` filters none of them.
-  assert.equal(new Set(MOCK_CHATHEADS.map((p) => p.id)).size, MOCK_CHATHEADS.length, 'duplicate id');
-  assert.ok(MOCK_CHATHEADS.every((p) => p.id >= 9000), 'a mock id is in the range real accounts use');
-
-  // More circles than `max-height` holds, so the preview shows the second column too.
-  assert.ok(MOCK_CHATHEADS.length >= 11, 'too few to wrap');
-
-  // The two states that are easy to forget while designing, and which the set exists
-  // to keep visible: a photograph, and a row the server sent no ages for at all.
-  assert.equal(MOCK_CHATHEADS.filter((p) => p.photo_url).length, 1);
-  const ageless = MOCK_CHATHEADS.filter((p) => p.idle_seconds === undefined);
-  assert.equal(ageless.length, 1);
-  assert.equal(ageless[0].login_age_seconds, undefined);
-
-  // A range of ages, so "just now" and a half-hour-old reading both appear — and a
-  // name long enough to take the card's 232px onto a second line.
-  const ages = MOCK_CHATHEADS.filter((p) => p.idle_seconds !== undefined).map((p) => p.idle_seconds);
-  assert.ok(Math.min(...ages) < 45, 'nothing reads as "just now"');
-  assert.ok(Math.max(...ages) > 1500, 'nothing reads as long enough ago to be interesting');
-  assert.ok(MOCK_CHATHEADS.some((p) => p.full_name.length > 22), 'nothing long enough to wrap the card');
-});
-
-test('the preview cannot be reached from a built bundle', async () => {
-  const chatheads = await readFile(path.join(root, 'src/components/Shell.jsx'), 'utf8');
-
-  // THE PERMISSION, in one expression: a dev build AND a URL that has not said `off`.
-  // `import.meta.env.DEV` is replaced with `false` by Vite at build time, so the mock
-  // is unreachable in a shipped bundle whatever the query string says — whether the
-  // default is on (dev) or not.
-  assert.match(chatheads, /import\.meta\.env\.DEV && chatheadPreview\(window\.location\.search\)/);
-
-  // THE GUARD IS NOT IN THE RAIL, and that is deliberate: the rail is rendered by a
-  // test harness that has no Vite, so an `import.meta.env` read in it would crash
-  // there — and the preview state would stop being checkable at all. It is now read a
-  // level higher still, in Shell, because it decides the messages panel as well.
-  const railSrc = await readFile(path.join(root, 'src/components/Chatheads.jsx'), 'utf8');
-  const rail = railSrc.slice(railSrc.indexOf('export function ChatheadRail'), railSrc.indexOf('export default function Chatheads'));
-  assert.doesNotMatch(rail, /import\.meta/);
-  // The rail takes the flag as a prop instead.
-  assert.match(rail, /preview = false,/);
-
-  // And the mock data is imported in exactly one place in src/, so no screen can
-  // start drawing invented officers by accident. Matching the QUOTED module path
-  // rather than the bare word: prose that mentions the file — the note in
-  // lib/presence.js, this test — is not an importer.
+test('the invented roster is gone, and nothing imports it back', async () => {
   const files = await readdir(path.join(root, 'src'), { recursive: true });
+
+  // THE PREVIEW IS REMOVED RATHER THAN SWITCHED OFF. The rail, the box and the
+  // conversations all read the live server now, and the module that invented officers
+  // and their threads is deleted. Both halves are asserted, because either one alone
+  // leaves a way back: a reinstated file is a rail that can start drawing people who do
+  // not exist, and a stray import of a deleted module is how one gets reinstated.
+  assert.ok(!files.includes('mock-chatheads.js'), 'the mock roster is back');
+
   const importers = [];
   for (const file of files) {
     if (!/\.(jsx?|mjs)$/.test(file)) continue;
     const source = await readFile(path.join(root, 'src', file), 'utf8');
-    if (/mock-chatheads\.js['"]/.test(source)) importers.push(String(file).replace(/\\/g, '/'));
+    if (/mock-chatheads/.test(source)) importers.push(String(file).replace(/\\/g, '/'));
   }
-  // EXACTLY TWO, and both are surfaces the preview flag governs: the rail draws the
-  // invented roster, and the messages panel draws the invented conversations those
-  // circles open. A third importer is how an invented officer ends up on a screen
-  // nobody was thinking about — the dashboard, a report — so the list is asserted
-  // rather than counted.
-  assert.deepEqual(importers, ['components/Chatheads.jsx', 'components/MessagesPanel.jsx']);
+  assert.deepEqual(importers, [], 'something still names the mock roster');
 });
 
 test('the rail and the chatbox share one corner, at the theme\u2019s ink', async () => {
   const css = await readFile(path.join(root, 'src/styles.css'), 'utf8');
-  const rule = css.slice(css.indexOf('.dash-chatheads {')).split('}')[0];
+  const rule = decls(css.slice(css.indexOf('.dash-chatheads {')).split('}')[0]);
   const dock = css.slice(css.indexOf('.dash-dock {')).split('}')[0];
 
   // THE CORNER MOVED OFF THE RAIL, and that is the point of this test now. The corner
@@ -365,11 +373,18 @@ test('the rail and the chatbox share one corner, at the theme\u2019s ink', async
   // NO `overflow` ON THE RAIL, and it is a rule about the CAP rather than about a card
   // that used to hang off it: `overflow` would turn the five-circle cap into a
   // scrollbar, and the whole point of the cap is that a colleague is never scrolled off
-  // the edge. There is still no `transform` either — a transformed ancestor is the
-  // containing block for positioned descendants, which is what would trap the preview
-  // caption pinned above the rail.
+  // the edge.
   assert.doesNotMatch(rule, /overflow/);
-  assert.doesNotMatch(rule, /transform/);
+  // THE TRANSFORM REFUSAL IS RETIRED, NOT FORGOTTEN. It was written because a transformed
+  // ancestor is the containing block for positioned descendants, which would have trapped
+  // the officer card that used to open leftward out of a circle — and that card is gone
+  // (a circle opens the conversation directly, see Chatheads.jsx). What replaced the ban
+  // is narrower than the ban was: the ONLY transform the rail may carry is the reveal's
+  // slide, and it is rung back to `none` at rest (asserted in the reveal test above),
+  // while the one positioned thing left inside the rail is the presence dot, which
+  // resolves against the circle that is nearer to it than the rail is. Nothing is hung
+  // outside the rail any more, so there is nothing left for a containing block to trap.
+  assert.match(rule, /transform: translateX\(22px\)/);
   // The height is capped on the LIST instead, where `max-height` can never clip.
   const list = css.slice(css.indexOf('.dash-chatheads__list {')).split('}')[0];
   assert.match(list, /max-height: min\(72vh, 540px\)/);
@@ -386,6 +401,9 @@ test('the rail and the chatbox share one corner, at the theme\u2019s ink', async
   // widened. A literal here would look right in the theme it was written in and vanish in
   // the other — which is exactly the bug this rail was built to avoid.
   const railCss = css.slice(css.indexOf('.dash-chatheads {'), css.indexOf('.dash-chathead--more {'));
+  // Nothing in the rail pins itself to the viewport: a `position: fixed` descendant is the
+  // one kind a transform still captures, which is what keeps the slide above honest.
+  assert.doesNotMatch(decls(railCss), /position: fixed/);
   const literals = railCss.match(/#[0-9a-fA-F]{3,8}\b/g) || [];
   assert.deepEqual(literals, [], 'the rail may hard-code no colour at all');
   assert.doesNotMatch(railCss, /\brgba?\(/);
@@ -555,63 +573,6 @@ test('nothing waiting means no mark, and a count nobody can read is capped', asy
   assert.doesNotMatch(junk, /dash-chathead__unread/);
 });
 
-test('a mock circle is a control that leads to a preview conversation', async () => {
-  const { renderRail } = await loadRail();
-  // Expanded, so the count below is the whole cast rather than the five the collapsed
-  // rail draws plus its chip.
-  const preview = renderRail({ preview: true, expanded: true });
-
-  // THE SAME AFFORDANCE AS THE LIVE RAIL, because it does the same thing: it opens a
-  // conversation. An earlier version drew these as plain marks — not controls — on the
-  // theory that a mock cannot be messaged, and the cost was that the primary
-  // interaction of the whole feature could not be exercised on the machine it is most
-  // often looked at from. What makes the press honest is the DESTINATION, not the
-  // absence of one: see the panel's preview note and mockThreadFor.
-  assert.match(preview, /is-preview/);
-  assert.equal((preview.match(/<button type="button" class="dash-chathead"/g) || []).length, 12);
-  // No leftover from the inert version: no card, no Message button, and no second
-  // element type for the same circle.
-  assert.doesNotMatch(preview, /dash-chathead__message/);
-  assert.doesNotMatch(preview, /dash-chathead__card/);
-
-  // No caption above the circles and no query-string hint beside them — the on-screen
-  // instructions for reaching the live rail are gone with it, which is a real cost and
-  // recorded in docs/PRESENCE.md rather than replaced by something the design did not
-  // ask for. What marks these faces is the dashed ring and the group's name.
-  assert.doesNotMatch(preview, /dash-chatheads__preview/);
-  assert.doesNotMatch(preview, /chatheads=off/);
-  assert.match(preview, /aria-label="Preview: 12 mock colleagues, not real presence"/);
-});
-
-test('the preview flag is read once, by Shell, and handed to both surfaces', async () => {
-  const railSrc = await readFile(path.join(root, 'src/components/Chatheads.jsx'), 'utf8');
-  const shellSrc = await readFile(path.join(root, 'src/components/Shell.jsx'), 'utf8');
-
-  // It has to be read ABOVE both surfaces. It now decides the rail's roster AND what
-  // the messages panel does with the id a circle hands over, and a flag read separately
-  // in each is how an invented officer ends up on a rail whose panel refuses their id
-  // — or, worse, the other way round.
-  assert.match(
-    shellSrc,
-    /const \[preview\] = useState\(\s*\n\s*\(\) => import\.meta\.env\.DEV && chatheadPreview\(window\.location\.search\)\s*\n\s*\);/
-  );
-  // …to the rail…
-  assert.match(shellSrc, /<Chatheads\s*\n\s*user=\{user\}\s*\n\s*preview=\{preview\}/);
-  // …and to the panel.
-  assert.match(shellSrc, /<MessagesPanel\s*\n\s*preview=\{preview\}/);
-
-  // The rail takes it as a prop and does NOT read the environment: it is rendered by
-  // the test harness, which has no Vite, so a module-scope env read anywhere reachable
-  // from it would crash the very tests that check the preview.
-  assert.match(railSrc, /export default function Chatheads\(\{ user, preview = false,/);
-  assert.match(railSrc, /export function ChatheadRail\(\{[\s\S]{0,120}preview = false,/);
-  const rail = railSrc.slice(railSrc.indexOf('export function ChatheadRail'), railSrc.indexOf('export default function Chatheads'));
-  assert.doesNotMatch(rail, /import\.meta\.env/);
-  // The expression, not the phrase: this file's own comments explain where the flag is
-  // read now, and naming it in prose must not read as reading it.
-  assert.doesNotMatch(railSrc, /import\.meta\.env\.DEV &&/);
-});
-
 test('the drawing is split out of the fetching, which is what makes any of this testable', async () => {
   const src = await readFile(path.join(root, 'src/components/Chatheads.jsx'), 'utf8');
 
@@ -622,7 +583,7 @@ test('the drawing is split out of the fetching, which is what makes any of this 
   // The rail hides the session's own account, through the tested rule rather than a
   // second copy of the comparison. A `(you)` marker used to live here; it cannot
   // come back as a way of showing self again without failing this.
-  assert.match(src, /const others = withoutSelf\(preview \? MOCK_CHATHEADS : online, user\);/);
+  assert.match(src, /const others = withoutSelf\(online, user\);/);
   assert.doesNotMatch(src, /isSelf\(/);
   const rail = src.slice(src.indexOf('export function ChatheadRail'), src.indexOf('export default function Chatheads'));
   assert.doesNotMatch(rail, /\bapi\(/);

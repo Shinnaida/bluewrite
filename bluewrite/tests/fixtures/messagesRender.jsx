@@ -26,7 +26,6 @@ import MessagesPanel, {
   MessageThreadView,
   MessagesBoxHead,
 } from '../../src/components/MessagesPanel.jsx';
-import { mockThreadFor } from '../../src/mock-chatheads.js';
 
 /** A colleague with a photograph, so the <img> half of Avatar is exercised. */
 const JUAN = {
@@ -115,7 +114,6 @@ export function renderThread({
   hasMore = false,
   error = null,
   sending = false,
-  preview = false,
   peerTyping = false,
 } = {}) {
   return renderToStaticMarkup(
@@ -128,7 +126,6 @@ export function renderThread({
       hasMore,
       error,
       sending,
-      preview,
       peerTyping,
       onDraft: () => {},
       onSend: () => {},
@@ -150,12 +147,11 @@ export function renderThread({
  * the state picks, what the title bar says on each, and that the screen and the bar
  * cannot disagree about which screen is showing.
  */
-export function renderBox({ peer = null, peerHint = null, preview = false } = {}) {
+export function renderBox({ peer = null, peerHint = null } = {}) {
   return renderToStaticMarkup(
     React.createElement(MessagesPanel, {
       peer,
       peerHint,
-      preview,
       onOpenPeer: () => {},
       onClose: () => {},
       onUnreadChange: () => {},
@@ -192,16 +188,6 @@ export function renderHead({
     })
   );
 }
-
-/**
- * A REAL preview conversation, composed by the code that composes the real one.
- *
- * Built at a pinned clock rather than left to `Date.now()`, so the two day headings
- * are always the same two days and a test never fails at 3am because "3.5 hours ago"
- * crossed midnight. The messages below are the ones the preview actually draws, not a
- * hand-typed imitation of them.
- */
-export const previewThread = mockThreadFor(9001, new Date('2026-09-22T14:00:00').getTime());
 
 /** The list of conversations, with and without anything waiting. */
 export function renderList({ conversations = [], loading = false, error = false } = {}) {

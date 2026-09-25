@@ -39,6 +39,25 @@
 // `withoutSelf` in lib/presence.js for why that is a drawing rule and not a presence
 // one. You are still heartbeating, and still on everybody else's rail.
 //
+// IT SLIDES OUT FOR THE POINTER, AND STAYS OUT FOR A MINUTE. The rail is hidden until
+// the pointer touches the right edge of the window, and it is put away a minute after
+// the pointer last touched it (`RAIL_DWELL_MS`) rather than the moment it leaves — a
+// rail that vanished with the pointer would have to be summoned again to read a name
+// out of it. A permanent column of faces over every screen is furniture the station did
+// not ask for; the question ("who is on?") is one an officer asks once in a while, and
+// a report being read is not the moment to be told about it. What the rail was for is
+// unchanged, and so is everything it draws once it is out; what changed is that the
+// workspace keeps its right-hand column until somebody reaches for one.
+//
+// NOTHING IS LOST WITH IT HIDDEN, and that is what makes hiding it acceptable rather
+// than just tidier. The unread count an officer actually acts on is on the top bar's
+// Messages button (AppTopBar), which is always drawn, always counted and announced as
+// "Messages, 2 unread" — the rail's marks are the per-colleague detail of the same
+// fact, not the only place it appears. And the rail stays in the TAB ORDER while it is
+// invisible: Tab reaches a circle, `:focus-within` opens the rail, and the roster is
+// readable without a pointer (see styles.css on why this is opacity and not
+// `visibility`).
+//
 // WHY THERE ARE TWO COMPONENTS HERE AND NOT ONE. `ChatheadRail` below draws a roster
 // it is handed; `Chatheads` is the wrapper that fetches it. The split is not tidiness
 // — it is the difference between a component that can be tested and one that cannot.
@@ -64,7 +83,6 @@ import {
 // `message_unread` — a rule of the same kind as the presence ones, so it lives
 // beside them rather than in this file.
 import { unreadFor, unreadSum } from '../lib/messages.js';
-import { MOCK_CHATHEADS } from '../mock-chatheads.js';
 import Avatar from './Avatar.jsx';
 
 /**
@@ -76,6 +94,36 @@ import Avatar from './Avatar.jsx';
  * the heartbeat itself replaces the whole list.
  */
 const TICK_MS = 15000;
+
+/**
+ * How close to the right edge of the window the pointer has to come before the rail
+ * slides out, in CSS pixels.
+ *
+ * Measured against the VIEWPORT rather than against the rail, and that is the whole
+ * reason the number exists: when the pointer starts moving the rail is not on screen,
+ * so there is no box of its own to aim at. Twenty-six pixels is wide enough to hit
+ * while aiming at the edge of a 1920px screen, and narrow enough that it is not a
+ * strip anybody crosses on the way to something else. (It is deliberately wider than
+ * the rail's own 18px inset: the pointer must be able to reach the first circle
+ * without ever leaving the band that keeps the rail open.)
+ */
+const RAIL_EDGE_PX = 26;
+
+/**
+ * How long the rail stays out after the pointer last touched the edge or the rail.
+ *
+ * A MINUTE, because the rail is read rather than used: the question it answers ("who is
+ * on?") is answered by looking at it, and the faces, their ages and their unread marks
+ * all want more than the second or two a pointer spends on its way past. Closing it the
+ * moment the pointer left would mean re-seeking the edge to check a name — and the edge
+ * is a gesture somebody has to remember. Standing open for a minute after the last
+ * interaction is what makes the rail feel like something that came out, rather than
+ * something that has to be held open.
+ *
+ * The countdown starts again on every interaction, so what expires is a minute of
+ * SILENCE, not a minute from the first touch of the edge.
+ */
+const RAIL_DWELL_MS = 60000;
 
 /** One shared no-op, so a caller that hands the rail nothing gets a stable function
     rather than a new inline one on every render. */
@@ -90,15 +138,9 @@ const NOOP = () => {};
  * than read here because ageing a roster is a decision that belongs with the rules
  * in lib/presence.js, not with the drawing.
  *
- * `preview` swaps the roster for the invented one in src/mock-chatheads.js. It is a
- * PROP all the way down — read once by Shell and passed here and to the messages
- * panel — because it now decides two surfaces' worth of behaviour, and a flag read
- * separately in each is how they end up disagreeing about whether the officers on
- * screen are real.
- *
  * `unread` is the heartbeat's own list of {sender_id, count} pairs, and `onOpen` is
  * how a circle hands a colleague over to the messages panel. Both are props for the
- * same reason `preview` is: the rail draws, the wrapper fetches.
+ * same reason the roster is: the rail draws, the wrapper fetches.
  *
  * CLICKING A CIRCLE OPENS THE CONVERSATION. There used to be an officer card in
  * between — press the face, read a panel of facts, then press a Message button in it
@@ -118,39 +160,29 @@ const NOOP = () => {};
  * conversation and draws the roster without it. Close the box and the prop goes null,
  * the face is back in its slot, and the next heartbeat re-states whatever marks are
  * still true — which is what makes this self-correcting rather than a cache.
- *
- * IN PREVIEW A CIRCLE OPENS A PREVIEW CONVERSATION, and that is not the same thing as
- * a broken one. The first attempt at this made the mock faces plain marks — not
- * controls at all — which left the primary interaction of the whole feature untestable
- * on the machine it is most often looked at from. The panel draws an invented
- * conversation for these ids instead, marked as a preview, and nothing in it reaches
- * the server (see mockThreadFor in src/mock-chatheads.js). The rail does not know or
- * care which kind of peer it is handing over: it hands over an id, and the panel is
- * the thing that knows what to do with it.
  */
 export function ChatheadRail({
   user,
   online,
   elapsedSeconds = 0,
-  preview = false,
   defaultExpanded = false,
+  defaultRevealed = false,
   unread = [],
   openPeerId = null,
   onOpen = NOOP,
 }) {
   // EVERYBODY BUT YOU, and before the empty check so that a station with exactly one
   // officer signed in draws nothing at all rather than drawing that officer back to
-  // themselves. Mock ids are far above any real id, so this filters nothing in
-  // preview mode and the two paths do not need to differ.
-  const others = withoutSelf(preview ? MOCK_CHATHEADS : online, user);
+  // themselves.
+  const others = withoutSelf(online, user);
 
   // THE COLLEAGUE YOU ARE TALKING TO STEPS OUT OF THE RAIL, and this happens BEFORE the
   // cap is applied rather than after: the rail draws five circles, and hiding one of
   // the five would leave a hole where a sixth colleague could have been shown.
   //
   // A non-numeric id hides nobody rather than everybody — a bare `Number(null)` is 0,
-  // which is why the null check comes first. Ids are numbers on the wire and in the
-  // mock, so comparing as numbers is enough; nothing here guesses at a string id.
+  // which is why the null check comes first. Ids are numbers on the wire, so comparing
+  // as numbers is enough; nothing here guesses at a string id.
   const talkingTo = openPeerId === null || openPeerId === undefined || !Number.isFinite(Number(openPeerId))
     ? null
     : Number(openPeerId);
@@ -164,6 +196,81 @@ export function ChatheadRail({
   const [expanded, setExpanded] = useState(defaultExpanded);
   const { shown, hidden } = railSlots(drawable, expanded ? Number.POSITIVE_INFINITY : RAIL_SLOTS);
 
+  // HIDDEN UNTIL THE POINTER REACHES THE EDGE, and that is a change of idea rather than
+  // of style. The rail was drawn over every screen for the whole of a shift so a station
+  // with four people in it could be told apart from an empty one — and it answered that,
+  // at the price of a column of faces permanently on top of every report, every
+  // directory and every audit list, for a question an officer asks occasionally. It is
+  // furniture that slides out now, and nothing else about it changed.
+  //
+  // WHY A LISTENER AND NOT `:hover`. It cannot be `:hover`: while it is hidden the rail
+  // takes no pointer events (that is what keeps an invisible column of buttons out of
+  // the way of the clicks aimed at the table underneath), and an element that cannot be
+  // hit cannot be hovered — so whatever brings it back has to be something that does not
+  // depend on the rail's own box. `atEdge` is that. Once the rail IS out it takes pointer
+  // events again, and `overRail` is what holds it open through the gap between the edge
+  // and the first circle — without it, the move onto a face would drop the rail on the
+  // frame that reached it, and the click would land on the table.
+  //
+  // AND FROM THERE THE MINUTE TAKES OVER. `atEdge` and `overRail` describe where the
+  // POINTER is, which is the wrong question to close the rail on: it has been read, not
+  // used, and a name read off it should not have to be re-summoned a second later. So
+  // both of them only ever ARM the dwell — see `held` and `RAIL_DWELL_MS`.
+  //
+  // THE SAME SHAPE OF STATE THE RAIL ALREADY USES: `defaultRevealed` mirrors
+  // `defaultExpanded` — a render test can put both states on screen, which is the only
+  // way to see the revealed markup without a pointer, and nothing about the reveal lives
+  // anywhere but here.
+  const [atEdge, setAtEdge] = useState(defaultRevealed);
+  const [overRail, setOverRail] = useState(false);
+  // THE MINUTE IT STAYS OUT (`RAIL_DWELL_MS`), held separately from the two live states
+  // because it outlives both: the pointer leaves the edge long before the rail should
+  // leave the screen. It is armed by any interaction and disarmed by the one timer, so
+  // the only thing that closes the rail is a minute in which nothing touched it.
+  const [held, setHeld] = useState(false);
+  const revealed = defaultRevealed || atEdge || overRail || held;
+
+  useEffect(() => {
+    // A test's rail listens to nothing: the window it would be listening to is the one
+    // the runner is in.
+    if (defaultRevealed) return undefined;
+
+    // THE BAND STOPS SHORT OF THE SCROLLBAR. `innerWidth` counts the scrollbar and
+    // `clientWidth` does not, so this is the last 26px of the CONTENT edge: dragging the
+    // page's scrollbar never opens the rail, which matters because reaching for it is
+    // an ordinary thing to do. On a platform with overlay scrollbars the two numbers are
+    // equal and the band is simply the last 26px of the window — the same gesture, read
+    // the only way it can be read there.
+    const onMove = (e) => setAtEdge(
+      e.clientX >= window.innerWidth - RAIL_EDGE_PX &&
+        e.clientX < document.documentElement.clientWidth
+    );
+    // The pointer can leave the window at the edge, and then no further move event
+    // arrives to correct the last one — so leaving the document puts it away too.
+    const onLeave = () => setAtEdge(false);
+    window.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerleave', onLeave);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerleave', onLeave);
+    };
+  }, [defaultRevealed]);
+
+  // THE DWELL, and the whole of it is this effect: anything that touches the rail arms a
+  // minute, anything that touches it again re-arms it, and the only way out is the timer
+  // firing with nothing holding it open. Written so the timer is re-created rather than
+  // kept — the effect re-runs on `held` as well, which is what makes "a minute since the
+  // last interaction" the rule instead of "a minute since the first one".
+  useEffect(() => {
+    // A test's rail has no clock to run down, and `defaultRevealed` is the state it was
+    // rendered in.
+    if (defaultRevealed) return undefined;
+    if (!atEdge && !overRail && !held) return undefined;
+    setHeld(true);
+    const timer = setTimeout(() => setHeld(false), RAIL_DWELL_MS);
+    return () => clearTimeout(timer);
+  }, [atEdge, overRail, held, defaultRevealed]);
+
   // NOBODY ELSE ONLINE, NOTHING DRAWN. An empty rail — a floating sliver with no
   // circles in it — would be a permanent occupant of the screen edge for a station
   // that is empty, which is most of the night (and for the officer who is the only
@@ -176,30 +283,19 @@ export function ChatheadRail({
 
   return (
     <div
-      className={`dash-chatheads${preview ? ' is-preview' : ''}`}
+      // `is-revealed` is the whole of the visual state (styles.css): without it the rail
+      // is an opacity-zero, unclickable column that still holds its place in the corner.
+      className={`dash-chatheads${revealed ? ' is-revealed' : ''}`}
       role="group"
+      // Enter and leave rather than over/out, so crossing between two circles does not
+      // read as leaving the rail and closing it.
+      onPointerEnter={() => setOverRail(true)}
+      onPointerLeave={() => setOverRail(false)}
       // The count is what is DRAWN, so it agrees with the circles under it: a rail
       // showing one colleague does not claim two because the second is the one you are
       // already talking to in the box beside it.
-      aria-label={
-        preview
-          ? `Preview: ${drawable.length} mock colleagues, not real presence`
-          : `${drawable.length} ${drawable.length === 1 ? 'colleague' : 'colleagues'} online`
-      }
+      aria-label={`${drawable.length} ${drawable.length === 1 ? 'colleague' : 'colleagues'} online`}
     >
-      {/* NO CAPTION ABOVE THE CIRCLES. There was one — "Preview — mock officers and
-          mock conversations, not real presence" — and it was removed by request, but it
-          is worth recording that it was also broken: an absolutely positioned child of
-          the rail has a containing block only as wide as a circle, so `max-width` never
-          applied and the sentence wrapped into a tall narrow column. It could not have
-          been made to read well there.
-
-          THE PREVIEW IS STILL MARKED, in the three places that can carry it honestly:
-          a dashed ring on every invented face (styles.css), so a CROP of a screenshot
-          still says what it is; the group's accessible name below; and the note above
-          the composer in an invented conversation, which is the one place it has to be
-          read to stop somebody typing into nothing. What is gone is the on-screen hint
-          at how to reach the live rail — that lives in docs/PRESENCE.md now. */}
       <ul className="dash-chatheads__list">
         {shown.map((person) => {
           const waiting = unreadFor(unread, person.id);
@@ -279,7 +375,7 @@ export function ChatheadRail({
   );
 }
 
-export default function Chatheads({ user, preview = false, onOpen, onUnreadChange, openPeerId = null }) {
+export default function Chatheads({ user, onOpen, onUnreadChange, openPeerId = null }) {
   // The last answer from the server: the roster, the window it was filtered by, and
   // when it arrived. `at` is what lets the rail age the list it is holding.
   const [presence, setPresence] = useState(null);
@@ -311,10 +407,6 @@ export default function Chatheads({ user, preview = false, onOpen, onUnreadChang
   useEffect(() => {
     applyRef.current = applyUnread;
   }, [applyUnread]);
-
-  // `preview` arrives already decided — see Shell, which reads the URL against
-  // `import.meta.env.DEV` once and hands the answer to the rail and to the messages
-  // panel so the two cannot disagree about whether the officers on screen are real.
 
   // THE BEAT. Fired once on mount — an officer who signs in and does nothing else
   // is online from the first second, not from thirty seconds in.
@@ -379,7 +471,6 @@ export default function Chatheads({ user, preview = false, onOpen, onUnreadChang
       user={user}
       online={online}
       elapsedSeconds={elapsed}
-      preview={preview}
       unread={unread}
       // Passing the id through is the whole of the handover: the rail says who, the box
       // is where the words go, and there is no state in between that could disagree

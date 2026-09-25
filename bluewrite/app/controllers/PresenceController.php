@@ -77,6 +77,8 @@ final class PresenceController
         $pdo->prepare('UPDATE users SET last_seen_at = NOW() WHERE id = :id')
             ->execute([':id' => $me['id']]);
 
+        $this->tally($pdo, (int) $me['id']);
+
         $messages = new MessagesController();
 
         Response::json(200, [
@@ -114,6 +116,54 @@ final class PresenceController
      * users.last_seen_at (migration 014's index) and NOW() is a constant for the
      * duration of the statement.
      */
+    /**
+     * Keep today's presence for this account — the same beat, remembered.
+     *
+     * WHY A SECOND WRITE ON A ROUTE THAT RUNS EVERY THIRTY SECONDS. `last_seen_at`
+     * answers "are they here now" and is overwritten each time, so the account page's
+     * attendance sheet had nothing to read: the trail knows when somebody signed in and
+     * when they pressed Sign out, and nothing about the hours in between. This is that
+     * beat kept as a history (migration 017), which is what makes "how long was this
+     * officer at a desk on the 14th" a question the record can answer at all.
+     *
+     * WHAT IT ADDS, and the order matters. MySQL evaluates an `ON DUPLICATE KEY`
+     * assignment list left to right and a later expression sees the value an earlier one
+     * wrote — so `seconds` must be accumulated BEFORE `last_seen` moves, or the gap it
+     * measures would be the one between this beat and itself. It reads `last_seen` from
+     * the ROW (the previous beat) and adds the interval only when the two are close
+     * enough to be one sitting; past that window the interval is a break, so nothing is
+     * added and only `last_seen` moves forward.
+     *
+     * A ROW PER ACCOUNT PER DAY, not a row per beat: a beat is a liveness signal and not
+     * an event worth 2,880 rows a day per officer, and the sheet asks a question about
+     * days. The count of beats is kept because a day with ONE beat is a day somebody was
+     * there, and a sum of intervals would call it zero.
+     *
+     * IT CANNOT FAIL THE BEAT. The roster is what a chathead rail draws and what the
+     * unread counts ride on; a database that has not had migration 017 applied yet would
+     * otherwise take the whole endpoint — and every officer's rail — down with it. So the
+     * write is guarded: the beat is served either way, and the account page simply
+     * estimates that day from the trail, exactly as it does for the days before the
+     * table existed.
+     */
+    private function tally(PDO $pdo, int $userId): void
+    {
+        try {
+            $stmt = $pdo->prepare(
+                'INSERT INTO presence_days (user_id, day, first_seen, last_seen, seconds, beats)
+                 VALUES (:uid, CURDATE(), NOW(), NOW(), 0, 1)
+                 ON DUPLICATE KEY UPDATE
+                   seconds = seconds + IF(TIMESTAMPDIFF(SECOND, last_seen, NOW()) <= :gap,
+                                          TIMESTAMPDIFF(SECOND, last_seen, NOW()), 0),
+                   last_seen = NOW(),
+                   beats = beats + 1'
+            );
+            $stmt->execute([':uid' => $userId, ':gap' => self::ONLINE_WINDOW_SECONDS]);
+        } catch (\Throwable $e) {
+            error_log('presence tally skipped: ' . $e->getMessage());
+        }
+    }
+
     private function roster(PDO $pdo): array
     {
         $window = self::ONLINE_WINDOW_SECONDS;

@@ -103,10 +103,7 @@ test('a typing signal is only sent when somebody is actually typing', () => {
   assert.equal(shouldAnnounceTyping({ draft: '   ' }), false);
   assert.equal(shouldAnnounceTyping({ draft: undefined }), false);
 
-  // NOTHING IS ANNOUNCED IN A PREVIEW: that conversation is invented, so there is no
-  // account to be typing to and the request would 404 at the other end.
-  assert.equal(shouldAnnounceTyping({ draft: 'Hello', preview: true }), false);
-  // NOR WHILE THE SEND IS IN FLIGHT — the message itself is on its way, and "I am
+  // NOT WHILE THE SEND IS IN FLIGHT — the message itself is on its way, and "I am
   // typing" after pressing Send is a claim that has already stopped being true.
   assert.equal(shouldAnnounceTyping({ draft: 'Hello', sending: true }), false);
 });

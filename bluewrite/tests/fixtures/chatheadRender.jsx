@@ -59,15 +59,16 @@ const ROSTER = [
 ];
 
 /**
- * The rail with a roster, optionally with one card open, or in design-preview mode.
+ * The rail with a roster, optionally with the overflow unfolded.
  *
- * `preview` is a prop rather than a URL lookup because the rail takes it as one —
- * see Chatheads.jsx on why the `import.meta.env.DEV` guard lives in the wrapper.
+ * The roster is a PROP, which is what lets a test render a station of twelve without
+ * twelve accounts signed in — see Chatheads.jsx on why the fetching lives in the
+ * wrapper and the drawing out here.
  */
 export function renderRail({
   online = ROSTER,
-  preview = false,
   expanded = false,
+  revealed = false,
   unread = [],
   openPeerId = null,
 } = {}) {
@@ -76,16 +77,19 @@ export function renderRail({
       user: ME,
       online,
       elapsedSeconds: 0,
-      preview,
       // The rail's own state decides whether the overflow is drawn; this is its
       // initial value, and the only way to render the expanded state without a click.
       defaultExpanded: expanded,
+      // Same shape, same reason: the rail is hidden until the pointer finds the right
+      // edge of the window, and a render has no pointer — so this is the only way to
+      // see the revealed markup at all. It also silences the rail's own listener, which
+      // matters inside a test runner that shares one window with the whole suite.
+      defaultRevealed: revealed,
       unread,
       openPeerId,
       // A no-op, because a circle is a control and renderToString cannot press one.
-      // What is checked here is that the circle IS one, that it carries the right
-      // accessible name, and that preview mode takes the affordance away — the
-      // handover itself is Shell's, wired up where the panel is.
+      // What is checked here is that the circle IS one and that it carries the right
+      // accessible name — the handover itself is Shell's, wired up where the panel is.
       onOpen: () => {},
     })
   );

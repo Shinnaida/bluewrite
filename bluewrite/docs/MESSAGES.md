@@ -1,7 +1,7 @@
 # Messages
 
-Officer-to-officer messages: a docked panel on the right edge, opened from a chathead
-or from the top bar, unread marks on the faces that are waiting.
+Officer-to-officer messages: a docked panel on the right edge, opened from a chathead,
+unread marks on the faces that are waiting.
 
 This document is the reasoning, not the tour. `docs/NOTIFICATIONS.md` covers the *other*
 half of "what do I need to look at" — what happened to your own reports — and the two are
@@ -46,8 +46,14 @@ colleague, and the **contacts picker** for starting a new one.
 | Where it opens from | What you get |
 |---|---|
 | **Clicking a chathead** | that colleague's thread, already focused in the composer |
-| The top bar's **messages button** | the list of conversations |
 | The title bar's **+** | the picker, filtered by name, badge or role |
+
+The panel used to have a third doorway: a messages icon on the top bar, beside the
+notification bell, which opened the list of conversations from anywhere. It was removed
+by request. The panel, the rail's unread marks and the picker are unchanged — what went
+is only the always-there shortcut to the LIST, so a conversation is started from a
+colleague's own circle on the rail (which is on every signed-in screen), and the `+` in
+the window's title bar still searches the roster for anyone not already on it.
 
 **One click, not two.** A chathead used to open an officer card first — a small panel
 with the colleague's name, role, badge and idle time — and the conversation was behind a
@@ -64,40 +70,19 @@ better spent on somebody who has gone unread while you were typing. See
 `docs/PRESENCE.md` for where in the rail that filter happens (before the cap, so hiding
 one colleague frees a slot rather than leaving a hole).
 
-## Preview conversations
+## Every conversation is a real one
 
-In dev the rail draws a cast of invented officers instead of the real roster (see
-`docs/PRESENCE.md`), and **clicking one opens an invented conversation**. It is a
-mock of a thread, not a mock of a mailbox.
+**There is one source of threads and it is the server.** A thread is the answer to
+`GET /messages/{id}`, polled while it is open, marked seen against the newest id it drew
+— and there is no second path for a conversation drawn from invented data. The panel used
+to have one (`mockThreadFor` in a dev-only `src/mock-chatheads.js`, opened by clicking an
+invented chathead), and it was removed when the real threads went in.
 
-| A preview thread does | A preview thread does not |
-|---|---|
-| come from `mockThreadFor(id)` in `src/mock-chatheads.js` | touch the network — no read, no poll, no `seen` mark, and no typing ping |
-| carry every field the real payload carries, composed **relative to now** | claim an age that contradicts its own clock |
-| draw two days, both bubble sides, both day headings | pretend the conversation list is fake — the list behind **Back** is real |
-| say so, above the composer, in the preview vocabulary | let a single character be sent |
-
-**Why it is composed rather than baked.** A canned `sent_label` of `15:22` sitting next
-to a canned age of `3h ago` is a preview that contradicts itself the moment somebody
-reads both — and the whole point of this cast is that the *shapes* are real even though
-the people are not. So the exchange is a list of offsets into the past, and the clock
-label, the age, the `day_group` and the `day_label` are all derived from one timestamp.
-That is also what makes it testable: `mockThreadFor(id, now)` takes the clock, so a test
-pins it and checks that the label and the age agree.
-
-**The predicate is the generator.** `mockThreadFor` answers with a thread for a mock
-officer's id and `null` for everything else, and the panel treats that null as "not a
-mock, fetch it normally". One function, no second id-range rule to drift out of step
-with the roster.
-
-**Nothing can be sent, and it is closed twice.** The textarea is `disabled` and its
-placeholder reads "Not available in the preview"; the submit path checks the same flag
-in the view *and* the container's `send()` refuses. A disabled attribute is a property
-of one render; the guard in the function that would POST is the one that holds.
-
-**The list is real.** Pressing **Back** from a preview thread shows the officer's actual
-conversations with actual colleagues. The preview invents a conversation, not a mailbox
-— hiding real work behind a design aid would be a different and much worse lie.
+What that buys is the absence of a whole class of bug: nothing in this panel can show
+words nobody wrote, and nothing can accept a reply that has nowhere to go. What it costs
+is the dev machine with one account signed in — its rail is empty, so seeing a
+conversation means a second browser with a second account. That is the honest price, and
+it is cheaper than a mock thread that looks exactly like a real one.
 
 ---
 
@@ -259,7 +244,7 @@ stopped being a 128px empty box and the bubbles got tighter:
 ```
           window   composer      thread
   was      368px   128px ← bug   ~211px
-  now      460px     ~55px       ~340px
+  now      460px     ~34px       ~360px
 ```
 
 The composer was the bug, and it is worth keeping the story. A global
@@ -269,8 +254,14 @@ overrode `resize` and never `min-height`. So a window had 128px of it as a flat 
 a third of the whole panel spent on nothing, while `rows={2}` and `resize: none` both
 already said two lines. `min-height: 0` on `.messages-draft` is what fixed it, and there is
 a test that pins it *and* that the global rule still exists — because a `min-height`
-inherited from an unrelated corner of the stylesheet survives every review. A `max-height`
-now sits beside it, so a pasted paragraph cannot eat the transcript instead.
+inherited from an unrelated corner of the stylesheet survives every review. The field is
+**one line and exactly the height of the send button** — `height: 34px` on
+`.messages-draft`, the same number as `.messages-send` — and anything longer **scrolls
+inside the field** rather than growing it, which is what keeps a pasted paragraph from
+eating the transcript. It was two rows (~55px) against a 34px circle, so the composer had
+two heights and the paper plane sat below the words it sends; the test asserts the two
+heights are equal to *each other* rather than to a number written into the test, so moving
+either one is a change it sees.
 
 ### What it is made of, and the one colour that does not flip
 
@@ -458,9 +449,8 @@ instead of once per day, a receipt drawn on the wrong side of the conversation, 
 drawn on somebody's own sentence.
 
 **What a render still cannot see**, and is therefore checked on the source: whether the
-preview short-circuits before it touches the network, whether the poll's rate is read from
-a ref rather than depended on, and whether auto-follow is decided from a ref. All three are
-effects, and `renderToString` runs none of them.
+poll's rate is read from a ref rather than depended on, and whether auto-follow is decided
+from a ref. Both are effects, and `renderToString` runs neither of them.
 
 ---
 
@@ -477,9 +467,8 @@ effects, and `renderToString` runs none of them.
 | `src/components/MessagesPanel.jsx` | the five views and the container |
 | `src/components/Avatar.jsx` | the one face in the app, and which of the six gradients an account gets |
 | `src/components/Chatheads.jsx` | the unread marks, and the handover on a circle's press |
-| `src/mock-chatheads.js` | the dev-only preview: the cast of officers **and** their conversations |
-| `src/components/AppTopBar.jsx` | the messages button and its badge |
-| `src/components/Shell.jsx` | the panel's state, the corner, and the one unread count both surfaces read |
+| `src/components/AppTopBar.jsx` | the bar itself — no messages control since it was removed; the notification bell and the profile pill are what it carries |
+| `src/components/Shell.jsx` | the panel's state and the corner it lives in |
 | `src/styles.css` | the `--msg-*` and `--bw-face-*` tokens, the window, the bubbles, the composer, the marks |
 | `src/dark-theme.css` | the same surfaces after dark — the navy tint, and the one design grey that had to be lifted to be readable |
 

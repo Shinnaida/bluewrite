@@ -20,11 +20,55 @@ Migration 014 is also what a photograph needs: it adds the `users` columns the
 files are recorded in. The files themselves live in `storage/avatars/`, made on
 demand, **git-ignored** — a photograph is user data, not source.
 
+The beat is also what the account page's **attendance sheet** reads, and that takes a
+second migration:
+
+```bash
+mysql -u root -p bluewrite < migrations/017_presence_days.sql
+```
+
+Until it runs, `POST /presence/heartbeat` answers normally — the tally is guarded, because
+the rail and the unread counts ride on the same endpoint — and the account page estimates
+the whole year from the trail's sign-ins instead. `presence_days` keeps one row per account
+per day, which is what makes "how long was this officer at a desk on the 14th" a question
+the record can answer at all; see *The half of absence nobody records* below.
+
+## The half of absence nobody records
+
+A presence rail answers *who is here now*, and the beat behind it is thrown away —
+`users.last_seen_at` is one stamp, overwritten on every beat. So the station had no
+answer to the question an attendance sheet asks: how long was this officer at a desk on
+the 14th. The audit trail could not answer it either: it records when somebody SIGNS IN
+and when they press SIGN OUT, and closing the tab, walking away or shutting the PC down
+all leave no end mark at all.
+
+`presence_days` (migration 017) is that beat kept as a history. What it measures, exactly:
+
+- **time at a desk**, not first-beat-to-last-beat — the sum of the gaps between
+  consecutive beats that are close enough together to be one sitting, using the same window
+  that decides who is online. A three-hour lunch is therefore not three hours of work, and
+  a slow minute is not a break;
+- **first seen and last seen beside it**, because a span and a sum are two facts about a
+day. The span is what the sheet shows on hover (`08:02–17:11, 6h 40m at the desk`);
+- **the beat count**, because a day with a single beat is a day somebody was there and a sum
+  of intervals would call it zero.
+
+WHAT IT CANNOT SEE: the beat runs while the workspace is open, so a station PC left signed
+in overnight counts as time at a desk. That is the honest reading of "the workspace was
+open", and it is why the page prints the total in words beside the squares rather than
+leaving the colours to speak for themselves. For the days before 017 there is nothing to
+backfill — the beats were never recorded — so the sheet estimates those from the trail's
+sign-ins and marks them as estimates.
+
 ## What it is
 
 Every account that has said "still here" in the last **two minutes**, as a column
-of circles in the **lower right corner** of whatever screen is open. It hangs
-upward from the corner: the workspace's own content is top-left heavy (headers,
+of circles in the **lower right corner** of whatever screen is open — and **out of
+the way until it is asked for**: the rail is invisible until the pointer reaches the
+right edge of the window, and it is put away again when the pointer leaves. See
+*Coming out for the pointer* below for why it is a listener rather than `:hover`.
+
+Once it is out, it hangs upward from the corner: the workspace's own content is top-left heavy (headers,
 tables, the dashboard grid), and the corner is the one part of the edge that is
 usually empty. The row nearest the corner is also the one that never moves as
 colleagues come and go, because the bottom edge is the anchor and the names read
@@ -281,13 +325,30 @@ shifted left of one would sit on top of the form it just uncovered — there it 
 give away, and the rail would cover the workspace it is reporting on. It is also
 hidden in `@media print`.
 
-**No `overflow` and no `transform` on the rail**, and both absences are still
-deliberate even though the reason they were first written down is gone:
+**No `overflow` on the rail**, and the absence is still deliberate even though the
+reason it was first written down is gone:
 
 - **`overflow`** would turn the cap into a scrollbar. The rail draws five circles and
 a `+N` chip precisely so it never has to scroll — the whole point of the cap is that a
 colleague is never scrolled off the edge, and a scrollbar would put the person the
 officer is looking for one flick away from invisible. Two columns, then the chip.
+- **`overflow`**, and this is the second thing it would break: a hidden rail slides out
+from the edge (see *Coming out for the pointer*), so anything clipped here would cut the
+motion off mid-frame.
+
+The **`transform` refusal is retired**, and it is worth saying why rather than deleting
+it quietly. It existed because a `transform` makes an element the containing block for
+positioned descendants, which was going to trap the officer card that opened leftward
+out of a circle in a box one circle wide. **That card is gone** — a circle opens the
+conversation directly, and the docs for its removal are in `Chatheads.jsx`. What is left
+inside the rail that is positioned at all is the presence dot, and it resolves against
+the circle, which is nearer to it than the rail is. So the rail may carry exactly one
+transform: the reveal's slide, rung back to `none` at rest. `chatheads.test.mjs` pins
+both halves, including that nothing in the rail is `position: fixed` (the one kind of
+descendant a transform still captures).
+
+The old note is kept below for the part that still holds:
+
 - **`transform`** makes an ancestor the containing block for positioned descendants.
 The circle's own `translateY(-1px)` hover lift is on the button, not the rail, so
 nothing is pinned today — but the rail is still anchored with `right` and `bottom`
@@ -295,11 +356,74 @@ rather than the usual `top: 50%` + `translateY(-50%)` edge-rail centring, becaus
 centring is exactly what would trap anything positioned outside the rail if something
 ever is again.
 
-**In preview mode the circles are still controls, and the dashed ring still says they
-are not people.** They open an invented conversation — marked, and unable to reach the
-server — rather than nothing, because an earlier version drew them as inert marks and
-that made the primary interaction of the whole feature untestable on the machine it is
-most often looked at from. See the design preview section below and `docs/MESSAGES.md`.
+## Coming out for the pointer
+
+**Hidden by default.** The rail used to be drawn over every screen for the whole of a
+shift, so that a station with four people in it could be told apart from an empty one.
+It answered that, at the price of a permanent column of faces on top of every report,
+directory and audit list — for a question an officer asks occasionally. It is furniture
+that slides out now: invisible until the pointer reaches the right edge, and gone again
+a **minute** after the pointer last touched it. **Nothing else about it changed** — the
+same roster, the same cap, the same tooltips, the same unread marks.
+
+**The trigger is a listener, not `:hover`, and that is forced.** While the rail is
+hidden it takes no pointer events, which is what keeps an invisible column of buttons
+out of the way of the clicks aimed at the table underneath — and an element that cannot
+be hit cannot be hovered either, so the thing that brings it back cannot be the rail's
+own box. `Chatheads.jsx` watches `pointermove` against `RAIL_EDGE_PX` (26px, measured to
+the **viewport** edge, not to the rail, which is not on screen when the pointer starts
+moving) and marks the rail open. Two further rules fall out of the same listener:
+
+| State | What holds the rail open |
+| --- | --- |
+| The pointer is at the edge | `atEdge` — the listener above |
+| The pointer is on the rail | `overRail` — enter/leave on the rail's root |
+| **A minute of silence** | `held` — `RAIL_DWELL_MS`, armed and re-armed by the two above |
+| A keyboard is inside it | `:focus-within` in CSS |
+
+**It stays out for a minute** (`RAIL_DWELL_MS = 60000`), and that is the row in that
+table worth reading twice. The two cursor states say where the *pointer* is, and that is
+the wrong question to close the rail on: the rail is read, not used — the faces, their
+ages and their unread marks all want more than the second or two a pointer spends on its
+way past — and closing it the instant the pointer left would mean re-seeking the edge to
+check a name, a gesture somebody has to remember. So both cursor states only ever arm the
+dwell, and the countdown is re-armed by every interaction: what expires is a minute of
+**silence**, not a minute from the first touch of the edge. A keyboard inside the rail
+still holds it open beyond that, which is the one thing the minute cannot close.
+
+The `overRail` half is the one that is easy to miss: without it, moving from the edge
+onto a face would close the rail on the frame that reached it and the click would land
+on the table. It is enter/leave rather than over/out so that crossing between two
+circles does not read as leaving. A pointer that leaves the window at the edge produces
+no further move event, so `pointerleave` on the document corrects the last one.
+
+**Hidden is `opacity: 0`, never `visibility` or `display`.** This is the accessibility
+decision in the rule rather than a styling one: an opacity-zero element stays in the tab
+order, so tabbing to the first circle opens the rail and the whole roster is reachable
+without a pointer. `visibility: hidden` would take the rail out of the tab order *and*
+the accessibility tree, making it a mouse-only feature. The cost is that the box keeps
+its place in the corner while invisible, which is deliberate: an invisible box that
+holds its place is cheaper than a chatbox that jumps right the moment somebody touches
+the edge.
+
+**It slides out of the edge, and it fades on the way.** The travel is
+`translateX(22px)` — the rail's own 18px inset plus a little, so the tucked-away rail is
+a sliver past the viewport edge and the motion starts off-screen rather than from an
+offset anybody can see. Nothing is clipped doing it: the corner is `position: fixed`, so
+a child past the right edge contributes no scrollbar, and the rail is invisible in that
+state anyway. `transform` returns to `none` the moment it arrives, which is what keeps
+the containing-block question above closed for everything except the 180ms in flight.
+The slide carries the motion and the fade covers its tail, so there is never a moment
+where a fully opaque column is moving over the table.
+
+Both transitions are gated with the corner's others on `prefers-reduced-motion`; **the
+states are not**, so for a reader who asked for less motion the rail is simply there or
+not, instantly, in the right place.
+
+**Nothing is lost while it is hidden.** The unread count an officer acts on is on the top
+bar's Messages button — always drawn, always counted, announced as "Messages, 2 unread".
+The rail's marks are the per-colleague detail of the same fact, not the only place it
+appears.
 
 ## Five circles, then a count
 
@@ -344,15 +468,31 @@ that is empty, which is most of the night.
 
 | Route | Who | What |
 | --- | --- | --- |
-| `POST /me/photo` | the session's own account | multipart `photo`; replaces it, audited `user.photo_set` |
+| `POST /me/photo` | the session's own account | multipart `photo`; replaces it, audited `user.photo_set` with the officer as the actor |
 | `DELETE /me/photo` | the session's own account | back to initials, audited `user.photo_remove`, idempotent |
+| `POST /users/:id/photo` | **Admin only** | the same upload for somebody else, audited `user.photo_set` with the **admin** as the actor |
+| `DELETE /users/:id/photo` | **Admin only** | their face back to initials, audited the same way, idempotent |
 | `GET /users/:id/photo` | **any signed-in role** | the stored bytes |
 
-Under `/me`, and **there is deliberately no admin route that sets another
-officer's photograph.** An avatar is part of an account's identity, and identity is
-the one thing every role may change about themselves and nobody may change about
-somebody else. That is also why `/me/photo` is registered *after* the auth gate,
-so the CSRF token is not optional.
+The officer's own face lives under `/me`, and both `/me/photo` routes are
+registered *after* the auth gate, so the CSRF token is not optional. The ordinary
+way a face is chosen is by its owner.
+
+**The admin route exists because of one case the owner cannot answer: an account
+that has not signed in yet.** It was added deliberately, and the note that used to
+say no such route existed was right for the version of the station that had no
+directory. What changed is that accounts are now created here — an administrator
+sets a name, a badge and a role, and the account may sit unused for days. "Their
+face is theirs to choose" left the roster drawing a blank circle for that whole
+time, which is not a principle being honoured; it is a hole in the record.
+
+**So it is an Admin action, and it is audited as one.** `UsersController::setPhoto`
+and `clearPhoto` write the same `user.photo_set` / `user.photo_remove` actions
+the officer's own upload does, against the officer's id, with the admin as the
+actor — so the trail can always answer who put that photograph there. An officer
+who replaces it later does not erase that entry: the trail records acts, and this
+one happened. Everything else about the two routes is shared, including every rule
+below — **an admin route is not a weaker upload.**
 
 `GET /users/:id/photo` is **the only route in `UsersController` that is not
 admin-only** — the roster draws every signed-in colleague's face, so every role
@@ -428,36 +568,24 @@ only ever readable through the API, under a session.
   failure the app noticed. The state resets when the URL changes, so a re-upload
   gets a fresh attempt.
 
-## The design preview
+## Where the roster comes from
 
-**On by default in dev.** The rail is a roster of **other** people, so on a
-development machine it is empty — filling it means a second browser with a second
-account, and filling it with nine faces means nine accounts. That makes it
-impossible to design against: "does a role read next to a badge?", "does the `+N` chip
-land on the last circle before the corner?" and "what does a second column look
-like?" all need a full rail to look at. So `src/mock-chatheads.js` is a cast of
-twelve invented officers, and in dev the rail draws them.
+**`POST /presence/heartbeat`, and nothing else.** The rail draws whatever the server
+last filtered, aged by the client against the server's own window, so every circle on it
+is a real account signed in on this station. There is no second source and there is no
+design preview any more: the rail used to have one — a cast of twelve invented officers
+in `src/mock-chatheads.js`, drawn by default on a dev machine and switched off with
+`?chatheads=off` — and it went when the real conversations went in. A rail that can draw
+officers who do not exist is a screenshot somebody later believes, and the two surfaces
+that read it (this rail and the chatbox beside it) now read the live server for one
+answer.
 
-**They ARE pressable, and that is a reversal worth recording.** A circle's job is to
-open a conversation, and there is no conversation to open with an account that does not
-exist — so the first version drew the mock faces as plain marks: not controls at all,
-with an explanation beside them. What that actually produced was the primary
-interaction of the whole feature being untestable on the machine it is most often looked
-at from. A dev box has one account signed in, the real rail is therefore empty, and the
-only chatheads on screen could not be clicked. "I cannot click the chatheads" is what
-that costs.
+The cost is real and it is known: **on a development machine the rail is empty**, because
+a roster of other people with nobody else in the building has nothing to say. Seeing more
+than one face means two browsers with two accounts — which is also the only way to check
+that the heartbeat actually works.
 
-So pressing a mock officer now opens a **preview conversation**: invented messages, in
-the shape the controller sends, composed relative to the clock, with a note at the
-composer and nothing in it able to reach the server. What makes that honest is the
-marking and the dead composer, not the absence of a destination. The full reasoning is
-in `docs/MESSAGES.md`.
-
-**The flag is read once, by Shell.** It decides the rail's roster and what pressing one
-of its circles opens, so a second read in the box is how an invented officer ends up on a
-rail whose box refuses their id.
-
-### The colleague you are talking to leaves the rail
+## The colleague you are talking to leaves the rail
 
 `openPeerId` — the id of the conversation the chatbox is showing, or null — takes that
 colleague's **whole circle** off the rail while the box is open. Close the box and the
@@ -482,91 +610,6 @@ than a cache.
 A two-officer station with the other one's conversation open therefore draws **no rail at
 all** — the same rule as the one-officer station above, reached from the other side.
 Nobody left to draw is not an empty frame; it is nothing.
-
-```
-http://localhost:5180/?chatheads=off     ← the REAL roster (live presence)
-```
-
-`off` (or `live`) is the only value that means anything, and it is the one that
-matters: checking that presence actually works needs real presence. It wins over
-any other value, so a stray `&chatheads=preview` cannot cancel it.
-
-### The default flipped, and why
-
-This shipped as an **opt-in** behind `?chatheads=preview`, on the theory that an
-explicit request is safer than something that simply appears. What it produced was
-invisibility: the rail was empty on every dev machine, indistinguishable from a
-feature that had never been built. A design preview you have to remember a query
-string to see is one nobody sees.
-
-**Safety did not move, because it was never in the flag.** The permission is
-`import.meta.env.DEV` — Vite folds it to `false` at build time — combined with the
-URL saying something other than `off`. A SHIPPED bundle shows no mock officer
-whatever the query string says, and that was equally true when the default was off.
-
-**It marks itself, in three places.** A dashed ring on every invented face — the
-one that survives being **cropped**, because it is in the image rather than beside
-it; the group's accessible name (`Preview: 12 mock colleagues, not real presence`);
-and a note above the composer of an invented conversation, which is the one that
-has to be read, because it is the one stopping somebody typing into nothing.
-
-A preview that looks exactly like the product is a screenshot somebody later
-believes, of officers who do not exist.
-
-**There used to be a caption above the circles, and it was removed.** Two things
-about that are worth keeping. The first is the cost: the caption was the only place
-ON SCREEN that said `?chatheads=off`, so how to reach the live rail now lives in
-this document and in `src/components/Shell.jsx` rather than in front of you. The
-second is that it could not have worked where it was: an absolutely positioned child
-of the rail has a containing block only as wide as a **circle**, so its `max-width`
-never applied and the sentence wrapped into a tall narrow column. The thing to
-learn is not "captions are bad" — it is that a marker hung outside a
-shrink-to-fit box inherits that box's width, and the rail is exactly such a box.
-
-**The faces are invented; the shapes are not.** Everything in the set is something
-`PresenceController::present()` can actually send:
-
-| Constraint | Why |
-| --- | --- |
-| roles only ever `Admin`, `Officer`, `Staff` | those three rows are the whole of the `roles` table |
-| every entry has a badge number | `users.badge_number` is `NOT NULL UNIQUE`; the client's "no badge" branch is defensive, not ordinary |
-| ids from 9001 | far above `AUTO_INCREMENT`, so a mock can never be mistaken for an account |
-| ~2 KB, dev only | see the note below |
-
-It also covers the states that are easy to forget while designing: **one
-photograph and eleven sets of initials** (the two halves of `Avatar`), **every
-role**, **a name long enough to be a mouthful in a tooltip**, **ages from 4 seconds to
-31 minutes** so both "active just now" and "active 31m ago" appear, and **one row
-with no ages at all** — the unreadable-entry case the client keeps on purpose,
-which draws "Signed in" with no duty line.
-
-Twelve is deliberately **more than the rail draws**, so the preview opens on the
-`+7` chip by itself — pressing it is how the second column gets seen at all.
-
-### One thing this does not do
-
-The mock is imported unconditionally, so its strings — the cast **and** the preview
-conversations — **are in the production bundle** as inert data. The
-`import.meta.env.DEV` read folds perfectly: in a built bundle the preview state is
-the literal `false` (`useState(()=>!1)`), and `chatheadPreview` does not appear in
-it at all, because the `false && …` short-circuit let Rollup drop the whole
-function. But Rollup cannot drop a value that a ternary still mentions, and a
-shipped bundle holds the mock text it can never reach.
-
-Dropping the bytes is possible (gate the import behind `DEV` at module scope), and
-it was not done, for one reason worth writing down: it would make the preview
-state **unreachable from the render test that exists to check it**, because that
-test runs in node, where `DEV` is not true. A checked mock is worth more than two
-kilobytes — and the thing that must hold, that a build cannot show a mock officer,
-is enforced by the `DEV` read and asserted in `tests/rules/chatheads.test.mjs`
-either way.
-
-To check it yourself after a build:
-
-```bash
-grep -o 'useState(()=>!1)' public/assets/index-*.js     # the folded preview flag
-grep -c chatheadPreviewEnabled public/assets/index-*.js # 0 — tree-shaken away
-```
 
 ## Three things that look like faults and are not
 
@@ -596,8 +639,7 @@ looks 60% online is not a fact the server has.
 | `src/lib/presence.js` | **new** — the heartbeat interval, the ageing rule, the "everybody but you" filter, and every sentence the rail says; kept pure so the rules and the wording can be tested |
 | `src/lib/avatar.js` | **new** — `checkAvatarFile`, `squareCrop`, `prepareAvatar` (the canvas re-encode) |
 | `src/components/Avatar.jsx` | **new** — one face for the whole app: photo, or initials when the load fails |
-| `src/components/Chatheads.jsx` | **new** — `ChatheadRail` (draws a roster it is handed) and `Chatheads` (the beat, and the `DEV`-guarded design preview) |
-| `src/mock-chatheads.js` | **new** — the twelve invented officers the rail draws in dev, unless `?chatheads=off` |
+| `src/components/Chatheads.jsx` | **new** — `ChatheadRail` (draws a roster it is handed) and `Chatheads` (the beat) |
 | `src/components/Shell.jsx` | renders the rail, because Shell is the signed-in frame and the gate has no roster to show |
 | `src/components/ProfilePanel.jsx` | the photo control, under Preferences |
 | `src/styles.css` | the **Presence rail (chatheads)** section, and `.bw-avatar` |

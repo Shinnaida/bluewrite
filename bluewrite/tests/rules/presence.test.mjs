@@ -18,7 +18,6 @@ import {
   RAIL_SLOTS,
   STALE_GRACE_SECONDS,
   ageRoster,
-  chatheadPreview,
   chatheadTitle,
   isSelf,
   onDutyLabel,
@@ -124,45 +123,6 @@ test('the officer card says how long they have been on, without parsing a clock'
   assert.equal(onDutyLabel({ login_age_seconds: null }), '');
   assert.equal(onDutyLabel({}), '');
   assert.equal(onDutyLabel({ login_age_seconds: 60 * 60 * 24 * 40 }), '');
-});
-
-test('the design preview is the default, and `off` is the only thing that says otherwise', () => {
-  // IT DEFAULTS ON IN DEV, because the rail is a roster of OTHER people: on a dev
-  // machine it is empty, and a design feature you have to remember a query string to
-  // see is one nobody sees. (The permission is not here — Chatheads ANDs this with
-  // `import.meta.env.DEV`, so a shipped bundle shows no mock either way.)
-  assert.equal(chatheadPreview(''), true);
-  assert.equal(chatheadPreview(undefined), true);
-  assert.equal(chatheadPreview('?'), true);
-  assert.equal(chatheadPreview('?range=30d'), true);
-  // The old explicit spelling still works, and needs no special case: it is simply
-  // not `off`.
-  assert.equal(chatheadPreview('?chatheads=preview'), true);
-
-  // `off` is how you see the LIVE rail, which is the one thing that has to stay
-  // possible: checking that real presence works needs real presence.
-  assert.equal(chatheadPreview('?chatheads=off'), false);
-  assert.equal(chatheadPreview('chatheads=off'), false);
-  assert.equal(chatheadPreview('?chatheads=OFF'), false);
-  assert.equal(chatheadPreview('?range=7d&chatheads=live'), false);
-
-  // And `off` wins however the query is ordered or repeated: a stray explicit
-  // request must not be able to cancel the one value that means "show me the truth".
-  assert.equal(chatheadPreview('?chatheads=off&chatheads=preview'), false);
-  assert.equal(chatheadPreview('?chatheads=preview&chatheads=off'), false);
-
-  // A near miss is not `off` — `offish` is not a value this understands, so the mock
-  // stays on — and `chatheads` must be the KEY, not a value or a suffix of one.
-  assert.equal(chatheadPreview('?chatheads=offish'), true, 'only the whole word means off');
-  assert.equal(chatheadPreview('?chatheads='), true, 'an empty value asks for nothing');
-  assert.equal(chatheadPreview('?preview=chatheads'), true, 'the value is not the key');
-  assert.equal(chatheadPreview('?xchatheads=off'), true);
-
-  // A hand-typed URL can carry a lone `%`, which makes decodeURIComponent throw. A
-  // malformed query is simply not `off` — never a rail that throws while being read.
-  assert.equal(chatheadPreview('?chatheads=%'), true);
-  assert.equal(chatheadPreview('?chatheads=%E0%A4%A'), true);
-  assert.equal(chatheadPreview('?chatheads=%'), true);
 });
 
 test('the rail stops at five, and says how many it is holding back', () => {
