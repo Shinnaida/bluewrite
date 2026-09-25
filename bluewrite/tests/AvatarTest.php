@@ -195,6 +195,161 @@ final class AvatarTest extends BaseApiTestCase
         $this->assertSame(1, $this->storedFileCount());
     }
 
+    // -----------------------------------------------------------------------
+    // The ADMIN route: /users/:id/photo
+    //
+    // The officer's own face is one case; an account whose owner has not signed in
+    // yet is the other, and it is the case that made this route necessary — a
+    // directory that could only draw a blank circle for every new account. These
+    // tests exist for what the two rules have in common (nothing weaker, nothing
+    // unaudited) and for where they part (whose record it is, and therefore who
+    // must be asking).
+    // -----------------------------------------------------------------------
+
+    public function testAnAdminCanSetSomebodyElsesFaceAndItIsAuditedUnderTheAdmin(): void
+    {
+        [$adminCookie, $adminCsrf, $admin] = $this->login('t.admin');
+        // The target is a Staff account, so there is no second factor in the way and
+        // the id being written to is unambiguously not the caller's own.
+        $target = (int) $this->db()->query("SELECT id FROM bluewrite_test.users WHERE username = 't.staff'")->fetchColumn();
+        $this->assertGreaterThan(0, $target);
+        $this->assertNotSame((int) $admin['id'], $target);
+
+        $res = $this->upload("/users/{$target}/photo", 'photo', 'officer.jpg', $this->jpegBytes(640, 480), $adminCookie, $adminCsrf);
+        $this->assertSame(200, $res['status'], json_encode($res['body']));
+        $this->assertNotNull($res['body']['photo_url']);
+        // The URL names the ACCOUNT, not the admin who set it: the face belongs to the
+        // officer, and every roster in the station draws it from the same place.
+        $this->assertStringContainsString("/api/v1/users/{$target}/photo?v=", (string) $res['body']['photo_url']);
+
+        // WHAT IS STORED IS WHAT WE WROTE — the same normalisation the officer's own
+        // upload gets, because an admin route is not a weaker one.
+        $served = $this->download((string) $res['body']['photo_url'], $adminCookie);
+        $this->assertSame(200, $served['status']);
+        $this->assertSame('image/jpeg', $served['contentType']);
+        $this->assertSame("\xFF\xD8", substr($served['bytes'], 0, 2));
+        $size = getimagesizefromstring($served['bytes']);
+        $this->assertIsArray($size);
+        $this->assertSame(self::EDGE, $size[0]);
+        $this->assertSame(self::EDGE, $size[1]);
+
+        // The row that was written is the OFFICER's, and nobody else's.
+        $row = $this->db()->query(
+            "SELECT photo_path FROM bluewrite_test.users WHERE id = {$target}"
+        )->fetch(PDO::FETCH_ASSOC);
+        $this->assertNotNull($row['photo_path']);
+
+        // AUDITED, WITH THE ADMIN AS THE ACTOR. The trail has to be able to answer
+        // "who put that photograph there" — which is the whole of why a face an
+        // officer did not choose is acceptable at all.
+        $log = $this->db()->query(
+            "SELECT a.user_id, a.entity_id, a.detail, u.username
+               FROM bluewrite_test.audit_logs a
+               JOIN bluewrite_test.users u ON u.id = a.user_id
+              WHERE a.action = 'user.photo_set'
+              ORDER BY a.id DESC LIMIT 1"
+        )->fetch(PDO::FETCH_ASSOC);
+        $this->assertIsArray($log, 'setting somebody else\'s photo was not audited');
+        $this->assertSame('t.admin', $log['username'], 'the actor must be the admin, not the account whose face changed');
+        $this->assertSame((string) $target, (string) $log['entity_id'], 'the entry must name the account the photo was set on');
+        $this->assertStringContainsString('t.staff', (string) $log['detail']);
+    }
+
+    public function testOnlyAnAdminMaySetSomebodyElsesFace(): void
+    {
+        [$offCookie, $offCsrf] = $this->login('t.officer');
+        $target = (int) $this->db()->query("SELECT id FROM bluewrite_test.users WHERE username = 't.staff'")->fetchColumn();
+
+        // An Officer is not an administrator, and this route changes somebody else's
+        // identity record — the one class of change /me deliberately cannot make.
+        $res = $this->upload("/users/{$target}/photo", 'photo', 'officer.jpg', $this->jpegBytes(300, 300), $offCookie, $offCsrf);
+        $this->assertSame(403, $res['status']);
+        $this->assertSame(0, $this->photoCount(), 'a refused upload must not be recorded');
+        $this->assertSame(0, $this->storedFileCount(), 'and must not leave a file behind');
+
+        // Reading somebody ELSE's photo stays open to every role — the roster draws
+        // every colleague's face (see the test above). The two rules are different on
+        // purpose: seeing the station's faces is not administering them.
+        $this->assertSame(403, $this->upload("/users/{$target}/photo", 'photo', 'x.jpg', $this->jpegBytes(300, 300), $offCookie, $offCsrf)['status']);
+    }
+
+    public function testClearingSomebodyElsesFaceIsAdminOnlyAndAuditedToo(): void
+    {
+        [$adminCookie, $adminCsrf] = $this->login('t.admin');
+        $target = (int) $this->db()->query("SELECT id FROM bluewrite_test.users WHERE username = 't.staff'")->fetchColumn();
+
+        $set = $this->upload("/users/{$target}/photo", 'photo', 'officer.jpg', $this->jpegBytes(300, 300), $adminCookie, $adminCsrf);
+        $this->assertSame(200, $set['status'], json_encode($set['body']));
+        $url = (string) $set['body']['photo_url'];
+
+        // An officer cannot clear it either.
+        [$offCookie, $offCsrf] = $this->login('t.officer');
+        $this->assertSame(403, $this->request('DELETE', "/users/{$target}/photo", null, $offCookie, $offCsrf)['status']);
+        $this->assertSame(200, $this->download($url, $adminCookie)['status'], 'a refused clear must change nothing');
+
+        // The admin can, and the row and the file go together.
+        $cleared = $this->request('DELETE', "/users/{$target}/photo", null, $adminCookie, $adminCsrf);
+        $this->assertSame(200, $cleared['status']);
+        $this->assertNull($cleared['body']['photo_url']);
+        $this->assertSame(0, $this->photoCount());
+        $this->assertSame(0, $this->storedFileCount());
+        $this->assertSame(404, $this->download($url, $adminCookie)['status'], 'the old URL must stop answering');
+
+        $log = $this->db()->query(
+            "SELECT a.user_id, u.username FROM bluewrite_test.audit_logs a
+               JOIN bluewrite_test.users u ON u.id = a.user_id
+              WHERE a.action = 'user.photo_remove' ORDER BY a.id DESC LIMIT 1"
+        )->fetch(PDO::FETCH_ASSOC);
+        $this->assertIsArray($log, 'clearing somebody else\'s photo was not audited');
+        $this->assertSame('t.admin', $log['username']);
+
+        // Clearing twice is not an error, the same rule the officer's own route keeps.
+        $this->assertSame(200, $this->request('DELETE', "/users/{$target}/photo", null, $adminCookie, $adminCsrf)['status']);
+    }
+
+    public function testTheDirectoryCarriesEachAccountsFaceUrl(): void
+    {
+        [$adminCookie, $adminCsrf] = $this->login('t.admin');
+        $target = (int) $this->db()->query("SELECT id FROM bluewrite_test.users WHERE username = 't.staff'")->fetchColumn();
+
+        // BEFORE: the list has an entry for every account and `photo_url` is null for
+        // the ones with no photo — the key is present either way, because the edit form
+        // reads it rather than guessing from its absence.
+        $before = $this->request('GET', '/users', null, $adminCookie);
+        $this->assertSame(200, $before['status']);
+        $byId = [];
+        foreach ($before['body']['users'] as $row) {
+            $byId[(int) $row['id']] = $row;
+        }
+        $this->assertArrayHasKey($target, $byId);
+        $this->assertArrayHasKey('photo_url', $byId[$target]);
+        $this->assertNull($byId[$target]['photo_url']);
+        // The two columns the URL is built FROM are not handed out: they name a file on
+        // the server's disk, and no client has a use for that.
+        $this->assertArrayNotHasKey('photo_path', $byId[$target]);
+        $this->assertArrayNotHasKey('photo_updated_at', $byId[$target]);
+
+        // AFTER: the URL the form will draw, built by the server so the cache key is
+        // the one the roster will hand out.
+        $this->upload("/users/{$target}/photo", 'photo', 'officer.jpg', $this->jpegBytes(300, 300), $adminCookie, $adminCsrf);
+        $after = $this->request('GET', '/users', null, $adminCookie);
+        foreach ($after['body']['users'] as $row) {
+            if ((int) $row['id'] === $target) {
+                $this->assertSame("/api/v1/users/{$target}/photo?v=", substr((string) $row['photo_url'], 0, strlen("/api/v1/users/{$target}/photo?v=")));
+            }
+        }
+    }
+
+    public function testTheAdminPhotoRoutesNeedASessionAndAToken(): void
+    {
+        // Writes are refused by the CSRF gate (419) before the session check can
+        // answer 401 — the front controller's order for every state-changing route,
+        // and these two are state-changing routes on somebody else's record.
+        $this->assertSame(419, $this->request('POST', '/users/3/photo')['status']);
+        $this->assertSame(419, $this->request('DELETE', '/users/3/photo')['status']);
+        $this->assertSame(0, $this->photoCount());
+    }
+
     /** How many accounts in the scratch DB currently have a photo on file. */
     private function photoCount(): int
     {

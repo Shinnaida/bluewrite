@@ -776,11 +776,18 @@ final class AuthController
      * POST /me/photo — the officer's own photograph.
      *
      * WHY IT LIVES HERE, under /me, and not under /users/:id. A photo is part of
-     * an account's identity, and identity is the one thing this API lets every
-     * role change ABOUT THEMSELVES and nobody change about somebody else. There
-     * is no route for an admin to set an officer's face, deliberately: the
-     * roster shows a person, and a person's face is theirs to choose. The same
-     * convention as /me/password, one method over.
+     * an account's identity, and the ordinary way it is chosen is by its owner —
+     * the same convention as /me/password, one method over. A client that is
+     * changing the officer's own face has no id to state and no permission to
+     * check: the session IS the account.
+     *
+     * THE ADMIN'S ROUTE IS /users/:id/photo, and it was added later on purpose
+     * rather than by accident: an account being CREATED has an owner who has not
+     * signed in yet, so "their face is theirs to choose" left the directory
+     * choosing a blank circle for weeks. That route takes the officer's id, is
+     * Admin-only, and is audited with the admin as the actor — see
+     * UsersController::setPhoto for the whole argument, including why this is not
+     * a weaker upload than the one here.
      *
      * MULTIPART, not JSON, because it is a file. The rules about what is
      * acceptable live in AvatarPhoto (see the class note for why the type is

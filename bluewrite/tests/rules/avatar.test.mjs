@@ -159,6 +159,60 @@ test('one account gets one face, wherever it is drawn', async () => {
   assert.doesNotMatch(photo, /data-face/);
 });
 
+test('a face is a photograph, initials, or a blank somebody asked for by name', async () => {
+  const { renderPhoto, renderInitials, renderBlank, renderBlankWithoutPlaceholder } = await loadFixture(
+    'tests/fixtures/avatarFaces.jsx'
+  );
+
+  // A PHOTOGRAPH IS AN <img> and carries no gradient: the attribute belongs to the
+  // initials, and a broken photograph falls back to them.
+  const photo = renderPhoto();
+  assert.match(photo, /<img[^>]*bw-avatar--photo/);
+  assert.doesNotMatch(photo, /data-face/);
+  assert.doesNotMatch(photo, /bw-avatar--blank/);
+
+  // A NAME IS INITIALS, on one of the six gradients — and INITIALS WIN OVER A
+  // PLACEHOLDER, which is the rule worth pinning: the account form offers a silhouette
+  // for the empty case, and the moment a name is typed the circle must go back to being
+  // a person's initials rather than staying anonymous.
+  const initials = renderInitials();
+  assert.match(initials, /data-face="\d"/);
+  assert.match(initials, />JD</);
+  assert.doesNotMatch(initials, /bw-avatar--blank/);
+  const named = renderBlank({ id: null, full_name: 'Juan Dela Cruz' });
+  assert.match(named, />JD</, 'a placeholder must never stand in for a name the app can draw');
+  assert.doesNotMatch(named, /bw-avatar--blank/);
+
+  // NOTHING TO DRAW, AND A PLACEHOLDER OFFERED: the blank branch. It carries its own
+  // class — the neutral circle the stylesheet answers for — the glyph, and no gradient
+  // rule of its own beyond that.
+  const blank = renderBlank();
+  assert.match(blank, /bw-avatar--blank/);
+  assert.match(blank, /class="bw-avatar__glyph"/);
+  assert.match(blank, /<svg[^>]*aria-hidden="true"/);
+  assert.match(blank, /fill="currentColor"/, 'the glyph takes its ink from the circle');
+
+  // AND IT IS OPT-IN. A caller that offers nothing keeps the empty circle it always had:
+  // the change belongs to the account form, not to every face in the station.
+  const untouched = renderBlankWithoutPlaceholder();
+  assert.doesNotMatch(untouched, /bw-avatar--blank/);
+  assert.doesNotMatch(untouched, /bw-avatar__glyph/);
+  assert.match(untouched, /data-face="1"/, 'still an initials face, just an empty one');
+
+  // The stylesheet's half: a neutral surface rather than the gradient, and the two inks
+  // are TOKENS — a literal here is a circle that looks right in the theme it was written
+  // in and vanishes in the other.
+  const css = await readFile(path.join(root, 'src/styles.css'), 'utf8');
+  const rule = css.slice(css.indexOf('.bw-avatar--blank {')).split('}')[0];
+  assert.match(rule, /background: var\(--panel-raised\)/);
+  assert.match(rule, /color: var\(--steel\)/);
+  assert.doesNotMatch(rule, /--bw-face/);
+  assert.doesNotMatch(rule, /#[0-9a-fA-F]{3,8}\b/);
+  // The glyph fills its circle — the declarations are matched with their whitespace, as
+  // this file reads the stylesheet unflattened.
+  assert.match(css, /\.bw-avatar__glyph \{\s*width: 100%;\s*height: 100%;\s*\}/);
+});
+
 test('the square is cut from the centre, and it never leaves the image', () => {
   // Landscape: the square is the height, and it comes out of the middle — a
   // photograph cropped from the left edge cuts off whichever side the subject is

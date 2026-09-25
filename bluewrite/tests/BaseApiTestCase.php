@@ -97,6 +97,11 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // that carries `peer_typing` becomes an unknown-table 500, and the test that
         // would have noticed is looking at a conversation that never opens.
         $this->runSqlFile(__DIR__ . '/../migrations/016_message_typing.sql');
+        // 017 adds presence_days: the workspace heartbeat kept as a per-day time-at-a-desk
+        // tally, which is what the account page's attendance sheet reads. A scratch DB
+        // without it would simply estimate every day from the trail, and the tests that
+        // assert a MEASURED day would pass for the wrong reason.
+        $this->runSqlFile(__DIR__ . '/../migrations/017_presence_days.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         // Every account that OWES a second factor has an email address, because
@@ -395,6 +400,11 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
             // only PATCH status=finalized still pass the completeness gate.
             'action_taken' => 'Subject turned over to the station for proper disposition.',
             'ioc_name' => 'Sgt. Test Investigator',
+            // Also required at finalize (migration 006): a submitted report names
+            // the reporting party and carries a number to reach them on. The
+            // reporter's address stays optional.
+            'reporter_name' => 'Nita B. Ramos',
+            'reporter_contact' => '(032) 555-1234',
             // A Theft report that is complete for its own type
             // (ReportRules::TYPE_RULES + the complainant group floor), so the
             // fixtures below represent a report an officer could really submit.

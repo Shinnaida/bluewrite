@@ -30,6 +30,10 @@ import { api, apiUpload, isUnreachable } from '../lib/api.js';
 // 5 MB photograph into a 60 KB square before it is sent (see lib/avatar.js for why
 // that is the client's job and not the server's).
 import Avatar from './Avatar.jsx';
+// The camera: a live photograph instead of one found on the disk. The same dialog
+// the account form uses — see CameraCapture for why a webcam is a component and
+// not markup in two screens.
+import CameraCapture from './CameraCapture.jsx';
 import { checkAvatarFile, prepareAvatar } from '../lib/avatar.js';
 import { THEME_HINTS, useResolvedTheme, useThemeSpread } from '../lib/theme.js';
 import { DENSITY_HINTS } from '../lib/density.js';
@@ -226,8 +230,43 @@ export default function ProfilePanel({
   // quick, and the decode is the slow one on a big image.
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoNote, setPhotoNote] = useState(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
-  const choosePhoto = async (e) => {
+  /**
+   * One photograph job: decode, re-encode and upload, with the busy state and the
+   * outcome line shared by both entry points.
+   *
+   * ONE PATH FOR BOTH SOURCES — the file picker and the camera — because everything
+   * after "we have the bytes" is identical, and the thing that would drift if it
+   * were written twice is the failure handling: a rejected upload has to reach the
+   * officer the same way whichever button they pressed.
+   */
+  const runPhotoJob = async (job) => {
+    setPhotoBusy(true);
+    setPhotoNote(null);
+    try {
+      await job();
+    } catch (err) {
+      if (isUnreachable(err)) onConnError?.(err);
+      setPhotoNote({ kind: 'error', text: err.message || 'That photo could not be saved.' });
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  /** The upload itself. Throws, so the caller's busy state and note cover it too. */
+  const sendPhoto = async (blob) => {
+    const form = new FormData();
+    form.append('photo', blob, 'avatar.jpg');
+    const saved = await apiUpload('/me/photo', form);
+    // The URL comes back with its cache key (?v=…), and it is the SERVER's — the
+    // same string /me and the roster will hand out, so the face that appears here
+    // is the one colleagues are about to see rather than a locally invented one.
+    onUserPatch?.({ photo_url: saved.photo_url });
+    setPhotoNote({ kind: 'ok', text: 'Photo saved.' });
+  };
+
+  const choosePhoto = (e) => {
     const file = e.target.files && e.target.files[0];
     // Cleared before anything else so choosing the SAME file again re-fires this
     // handler: otherwise "Replace photo" would do nothing the second time, which
@@ -241,24 +280,17 @@ export default function ProfilePanel({
       return;
     }
 
-    setPhotoBusy(true);
-    setPhotoNote(null);
-    try {
-      const blob = await prepareAvatar(file);
-      const form = new FormData();
-      form.append('photo', blob, 'avatar.jpg');
-      const saved = await apiUpload('/me/photo', form);
-      // The URL comes back with its cache key (?v=…), and it is the SERVER's — the
-      // same string /me and the roster will hand out, so the face that appears here
-      // is the one colleagues are about to see rather than a locally invented one.
-      onUserPatch?.({ photo_url: saved.photo_url });
-      setPhotoNote({ kind: 'ok', text: 'Photo saved.' });
-    } catch (err) {
-      if (isUnreachable(err)) onConnError?.(err);
-      setPhotoNote({ kind: 'error', text: err.message || 'That photo could not be saved.' });
-    } finally {
-      setPhotoBusy(false);
-    }
+    runPhotoJob(async () => {
+      await sendPhoto(await prepareAvatar(file));
+    });
+  };
+
+  /** A frame from the camera — re-encoded here exactly like a chosen file. */
+  const takePhoto = (blob) => {
+    setCameraOpen(false);
+    runPhotoJob(async () => {
+      await sendPhoto(await prepareAvatar(blob));
+    });
   };
 
   const removePhoto = async () => {
@@ -599,6 +631,18 @@ export default function ProfilePanel({
                     disabled={photoBusy}
                   />
                 </label>
+                {/* The camera is offered BESIDE the picker rather than instead of it:
+                    the front desk has a webcam and no photographs on disk, the
+                    offices have photographs and no webcam, and neither should have
+                    to work out where the other one went. */}
+                <button
+                  type="button"
+                  className="profile-photo__camera"
+                  onClick={() => setCameraOpen(true)}
+                  disabled={photoBusy}
+                >
+                  Take a photo
+                </button>
                 {user.photo_url && (
                   <button
                     type="button"
@@ -883,6 +927,16 @@ export default function ProfilePanel({
           </dl>
         </PanelSection>
       </div>
+
+      {/* MOUNTED ONLY WHILE IT IS OPEN, which is what stops the stream: a camera left
+          mounted would keep its light on behind the panel. See CameraCapture. */}
+      {cameraOpen && (
+        <CameraCapture
+          title="Your profile photo"
+          onCapture={takePhoto}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
     </aside>
   );
 }

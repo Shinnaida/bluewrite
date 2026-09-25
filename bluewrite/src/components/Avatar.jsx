@@ -18,11 +18,41 @@
 // SIZE IS CSS's, unless a caller states one. The three existing call sites each
 // size their avatar in their own stylesheet (26px in the bar, 32px in its menu,
 // 46px in the panel), and passing a number here would quietly overrule all three.
+//
+// THE BLANK FACE IS OPT-IN, and it is the one state that is NOT drawn somewhere.
+// `initialsOf('')` is the empty string, so an account with no name and no
+// photograph — the account form, before anybody has typed anything — draws a
+// coloured circle with nothing in it, which reads as a failed load rather than as
+// an empty field. A caller that has something better to show hands it in as
+// `placeholder`, and this draws that instead, in a neutral circle rather than in
+// one of the six gradients: the gradients are for PEOPLE, and a blank circle is
+// nobody yet. Callers that pass nothing keep exactly what they had — which is why
+// this is a prop and not a change of behaviour.
 
 import React, { useEffect, useState } from 'react';
 import { initialsOf } from '../lib/profile.js';
 
-export default function Avatar({ user, className = '', decorative = true, size = null }) {
+/**
+ * The silhouette a blank face wears: a head and a pair of shoulders, clipped by the
+ * circle itself (see `.bw-avatar--blank`, which is where the clipping happens).
+ *
+ * DRAWN HERE RATHER THAN BROUGHT IN. This project ships no icon library, and the
+ * rule the app's other glyphs follow is that a glyph this simple belongs in the
+ * component that draws it — two shapes, `currentColor`, and nothing to keep in step
+ * with a dependency. The shapes are deliberately a little oversized and left to bleed
+ * past the bottom edge: the circle's own `overflow: hidden` cuts them, which is what
+ * makes the shoulders an arc instead of a rounded rectangle sitting in the circle.
+ */
+export function PersonGlyph() {
+  return (
+    <svg className="bw-avatar__glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="9.2" r="4.3" />
+      <rect x="3.2" y="14.8" width="17.6" height="9.4" rx="8.8" />
+    </svg>
+  );
+}
+
+export default function Avatar({ user, className = '', decorative = true, size = null, placeholder = null }) {
   const photo = user?.photo_url ?? null;
   const [failed, setFailed] = useState(false);
 
@@ -34,6 +64,9 @@ export default function Avatar({ user, className = '', decorative = true, size =
   }, [photo]);
 
   const initials = initialsOf(user?.full_name);
+  // A photograph that has not loaded yet is NOT blank: the initials are still the face
+  // underneath it, which is the whole reason the fallback is state (see above).
+  const blank = initials === '' && placeholder !== null && placeholder !== undefined;
   const style = Number.isFinite(size)
     ? { width: size, height: size, fontSize: Math.max(9, Math.round(size * 0.4)) }
     : undefined;
@@ -64,8 +97,8 @@ export default function Avatar({ user, className = '', decorative = true, size =
   }
 
   return (
-    <span className={classes} data-face={face} style={style} {...hidden}>
-      {initials}
+    <span className={`${classes}${blank ? ' bw-avatar--blank' : ''}`} data-face={face} style={style} {...hidden}>
+      {blank ? placeholder : initials}
     </span>
   );
 }
