@@ -24,7 +24,33 @@
   --ir-page: var(--void);
   --ir-card: var(--panel);
   --ir-card-head: var(--card-head);
+  /* The section header BAR — the fill that carries a white section title. It is
+     --ir-navy, the SAME navy the top bar paints itself with (header.ir-nav, the
+     "Public Safety Department" bar), so the section headings and the app's own
+     header read as one official palette instead of a blue form under a purple
+     heading. White on #1a2b4a measures ~14:1 in light and ~13:1 in dark, so the
+     title clears AA at its weight and the numeral beside it costs nothing.
+
+     It is a name of its own rather than a direct read of --ir-navy or a change
+     to --ir-card-head, because those are two DIFFERENT jobs: --ir-card-head also
+     backs table headers, and a table is a slice of the document, not a section
+     of it (see .ir-card-head, which says the rest). */
+  --ir-bar: var(--ir-navy);
+  /* The "not yet filed" flag (the DRAFT chip in .ir-status). A FILL rather than
+     the shared ghost chip, because it is the badge that means "this report lives
+     only in this browser". #9A5B00 holds white at 5.4:1 — the app's --amber as a
+     fill would only reach 4.24:1 with white, which is under AA for an 11px caps
+     label. Dark restates the pair (see dark-theme.css). */
+  --ir-flag-fill: #9A5B00;
+  --ir-flag-ink: #ffffff;
   --ir-border: var(--line);
+  /* A FIELD's own hairline, and it has to be a legible one: the boundary of an
+     input is a UI component, so it is measured against the well it draws rather
+     than against the page (WCAG 1.4.11 asks for 3:1). --line-bright (#C2C9D6)
+     is 1.66:1 on this white well, which read as a printed rule rather than as a
+     box you type into; this value measures 3.08:1. The panel keeps --line — a
+     card edge is not something you interact with. */
+  --ir-field-border: #8E93A0;
   --ir-text: var(--paper);
   --ir-muted: var(--steel);
   /* Blue, the fill half: the submit bar, the primary button, the switch. It
@@ -81,7 +107,12 @@
      this file should not have to know which palette slot that is today. */
   --ir-head-ink: var(--head-ink);
   --ir-icon: var(--icon-dim);
-  --ir-placeholder: var(--placeholder);
+  /* The placeholder is TEXT an officer reads before typing, so it is measured
+     as text: 4.5:1 on this white well. The app-wide --placeholder (#9AA3B2) is
+     2.55:1 here, and while it is right for the compact app forms it is too pale
+     for a document field. Named rather than inlined so each theme can restate
+     its own (see dark-theme.css). */
+  --ir-placeholder: #6E7787;
   --ir-hero-ink: var(--hero-ink);
   --ir-info-ink: var(--info-ink);
   --ir-danger-ink: var(--danger-ink);
@@ -226,14 +257,20 @@
   flex: 1;
 }
 
-/* ---- Page header: title left, case no. + date right ---- */
+/* ---- Page header: title left, case no. + date right ----
+   A ruled masthead: the hairline under the row closes the document's
+   header the way a form's letterhead rule does, so the title block reads
+   as the head of the page rather than as text floating above the panels.
+   The padding is the clearance between that rule and the meta block. */
 .ir-page-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem clamp(1rem, 4vw, 3rem);
   flex-wrap: wrap;
+  padding-bottom: 0.75rem;
   margin-bottom: 1rem;
+  border-bottom: 1px solid var(--ir-border);
 }
 
 .ir-title {
@@ -248,6 +285,36 @@
   margin: 0;
 }
 
+/* The masthead's right-hand block: each fact is a labelled PAIR, key then
+   value, right-aligned as a unit. The key is the quiet half (small, tracked,
+   muted) and the value carries the weight — so "Case no." names the field
+   and BW-0313 is what the eye lands on. Tabular figures keep the case
+   number and date from jittering between renders. Rows are a grid rather
+   than plain divs so every key column ends on the same right edge. */
+.ir-meta-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, auto);
+  justify-content: end;
+  align-items: baseline;
+  column-gap: 0.6rem;
+}
+
+.ir-meta-key {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+}
+
+.ir-meta-val {
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--ir-text);
+  font-variant-numeric: tabular-nums;
+}
+
 .ir-meta {
   text-align: right;
   font-size: 0.82rem;
@@ -257,14 +324,46 @@
   line-height: 1.6;
 }
 
+/* The record strip: DRAFT badge, who recorded it, the translation badge.
+   Panelled rather than floating text — a tinted card with its own hairline
+   gives the status block a defined edge, so the badge and the sentence read
+   as one object directly under the masthead rule instead of as loose lines.
+   The padding is deliberately tighter than a form panel's: this is a
+   caption on the document, not a section of it. */
 .ir-status {
   display: flex;
   align-items: center;
   gap: 0.6rem;
   flex-wrap: wrap;
   margin: 0 0 1rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--ir-raised);
+  border: 1px solid var(--ir-border);
+  border-radius: 4px;
   font-size: 0.8rem;
   color: var(--ir-muted);
+}
+
+/* THE "NOT FILED YET" FLAG — scoped to this screen's status row.
+   .ir-status--flag marks THIS row: three screens share .ir-status, and the
+   register paints an officer's role on .badge.draft — a solid plate there would
+   out-shout its column; it also out-specifies .ir-body .badge.draft below.
+
+   A FILL, not a ghost: this is the one badge that says the report exists only in
+   this browser, so it has to be read at a glance from the top of the page.
+   Bigger, heavier and solid — with the ink measured rather than assumed (white
+   on a plain --amber fill is 4.24:1 and under AA at this size; the light pair
+   below is 5.4:1, the dark pair 8.1:1). */
+.ir-status.ir-status--flag .badge.draft {
+  background: var(--ir-flag-fill);
+  color: var(--ir-flag-ink);
+  border-color: var(--ir-flag-fill);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 0.32rem 0.75rem;
+  border-radius: 3px;
+  box-shadow: var(--shadow-xs);
 }
 
 .ir-required-note {
@@ -283,21 +382,41 @@
    read-out and a jump-nav, not a wizard — the form stays one long scroll, so
    this is content, never a second sticky bar.
 
+   NOT PANELLED, and it must not be. This block used to wear the same bordered
+   white plate as the form sections below it ("the screen's map"), which had the
+   opposite of its intent: a bordered box with a caption and a pill in it sat
+   directly above the first field, so the tracker read as one more input — as
+   though it were nested inside a control rather than heading the form. It is a
+   HEADER BAND now: no fill, no border, no radius, no shadow, flush with the
+   page, and the only rule it owns is the head row's own hairline. Nothing about
+   its behaviour changed — it still navigates, never locks or edits, and it is
+   still not rendered in the sheet format.
+
    Colours are named with the palette tokens directly (this file's --ir-*
    aliases resolve to exactly these); the dot size and the label width are
    variables here so a narrow viewport can shrink both in one place. */
 .ir-stepper {
   --ir-stepper-dot-size: 24px;
   --ir-stepper-label-w: 9.5rem;
+  /* The node's top padding, named because the TRACK below has to clear it:
+     the track is absolutely positioned from the rail's top edge, so its
+     centre line must be pad + dot/2 or the rail slips above the dots. */
+  --ir-stepper-node-pad: 0.3rem;
   margin: 0 0 1.1rem;
+  /* The SAME horizontal clamp .ir-card-head uses, so "REPORT COMPLETION" and
+     its hairline line up with the section titles and the field column below
+     rather than hanging off the page's edge. */
+  padding: 0 clamp(0.9rem, 1.6vw, 1.25rem);
 }
 
 .ir-stepper-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.7rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--ir-border);
 }
 
 /* The caption wears the page title's treatment — same face, same ink — at
@@ -313,11 +432,19 @@
 }
 
 .ir-stepper-count {
+  /* A position pill rather than bare text: the count answers "where am I"
+     and deserves the same chip treatment the DRAFT badge gets — small,
+     tracked caps on a tinted plate with its own hairline. */
+  padding: 0.2rem 0.6rem;
+  background: var(--ir-raised);
+  border: 1px solid var(--ir-border);
+  border-radius: 999px;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--steel);
+  color: var(--ir-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* The rail carries the track that runs behind the dots. */
@@ -333,15 +460,20 @@
   position: absolute;
   left: var(--ir-stepper-inset, 10%);
   right: var(--ir-stepper-inset, 10%);
-  top: calc(var(--ir-stepper-dot-size) / 2);
-  height: 1px;
+  top: calc(var(--ir-stepper-node-pad) + var(--ir-stepper-dot-size) / 2 - 1px);
+  /* 2px with rounded ends: at 1px the rail read as an artefact of the dots
+     rather than as a line connecting them, and the violet fill disappeared
+     into it on low-DPI panels. */
+  height: 2px;
+  border-radius: 1px;
   background: var(--line);
 }
 .ir-stepper-track-fill {
   display: block;
   height: 100%;
   width: var(--ir-stepper-fill, 0%);
-  background: var(--violet);
+  border-radius: 1px;
+  background: var(--step-bar);
   transition: width 0.35s ease;
 }
 
@@ -359,7 +491,8 @@
 
 /* Dot + label are ONE button, so the whole step is the hit target. Excluded
    from the .ir-body button rules (section 4) — the dot carries the fill and
-   the border, never the button. */
+   the border, never the button. The padding gives the target a comfortable
+   size and the hover plate room to sit in; the radius rounds that plate. */
 .ir-stepper-node {
   display: flex;
   flex-direction: column;
@@ -367,16 +500,28 @@
   gap: 0.45rem;
   width: 100%;
   min-width: 0;
-  padding: 0;
+  padding: var(--ir-stepper-node-pad) 0.25rem 0.35rem;
   border: 0;
-  border-radius: 0;
+  border-radius: 6px;
   background: transparent;
   box-shadow: none;
   cursor: pointer;
+  transition: background 140ms ease;
 }
+/* Hover and keyboard focus share one plate — it says "this dot navigates"
+   in the accent's own TINT rather than a grey that vanishes against the
+   white card (panel-sunken measures ~2% off white here). Focus keeps a real
+   ring as well, so the state is never colour-only. The element-level
+   `button:hover` in styles.css would paint a raised plate with accent ink;
+   this class out-specifies it. */
 .ir-stepper-node:hover {
   border: 0;
-  background: transparent;
+  background: var(--cyan-bg);
+}
+.ir-stepper-node:focus-visible {
+  outline: 2px solid var(--ir-blue);
+  outline-offset: 2px;
+  background: var(--cyan-bg);
 }
 
 /* Lifted over the track, which is positioned and would otherwise paint on
@@ -399,19 +544,19 @@
 }
 
 /* TWO faces, one rule: filled or not.
-     white inside + violet ring  → not finished
-     all violet + white tick     → that section is filled in
+     white inside + navy ring  → not finished
+     all navy + white tick     → that section is filled in
    A dot's face is never influenced by position, so "is this step done?" is
    answered by the fill alone and never competes with "you are here". The
-   violet is the rail's own accent (--violet): its number and its ring carry
-   it, and the line it sits on fills with it. */
+   accent is the rail's own (--step-bar, which resolves to the top bar's navy):
+   its number and its ring carry it, and the line it sits on fills with it. */
 .ir-stepper-dot--pending {
-  border-color: var(--violet);
-  color: var(--violet);
+  border-color: var(--step-bar);
+  color: var(--step-bar);
 }
 .ir-stepper-dot--done {
-  border-color: var(--violet);
-  background: var(--violet);
+  border-color: var(--step-bar);
+  background: var(--step-bar);
   color: var(--panel);
 }
 
@@ -424,12 +569,12 @@
    the same on every dot, so it can never be mistaken for a third state. */
 .ir-stepper-node--here .ir-stepper-dot {
   border-width: 2px;
-  color: var(--violet);
+  color: var(--step-bar);
 }
 .ir-stepper-node--here .ir-stepper-dot--done {
   border-width: 1px;
   color: var(--panel);
-  outline: 2px solid var(--violet);
+  outline: 2px solid var(--step-bar);
   outline-offset: 2px;
 }
 
@@ -453,11 +598,11 @@
 /* The here node's label wins over --done's ink by specificity (0,2,0 > 0,1,0),
    so a finished section you are standing on still reads as the position. */
 .ir-stepper-node--here .ir-stepper-label {
-  color: var(--violet);
+  color: var(--step-bar);
 }
 /* Hover is the whole affordance: these dots navigate, they do not submit. */
 .ir-stepper-node:hover .ir-stepper-label {
-  color: var(--violet);
+  color: var(--step-bar);
 }
 
 /* ---- Step navigation (stepped form format only) --------------------------
@@ -777,11 +922,28 @@
 .ir-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(0.85rem, 1.6vw, 1.25rem);
+  /* A little more air than the panels used to carry: the gap is what separates
+     one field cell from the next, so it is spent here rather than on each
+     field's own margin. */
+  gap: clamp(1rem, 1.8vw, 1.5rem);
   align-items: start;
 }
 
-/* ---- The stepped format (Profile ▸ Preferences ▸ Form format) -------------
+/* ---- A ROW OF CARDS — two half-width panels side by side ------------------
+   The same two-column measure .ir-grid uses, and the same breakpoint, so a
+   section built from two blocks (Action Taken and the IOC) reads as one pair
+   instead of as two stacked full-width bands. It is deliberately NOT `.ir-grid`:
+   the cards inside it do NOT carry `.ir-card--wide`, because the modifier would
+   span the row and put them back one above the other. */
+.ir-card-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(1rem, 1.8vw, 1.5rem);
+  align-items: start;
+  /* These two were `.ir-card--wide` blocks before they became a row, so the
+     separation from the cards above them has to come from HERE now. */
+  margin-top: clamp(1rem, 1.8vw, 1.5rem);
+}
    One panel per step instead of one long scroll. Every card stays MOUNTED —
    `hidden` only takes it off screen — because the error jumps resolve by
    element id and a field that is outside the DOM can neither be focused nor
@@ -809,63 +971,85 @@
   margin-top: clamp(0.85rem, 1.6vw, 1.25rem);
 }
 
+/* The margin above belongs to the block-level cards that FOLLOW the grid.
+   Inside the grid the row separator is already the grid's own gap, so a `--wide`
+   card there (the narrative) would get the gap AND the margin stacked — and the
+   sheet format restates that margin for its own page, so the page needs the same
+   correction stated against it. */
+.ir-grid > .ir-card--wide {
+  margin-top: 0;
+}
+.ir-form--sheet .ir-grid > .ir-card--wide {
+  margin-top: 0;
+}
+
+/* THE SECTION HEADER BAR — and it is the same bar on every section.
+
+   This treatment belonged to the card the officer was on (the --current
+   modifier) while the rail was the only thing saying which step they were in,
+   because a step is one card or several and nothing else on the page grouped
+   them. The rail still says that, and the bar now runs from the first section to
+   the last, so the document reads as a run of titled panels instead of one
+   highlighted panel among plain ones.
+
+   Deliberate choices, all of them carrying over from when only one card had it:
+     · --ir-card-head, the token this rule used to read, is NOT recoloured. It
+       also backs table headers, and recolouring it would tint every table in the
+       document. The fill comes from --ir-bar, a name for this job alone (see the
+       palette above), so two jobs keep two names.
+     · the bar's own hairline goes WITH the fill, so no grey line cuts across the
+       filled colour, and nothing moves: same padding, same label position.
+     · the ink is white, the trade a filled header asks for, and it comes from
+       --on-accent rather than a literal so that both themes answer for it.
+
+   What the modifier is still for: `--current` marks the card the officer is on
+   for assistive tech (IrSection reads it into aria-current), and the SHEET format
+   still keys its own "a page has no current position" rule on it. This rule no
+   longer reads it at all — see .ir-form--sheet below, where a page clears the
+   fill and restates the ink, because no page has filled header bars. */
 .ir-card-head {
-  background: var(--ir-card-head);
-  border-bottom: 1px solid var(--ir-border);
-  padding: 0.55rem 0.9rem;
+  background: var(--ir-bar);
+  border-bottom: 1px solid var(--ir-bar);
+  /* The SAME horizontal clamp the body uses, so the panel number and title
+     sit exactly above the field column below them at every width. */
+  padding: 0.55rem clamp(0.9rem, 1.6vw, 1.25rem);
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ir-head-ink);
+  color: var(--on-accent);
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-.ir-card-head .ir-card-num {
-  color: var(--ir-blue-ink);
-}
-
-/* The cards of the step the officer is on — the WHOLE header bar goes --step-bar,
-   the rail's emphasis repeated in the body, because a step is one card or
-   several (step 4 is Parties Involved AND the per-type block; step 5 is three
-   cards) and nothing else on the page says which cards belong together.
-
-   Three deliberate choices:
-     · it is a DIRECT-child selector, so a RepeatableGroup's own header inside a
-       current card is never repainted by it;
-     · it is a modifier, not a change to --ir-card-head, which also backs table
-       headers — recolouring that token would tint every table in the document;
-     · the bar's own hairline goes with the fill too, so no grey line cuts across
-       the filled colour, and nothing moves: same padding, same label position.
-   The ink is white, the trade a filled header asks for, and it comes from
-   --on-accent rather than a literal so that both themes answer for it. The bar's
-   own value is --step-bar; the token carries the measured contrast for each
-   theme. Read-out only: a card that is not current stays fully editable. */
-.ir-card--current > .ir-card-head {
-  background: var(--step-bar);
-  border-bottom-color: var(--step-bar);
-  color: var(--on-accent);
 }
 /* The numeral keeps a step of hierarchy on the filled bar, but by WEIGHT rather
    than by a faded white. At 0.72 alpha the composite measured 3.4:1 — under AA,
    and no alpha on a saturated fill can fix that: even 0.95 lands at 4.8:1, which
    is indistinguishable from solid at a glance. Weight is a difference that does
    not spend contrast, so the numeral reads secondary beside the bold title. */
-.ir-card--current > .ir-card-head > .ir-card-num {
+.ir-card-head .ir-card-num {
   color: var(--on-accent);
   font-weight: 500;
 }
 
 .ir-card-body {
-  padding: clamp(0.85rem, 1.6vw, 1.15rem) clamp(0.9rem, 1.6vw, 1.25rem);
+  padding: clamp(0.7rem, 1.4vw, 1rem) clamp(0.9rem, 1.6vw, 1.2rem);
 }
 
 /* Two-column sub-grids inside Panel I and Panel II. */
 .ir-sub {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 1rem;
+  column-gap: 1.25rem;
+  /* The ROW gap is the field rhythm, not zero: every field inside a sub-grid is
+     its own grid cell, so a `margin-bottom` on the fields left the last field of
+     each column with no space under it while the row above got a full gap — the
+     rows read unevenly. The gap is stated once here and the fields surrender
+     their margin below. */
+  row-gap: var(--density-doc-gap, 0.75rem);
+}
+.ir-sub > .ir-field {
+  margin-bottom: 0;
 }
 .ir-sub .ir-span-2 {
   grid-column: 1 / -1;
@@ -880,9 +1064,21 @@
 
 /* ---- Field with an icon beside its label ---- */
 .ir-field {
-  margin-bottom: var(--density-doc-gap);
+  margin-bottom: var(--density-doc-gap, 0.75rem);
 }
 .ir-field:last-child {
+  margin-bottom: 0;
+}
+
+/* The plain `.field` cells — the Type-Specific block, the repeatable groups and
+   the section 5 pair — measure themselves against the app-wide
+   --density-field-gap, which is sized for the account and directory forms.
+   Inside the report document they follow the document's own rhythm instead, so
+   all five sections agree on how far apart a field sits. */
+.ir-body .field {
+  margin-bottom: var(--density-doc-gap, 0.75rem);
+}
+.ir-body .field:last-child {
   margin-bottom: 0;
 }
 
@@ -891,20 +1087,185 @@
    still fit well inside 20rem, so a full-column select was mostly empty box.
    Raise this number if a longer type name is ever added — it is the only place
    the width is stated. */
-.ir-field--narrow select {
+.ir-field--narrow select,
+/* A TYPEABLE field is an input, not a select, and it wants the same measure as
+   the select it replaced — the capacity box in Panel I is the case. */
+.ir-field--narrow input,
+/* A dropdown is measured by the input it is built on (see .ir-select below), so
+   it wants the same cap the plain select and input above do. */
+.ir-field--narrow .ir-select,
+.ir-field--narrow .ir-select__trigger {
   max-width: 20rem;
+}
+
+/* ---- The dropdown: one trigger, one card of options -----------------------
+   Every option list on the Write Report screen is drawn by the Dropdown
+   component rather than by a native control, which is the only way the list can
+   wear the document's own colours: a native menu is not a DOM node, so no
+   selector reaches it and no theme can paint it (see Dropdown.jsx).
+
+   The TRIGGER is an ordinary input — readonly in the plain mode, typeable in the
+   combobox one — so it inherits the field styling above, in both the screen and
+   the sheet format, and only the room for the mark and the pointer change.
+
+   The CARD is drawn once, here, and holds three things the officer asked for:
+   the hairline box, a row that lifts under the pointer, and the answer already
+   given marked in the document's blue. It scrolls once a list outgrows ~14 rows
+   (the incident types), which is why the max-height is stated rather than left
+   to the page. */
+.ir-select {
+  position: relative;
+}
+.ir-select__trigger {
+  padding-right: 2.1rem;
+}
+.ir-select__trigger[readonly] {
+  cursor: pointer;
+}
+.ir-select__chevron {
+  position: absolute;
+  top: 50%;
+  right: 0.7rem;
+  transform: translateY(-50%);
+  display: flex;
+  color: var(--ir-muted);
+  /* The mark is decoration: the box under it is what the click is for. */
+  pointer-events: none;
+}
+.ir-select__chevron svg {
+  transition: transform 120ms ease;
+}
+/* The arrow POINTS AT WHERE THE LIST IS: down while the card is away, up once it
+   is open and hanging either under the field or over it. It is the only cue that
+   the box is a dropdown rather than a text field, so it has to agree with what is
+   on screen. */
+.ir-select[data-open] .ir-select__chevron svg {
+  transform: rotate(180deg);
+}
+.ir-select__menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  min-width: 100%;
+  /* The ceiling on the card, in both senses. Dropdown.jsx states the same number
+     as its own fallback and sets the height inline — the shorter of the LIST's own
+     height and this — so a three-row list gets a three-row card and a fourteen-row
+     one scrolls inside this box. A list taller than the window is the case this
+     number exists to stop: a dropdown is a peephole on a list, not a page. */
+  max-height: 17rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.3rem;
+  list-style: none;
+  background: var(--ir-input);
+  border: 1px solid var(--ir-border);
+  border-radius: 10px;
+  box-shadow: 0 18px 34px -18px rgba(15, 23, 42, 0.45), 0 2px 6px rgba(15, 23, 42, 0.08);
+  /* The wheel STOPS at the ends of this list instead of carrying on into the
+     sheet behind it. Scrolling a long list of incident types must not also move
+     the page the officer is reading it against — and once the list is at its end,
+     a wheel tick over it is meant to do nothing, not to lurch the document. The
+     page is still scrollable with the pointer anywhere off the card, and the card
+     travels with the field when it is. */
+  overscroll-behavior: contain;
+}
+/* Not enough room underneath: the card hangs UP from the field instead, which is
+   the same element anchored to the other edge. */
+.ir-select[data-flip] .ir-select__menu {
+  top: auto;
+  bottom: calc(100% + 0.3rem);
+}
+.ir-select__option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 7px;
+  color: var(--ir-text);
+  cursor: pointer;
+}
+/* The row under the pointer LOOKS under the pointer: a tinted plate and a bar
+   down its edge, so the officer can see which answer Enter would take. */
+.ir-select__option[data-active] {
+  background: var(--cyan-bg);
+}
+.ir-select__option[data-active]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.3rem;
+  bottom: 0.3rem;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--ir-blue);
+}
+/* …and the answer ALREADY given reads as chosen even before the card opens. */
+.ir-select__option[aria-selected='true'] .ir-select__option-label {
+  color: var(--ir-blue-ink);
+  font-weight: 700;
+}
+.ir-select__option-icon {
+  display: flex;
+  flex: none;
+  color: var(--ir-blue-ink);
+}
+
+/* A card clips what is inside it (see .ir-card), which would cut a menu off at
+   the card's own edge instead of letting it hang over the panel below. While one
+   of these is open the card stops clipping — only while, so the header bar keeps
+   its rounded corners the rest of the time.
+
+   THE PAGE IS NOT IN THIS RULE, and its absence is the fix for a reported bug.
+   `.ir-body` sits on the shell's own `<main>`, which is the element whose
+   `overflow-y: auto` IS the page scroll (see `.main` in styles.css), so listing
+   it here did not stop the form clipping a menu — it stopped the PAGE SCROLLING
+   for as long as any menu was open: the pane was switched to `visible`, the shell
+   above it is `height: 100dvh; overflow: hidden`, and the wheel had nowhere left
+   to go. No menu is cut off without it: the pane a menu hangs in is the window
+   itself. */
+.ir-card:has(.ir-select[data-open]) {
+  overflow: visible;
+}
+
+/* ---- The form's controls: 12px -------------------------------------------
+   The controls sit one step BELOW the global input rule in styles.css, which
+   sets `font: inherit` and therefore inherited the page's ~16px body size. On
+   the report that read too large next to the fields' own labels (11.5px) and
+   made every panel a line taller than it needed to be, so the officer asked for
+   the fields to be set to 12px to match the document's own scale.
+
+   Scoped to `.ir-form` — the Write Report screen's controls, the RepeatableGroup
+   rows, the per-type block and the review step's in-place editors, which all
+   live inside it — and NOT to the app-wide rule, so the other screens (Users,
+   Messages, Station settings) keep the size they were designed with.
+
+   The SHEET format is excluded on purpose: there the controls ARE the printed
+   page, and its writing line is set in the document's prose face (see
+   `.ir-form--sheet .ir-field textarea` below), which 12px would shrink out of
+   proportion with the letterhead above it. */
+.ir-form:not(.ir-form--sheet) :is(input, select, textarea) {
+  font-size: 12px;
 }
 
 .ir-label {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--ir-muted);
-  margin-bottom: 0.35rem;
+  /* The label is PRIMARY text, not a caption: at --ir-muted it was the faintest
+     thing in the cell, a grey uppercase whisper over the well it names. It reads
+     --ir-text now — the document's own ink, the same ~15:1 in light and ~14:1 in
+     dark the field VALUES carry — while the muted token stays for genuinely
+     secondary copy (hints, meta, the .ir-approx qualifier). */
+  color: var(--ir-text);
+  /* Label → control is the tightest gap in the form: it is a pair, they belong
+     to one another, and a wide gap between them reads as two unrelated lines. */
+  margin-bottom: 0.3rem;
 }
 .ir-label svg {
   flex: none;
@@ -915,10 +1276,16 @@
 .ir-body select,
 .ir-body textarea {
   background: var(--ir-input);
-  border: 1px solid var(--ir-border);
+  border: 1px solid var(--ir-field-border);
   border-radius: 3px;
   color: var(--ir-text);
   box-shadow: none;
+  /* Room to read: the document's fields are typed into at length, so they
+     get a little more vertical air than the app's compact controls — but only
+     a little: this is the single largest per-field cost in the form, and
+     0.5rem still clears the 12px type by a comfortable margin. */
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
 .ir-body input::placeholder,
 .ir-body textarea::placeholder {
@@ -940,9 +1307,17 @@
 .ir-body textarea:disabled {
   background: var(--ir-raised);
 }
+/* An invalid field is flagged THREE ways — red border, tinted well, and the
+   inline message below it — because a colour-only signal on the border alone
+   is easy to miss at 1px, especially in dark where the red hairline is the
+   faintest of the three. SELECT joins the rule here: the incident type and
+   the per-type dropdowns set aria-invalid exactly like the text fields do
+   and were shipping with only one of the three signals. */
 .ir-body input[aria-invalid='true'],
+.ir-body select[aria-invalid='true'],
 .ir-body textarea[aria-invalid='true'] {
   border-color: var(--ir-red);
+  background: var(--red-bg);
 }
 
 /* A radio or a checkbox on the light page follows the document's own blue: the
@@ -965,15 +1340,18 @@
 
 .ir-sub-label {
   display: block;
-  font-size: 0.68rem;
-  font-weight: 600;
+  font-size: 0.72rem;
+  font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--ir-muted);
-  margin-bottom: 0.2rem;
+  color: var(--ir-text);
+  margin-bottom: 0.25rem;
 }
 
-.ir-approx {
+/* Qualified by .ir-body so it keeps the quiet ink: the wording above gives every
+   label the document's own colour, and this is a QUALIFIER on the date/time pair
+   rather than a field label, so it stays a step down from the field it rides on. */
+.ir-body .ir-approx {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -1053,6 +1431,14 @@
 }
 @media (max-width: 720px) {
   .rv-side { grid-template-columns: minmax(0, 1fr); }
+  /* The report grids kept their second column down to the phone, which squeezed
+     each field cell into a few characters. Both the outer panel grid and the
+     per-panel sub-grids fold to one column here; the fields stay in document
+     order, so nothing moves relative to its neighbours. */
+  .ir-grid,
+  .ir-sub {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .rv-side-col { min-width: 0; }
 .rv-side-title {
@@ -1300,13 +1686,29 @@
    for the panel's own compact button size, so it needs nothing from this
    neutral treatment — without the exclusion below that fill would be repainted
    as a plain button and the panel's main action would read like a secondary
-   one. */
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort) {
+   one.
+
+   `.primary` AND `.danger` ARE THE SAME CASE, and they were the two that got it
+   wrong. This selector collects nine classes; `.ir-body button.primary` carries
+   two, so the neutral fill won every time and NO primary button in the workspace
+   ever rendered as one — Create Account sat next to Edit at identical weight,
+   and every destructive action (Deactivate Account, Delete) lost the red that
+   says so. Specificity beat intent, silently, in the one place where the
+   difference IS the message. They are excluded here for the reason above: the
+   variants below are deliberate exceptions, not defaults to be corrected.
+
+   .users-fab IS THE THIRD OF THAT KIND, one screen further on: User
+   Management's create circle owns its own fill, its own shape and its own
+   corner (styles.css), so it enters none of this. A circle that inherited this
+   fill would be a grey ring around a grey plus half a pixel from the bottom of
+   the window — and it is the only control on that screen that CREATES anything,
+   which is the one fact its colour has to carry. */
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.primary):not(.danger) {
   background: var(--ir-btn);
   border: 1px solid var(--ir-border);
   color: var(--ir-btn-ink);
 }
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):hover {
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.primary):not(.danger):hover {
   border-color: var(--ir-blue);
   color: var(--ir-blue-ink);
   background: var(--ir-btn);
@@ -1360,6 +1762,18 @@
 .ir-body .section-hint,
 .ir-body .field-hint {
   color: var(--ir-muted);
+  /* The guidance under a field is SUPPORTING copy: one size below the label,
+     a tight measure, and a line-height that gives it back the height it spends.
+     The TEXT is untouched — nothing here clips, truncates or hides a word of it. */
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+.ir-body .section-hint {
+  margin-bottom: 0.5rem;
+}
+.ir-body .section-hint:last-child,
+.ir-body .field-hint:last-child {
+  margin-bottom: 0;
 }
 
 .ir-body .alert {
@@ -1370,15 +1784,83 @@
   border-color: var(--red-line);
   color: var(--ir-danger-ink);
 }
+
+/* ---- The blocked-submit banner: title, instruction, jump-link chips ------
+   The old banner was one run-on sentence — six full error strings separated
+   by commas — which is unreadable at a glance and makes every problem look
+   like prose rather than a target. Restructured as three lines: the COUNT,
+   what to do about it, then each problem as its own CHIP.
+
+   A chip is obviously clickable where an inline link in a sentence is not,
+   the wrap lays all six out as separate targets, and each one still runs the
+   same jumpTo() path it always did — this is presentation only. The chips
+   sit on the card colour so they read as buttons ON the alert rather than
+   as more of its text; hover flips to the solid danger plate so the target
+   is unmistakable. Scoped under .alert.error so the 422 detail list (which
+   reuses .error-summary-inline as plain text) keeps its inline rendering. */
+.error-summary-block {
+  display: block;
+}
+.error-summary-title {
+  display: block;
+  font-weight: 700;
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+  margin-bottom: 0.25rem;
+}
+.error-summary-hint {
+  display: block;
+  font-size: 0.8rem;
+  margin-bottom: 0.6rem;
+}
+.error-summary-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.ir-body .alert.error .error-summary-links a {
+  display: inline-block;
+  padding: 0.28rem 0.7rem;
+  background: var(--ir-card);
+  border: 1px solid var(--red-line);
+  border-radius: 999px;
+  color: var(--ir-danger-ink);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-decoration: none;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+/* The hover plate inverts rather than going white-on-red: white on
+   `--red` measures ~3:1 in dark, under the bar for 0.78rem text. danger-ink
+   is a DARK red on a white card and a LIGHT salmon on a near-black one, and
+   the chip's text flips to the card colour — so both themes land at 6-8:1
+   without either one stating a hover colour of its own. */
+.ir-body .alert.error .error-summary-links a:hover {
+  background: var(--ir-danger-ink);
+  border-color: var(--ir-danger-ink);
+  color: var(--ir-card);
+  text-decoration: none;
+}
+.ir-body .alert.error .error-summary-links a:focus-visible {
+  outline: 2px solid var(--ir-blue);
+  outline-offset: 2px;
+}
 .ir-body .alert.info {
   background: var(--cyan-bg);
   border-color: var(--cyan-bg-strong);
   color: var(--ir-info-ink);
 }
 
+/* EVERY label, not only .ir-label. The narrative blocks, the review rows and the
+   per-group fields draw bare <label>s, and they were all inheriting the muted
+   ink here — so the labels the officer scans by were the quietest text in the
+   cell. A label is there to be read, so it takes the document's own text colour;
+   the muted token stays for copy that is genuinely secondary (field hints, meta,
+   and the .ir-approx qualifier, which states its own colour below). */
 .ir-body label {
   font-family: var(--font-body);
-  color: var(--ir-muted);
+  color: var(--ir-text);
 }
 
 .ir-body .badge.draft {
@@ -1399,12 +1881,15 @@
   color: var(--ir-red);
 }
 
-/* Read-only sign-off line (badge number comes from the account, never typed). */
+/* Read-only sign-off line (badge number comes from the account, never typed).
+   Its box is sized to stand in for a text field (the mirror field in
+   TypeSpecificFields swaps between the two), so it follows the field's
+   padding and rests at the same height instead of sitting 3px short. */
 .ir-readonly {
   display: flex;
   align-items: center;
-  min-height: 2.35rem;
-  padding: 0.45rem 0.7rem;
+  min-height: 2.5rem;
+  padding: 0.6rem 0.7rem;
   border: 1px dashed var(--ir-border);
   border-radius: 3px;
   background: var(--ir-raised);
@@ -1449,8 +1934,12 @@
   margin-left: auto;
 }
 
-/* Compact, quiet controls on the tinted header bar — they read as part of
-   the card's chrome, not as another field. */
+/* Compact, quiet controls on the header bar — they read as part of the card's
+   chrome, not as another field. They keep their OWN surface and ink (--ir-btn /
+   --ir-btn-ink) rather than borrowing the bar's, so a light pill on the filled
+   bar stays legible without the bar's colour entering into it; that was already
+   true when the bar was a tint, and it is what makes the fill change a no-op
+   here. */
 .ir-card-head-actions button,
 .ir-card-head-actions .button-link {
   padding: 0.25rem 0.65rem;
@@ -2234,72 +2723,13 @@
   letter-spacing: 0.02em;
 }
 
-/* Messages: the bell's twin, standing immediately before it.
-
-   THE SAME TRIGGER, DELIBERATELY. Same 34px box, same bare 17px glyph, same dimmed
-   resting ink and white hover, same white focus ring. The two are a pair — "what
-   happened to my reports" and "what have my colleagues said" — and a second control
-   on the bar that invented its own hover would read as belonging to a different
-   toolbar. The 34px box is what puts the two glyphs on one baseline next to the
-   profile pill, and what the badge is positioned against.
-
-   It is a SIBLING of the bell rather than a child of its wrapper: the bell's wrapper
-   is a click-outside region for its own panel, and a button inside it would be in
-   that region for no reason. */
-.ir-msg-trigger {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  color: rgba(255, 255, 255, 0.86);
-  cursor: pointer;
-}
-/* Restated for the same reason the bell restates them: an element-level
-   `button:hover` in styles.css would otherwise drop a near-white plate behind the
-   icon on the navy bar. Nothing is painted — the icon brightens. */
-.ir-msg-trigger:hover,
-.ir-msg-trigger[aria-expanded='true'] {
-  background: none;
-  border-color: transparent;
-  color: #fff;
-}
-.ir-msg-trigger:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 3px;
-}
-
-/* The count, in the same red at the same place as the bell's: on a bare icon the
-   badge hangs off the GLYPH, so these two offsets are the bell badge's own values
-   rather than the rim offsets a round plate used to want.
-
-   The number is capped at 9+ in the component, because an exact 47 in a 16px circle
-   is unreadable at the size it is drawn — it is a hint that something is waiting,
-   not a ledger. */
-.ir-msg-badge {
-  position: absolute;
-  top: 1px;
-  right: 2px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--ir-red);
-  color: #fff;
-  font-size: 0.62rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-}
+/* RETIRED: the bar's messages trigger and its unread badge (.ir-msg-trigger,
+   .ir-msg-badge) stood here as the bell's twin. The control was removed from
+   AppTopBar by request — the bar now ends at the bell — so both rule sets are
+   gone rather than left as dead styles that would silently come back to life if
+   the class name were reused. The messages panel itself is unchanged, and is
+   still opened from the presence rail's officer cards and the dashboard's
+   chatheads. */
 
 .ir-bell-panel {
   position: absolute;
@@ -2700,7 +3130,8 @@
    8. Responsiveness — single column on narrow viewports
    =========================================================================== */
 @media (max-width: 980px) {
-  .ir-grid {
+  .ir-grid,
+  .ir-card-row {
     grid-template-columns: minmax(0, 1fr);
   }
   .ir-page-head {
@@ -2903,7 +3334,11 @@
   background: var(--ir-card);
 }
 
-.st-block-head h2 {
+/* The account form's own sections are h3, because its title is the h2 and the
+   page title above that is the h1 — one heading per level, and the same card
+   vocabulary on both screens. */
+.st-block-head h2,
+.st-block-head h3 {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 700;
@@ -3096,7 +3531,11 @@
   --ir-muted: #5c6675;
   --ir-head-ink: #131922;
   --ir-icon: #5c6675;
-  --ir-placeholder: #9aa4b2;
+  --ir-placeholder: #6E7787;
+  /* Restated so the PAPER keeps the light-mode hairline whatever theme the app
+     is in: without it the sheet would inherit the dark theme's #5E6778 and its
+     fields would come out noticeably heavier than they do on screen. */
+  --ir-field-border: #8E93A0;
   --ir-row-hover: #f1f5fa;
   --ir-focus-ring: rgba(31, 95, 208, 0.16);
   --ir-blue: #1f5fd0;
@@ -3147,6 +3586,28 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
 }
+/* On paper the pair reads down, never across — a document is one column. */
+.ir-form--sheet .ir-card-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* ---- THE ACCENT CARD — the AI assistant's own section --------------------
+   Every card on this screen is a section of the report; this one is not. It is
+   the assistant, so it wears the accent instead of the section navy: a tinted
+   plate, an accent hairline and a 4px left edge that marks it out of the
+   corner of the eye without lifting it off the page (it is still a card in the
+   same grid, with the same header bar as its neighbours — see --ir-bar above, so
+   the whole form still reads as one official document).
+
+   It is the WRAPPING card that changes, not the controls inside: .ai-assist
+   keeps its own smaller tint, accent rail and "AI" pill, because those group the
+   controls themselves and this card is what says "this block is different in
+   kind" before the officer is close enough to read it. */
+.ir-card--accent {
+  border-color: var(--cyan-bg-strong);
+  border-left: 4px solid var(--ir-blue);
+  background: var(--cyan-bg);
+}
 .ir-form--sheet .ir-card--wide {
   margin-top: 1.6rem;
 }
@@ -3163,6 +3624,11 @@
 
 .ir-form--sheet .ir-card-head {
   background: none;
+  /* The ink is RESTATED, not inherited: the shared rule writes it as the white
+     that sits on the filled bar, and on paper the fill is gone, so white would
+     be white on white. This is the same reason the fill is cleared here at all —
+     a screen paints a header bar, a page prints a heading. */
+  color: var(--ir-text);
   padding: 0;
   margin-bottom: 0.85rem;
   /* Sentence case, no tracking, and NO RULE under it. That hairline was the
@@ -3183,16 +3649,17 @@
   font-weight: inherit;
 }
 
-/* The document format marks the card the officer is "on" with a filled header
-   bar. A page has no current position — you are wherever you are reading — so
-   the fill is dropped and every section heading carries the same weight. */
-.ir-form--sheet .ir-card--current > .ir-card-head {
-  background: none;
-  color: var(--ir-text);
-}
-.ir-form--sheet .ir-card--current > .ir-card-head > .ir-card-num {
-  color: inherit;
-}
+/* NOTHING KEYS ON --current HERE ANY MORE, and that is the point rather than a
+   tidy-up. This used to be the pair that un-painted the CURRENT card's header,
+   because a page has no current position — you are wherever you are reading.
+   Now the fill sits on every section bar and the rule above clears it for every
+   section bar, so the current card needs no exemption: the page's answer is no
+   longer "not this one" but "not any of them", which is the same statement and
+   cannot drift from it. Leaving the modifier rule here would have been a second,
+   weaker copy of a rule that no longer distinguishes anything.
+
+   (`--current` itself stays on the markup — it is how assistive tech is told
+   which card the officer is on, via aria-current. See .ir-card-head.) */
 
 .ir-form--sheet .ir-card-body {
   padding: 0 0 1.5rem;
@@ -3290,6 +3757,12 @@
    form at all in the sheet format — the first two are moved below the paper (see
    ReportEditor) and the third is stepped-only. */
 .ir-form--blank .ir-card:not(.ir-card--sheet-page) {
+  display: none;
+}
+/* …and the ROW those two cards live in, which would otherwise be left behind
+   as an empty box carrying its own top margin (its children are hidden, but the
+   wrapper is not a `.ir-card`). */
+.ir-form--blank .ir-card-row {
   display: none;
 }
 

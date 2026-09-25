@@ -227,6 +227,26 @@ prompt):
 8. **End when the facts end.** No summary sentence, no closing formula. The
    final sentence is the disposition or the last recorded fact.
 
+The findings block has its own answers to "what is a finding?" (added
+2026-09-24, guarded by `testBaseInstructionCarriesNotableFindingsRules`):
+
+- **Draw on every field, not only the box.** The officer does NOT have to type
+  anything in Notable Findings. The block is generated from the whole record —
+  CCTV availability and details, manner of taking, recovery status, property,
+  parties, action taken — even when the box is blank.
+- **A filled field is not a finding.** The incident type, the date/time, the
+  place, a party's name and the report's own classification are not findings;
+  only an investigative observation (footage that shows something, property
+  seized or recovered, forced entry, tool marks, an injury, a witness who gave
+  a statement) qualifies.
+- **No conclusions, and no CCTV or recovery beyond the record.** An observation
+  is stated; an inference ("the suspect was familiar with the warehouse",
+  "pre-planned", "an insider was involved") is not drawn unless the officer
+  wrote it. CCTV "No" never becomes footage reviewed/preserved/requested, and
+  CCTV "Yes" with no details never becomes what the footage showed. When
+  nothing qualifies, the array is empty and the sheet leaves the block out —
+  never the words "None noted" as a finding line.
+
 Two of the failures in BW-0295 were not the model's:
 
 - **F5 — "The entry is on file with this station."** was our own
@@ -285,6 +305,7 @@ for the analyser, `tests/rules/printActions.test.mjs` for the print block.
 | §7 unidentified parties | prompt: UNIDENTIFIED PARTIES | `testBaseInstructionCarriesNoNewInformationConstraint` |
 | §8 tone / numbers / accuracy | prompt: TONE AND NUMBERS; ACCURACY | `testBaseInstructionCarriesAccuracyRules` |
 | §9 economy | prompt: ECONOMY AND NON-REDUNDANCY; `app/ai/NarrativeEconomy.php` | `testBaseInstructionCarriesEconomyRules`, `testEconomySectionIsCarriedOnce`, `NarrativeEconomyTest` (whole file) |
+| §9 findings output rules (all fields, a filled field is not a finding, CCTV/recovery limits, no conclusions) | prompt: ADDITIONAL OUTPUTS — notableFindings | `testBaseInstructionCarriesNotableFindingsRules` |
 | §9 F5 on-file note | `src/lib/printActions.js` | `printActions.test.mjs` — on-file note only when the block is empty |
 | §9 F7 filler closers | `narrative_few_shots.md` | `testFewShotsStateThatEveryDetailIsTraceable`, `testEconomyFewShotModelsOnePropositionOnePlace` |
 | §10 per-type rows | `type_vocabulary.json` | `testAllCanonicalTypesHaveVocabularyEntries`, `testTypeVocabularyIsAppendedForMatchingType`, `testSensitivityNoteAppendedOnlyForSensitiveTypes` |

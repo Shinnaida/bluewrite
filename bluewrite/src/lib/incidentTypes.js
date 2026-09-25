@@ -479,10 +479,19 @@ export const STOLEN_ITEM_FIELDS = [
 ];
 
 // Shared vehicle sub-schema (traffic accidents, getaways, seizures).
+//
+// The licence number lives HERE, on the vehicle whose driver it identifies,
+// and not on the reporting party. A traffic accident is often reported by a
+// passenger, a bystander or a barangay official, so a licence asked for in
+// Panel I asks the WRONG PERSON for it — the requirement moves with the record
+// it belongs to. Same for the owner, who may be neither the driver nor the
+// reporter.
 export const VEHICLE_ITEM_FIELDS = [
   f('plate_number', 'Plate Number', { type: 'plate' }),
   f('driver_name', 'Driver', { type: 'name' }),
+  f('driver_license_no', 'Driver\u2019s License No.'),
   f('make_model', 'Make/Model'),
+  f('owner_name', 'Vehicle Owner', { type: 'name' }),
   f('damage_description', 'Damage', { textarea: true }),
 ];
 

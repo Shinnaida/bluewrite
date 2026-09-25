@@ -20,6 +20,20 @@ final class ReportsController
     private const LEGACY_TYPES = ['Physical Injury', 'Vehicular Accident', 'Drug-related', 'Other'];
 
     /**
+     * The reporting-party fields a finalize PATCH may leave out, because the
+     * report already carries them. validateReporterParty() is given the stored
+     * value for any of these the body does not send, so a PATCH that only flips
+     * the status is checked against the row an officer has actually written
+     * rather than against an empty body. Nothing here decides what a PATCH
+     * writes — that stays with the keys the body carried.
+     */
+    private const PARTY_FIELDS = [
+        'reporter_name',
+        'reporter_contact',
+        'reporter_address',
+    ];
+
+    /**
      * Phase 6 Stage 1 — the languages a narrative may be filed in (migration
      * 007). §8 Q2 of the plan settled on DECLARATION, and that was later
      * superseded by the owner: the client now DETECTS the language from the
@@ -357,6 +371,26 @@ final class ReportsController
             $params[':uid'] = (int) $user['id'];
         }
 
+        // WHOSE REPORTS — one officer's own list, which is what the account page shows
+        // an administrator. It reuses this query rather than adding a second one so that
+        // the counts, the statuses and the derived verification state on that page are
+        // the SAME numbers this list shows: a summary computed a second way is a summary
+        // that eventually disagrees with the record it summarises (pagination.total is
+        // therefore that officer's total, not the station's).
+        //
+        // ADMIN ONLY, AND REFUSED RATHER THAN IGNORED. An Officer or Staff account is
+        // already scoped to its own reports by the clause above; silently intersecting
+        // the two would answer 200 with an empty blotter, which reads as "that colleague
+        // has never recorded anything" rather than as "you may not ask that".
+        $createdBy = (int) ($_GET['created_by'] ?? 0);
+        if ($createdBy > 0) {
+            if ($user['role'] !== 'Admin') {
+                Response::json(403, ['error' => 'Your account does not have permission to perform this action.']);
+            }
+            $where[] = 'r.created_by = :created_by';
+            $params[':created_by'] = $createdBy;
+        }
+
         // Phase 6 Stage 4 — the "awaiting verification" view: a MODE of this same
         // list. It shows translated reports with no verification yet, in the
         // source languages this account can read, and it deliberately lifts the
@@ -614,15 +648,15 @@ final class ReportsController
                                   discovery_date, discovery_time, discovery_time_approximate,
                                   location, complainant, respondent, narrative, narrative_language,
                                   action_taken, ioc_name,
-                                  reporter_name, reporter_id_no, reporter_contact, reporter_email,
-                                  reporter_address, officer_initials,
+                                  reporter_name, reporter_contact,
+                                  reporter_address,
                                   type_specific, status)
              VALUES (:created_by, :type, :report_date, :blotter_no, :blotter_date,
                      :dt, :incident_date, :incident_time, :incident_time_approx,
                      :discovery_date, :discovery_time, :discovery_time_approx,
                      :loc, :comp, :resp, :narr, :narr_lang, :act, :ioc,
-                     :reporter_name, :reporter_id, :reporter_contact, :reporter_email,
-                     :reporter_address, :officer_initials,
+                     :reporter_name, :reporter_contact,
+                     :reporter_address,
                      :ts, :status)'
         );
         $stmt->execute([
@@ -646,11 +680,8 @@ final class ReportsController
             ':act' => isset($body['action_taken']) && $body['action_taken'] !== null ? trim((string) $body['action_taken']) : null,
             ':ioc' => isset($body['ioc_name']) && $body['ioc_name'] !== null ? trim((string) $body['ioc_name']) : null,
             ':reporter_name' => $official['reporter_name'],
-            ':reporter_id' => $official['reporter_id_no'],
             ':reporter_contact' => $official['reporter_contact'],
-            ':reporter_email' => $official['reporter_email'],
             ':reporter_address' => $official['reporter_address'],
-            ':officer_initials' => $official['officer_initials'],
             ':ts' => $typeSpecific,
             ':status' => $status,
         ]);
@@ -702,7 +733,7 @@ final class ReportsController
         }
         // Official-document fields (spec §1.2). Each is independent: a PATCH
         // may update only the blotter reference, or only the time.
-        $officialFields = $this->officialFields($body, $v);
+        $officialFields = $this->officialFields($body, $v, ($body['status'] ?? null) === 'finalized', $report);
         $official = $officialFields['values'];
         $touchesIncidentWhen = $official['incident_date'] !== null || $official['incident_time'] !== null;
         if ($touchesIncidentWhen) {
@@ -926,9 +957,8 @@ final class ReportsController
             'report_date', 'blotter_no', 'blotter_date',
             'incident_date', 'incident_time', 'incident_time_approximate',
             'discovery_date', 'discovery_time', 'discovery_time_approximate',
-            // Migration 006 — Write Report screen Panels I and IV.
-            'reporter_name', 'reporter_id_no', 'reporter_contact',
-            'reporter_email', 'reporter_address', 'officer_initials',
+            // Migration 006 — the Write Report screen's reporting party.
+            'reporter_name', 'reporter_contact', 'reporter_address',
         ];
         foreach ($officialMap as $key) {
             if (!array_key_exists($key, $body)) {
@@ -1212,7 +1242,7 @@ n     * view. Officers and Staff may print only their own reports; Admin may
      * @param array<string, mixed> $body
      * @return array<string, mixed> normalized values (null = absent/blank)
      */
-    private function officialFields(array $body, Validator $v): array
+    private function officialFields(array $body, Validator $v, bool $finalizing = false, ?array $stored = null): array
     {
         $pick = static function (array $b, string $key): ?string {
             if (!array_key_exists($key, $b) || $b[$key] === null) {
@@ -1235,11 +1265,8 @@ n     * view. Officers and Staff may print only their own reports; Admin may
             // the other document fields: these are what the filing party
             // declared, not per-type detail.
             'reporter_name' => $pick($body, 'reporter_name'),
-            'reporter_id_no' => $pick($body, 'reporter_id_no'),
             'reporter_contact' => $pick($body, 'reporter_contact'),
-            'reporter_email' => $pick($body, 'reporter_email'),
             'reporter_address' => $pick($body, 'reporter_address'),
-            'officer_initials' => $pick($body, 'officer_initials'),
         ];
 
         // Shapes first (one message per field, the codebase's usual style),
@@ -1273,16 +1300,30 @@ n     * view. Officers and Staff may print only their own reports; Admin may
         // shapes in the rule engine.
         foreach ([
             'reporter_name' => ['Reporting party name', 160],
-            'reporter_id_no' => ['Identification number', 60],
             'reporter_contact' => ['Contact number', 40],
-            'reporter_email' => ['Email address', 160],
             'reporter_address' => ['Home address', 255],
-            'officer_initials' => ['Officer initials', 12],
         ] as $key => [$label, $max]) {
             $v->optional($key, $values[$key], $label, $max);
         }
-        $v->email('reporter_email', $values['reporter_email'], 'Email address');
-        $party = ReportRules::validateReporterParty($values);
+        // Gate 2 only: a name and a contact number are what a SUBMITTED report
+        // cannot do without. A draft save passes them through unchecked, which is
+        // what lets an officer start a report before the party will give a number.
+        //
+        // A PATCH may finalize without re-sending the party: those fields are
+        // already on the row. So the check reads the EFFECTIVE row — the body
+        // where it speaks, the stored row where it is silent — the same way the
+        // finalize gate below reads the narrative, the Action Taken and the IOC.
+        // What a PATCH WRITES is untouched by this; that is still decided by
+        // which keys the body carried (see the $officialMap below).
+        $partyValues = $values;
+        if ($finalizing && is_array($stored)) {
+            foreach (self::PARTY_FIELDS as $key) {
+                if (!array_key_exists($key, $body)) {
+                    $partyValues[$key] = $stored[$key] ?? null;
+                }
+            }
+        }
+        $party = ReportRules::validateReporterParty($partyValues, $finalizing);
         foreach ($party['errors'] as $field => $msg) {
             $v->add($field, $msg);
         }

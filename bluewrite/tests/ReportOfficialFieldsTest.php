@@ -368,9 +368,12 @@ final class ReportOfficialFieldsTest extends BaseApiTestCase
             'incident_date' => '2026-09-09',
             'incident_time' => '09:00',
             'location' => 'Somewhere',
-            'narrative' => 'A sufficiently long narrative describing what happened at the scene for the report.',
-            'action_taken' => 'Subject turned over to the station for proper disposition.',
+            'narrative' => 'A sufficiently long narrative describing what happened at the scene for the report.',            'action_taken' => 'Subject turned over to the station for proper disposition.',
             'ioc_name' => 'Sgt. Test Investigator',
+            // Required at finalize (migration 006): who filed it and how to
+            // reach them. Both of these tests finalize the report.
+            'reporter_name' => 'Nita B. Ramos',
+            'reporter_contact' => '(032) 555-1234',
             // Complete for the incident's OWN type too (ReportRules::TYPE_RULES),
             // since both of these tests finalize the report.
             'type_specific' => [
@@ -387,13 +390,14 @@ final class ReportOfficialFieldsTest extends BaseApiTestCase
         $this->assertSame(200, $finalized['status'], json_encode($finalized['body']));
 
         $row = $this->db()->query("SELECT status, finalized_by FROM bluewrite_test.reports WHERE id = {$id}")->fetch();
+
         $this->assertSame('finalized', $row['status']);
         $this->assertNotNull($row['finalized_by']);
     }
 
-    // ---- Write Report screen: Panel I + Panel IV (migration 006) -------
+    // ---- Write Report screen: the reporting party (migration 006) -------
 
-    public function testReportingPartyAndInitialsSurviveASaveAndReload(): void
+    public function testReportingPartySurvivesASaveAndReload(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');
         $created = $this->request('POST', '/reports', [
@@ -403,11 +407,8 @@ final class ReportOfficialFieldsTest extends BaseApiTestCase
             'location' => 'Mercado Street',
             'narrative' => 'A sufficiently long narrative describing what happened at the scene for the report.',
             'reporter_name' => 'Nita B. Ramos',
-            'reporter_id_no' => 'N01-23-456789',
             'reporter_contact' => '(032) 555-1234',
-            'reporter_email' => 'nita.ramos@example.gov.ph',
             'reporter_address' => 'Poblacion, City of Naga, Cebu',
-            'officer_initials' => 'J.D.C.',
         ], $cookie, $csrf);
         $this->assertSame(201, $created['status'], json_encode($created['body']));
         $id = (int) $created['body']['report']['id'];
@@ -416,18 +417,33 @@ final class ReportOfficialFieldsTest extends BaseApiTestCase
         $this->assertSame(200, $loaded['status']);
         $report = $loaded['body']['report'];
         $this->assertSame('Nita B. Ramos', $report['reporter_name']);
-        $this->assertSame('N01-23-456789', $report['reporter_id_no']);
         $this->assertSame('(032) 555-1234', $report['reporter_contact']);
-        $this->assertSame('nita.ramos@example.gov.ph', $report['reporter_email']);
         $this->assertSame('Poblacion, City of Naga, Cebu', $report['reporter_address']);
-        $this->assertSame('J.D.C.', $report['officer_initials']);
         // Nothing has been signed yet — the signature timestamp is set by the
         // submit transition, not by the draft.
         $this->assertNull($report['party_signed_at']);
+
+        // The email address and the officer initials are NO LONGER collected: the
+        // form does not draw either box. A body that still sends them is not an
+        // error — an older client must keep working — it is simply ignored, and
+        // the row is left as it was.
+        $this->assertSame(200, $this->patchReport($cookie, $csrf, $id, [
+            'reporter_email' => 'nita.ramos@example.gov.ph',
+            'officer_initials' => 'J.D.C.',
+        ])['status']);
+        $row = $this->db()->query(
+            "SELECT reporter_email, officer_initials FROM bluewrite_test.reports WHERE id = {$id}"
+        )->fetch();
+        $this->assertNull($row['reporter_email']);
+        $this->assertNull($row['officer_initials']);
     }
 
-    public function testReportingPartyIsOptionalSoAFilingCanHaveNoneOfIt(): void
+    public function testADraftCanBeStartedBeforeTheReportingPartyIsKnown(): void
     {
+        // The reporter is a FINALIZE requirement, not a create one: an officer
+        // opens the report while the complainant is still at the desk and has
+        // not yet given a callback number. Nothing about the party is needed to
+        // save the draft.
         [$cookie, $csrf] = $this->login('t.officer');
         $created = $this->request('POST', '/reports', [
             'incident_type' => 'Theft',
@@ -436,6 +452,31 @@ final class ReportOfficialFieldsTest extends BaseApiTestCase
             'narrative' => 'n',
         ], $cookie, $csrf);
         $this->assertSame(201, $created['status'], json_encode($created['body']));
+    }
+
+    public function testAReportCannotBeFinalizedWithoutTheReportingParty(): void
+    {
+        // WHO FILED IT is the report's minimum: a submission with no reporting
+        // party and no contact number is refused, field by field, so the editor
+        // can point at the two boxes that are missing.
+        [$cookie, $csrf] = $this->login('t.officer');
+        $created = $this->createReport($cookie, $csrf, [
+            'reporter_name' => '',
+            'reporter_contact' => '',
+        ]);
+        $id = (int) $created['id'];
+
+        $finalized = $this->patchReport($cookie, $csrf, $id, ['status' => 'finalized']);
+        $this->assertSame(422, $finalized['status']);
+        $this->assertArrayHasKey('reporter_name', $finalized['body']['fields']);
+        $this->assertArrayHasKey('reporter_contact', $finalized['body']['fields']);
+
+        // Supplying both is the whole fix.
+        $this->assertSame(200, $this->patchReport($cookie, $csrf, $id, [
+            'reporter_name' => 'Nita B. Ramos',
+            'reporter_contact' => '(032) 555-1234',
+        ])['status']);
+        $this->assertSame(200, $this->patchReport($cookie, $csrf, $id, ['status' => 'finalized'])['status']);
     }
 
     public function testMalformedPartyDetailsAreRejectedOnSave(): void
@@ -448,18 +489,9 @@ final class ReportOfficialFieldsTest extends BaseApiTestCase
             'narrative' => 'n',
         ];
 
-        $badEmail = $this->request('POST', '/reports', $base + ['reporter_email' => 'nita.ramos@'], $cookie, $csrf);
-        $this->assertSame(422, $badEmail['status']);
-        $this->assertArrayHasKey('reporter_email', $badEmail['body']['fields']);
-        $this->assertStringContainsString('email', strtolower((string) $badEmail['body']['error']));
-
         $badContact = $this->request('POST', '/reports', $base + ['reporter_contact' => 'call the station'], $cookie, $csrf);
         $this->assertSame(422, $badContact['status']);
         $this->assertArrayHasKey('reporter_contact', $badContact['body']['fields']);
-
-        $badInitials = $this->request('POST', '/reports', $base + ['officer_initials' => 'JDC 123'], $cookie, $csrf);
-        $this->assertSame(422, $badInitials['status']);
-        $this->assertArrayHasKey('officer_initials', $badInitials['body']['fields']);
     }
 
     public function testSubmittingTheReportStampsTheSignatureTimestamp(): void
@@ -473,6 +505,7 @@ final class ReportOfficialFieldsTest extends BaseApiTestCase
             'action_taken' => 'Subject turned over to the station for proper disposition.',
             'ioc_name' => 'Sgt. Test Investigator',
             'reporter_name' => 'Nita B. Ramos',
+            'reporter_contact' => '(032) 555-1234',
             // Complete for the incident's OWN type too (ReportRules::TYPE_RULES),
             // since both of these tests finalize the report.
             'type_specific' => [

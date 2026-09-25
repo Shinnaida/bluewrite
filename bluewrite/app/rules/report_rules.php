@@ -29,10 +29,19 @@ final class ReportRules
         'injury_status' => ['select', false, null, null],
     ];
 
+    /**
+     * Vehicle row. The licence number is collected HERE, on the vehicle whose
+     * driver it identifies, and not on the reporting party: a traffic accident
+     * is often reported by a passenger, a bystander or a barangay official, so
+     * a licence asked for in Panel I asks the wrong person for it. Mirrors
+     * VEHICLE_ITEM_FIELDS in src/lib/incidentTypes.js.
+     */
     private const VEHICLE_ITEM = [
         'plate_number' => ['plate', false, null, null],
         'driver_name' => ['name', false, null, null],
+        'driver_license_no' => ['text', false, null, null],
         'make_model' => ['text', false, null, null],
+        'owner_name' => ['name', false, null, null],
         'damage_description' => ['text', false, null, null],
     ];
 
@@ -909,33 +918,43 @@ final class ReportRules
      * initials of Panel IV. Mirrors validateReporterParty() in
      * src/lib/reportRules.js so the browser and the API agree.
      *
-     * Nothing here is required: a report filed in person may have no ID
-     * number, no email and no address, and an officer may file it without a
-     * reporting party at all. Only a value that IS supplied is checked, and
-     * the contact number is deliberately permissive (PH landline/mobile
-     * formats are written many ways).
+     * WHO FILED IT is the report's minimum social fact, so the reporting party's
+     * NAME and a CONTACT NUMBER are required — but only when `$finalizing` is
+     * true, which is the same Gate 2 the narrative, the Action Taken and the IOC
+     * sit behind. A draft stays writable without them (an officer starts a
+     * report before the complainant has given a callback number), and the
+     * columns stay NULLable so every existing row keeps working.
+     *
+     * Everything else about the reporter remains OPTIONAL and is only checked
+     * when supplied: a report filed in person may have no ID number, no email
+     * and no address. The contact number itself is deliberately permissive — PH
+     * landline and mobile formats are written many ways.
      *
      * @param array<string, mixed> $f raw field values
+     * @param bool $finalizing true = Gate 2, where a name and a contact are
+     *   mandatory; false = a draft save, where only shapes are checked
      * @return array{errors: array<string, string>}
      */
-    public static function validateReporterParty(array $f): array
+    public static function validateReporterParty(array $f, bool $finalizing = false): array
     {
         $errors = [];
         $trim = static fn ($v): string => trim((string) ($v ?? ''));
 
-        $email = $trim($f['reporter_email'] ?? null);
-        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
-            $errors['reporter_email'] = 'Email address must be a valid email address.';
+        if ($finalizing) {
+            if ($trim($f['reporter_name'] ?? null) === '') {
+                $errors['reporter_name'] = 'Reporting party name is required.';
+            }
+            if ($trim($f['reporter_contact'] ?? null) === '') {
+                $errors['reporter_contact'] = 'Contact number is required.';
+            }
         }
 
+        // The email address and the address are both OPTIONAL and only their
+        // shape is checked when they are supplied — the client no longer collects
+        // an email at all, so nothing here demands one.
         $contact = $trim($f['reporter_contact'] ?? null);
         if ($contact !== '' && preg_match('/^[0-9+()\- .]{5,40}$/', $contact) !== 1) {
             $errors['reporter_contact'] = 'Contact number must be a valid contact number.';
-        }
-
-        $initials = $trim($f['officer_initials'] ?? null);
-        if ($initials !== '' && preg_match('/^[\p{L}. ]{1,12}$/u', $initials) !== 1) {
-            $errors['officer_initials'] = 'Officer initials may contain letters, dots and spaces only.';
         }
 
         return ['errors' => $errors];

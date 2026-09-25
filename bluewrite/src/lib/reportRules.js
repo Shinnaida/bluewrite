@@ -56,39 +56,53 @@ const COMMON_RULES = {
 // Reporting party + officer initials (Write Report screen, Panels I and IV).
 // Mirrors ReportRules::validateReporterParty() in app/rules/report_rules.php.
 //
-// None of it is required — a report filed in person may have no ID number,
-// no email and no address — so only a value that IS supplied is checked.
+// WHO FILED IT is the report's minimum social fact: a document with no reporting
+// party is an unsigned note, not a complaint, and there is nobody for the
+// station to call back. So the reporter's NAME and a CONTACT NUMBER are required
+// — at FINALIZE only. This function is reached from the finalize branch of
+// validateReport(), so a half-written draft still saves (the same gate the
+// narrative, the Action Taken and the IOC sit behind).
+//
+// Everything else about the reporter stays OPTIONAL, and deliberately so: a
+// filing made in person may have no address and no email, and the officer must
+// not be made to type "N/A" into a box that does not apply. There is deliberately
+// no email field at all — the station reaches a reporting party by telephone, and
+// a mailbox nobody reads was one more box to leave blank.
 // ---------------------------------------------------------------------------
+const REPORTER_REQUIRED = [
+  { key: 'reporter_name', label: 'Reporting party name' },
+  { key: 'reporter_contact', label: 'Contact number' },
+];
+
 const REPORTER_FIELDS = [
-  {
-    key: 'reporter_email',
-    label: 'Email address',
-    pattern: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/,
-    hint: 'must be a valid email address.',
-  },
   {
     key: 'reporter_contact',
     label: 'Contact number',
     pattern: /^[0-9+()\-. ]{5,40}$/,
     hint: 'must be a valid contact number.',
   },
-  {
-    key: 'officer_initials',
-    label: 'Officer initials',
-    pattern: /^[\p{L}. ]{1,12}$/u,
-    hint: 'may contain letters, dots and spaces only.',
-  },
 ];
 
 /** @returns {Array<{level,path,message}>} shape errors for the party fields. */
 export function validateReporterParty(draft) {
   const problems = [];
+
+  // Required: the person who filed the report, and how to reach them.
+  for (const field of REPORTER_REQUIRED) {
+    if (String(draft?.[field.key] ?? '').trim() === '') {
+      problems.push(err(field.key, `${field.label} is required.`));
+    }
+  }
+
+  // Optional, but checked when supplied. An empty value is skipped, so the
+  // required check above is the only thing that can complain about it.
   for (const field of REPORTER_FIELDS) {
     const value = String(draft?.[field.key] ?? '').trim();
     if (value === '') continue; // optional and empty — nothing to check
     if (field.pattern.test(value)) continue;
     problems.push(err(field.key, `${field.label} ${field.hint}`));
   }
+
   return problems;
 }
 

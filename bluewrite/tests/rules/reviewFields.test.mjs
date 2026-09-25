@@ -54,11 +54,8 @@ test('every aliased field resolves to the id the form actually uses', () => {
   // The alias table exists because `<key>` → `r-<key>` does not hold for these;
   // a wrong entry here is a link that scrolls nowhere.
   assert.deepEqual(fieldIdCandidates('reporter_name'), ['r-reporter-name']);
-  assert.deepEqual(fieldIdCandidates('reporter_id_no'), ['r-reporter-id']);
   assert.deepEqual(fieldIdCandidates('reporter_contact'), ['r-reporter-contact']);
-  assert.deepEqual(fieldIdCandidates('reporter_email'), ['r-reporter-email']);
   assert.deepEqual(fieldIdCandidates('reporter_address'), ['r-reporter-address']);
-  assert.deepEqual(fieldIdCandidates('officer_initials'), ['r-officer-initials']);
   assert.deepEqual(fieldIdCandidates('action_taken'), ['r-act']);
   assert.deepEqual(fieldIdCandidates('ioc_name'), ['r-ioc']);
 });

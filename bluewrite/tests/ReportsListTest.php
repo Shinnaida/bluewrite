@@ -11,6 +11,14 @@ namespace BlueWrite\Tests;
  */
 final class ReportsListTest extends BaseApiTestCase
 {
+    /** The scratch DB's own id for a seeded account (see the base case's seed). */
+    private function userId(string $username): int
+    {
+        return (int) $this->db()->query(
+            'SELECT id FROM bluewrite_test.users WHERE username = ' . $this->db()->quote($username)
+        )->fetchColumn();
+    }
+
     private function seedReports(): void
     {
         [$officerCookie, $officerCsrf] = $this->login('t.officer');
@@ -252,6 +260,56 @@ final class ReportsListTest extends BaseApiTestCase
         // A page beyond the last simply returns an empty slice.
         $res = $this->request('GET', '/reports?per_page=2&page=9', null, $cookie);
         $this->assertCount(0, $res['body']['reports']);
+        $this->assertSame(3, $res['body']['pagination']['total']);
+    }
+
+    /**
+     * The Admin-only `created_by` filter: one officer's own blotter.
+     *
+     * This is the query behind the account page in User Management (an administrator
+     * opening a colleague reads what they have recorded). It is deliberately the SAME
+     * list query with one more clause rather than a second summary endpoint, so the
+     * count, the statuses and the derived verification state on that page are the
+     * numbers All Reports shows — which is why `pagination.total` here is asserted
+     * rather than just the rows.
+     */
+    public function testCreatedByFilterIsAdminOnlyAndScopesTheTotal(): void
+    {
+        [$officerCookie, $officerCsrf] = $this->login('t.officer');
+        $this->seedReports();
+        $officerId = $this->userId('t.officer');
+
+        // THE ADMIN, asking about the officer: the same three seeds, and a total that is
+        // THAT OFFICER'S rather than the station's.
+        [$adminCookie] = $this->login('t.admin');
+        $res = $this->request('GET', '/reports?created_by=' . $officerId, null, $adminCookie);
+        $this->assertSame(200, $res['status']);
+        $this->assertSame(3, $res['body']['pagination']['total']);
+        foreach ($res['body']['reports'] as $row) {
+            $this->assertSame($officerId, (int) $row['created_by']);
+        }
+
+        // An account that has recorded nothing is an EMPTY LIST, not an error: that is a
+        // real answer to the question the account page asks.
+        $staffId = $this->userId('t.staff');
+        $res = $this->request('GET', '/reports?created_by=' . $staffId, null, $adminCookie);
+        $this->assertSame(200, $res['status']);
+        $this->assertSame(0, $res['body']['pagination']['total']);
+
+        // REFUSED RATHER THAN IGNORED for everyone else. An Officer is already scoped to
+        // their own reports, so intersecting the two clauses would answer 200 with an
+        // empty blotter — which reads as "that colleague has never recorded anything"
+        // rather than as "you may not ask that".
+        $res = $this->request('GET', '/reports?created_by=' . $staffId, null, $officerCookie);
+        $this->assertSame(403, $res['status']);
+
+        [$staffCookie] = $this->login('t.staff');
+        $res = $this->request('GET', '/reports?created_by=' . $officerId, null, $staffCookie);
+        $this->assertSame(403, $res['status']);
+
+        // Absent (0) is not a filter at all, so every existing caller of this list is
+        // unaffected — the Admin's own view is still the whole station.
+        $res = $this->request('GET', '/reports', null, $adminCookie);
         $this->assertSame(3, $res['body']['pagination']['total']);
     }
 }

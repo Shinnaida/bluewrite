@@ -12,6 +12,10 @@
 
 import React from 'react';
 import { DEFAULT_SOFT_WARN_AT } from '../lib/incidentTypes.js';
+// The dropdown every `select` field in a row is drawn with, so a Sex or a
+// Status list looks the same here as the incident type does in Panel II — see
+// the component for why the list is not a native <select>.
+import Dropdown from './Dropdown.jsx';
 
 export default function RepeatableGroup({
   groupKey,
@@ -91,10 +95,18 @@ export default function RepeatableGroup({
               const id = `${idPrefix}${groupKey}-${i}-${fld.key}`;
               const fieldErr = errors?.[`${groupKey}[${i}].${fld.key}`];
               const control = fld.select ? (
-                <select id={id} value={item?.[fld.key] ?? ''} onChange={(e) => setItemField(i, fld.key, e.target.value)}>
-                  <option value="">Select…</option>
-                  {fld.select.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
+                <Dropdown
+                  id={id}
+                  options={fld.select}
+                  // A select needs a way back to "nothing chosen", which the
+                  // option list itself never carries.
+                  emptyLabel="Select…"
+                  placeholder="Select…"
+                  value={item?.[fld.key] ?? ''}
+                  onChange={(next) => setItemField(i, fld.key, next)}
+                  disabled={disabled}
+                  invalid={!!fieldErr}
+                />
               ) : fld.textarea ? (
                 <textarea
                   id={id}

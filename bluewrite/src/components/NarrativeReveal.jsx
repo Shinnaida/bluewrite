@@ -54,6 +54,14 @@ export default function NarrativeReveal({
   text,
   resetKey,
   onComplete,
+  // Optional, and only for callers that run SEVERAL reveals in sequence (the AI
+  // panel types the facts, the findings and the action taken one after the
+  // other). Skipping means "show me the draft": onComplete still fires — this
+  // part is finished either way — and onSkip then fires AFTER it, so a caller
+  // can take the whole sequence to its end instead of making the officer press
+  // skip once per part. A caller that does not pass it is unaffected: the two
+  // callbacks are simply the same event with two scopes.
+  onSkip,
   outerDurationCapMs = 3500, // see SPEED/CAP DECISION above
   baseTypingSpeed = 45,      // ms per char at the natural tier
   variableSpeed,             // default set below, clamped by the cap tier
@@ -100,7 +108,10 @@ export default function NarrativeReveal({
     if (typedOut) return;
     setSkipped(true);
     fireComplete();
-  }, [typedOut, fireComplete]);
+    // After fireComplete(), deliberately: both callbacks usually set state, and
+    // the caller's "sequence is over" must be the last word of the two.
+    onSkip?.();
+  }, [typedOut, fireComplete, onSkip]);
 
   useEffect(() => {
     if (skipped) return undefined;

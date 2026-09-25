@@ -40,6 +40,11 @@ function validBase(type, overrides = {}) {
     action_taken:
       'Subject turned over to the station for proper disposition. Follow-up investigation ongoing.',
     ioc_name: 'Sgt. Test Investigator',
+    // Required at finalize (migration 006): a submitted report names the
+    // reporting party and carries a number to reach them on. The reporter's
+    // address stays optional.
+    reporter_name: 'Nita B. Ramos',
+    reporter_contact: '(032) 555-1234',
     type_specific: {},
     ...overrides,
   };
@@ -424,6 +429,23 @@ test('victim groups carry victim type + representative; suspect groups carry sta
   assert.ok(!keysOf('Missing Person', 'complainant').includes('victim_type'));
 });
 
+test('a traffic-accident vehicle row carries the driver\u2019s licence and the owner', () => {
+  // The licence belongs to the person DRIVING, not to whoever filed the report:
+  // a traffic accident is routinely reported by a passenger, a bystander or a
+  // barangay official, so Panel I must not be where it is asked for. The owner
+  // is recorded here too, because the owner may be neither the driver nor the
+  // reporter (a borrowed car, a company vehicle).
+  const vehicles = keysOf('Traffic Accident', 'vehicles');
+  assert.ok(vehicles.includes('driver_license_no'));
+  assert.ok(vehicles.includes('owner_name'));
+  // The pair the vehicle_completeness cross-check enforces stays intact.
+  assert.ok(vehicles.includes('plate_number'));
+  assert.ok(vehicles.includes('driver_name'));
+  // The same row schema serves a drug-related seizure's vehicle, so it carries
+  // them there too — one row shape, one set of rules to keep in step with PHP.
+  assert.deepEqual(keysOf('Drug-Related Incident', 'vehicles'), vehicles);
+});
+
 test('a victim with no representative and an identified/organization mix is valid', () => {
   const draft = validBase('Theft', {
     type_specific: {
@@ -501,20 +523,43 @@ test('stolenItemsTotal sums what is known and labels a partial total', () => {
   assert.deepEqual(stolenItemsTotal([]), { total: 0, partial: false, rows: 0, valued: 0 });
 });
 
-// ---- 11. Part 1: reporting party + officer initials (Panels I / IV) --------
+// ---- 11. Part 1: the reporting party (Panel I) -----------------------------
 
-test('the reporting party fields are optional and never block a blank report', () => {
-  assert.deepEqual(validateReporterParty({}), []);
-  assert.deepEqual(validateReporterParty({ reporter_name: 'Juan Dela Cruz' }), []);
-  // A report filed in person may have no ID, no email, no address at all.
+test('the reporting party must be named and reachable before the report is filed', () => {
+  // WHO FILED IT is the report's minimum: without a name there is nobody the
+  // document is from, and without a number there is nobody to call back about
+  // the case. Both are required — and nothing else about the reporter is.
+  const missing = validateReporterParty({});
+  assert.deepEqual(
+    missing.map((p) => p.path).sort(),
+    ['reporter_contact', 'reporter_name'],
+  );
+  assert.ok(missing.every((p) => p.level === 'error'));
+
+  // Each one is reported on its own — a report is blocked for the one that is
+  // actually missing, not for "the party" as a whole.
+  assert.deepEqual(
+    validateReporterParty({ reporter_name: 'Juan Dela Cruz' }).map((p) => p.path),
+    ['reporter_contact'],
+  );
+  assert.deepEqual(
+    validateReporterParty({ reporter_contact: '0917 555 1234' }).map((p) => p.path),
+    ['reporter_name'],
+  );
+});
+
+test('the rest of the reporting party is optional, but a supplied value is checked', () => {
+  // A report filed in person may have no address at all. There is no email field
+  // on this report, so none is expected here.
+  assert.deepEqual(
+    validateReporterParty({ reporter_name: 'Juan Dela Cruz', reporter_contact: '0917 555 1234' }),
+    [],
+  );
   assert.deepEqual(
     validateReporterParty({
       reporter_name: 'Nita B. Ramos',
-      reporter_id_no: 'N01-23-456789',
       reporter_contact: '(032) 555-1234',
-      reporter_email: 'nita.ramos@example.gov.ph',
       reporter_address: 'Poblacion, City of Naga, Cebu',
-      officer_initials: 'J.D.C.',
     }),
     [],
   );
@@ -522,23 +567,30 @@ test('the reporting party fields are optional and never block a blank report', (
 
 test('a malformed reporting-party value is named, not silently accepted', () => {
   const problems = validateReporterParty({
-    reporter_email: 'nita.ramos@',
+    reporter_name: 'Juan Dela Cruz',
     reporter_contact: 'call the station',
-    officer_initials: 'JDC 123',
   });
   assert.deepEqual(
     problems.map((p) => p.path).sort(),
-    ['officer_initials', 'reporter_contact', 'reporter_email'],
+    ['reporter_contact'],
   );
   assert.ok(problems.every((p) => p.level === 'error'));
 });
 
-test('the reporting-party shapes are a finalize check, not a draft nag', () => {
-  const draft = validBase('Theft', { reporter_email: 'not-an-email' });
-  const asDraft = validateReport(draft, 'draft');
-  assert.equal(asDraft.errors.filter((e) => e.path === 'reporter_email').length, 0);
-  const atFinalize = validateReport(draft, 'finalize');
-  assert.equal(atFinalize.errors.filter((e) => e.path === 'reporter_email').length, 1);
+test('the reporting-party rules are a finalize check, not a draft nag', () => {
+  // A draft that nobody has been entered for still SAVES; it is only the
+  // submission that needs the reporting party.
+  const blank = validBase('Theft', {
+    reporter_name: '',
+    reporter_contact: '',
+  });
+  const asDraft = validateReport(blank, 'draft');
+  assert.equal(asDraft.errors.filter((e) => e.path === 'reporter_name').length, 0);
+  assert.equal(asDraft.errors.filter((e) => e.path === 'reporter_contact').length, 0);
+
+  const atFinalize = validateReport(blank, 'finalize');
+  assert.equal(atFinalize.errors.filter((e) => e.path === 'reporter_name').length, 1);
+  assert.equal(atFinalize.errors.filter((e) => e.path === 'reporter_contact').length, 1);
 });
 
 // ---- 12. Per-type requirements: what each incident KIND must record --------

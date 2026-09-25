@@ -63,16 +63,22 @@ import {
   setIncidentTime,
 } from '../lib/reviewFields.js';
 import RepeatableGroup from './RepeatableGroup.jsx';
+// Every option list on this screen: the two typeable boxes (the incident type
+// and the reporting party's capacity) and each per-type dropdown. Drawn rather
+// than native, because a native menu cannot be painted — see the component.
+import Dropdown from './Dropdown.jsx';
 import AiNarrativePanel from './AiNarrativePanel.jsx';
 // Phase 6 Stage 4 — the translation review surface: the original beside the
 // English, the derived status, and (when the server allows it) the verify /
 // dispute form. Same component for the editor and the reviewing officer, since
 // a verifier opens the report read-only through the same screen.
 import ReportVerificationPanel from './ReportVerificationPanel.jsx';
-// Phase 6 Stage 5 Track B — the terminology table as a full panel: browse,
-// search, and the approved terms the officer's own text already uses. Offline,
-// read-only, and mounted in the editor so it works with the AI switched off.
-import NarrativeTermsPanel from './NarrativeTermsPanel.jsx';
+// Phase 6 Stage 5 Track B — the terminology table (NarrativeTermsPanel.jsx) is
+// deliberately NOT imported here: the glossary ships with zero approved terms
+// today, so the only thing it could draw on this screen is its empty-state
+// disclaimer, which reads like a fault on a form that otherwise works. The
+// component is untouched and returns with the glossary — see `termsPanel` below
+// for the two places to re-add it.
 // Home's backdrop only — the animated grid behind the wordmark and the register
 // tail. Nothing else in the app renders it (see HomeGrid.jsx).
 import HomeGrid from './HomeGrid.jsx';
@@ -84,7 +90,9 @@ import {
   caseNumber,
   reportDateValue,
   specDate,
-  specTimestamp,
+  CUSTOM_TYPE,
+  incidentTypeBoxValue,
+  resolveIncidentTypeInput,
 } from '../lib/incidentReport.js';
 // Phase 6 Stage 1 — the language of the narrative. One module behind the
 // detector, the "not translated" notice, the AI guard's reason, the finalize
@@ -124,15 +132,13 @@ const EMPTY = {
   // signs the "IOC:" line.
   action_taken: '',
   ioc_name: '',
-  // Reporting party (migration 006, Panel I of the Write Report screen) and
-  // the officer initials of Panel IV. Separate from created_by: the person
-  // filing the report is not always the officer on the record.
+  // Reporting party (migration 006, Panel I of the Write Report screen).
+  // Separate from created_by: the person filing the report is not always the
+  // officer on the record.
+  //
   reporter_name: '',
-  reporter_id_no: '',
   reporter_contact: '',
-  reporter_email: '',
   reporter_address: '',
-  officer_initials: '',
   // Phase 6 Stage 1 (migration 007) — the language the NARRATIVE is written
   // in, DECLARED by the officer. A new report starts here and D7 pre-selects
   // the officer's last-used language over it; an existing report always shows
@@ -210,9 +216,7 @@ const FIELD_LABELS = {
   location: 'Place of incident',
   narrative: 'Narrative',
   reporter_name: 'Reporting party name',
-  reporter_email: 'Email address',
   reporter_contact: 'Contact number',
-  officer_initials: 'Officer initials',
 };
 
 // ---------------------------------------------------------------------------
@@ -323,6 +327,9 @@ function IrCard({
   title,
   children,
   wide,
+  // A card that is NOT one of the report's ordinary sections: accent-edged and
+  // tinted so it reads as a different kind of block (today, the AI assistant).
+  accent,
   flush,
   actions,
   headless,
@@ -342,8 +349,8 @@ function IrCard({
   return (
     <section
       className={`ir-card${wide ? ' ir-card--wide' : ''}${current ? ' ir-card--current' : ''}${
-        sheetPage ? ' ir-card--sheet-page' : ''
-      }`}
+        accent ? ' ir-card--accent' : ''
+      }${sheetPage ? ' ir-card--sheet-page' : ''}`}
       data-ir-step={step}
       /* The card you are on is the one your step owns — readable to assistive
          tech, not only to the eye. */
@@ -378,6 +385,15 @@ function flashTarget(el, cls = 'jump-flash') {
   el.classList.add(cls);
   window.setTimeout(() => el.classList.remove(cls), 2200);
 }
+
+// There is deliberately NO scheme-flipping machinery here any more. It existed
+// for the menus the BROWSER drew behind `<input list>`: a menu that is not a DOM
+// node, painted from the option values, reachable only by `color-scheme` — and
+// therefore near-black in the dark theme, which is why the document had to
+// answer as light while one was open. Every option list on this screen is now
+// drawn by Dropdown.jsx, which is a real element on the page and wears the theme
+// like everything else, so nothing has to be flipped and no attribute has to be
+// put on and taken off while a field is engaged.
 
 // ---- Which copy of a field a lookup means -----------------------------
 // In the stepped format every panel the officer is NOT on carries the `hidden`
@@ -563,12 +579,17 @@ function TypeSpecificFields({ incidentType, values, onChange, disabled, errors, 
           return (
             <div className="field" key={fld.key}>
               {label}
-              <select {...common} value={val} onChange={(e) => set(e.target.value)} disabled={disabled}>
-                <option value="">Select…</option>
-                {fld.select.map((o) => (
-                  <option key={o} value={o}>{o}</option>
-                ))}
-              </select>
+              <Dropdown
+                id={id}
+                options={fld.select}
+                emptyLabel="Select…"
+                value={val}
+                onChange={set}
+                disabled={disabled}
+                required={isRequired}
+                invalid={problem ? true : undefined}
+                placeholder="Select…"
+              />
               {problemLine}
             </div>
           );
@@ -609,18 +630,7 @@ function TypeSpecificFields({ incidentType, values, onChange, disabled, errors, 
 // cannot disagree with the red banner, the inline errors or Gate 2.
 // ===========================================================================
 const STEPPER_STEPS = [
-  {
-    label: 'Reporting party',
-    // Panel I, plus the officer initials typed in Panel IV.
-    paths: [
-      'reporter_name',
-      'reporter_id_no',
-      'reporter_contact',
-      'reporter_email',
-      'reporter_address',
-      'officer_initials',
-    ],
-  },
+  { label: 'Reporting party', paths: ['reporter_name', 'reporter_contact', 'reporter_address'] },
   { label: 'Incident details', paths: ['incident_type', 'incident_datetime', 'location'] },
   { label: 'Narrative', paths: ['narrative'] },
   // The polymorphic section: the repeatable groups (a bare key like `vehicles`
@@ -628,7 +638,7 @@ const STEPPER_STEPS = [
   // scalar path. Checked against the type chosen NOW, so a group that does not
   // exist for this type can never count against it.
   { label: 'Type-specific', paths: [], typeSpecific: true },
-  { label: 'Action & signatures', paths: ['action_taken', 'ioc_name'] },
+  { label: 'Action taken', paths: ['action_taken', 'ioc_name'] },
 ];
 
 // Index of the polymorphic section above, named so the bucketing reads itself
@@ -698,15 +708,16 @@ function computeStepProgress(draft, visited) {
 
   const complete = STEPPER_STEPS.map((_, i) => {
     if (flagged[i] > 0) return false;
-    // Two sections read "no problems" without anything having been filled in,
-    // so the rules alone would call them finished, and neither is:
-    //   - section 1 is all-optional: a blank card is valid but not filled;
-    //   - the type-specific section has no completeness signal of its own on a
-    //     type whose groups are ALL optional and whose scalars are unrequired
-    //     (Drug-Related Incident) — every other type is caught by a count
-    //     floor, but that one would read done the moment a type was chosen.
-    // Both therefore need the officer to have engaged with them, and the
-    // type-specific one additionally needs a type to exist at all.
+    // The type-specific section reads "no problems" without anything having
+    // been filled in, so the rules alone would call it finished, and it is not:
+    // on a type whose groups are ALL optional and whose scalars are unrequired
+    // (Drug-Related Incident) every other type is caught by a count floor, but
+    // that one would read done the moment a type was chosen. So it needs the
+    // officer to have engaged with it, and a type to exist at all.
+    // Section 1 used to be in the same boat (every reporter field was optional).
+    // It is not any more — the reporting party's name and contact number are
+    // required at finalize (validateReporterParty), so a blank card is FLAGGED,
+    // and the engagement fallback below only covers the already-complete case.
     // "Engaged": the officer has been in the section OR has filled something
     // in it. Both are honest signals, and either one alone is wrong — visiting
     // is all a blank section ever offers, and filling is all a reopened report
@@ -895,16 +906,14 @@ function ReportProgressStepper({ complete, current, onJump, withReview = false, 
 // needs more than an input tag; these are the plain ones.
 const REVIEW_INPUTS = {
   reporter_name: { autoComplete: 'name', placeholder: 'Last Name, First Name, M.I.' },
-  reporter_id_no: { placeholder: 'e.g. N01-23-456789' },
   reporter_contact: { type: 'tel', autoComplete: 'tel', placeholder: '(000) 000-0000' },
-  reporter_email: { type: 'email', autoComplete: 'email', placeholder: 'name@example.com' },
   reporter_address: {
     autoComplete: 'street-address',
     placeholder: 'Street, barangay, city / municipality',
   },
+
   location: { placeholder: 'Specific address or intersection' },
   ioc_name: { placeholder: 'Name of the officer handling the case' },
-  officer_initials: { placeholder: 'e.g. J.D.C.', maxLength: 12 },
 };
 
 /**
@@ -918,7 +927,16 @@ const REVIEW_INPUTS = {
  * `reviewEdit` in ReportEditor for what it carries and why.
  */
 function ReviewFieldEditor({ rowPath, label, edit }) {
-  const { draft, errors, set, changeType, setNarrative, setActionTaken, endEdit, types = TYPES } = edit;
+  const {
+    draft,
+    errors,
+    set,
+    setNarrative,
+    setActionTaken,
+    setIncidentTypeTyped,
+    endEdit,
+    types = TYPES,
+  } = edit;
   const id = reviewFieldId(rowPath);
   const ref = useRef(null);
 
@@ -962,21 +980,22 @@ function ReviewFieldEditor({ rowPath, label, edit }) {
   const errorFor = (path) => (errors[path] ? <div className="error">{errors[path]}</div> : null);
 
   if (rowPath === 'incident_type') {
+    // Typeable here too, calling the SAME setter the form does — an edit made
+    // from the read-back has to store what the form would have stored.
     return shell(
       <>
-        <select
+        <Dropdown
           ref={ref}
           id={id}
-          value={draft.incident_type}
-          onChange={(e) => changeType(e.target.value)}
-          aria-label={label}
-          aria-invalid={!!errors.incident_type}
-        >
-          <option value="">Select type…</option>
-          {types.map((t) => (
-            <option key={t}>{t}</option>
-          ))}
-        </select>
+          typeable
+          options={types}
+          placeholder="Type or choose an incident type…"
+          value={incidentTypeBoxValue(draft)}
+          onChange={setIncidentTypeTyped}
+          label={label}
+          invalid={!!errors.incident_type}
+          optionIcon={<LabelIcon name="hash" />}
+        />
         {errorFor('incident_type')}
       </>,
     );
@@ -1227,18 +1246,22 @@ function ReportReview({ draft, user, complete, onGoToSection, edit }) {
       <section className="ir-review-section">
         <ReviewHeading index={0} complete={complete} onGoToSection={onGoToSection} />
         <div className="ir-review-rows">
-          <ReviewRow label="Full Name" value={draft.reporter_name} {...editable('reporter_name')} />
+          {/* Name and Contact Number are what the report cannot be submitted
+              without (see validateReporterParty): a blank one has to read as a
+              MISSING requirement here, not as an ordinary blank the sheet
+              omits. The address stays optional. */}
           <ReviewRow
-            label="Identification / Driver’s License No."
-            value={draft.reporter_id_no}
-            {...editable('reporter_id_no')}
+            label="Full Name"
+            value={draft.reporter_name}
+            required
+            {...editable('reporter_name')}
           />
           <ReviewRow
             label="Contact Number"
             value={draft.reporter_contact}
+            required
             {...editable('reporter_contact')}
           />
-          <ReviewRow label="Email Address" value={draft.reporter_email} wide {...editable('reporter_email')} />
           <ReviewRow
             label="Home Address"
             value={draft.reporter_address}
@@ -1251,7 +1274,15 @@ function ReportReview({ draft, user, complete, onGoToSection, edit }) {
       <section className="ir-review-section">
         <ReviewHeading index={1} complete={complete} onGoToSection={onGoToSection} />
         <div className="ir-review-rows">
-          <ReviewRow label="Type of Incident" value={type} required {...editable('incident_type')} />
+          {/* The type row reads back what the box shows — for an Other Incident
+              that carries a specification, that is the specification itself, so
+              the read-back matches the field the officer typed into. */}
+          <ReviewRow
+            label="Type of Incident"
+            value={incidentTypeBoxValue(draft)}
+            required
+            {...editable('incident_type')}
+          />
           <ReviewRow
             label="Date &amp; Time of Occurrence"
             value={when}
@@ -1393,25 +1424,13 @@ function ReportReview({ draft, user, complete, onGoToSection, edit }) {
             required
             {...editable('ioc_name')}
           />
-          <ReviewRow
-            label="Officer Initials"
-            value={draft.officer_initials}
-            {...editable('officer_initials')}
-          />
-          {/* Derived read-outs, deliberately NOT editable: the badge line comes
-              from the account, the signed name from Panel I, and the timestamp
-              from the server at submit time. A path here would offer an edit
-              that has nowhere to be written. */}
+          {/* A derived read-out, deliberately NOT editable: the badge line comes
+              from the account. A path here would offer an edit that has nowhere
+              to be written. The signature rows that used to close this section
+              went with Panel IV — the station asked for the signature block off
+              the form, so the read-back must not promise a line the paper does
+              not carry. */}
           <ReviewRow label="Badge No." value={`${user.badge_number} · ${user.full_name}`} />
-          <ReviewRow label="Signature of Reporting Party" value={draft.reporter_name} />
-          <ReviewRow
-            label="Signature Timestamp"
-            value={
-              draft.party_signed_at
-                ? specTimestamp(draft.party_signed_at)
-                : 'Auto-filled when the report is submitted'
-            }
-          />
         </div>
       </section>
     </div>
@@ -2061,6 +2080,41 @@ export function ReportEditor({
     setAiUndo((u) => (u[field] === null ? u : { ...u, [field]: null }));
   }
 
+  // The Incident Details type box is TYPABLE (see Panel II's dropdown): the
+  // station's types are its suggestions, and anything else the officer types is
+  // recorded as an "Other Incident" whose Category is that text — where such a
+  // report already keeps its specification, so no field is added or revealed.
+  // What the text RESOLVES to is a pure rule of its own (resolveIncidentTypeInput,
+  // covered by node:test); this only writes it.
+  //
+  // Every keystroke rewrites the type, so a half-typed "Theft" reads as a custom
+  // Other Incident for a moment. That is deliberate: the alternative is holding
+  // the text outside the draft, and the draft is what autosave, the stepper and
+  // the rule engine all read. It corrects itself the instant the text matches a
+  // type on the list.
+  function setIncidentTypeTyped(text) {
+    const { type, custom } = resolveIncidentTypeInput(text, typeOptions);
+    if (type !== CUSTOM_TYPE) {
+      // A real type on the list, or the box cleared. The specific fields belong
+      // to the OLD type, which is exactly what changeType has always ruled — so
+      // this reuses it rather than restating the rule. Skipped when nothing
+      // changed, so re-picking the type already chosen does not wipe the
+      // type-specific fields underneath it.
+      if (String(draftRef.current?.incident_type ?? '') !== type) changeType(type);
+      return;
+    }
+    // Not a type on this station's list: an Other Incident, specified. Its
+    // Category IS the specification (a required field of that type), so the text
+    // lands where such a report already keeps it and no field is revealed.
+    dirtyRef.current = true;
+    setDraft((d) => ({
+      ...d,
+      incident_type: CUSTOM_TYPE,
+      type_specific: { ...d.type_specific, incident_category: custom },
+    }));
+    if (errors.incident_type) setErrors((e) => ({ ...e, incident_type: undefined }));
+  }
+
   function setTypeSpecific(key, value) {
     dirtyRef.current = true;
     setDraft((d) => {
@@ -2100,12 +2154,52 @@ export function ReportEditor({
       set('narrative_source_text', sourceMeta.text ?? '');
       set('narrative_source_language', sourceMeta.language);
     } else {
-      // No source pair: this was a draft written from the rough notes rather
-      // than a translation, so its language is read from the text like any
-      // other. Detecting here keeps the rule in one place — the AI writing
-      // English must leave the record saying English.
+      // No source pair: this draft was written from the report itself rather
+      // than translated from a stored source, so its language is read from the
+      // text like any other. Detecting here keeps the rule in one place — the
+      // AI writing English must leave the record saying English.
       set('narrative_language', detectNarrativeLanguage(aiText));
     }
+  }
+
+  // THE DRAFT'S TWO FORMALISED BLOCKS, written into the fields that save,
+  // snapshot and print. Generating a draft writes nothing (see the AI panel):
+  // the panel holds all three parts and Accept carries them over, so these two
+  // helpers and the officer's own typing are the only ways either field changes.
+  //
+  // Empty is "nothing to propose", never "clear the field": a draft with no
+  // findings left the officer's own wording alone, and it still does — which is
+  // also why every control that calls these is offered only when it actually
+  // proposes something. Identical text is not a rewrite either (it would raise a
+  // spurious unsaved-changes state for no change).
+  function applyFindingsText(text) {
+    const next = String(text ?? '');
+    const prev = String(draftRef.current?.type_specific?.notable_findings || '');
+    if (next.trim() === '' || next === prev) return;
+    // Remember what is about to be replaced so the formalisation can be rejected
+    // with one click. Only the FIRST snapshot counts: Undo must reach the
+    // officer's own pre-AI wording, not the last AI text the field happened to
+    // hold.
+    setAiUndo((u) => ({ ...u, findings: u.findings ?? prev }));
+    setTypeSpecific('notable_findings', next);
+  }
+  // Same rule for the formalised ACTION TAKEN / STATUS line.
+  function applyActionTakenText(text) {
+    const next = String(text ?? '');
+    const prev = String(draftRef.current?.action_taken || '');
+    if (next.trim() === '' || next === prev) return;
+    setAiUndo((u) => ({ ...u, action_taken: u.action_taken ?? prev }));
+    set('action_taken', next);
+  }
+
+  // ACCEPT, in the panel's own terms: one draft, one action, three parts. The
+  // parts it was not given are simply not written — a tighten result hands over
+  // its narrative alone, because its two field proposals have their own buttons
+  // and accepting the wording must not smuggle them in.
+  function applyAiDraft(parts, sourceMeta) {
+    applyAiNarrative(String(parts?.narrative ?? ''), sourceMeta);
+    if (typeof parts?.findingsText === 'string') applyFindingsText(parts.findingsText);
+    if (typeof parts?.statusText === 'string') applyActionTakenText(parts.statusText);
   }
 
   // Phase 7 — the account read (POST /ai/classify), wired to the AI panel's
@@ -2301,33 +2395,51 @@ export function ReportEditor({
   }
 
   // Phase 6 Stage 5 (Track C) — the guided flow's step 1: apply the reviewed
-  // translation AND save it. The save is not decoration: the tighten endpoint
-  // refuses while the STORED report still declares a non-English narrative
+  // draft AND save it. The save is not decoration: the tighten endpoint refuses
+  // while the STORED report still declares a non-English narrative
   // (NarrativeController::tighten), and that guard is deliberately not weakened
-  // to spare the client a round trip. The body is built from draftRef — the
-  // same latest-values ref the autosave uses — so it saves exactly the report
-  // the officer is looking at, with the English text and its source pair on it.
-  async function applyGuidedTranslation(aiText, sourceMeta) {
+  // to spare the client a round trip. The body is built from draftRef — the same
+  // latest-values ref the autosave uses — with the three reviewed parts written
+  // over it, because the setters below only QUEUE and this save has to carry
+  // them itself. It is the guided flow's accept, so it carries all three: half a
+  // draft would leave the record holding one part in English and two in the
+  // officer's own language.
+  async function applyGuidedTranslation(parts, sourceMeta) {
+    const narrative = String(parts?.narrative ?? '');
+    const findings = String(parts?.findingsText ?? '');
+    const status = String(parts?.statusText ?? '');
     const hadSource = !!(sourceMeta && sourceMeta.language && sourceMeta.language !== 'en');
-    applyAiNarrative(aiText, sourceMeta);
     const current = draftRef.current ?? {};
     if (!current.incident_type) {
       throw new Error('Choose the incident type first — the report cannot be saved without it.');
     }
-    const next = hadSource
-      ? {
-        ...current,
-        narrative: aiText,
-        narrative_language: 'en',
-        narrative_source_text: sourceMeta.text ?? '',
-        narrative_source_language: sourceMeta.language,
-      }
-      : { ...current, narrative: aiText };
+    const ts = { ...(current.type_specific ?? {}) };
+    if (findings.trim() !== '') ts.notable_findings = findings;
+    const next = {
+      ...current,
+      narrative,
+      // An empty block proposes nothing, exactly as it does on the plain accept
+      // path, so the field the officer wrote keeps what they wrote.
+      action_taken: status.trim() !== '' ? status : current.action_taken,
+      type_specific: ts,
+      ...(hadSource
+        ? {
+          narrative_language: 'en',
+          narrative_source_text: sourceMeta.text ?? '',
+          narrative_source_language: sourceMeta.language,
+        }
+        : {}),
+    };
     const body = { ...next, status: 'draft', narrative_source: 'ai-assisted' };
     const id = idRef.current
       ? await api(`/reports/${idRef.current}`, { method: 'PATCH', body }).then(() => idRef.current)
       : await api('/reports', { method: 'POST', body }).then((created) => created.report.id);
     adoptSavedId(id);
+    // The form is brought up to what was just saved — through the SAME appliers
+    // the plain accept uses, so the two ways into a draft leave the form in
+    // exactly one state. The dirty flag is cleared last, after them: those
+    // setters raise it, and the record is already saved.
+    applyAiDraft(parts, sourceMeta);
     dirtyRef.current = false;
   }
 
@@ -2471,24 +2583,32 @@ export function ReportEditor({
     setRuleWarnings(ruleWarnings);
     if (blocking.length > 0) {
       const all = { ...errs, ...gErrs };
+      // THREE LINES, NOT ONE RUN-ON SENTENCE. A comma-separated list of
+      // six error sentences is unreadable at a glance; a title that states
+      // the count, a one-line instruction, then each problem as its own
+      // chip makes every problem a visible, separately clickable target.
+      const problemCount = Object.keys(all).length;
       setError(
-        <span>
-          The report has {Object.keys(all).length} problem{Object.keys(all).length === 1 ? '' : 's'}:{' '}
-          <span className="error-summary-inline">
-            {Object.entries(all)
-              .map(([k, msg]) => (
-                <a
-                  key={k}
-                  href={`#f-${k}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    jumpTo(k);
-                  }}
-                >
-                  {msg}
-                </a>
-              ))
-              .reduce((acc, el, i) => (i === 0 ? [el] : [...acc, ', ', el]), [])}
+        <span className="error-summary-block">
+          <span className="error-summary-title">
+            The report has {problemCount} problem{problemCount === 1 ? '' : 's'}
+          </span>
+          <span className="error-summary-hint">
+            Select a problem below to jump straight to the field that needs it:
+          </span>
+          <span className="error-summary-links">
+            {Object.entries(all).map(([k, msg]) => (
+              <a
+                key={k}
+                href={`#f-${k}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  jumpTo(k);
+                }}
+              >
+                {msg}
+              </a>
+            ))}
           </span>
         </span>,
       );
@@ -2511,8 +2631,8 @@ export function ReportEditor({
   // Only the narrative is exempt — that is what the AI is there to write.
   function gateAiGenerate() {
     // Phase 6 Stage 3 (D4) — Generate is deliberately NO LONGER refused for a
-    // non-English narrative: translating a Bisaya/Tagalog narrative (or notes)
-    // into formal English is exactly what this stage adds, and Apply sets the
+    // non-English narrative: translating a Bisaya/Tagalog narrative into formal
+    // English is exactly what this stage adds, and Apply sets the
     // report back to English. Tighten keeps the Stage 1 refusal (see the panel
     // and the server guard), because the English economy engine must never
     // rewrite native text.
@@ -2713,17 +2833,15 @@ export function ReportEditor({
   // that place is the REVIEW step — the read-back that ends the flow — so the
   // officer meets a single Generate row at a single point instead of the same
   // control on both the narrative step and the last step. The document format
-  // has no review step, so there the panel sits in Panel III, under the
-  // narrative field, where the writing happens.
+  // has no review step, so there the panel sits at the FOOT of the report,
+  // under Investigator-on-Case (see the AI assistance card below).
   //
   // One instance on screen at a time, deliberately: the panel owns the
-  // slide-in side panel, the rough-notes box and the generated draft, so two
-  // live copies would draw two side panels and two rails, and would fight over
-  // the body class that reserves the panel's space (the divergence that leaves
-  // a phantom gap beside the form). A draft generated earlier in the tab
-  // survives a step change by design — the panel restores it from the per-tab
-  // session store keyed by report id — and so does its own visibility, which
-  // is settled by the health probe on mount.
+  // generated draft, so two live copies would offer the same draft twice and
+  // would write over each other's per-tab session slot. A draft generated
+  // earlier in the tab survives a step change by design — the panel restores it
+  // from the per-tab session store keyed by report id — and so does its own
+  // visibility, which is settled by the health probe on mount.
   // The language of the record (Phase 6 Stage 1), read through normaliseLanguage
   // so a stored value this build does not know — an older row, a draft restored
   // from sessionStorage — shows as English rather than as a language nobody can
@@ -2733,26 +2851,26 @@ export function ReportEditor({
   // decisions made about it cannot disagree.
   const languageCode = normaliseLanguage(draft?.narrative_language);
 
-  // Track B — the officer's dictionary. Read-only and offline; it never
-  // inserts a term anywhere. Kept beside the writing (the narrative card)
-  // rather than inside the AI panel, because it is useful whether or not the
-  // model is available.
+  // Track B — the officer's dictionary, NOT MOUNTED ON THIS SCREEN TODAY.
   //
-  // The sheet format is the one format it is NOT in. Everything inside
-  // `.ir-form--sheet` IS the page, so beside the narrative there would put the
-  // dictionary on the report; its only sheet-format home was a second copy on
-  // the desk below the paper, and that copy was removed by request. The
-  // dictionary is a Document/Steps affordance.
-  const termsPanel = canEdit ? (
-    <NarrativeTermsPanel
-      reportLanguage={languageCode}
-      texts={[
-        draft?.narrative || '',
-        draft?.action_taken || '',
-        draft?.type_specific?.notable_findings || '',
-      ]}
-    />
-  ) : null;
+  // The glossary is Stage 2/3 functionality that has not been built out: with no
+  // approved terms published, the panel's only contribution to the Write Report
+  // screen is the "Report terminology — Approved report terminology — not a
+  // translator … / No approved report terminology has been published yet"
+  // disclaimer, which is confusing on a form that is otherwise ready to file.
+  //
+  // It comes back in two moves, when the station's records/legal officer has
+  // approved the first terms: re-add the NarrativeTermsPanel import at the top
+  // of this file, and render `termsPanel` where the comment under the narrative
+  // sits (see the Track B comment in Panel III). Nothing else changed — the
+  // component, its CSS namespace (term-panel-*) and its offline data file are all
+  // still in the tree.
+  //
+  // What it looked like when mounted: kept beside the writing (the narrative
+  // card) rather than inside the AI panel, because it is useful whether or not
+  // the model is available. Never in the sheet format — everything inside
+  // `.ir-form--sheet` IS the page, so the dictionary would have been printed.
+  // The dictionary is a Document/Steps affordance.
 
   const aiPanel = canEdit ? (
     <AiNarrativePanel
@@ -2797,39 +2915,26 @@ export function ReportEditor({
       // Phase 6 Stage 2 — opens the terminology lookup on the language the
       // officer is writing in. A default only; it never edits the narrative.
       narrativeLanguage={languageCode}
-      // Human-in-the-loop: the officer explicitly copies the AI draft in; it
-      // stays fully editable afterwards. The source tag lands in report_history
-      // via the next save/finalize.
-      onAccept={applyAiNarrative}
+      // Human-in-the-loop: the officer explicitly copies the AI draft in — the
+      // WHOLE draft (the facts, the notable findings and the action taken),
+      // because generating one writes nothing and this is the only action that
+      // does. It stays fully editable afterwards. The source tag lands in
+      // report_history via the next save/finalize.
+      onAccept={applyAiDraft}
       // Phase 6 Stage 5 (Track C) — step 1 of the guided "Translate & tighten"
-      // flow: apply AND save the reviewed translation, so step 2 can run against
-      // a record the server already knows is English.
+      // flow: apply AND save the reviewed draft, so step 2 can run against a
+      // record the server already knows is English.
       onApplyGuided={applyGuidedTranslation}
-      // Generating the report IS the action for the findings: the
-      // drafted lines replace the Notable Findings field outright
-      // (one printed line per finding), because that field is what
-      // saves, snapshots and prints. A draft with no findings leaves
-      // the officer's text alone, and identical text is not rewritten
-      // (so no spurious unsaved-changes state).
-      onApplyFindings={(lines) => {
-        const text = lines.join('\n');
-        if (text.trim() === '') return;
-        if (text === String(draft?.type_specific?.notable_findings || '')) return;
-        // Remember what we are about to replace so the officer can
-        // reject the formalisation with one click.
-        setAiUndo((u) => ({ ...u, findings: String(draft?.type_specific?.notable_findings || '') }));
-        setTypeSpecific('notable_findings', text);
-      }}
-      // The recorded disposition is enhanced the same way: the
-      // formalised line replaces the ACTION TAKEN / STATUS field,
-      // which is what saves and prints. A blank disposition in the
-      // draft leaves the officer's wording untouched.
-      onApplyActionTaken={(text) => {
-        if (text.trim() === '') return;
-        if (text === String(draft?.action_taken || '')) return;
-        setAiUndo((u) => ({ ...u, action_taken: String(draft?.action_taken || '') }));
-        set('action_taken', text);
-      }}
+      // TIGHTEN'S PROPOSALS for the officer's own two fields — the only callers
+      // left now that generating a draft writes nothing. Each is reached by its
+      // own button, and the button is offered only when it actually proposes a
+      // change; the field helpers hold the rest of the rules (empty proposes
+      // nothing, identical text is not a rewrite, and the first snapshot is the
+      // one Undo reaches).
+      onApplyFindings={(lines) => applyFindingsText(
+        Array.isArray(lines) ? lines.join('\n') : String(lines ?? ''),
+      )}
+      onApplyActionTaken={(text) => applyActionTakenText(text)}
     />
   ) : null;
 
@@ -2861,9 +2966,9 @@ export function ReportEditor({
     endEdit: endReviewEdit,
     errors,
     set,
-    changeType,
     setNarrative,
     setActionTaken,
+    setIncidentTypeTyped,
     // Handed to the review's type editor so the report can be re-typed from the
     // read-back against the SAME list the form offers.
     types: typeOptions,
@@ -2942,13 +3047,24 @@ export function ReportEditor({
           can never repaint an official sheet. */}
       <div className="ir-page-head">
         <h1 className="ir-title">POLICE INCIDENT REPORT</h1>
+        {/* Labelled pairs rather than "CASE NO: …" run-on strings: the key
+            says what the value IS, the value carries the weight, and both
+            line up on the right edge of the masthead as a block. */}
         <div className="ir-meta">
-          <div>CASE NO: {caseNumber(draft)}</div>
-          <div>DATE: {specDate(reportDateValue(draft, new Date().toISOString().slice(0, 10)))}</div>
+          <div className="ir-meta-row">
+            <span className="ir-meta-key">Case no.</span>
+            <span className="ir-meta-val">{caseNumber(draft)}</span>
+          </div>
+          <div className="ir-meta-row">
+            <span className="ir-meta-key">Date</span>
+            <span className="ir-meta-val">
+              {specDate(reportDateValue(draft, new Date().toISOString().slice(0, 10)))}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="ir-status">
+      <div className="ir-status ir-status--flag">
         <span className={`badge ${draft.status || 'draft'}`}>{draft.status || 'draft'}</span>
         <span>
           {draft.id
@@ -3056,11 +3172,15 @@ export function ReportEditor({
           sheetBlank ? ' ir-form--blank' : ''
         }`}
       >
-        {/* The spec's four panels, 2x2 on desktop. Panels I and II carry the
-            screen's own fields; Panel III is the narrative the AI drafts and
-            Panel IV is the signature block. The application's remaining
-            document sections follow the grid as full-width cards, so nothing
-            the blotter needs was dropped to match the layout. */}
+        {/* The screen's opening panels: Panels I and II side by side on
+            desktop, and the narrative (Panel III) SPANNING the row beneath them
+            so the longest field on the form gets the full measure. The
+            signature block that used to be the grid's fourth cell is gone — the
+            station asked for it off the form, and the officer initials it
+            collected went with it, which is what left a half-column empty.
+            The application's remaining document sections follow the grid as
+            full-width cards, so nothing the blotter needs was dropped to match
+            the layout. */}
         <div className="ir-grid">
           {/* Panel I is the stepper's section 1. `onFocus`/`onBlur` on the card
               mark it visited — no per-field listener needed. */}
@@ -3075,7 +3195,7 @@ export function ReportEditor({
           >
             <div className="ir-sub">
               <div className="ir-field">
-                <IrLabel htmlFor="r-reporter-name" icon="person">Full Name</IrLabel>
+                <IrLabel htmlFor="r-reporter-name" icon="person" required>Full Name</IrLabel>
                 <input
                   id="r-reporter-name"
                   autoComplete="name"
@@ -3083,22 +3203,13 @@ export function ReportEditor({
                   value={draft.reporter_name || ''}
                   onChange={(e) => set('reporter_name', e.target.value)}
                   disabled={!canEdit}
+                  aria-required="true"
+                  aria-invalid={!!errors.reporter_name}
                 />
+                {errors.reporter_name && <div className="error">{errors.reporter_name}</div>}
               </div>
               <div className="ir-field">
-                <IrLabel htmlFor="r-reporter-id" icon="id">
-                  Identification / Driver&rsquo;s License No.
-                </IrLabel>
-                <input
-                  id="r-reporter-id"
-                  placeholder="e.g. N01-23-456789"
-                  value={draft.reporter_id_no || ''}
-                  onChange={(e) => set('reporter_id_no', e.target.value)}
-                  disabled={!canEdit}
-                />
-              </div>
-              <div className="ir-field">
-                <IrLabel htmlFor="r-reporter-contact" icon="phone">Contact Number</IrLabel>
+                <IrLabel htmlFor="r-reporter-contact" icon="phone" required>Contact Number</IrLabel>
                 <input
                   id="r-reporter-contact"
                   type="tel"
@@ -3107,23 +3218,10 @@ export function ReportEditor({
                   value={draft.reporter_contact || ''}
                   onChange={(e) => set('reporter_contact', e.target.value)}
                   disabled={!canEdit}
+                  aria-required="true"
                   aria-invalid={!!errors.reporter_contact}
                 />
                 {errors.reporter_contact && <div className="error">{errors.reporter_contact}</div>}
-              </div>
-              <div className="ir-field">
-                <IrLabel htmlFor="r-reporter-email" icon="mail">Email Address</IrLabel>
-                <input
-                  id="r-reporter-email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="name@example.com"
-                  value={draft.reporter_email || ''}
-                  onChange={(e) => set('reporter_email', e.target.value)}
-                  disabled={!canEdit}
-                  aria-invalid={!!errors.reporter_email}
-                />
-                {errors.reporter_email && <div className="error">{errors.reporter_email}</div>}
               </div>
               <div className="ir-field ir-span-2">
                 <IrLabel htmlFor="r-reporter-address" icon="pin">Home Address</IrLabel>
@@ -3152,18 +3250,23 @@ export function ReportEditor({
                   half-width column just made a very wide box with nothing in it. */}
               <div className="ir-field ir-field--narrow">
                 <IrLabel htmlFor="r-type" icon="hash" required>Type of Incident</IrLabel>
-                <select
+                {/* TYPABLE, not a menu to hunt through: the station's types are
+                    what the card under it offers and anything else is typed into
+                    this same box. Text that is not a type on the list is recorded
+                    as an Other Incident whose Category is what was typed — the
+                    same place that type already keeps its specification — so no
+                    second field is revealed. See resolveIncidentTypeInput. */}
+                <Dropdown
                   id="r-type"
-                  value={draft.incident_type}
-                  onChange={(e) => changeType(e.target.value)}
+                  typeable
+                  options={typeOptions}
+                  placeholder="Type or choose an incident type…"
+                  value={incidentTypeBoxValue(draft)}
+                  onChange={setIncidentTypeTyped}
                   disabled={!canEdit}
-                  aria-invalid={!!errors.incident_type}
-                >
-                  <option value="">Select type…</option>
-                  {typeOptions.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
+                  invalid={!!errors.incident_type}
+                  optionIcon={<LabelIcon name="hash" />}
+                />
                 {errors.incident_type && <div className="error">{errors.incident_type}</div>}
               </div>
               <div className="ir-field">
@@ -3258,6 +3361,7 @@ export function ReportEditor({
           <IrCard
             num="III"
             title="Incident Narrative"
+            wide
             step={2}
             current={currentSection === 2}
             hidden={panelHidden(2)}
@@ -3342,8 +3446,11 @@ export function ReportEditor({
                   notify={notify}
                 />
               )}
-              {/* Track B — the full terminology panel, beside the writing. */}
-              {!sheet && termsPanel}
+              {/* Track B — the terminology glossary is NOT rendered here today
+                  (see the comment where `termsPanel` used to be built): the
+                  approved-terms table ships empty, so all it could say is the
+                  "no approved report terminology published yet" disclaimer. It
+                  mounts back under this line when the glossary has entries. */}
             </div>
             {/* Where the AI panel lives is settled PER FORMAT — one home each,
                 never two, because the panel owns the slide-in side panel and the
@@ -3354,8 +3461,15 @@ export function ReportEditor({
                               end). The hint below says where it went, so the
                               control's absence reads as a move rather than as
                               the feature being gone.
-                  document  — here, under the narrative field, where the
-                              writing happens. It has no review step.
+                  document  — in its own card at the FOOT of the report, under
+                              Investigator-on-Case (see the AI assistance card
+                              near the submit cluster). It used to sit here,
+                              under the narrative field, which put a Generate
+                              row in the middle of the document — above the
+                              Parties, the Action Taken and the IOC the draft is
+                              written FROM. The officer fills the report top to
+                              bottom, so the assistant now waits where that
+                              filling is done.
                   sheet     — on the desk BELOW the paper (see the desk block
                               after the form). This card IS the sheet's page,
                               so a Generate row inside it would be printed on
@@ -3371,63 +3485,16 @@ export function ReportEditor({
                 jumps straight there.
               </p>
             )}
-            {!stepped && !sheet && aiPanel}
           </IrCard>
 
-          <IrCard
-            title="Signatures"
-            step={4}
-            current={currentSection === 4}
-            hidden={panelHidden(4)}
-          >
-            <div className="ir-sign-grid">
-              <div className="ir-sign-box">
-                <div className="ir-sign-caption">Signature of Reporting Party</div>
-                {/* No signature-pad component exists in the system, so this
-                    is a typed record: the name from Panel I over a signature
-                    rule, dated by the server when the report is submitted. */}
-                <div className="ir-sign-area">
-                  {draft.reporter_name
-                    ? draft.reporter_name
-                    : <span className="ir-sign-empty">Name typed in Panel I appears here</span>}
-                </div>
-                <div className="ir-sign-stamp">
-                  Timestamp:{' '}
-                  {draft.party_signed_at ? (
-                    <strong>{specTimestamp(draft.party_signed_at)}</strong>
-                  ) : (
-                    <span>auto-filled when the report is submitted</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="ir-sign-box">
-                <div className="ir-sign-caption">Officer Initial &amp; Badge No.</div>
-                <div>
-                  <label className="ir-sub-label" htmlFor="r-officer-initials">Initials</label>
-                  <input
-                    id="r-officer-initials"
-                    placeholder="e.g. J.D.C."
-                    maxLength={12}
-                    value={draft.officer_initials || ''}
-                    onChange={(e) => set('officer_initials', e.target.value)}
-                    disabled={!canEdit}
-                    aria-invalid={!!errors.officer_initials}
-                  />
-                  {errors.officer_initials && <div className="error">{errors.officer_initials}</div>}
-                </div>
-                <div>
-                  <label className="ir-sub-label" htmlFor="r-officer-badge">Badge No.</label>
-                  {/* Taken from the signed-in account, exactly like the
-                      "Recorded by" line — never typed, never overridable. */}
-                  <div className="ir-readonly" id="r-officer-badge">
-                    {user.badge_number} · {user.full_name}
-                  </div>
-                  <p className="ir-readonly-note">From your account — cannot be edited.</p>
-                </div>
-              </div>
-            </div>
-          </IrCard>
+          {/* The Signatures panel used to close this grid: the reporting
+              party's name over a signature rule, its submit timestamp, and the
+              officer's initials. The station asked for it off the form — a
+              typed name is not a signature, and the initials next to the badge
+              number are already on the sheet from the account that filed the
+              report (see ReportPrint, which draws its own "Recorded by" block).
+              Nothing is lost from the record: the server still dates the party's
+              signature at submit time, it is simply no longer asked for here. */}
         </div>
 
         {/* Section 4's two cards are one step: the groups here and the per-type
@@ -3523,8 +3590,10 @@ export function ReportEditor({
                 placeholder="e.g. CCTV shows the suspect knew exactly where the wires were kept; entry was made without a flashlight."
               />
               <div className="section-hint">
-                Printed in the NOTABLE FINDINGS block of the report sheet — one
-                line per typed line. Leave blank if there is nothing notable.
+                Optional. Enter additional observations or findings that are not
+                already captured in the fields above. Leave blank if there are
+                none. Printed in the NOTABLE FINDINGS block of the sheet, one
+                line per typed line.
               </div>
               {canEdit && aiUndo.findings !== null && (
                 <div className="section-hint ai-undo-hint">
@@ -3542,84 +3611,115 @@ export function ReportEditor({
           </IrCard>
         )}
 
-        {/* Action Taken / Status is a required document block: the narrative
-            generator receives it as context, and the report cannot be
-            submitted without it. It follows the four spec panels and sits
-            directly above the submit bar. */}
-        <IrCard
-          wide
-          title="Action Taken / Status"
-          step={4}
-          current={currentSection === 4}
-          hidden={panelHidden(4)}
-        >
-          <p className="section-hint">
-            How the incident was handled. Required before the report can be
-            submitted, and used by the AI when it writes the narrative.
-          </p>
-          <div className="field field-narrative">
-            <label htmlFor="r-act">
-              Action Taken / Status<span className="req">*</span>
-            </label>
-            <textarea
-              id="r-act"
-              rows={4}
-              value={draft.action_taken || ''}
-              onChange={(e) => setActionTaken(e.target.value)}
-              disabled={!canEdit}
-              aria-invalid={!!errors.action_taken}
-              placeholder="e.g. Subject turned over to the station for proper disposition. Follow-up investigation ongoing."
-            />
-            {errors.action_taken && <div className="error">{errors.action_taken}</div>}
-            <div className="section-hint">
-              Printed in the ACTION TAKEN / STATUS block of the report sheet.
-            </div>
-            {canEdit && aiUndo.action_taken !== null && (
-              <div className="section-hint ai-undo-hint">
-                Formalised by the AI —{' '}
-                <button
-                  type="button"
-                  className="ai-undo"
-                  onClick={() => revertAiField('action_taken')}
-                >
-                  Undo
-                </button>
-              </div>
-            )}
-          </div>
-        </IrCard>
+        {/* Section 5 pairs the section's ONE long field with its ONE short
+            field: the two cards below share a row so the section reads as a
+            pair rather than as two stacked full-width bands, which is also one
+            fewer scroll to reach the Submit bar. Both keep their own header
+            bar, their own hint and their own step index, so the dot's jump
+            still flashes them together and the current-step highlight still
+            covers the whole section instead of one card of it.
 
-        {/* The narrative moved into Panel III of the grid above (with the AI
-            panel beside it) — it is not repeated here. */}
-        {/* Section 5 is THREE cards, so all three carry the step index: the
-            dot's jump flashes them together, and the current-step highlight
-            covers the whole section instead of one card of it. */}
-        <IrCard
-          wide
-          title="Investigator-on-Case"
-          step={4}
-          current={currentSection === 4}
-          hidden={panelHidden(4)}
-        >
-          <p className="section-hint">
-            Who is carrying the case. Required before the report can be
-            submitted — the name is printed on the “IOC:” line.
-          </p>
-          <div className="field">
-            <label htmlFor="r-ioc">
-              Investigator-on-case (IOC)<span className="req">*</span>
-            </label>
-            <input
-              id="r-ioc"
-              value={draft.ioc_name || ''}
-              onChange={(e) => set('ioc_name', e.target.value)}
-              disabled={!canEdit}
-              aria-invalid={!!errors.ioc_name}
-              placeholder="Name of the officer handling the case"
-            />
-            {errors.ioc_name && <div className="error">{errors.ioc_name}</div>}
-          </div>
-        </IrCard>
+            Neither card carries `wide`: inside `.ir-card-row` that modifier
+            would span the row and put them back one above the other. */}
+        <div className="ir-card-row">
+          {/* Action Taken / Status is a required document block: the narrative
+              generator receives it as context, and the report cannot be
+              submitted without it. It follows the four spec panels and sits
+              directly above the submit bar. */}
+          <IrCard
+            title="Action Taken / Status"
+            step={4}
+            current={currentSection === 4}
+            hidden={panelHidden(4)}
+          >
+            <p className="section-hint">
+              How the incident was handled. Required before the report can be
+              submitted, and used by the AI when it writes the narrative.
+            </p>
+            <div className="field field-narrative">
+              <label htmlFor="r-act">
+                Action Taken / Status<span className="req">*</span>
+              </label>
+              <textarea
+                id="r-act"
+                rows={4}
+                value={draft.action_taken || ''}
+                onChange={(e) => setActionTaken(e.target.value)}
+                disabled={!canEdit}
+                aria-invalid={!!errors.action_taken}
+                placeholder="e.g. Subject turned over to the station for proper disposition. Follow-up investigation ongoing."
+              />
+              {errors.action_taken && <div className="error">{errors.action_taken}</div>}
+              <div className="section-hint">
+                Printed in the ACTION TAKEN / STATUS block of the report sheet.
+              </div>
+              {canEdit && aiUndo.action_taken !== null && (
+                <div className="section-hint ai-undo-hint">
+                  Formalised by the AI —{' '}
+                  <button
+                    type="button"
+                    className="ai-undo"
+                    onClick={() => revertAiField('action_taken')}
+                  >
+                    Undo
+                  </button>
+                </div>
+              )}
+            </div>
+          </IrCard>
+
+          {/* The narrative moved into Panel III of the grid above (with the AI
+              panel beside it) — it is not repeated here. */}
+          <IrCard
+            title="Investigator-on-Case"
+            step={4}
+            current={currentSection === 4}
+            hidden={panelHidden(4)}
+          >
+            <p className="section-hint">
+              Who is carrying the case. Required before the report can be
+              submitted — the name is printed on the “IOC:” line.
+            </p>
+            <div className="field">
+              <label htmlFor="r-ioc">
+                Investigator-on-case (IOC)<span className="req">*</span>
+              </label>
+              <input
+                id="r-ioc"
+                value={draft.ioc_name || ''}
+                onChange={(e) => set('ioc_name', e.target.value)}
+                disabled={!canEdit}
+                aria-invalid={!!errors.ioc_name}
+                placeholder="Name of the officer handling the case"
+              />
+              {errors.ioc_name && <div className="error">{errors.ioc_name}</div>}
+            </div>
+          </IrCard>
+        </div>
+
+        {/* AI assistance — where the document format keeps the writing
+            assistant (see `aiPanel` above), and why it is HERE rather than
+            under the narrative field it works on.
+
+            Under the Investigator-on-Case, at the foot of the report, because
+            that is the order the officer works in: the form is filled top to
+            bottom, and the draft is written from what is in it — the parties,
+            the Action Taken, the IOC and the narrative among them. Mid-document
+            the Generate row interrupted that filling (and the account read it
+            can start would fill fields BELOW the control that was pressed).
+            From here the officer reaches the last field, then the assistant,
+            then Submit: one pass down the page, nothing to scroll back for.
+
+            The sheet format keeps its own home for the panel (on the desk under
+            the paper) and the stepped format its own (on the Review step), so
+            this card is the document format's and the document format's only —
+            one live copy on screen at a time, which is what the panel's own
+            side panel and body class require. */}
+        {!stepped && !sheet && canEdit && (
+          <IrCard wide accent title="AI assistance">
+            {aiPanel}
+          </IrCard>
+        )}
 
         {/* The final step: the five sections read back as ONE document, with one
             row editable at a time. It is mounted only in the stepped format (the
@@ -3657,7 +3757,7 @@ export function ReportEditor({
             panel already sits under the narrative field, where the writing
             happens. */}
         {stepped && activeStep === REVIEW_STEP && canEdit && (
-          <IrCard wide title="AI assistance">
+          <IrCard wide accent title="AI assistance">
             {aiPanel}
           </IrCard>
         )}
@@ -3731,7 +3831,9 @@ export function ReportEditor({
           The dictionary used to be one of these controls and is not any more:
           everything inside the sheet is the page, so it cannot sit beside the
           narrative there, and this desk was its only home in this format. The
-          dictionary is a Document/Steps affordance now (see termsPanel).
+          dictionary is a Document/Steps affordance now (and is off the screen
+          entirely until the glossary has terms — see the Track B comment above
+          `aiPanel`).
 
           The one thing deliberately not on this desk is the narrative-language
           selector: the language is read from the narrative (see setNarrative)

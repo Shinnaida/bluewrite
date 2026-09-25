@@ -64,24 +64,19 @@ const FORM_FIELD_ALIASES = {
   // has to name it: the two copies must agree on which field they shadow.
   incident_time_approximate: 'r-time-approx',
   reporter_name: 'r-reporter-name',
-  reporter_id_no: 'r-reporter-id',
   reporter_contact: 'r-reporter-contact',
-  reporter_email: 'r-reporter-email',
   reporter_address: 'r-reporter-address',
-  officer_initials: 'r-officer-initials',
 };
 
 /**
  * The paths the review carries a single control for. Everything the officer can
  * type into, in other words — the rows it prints as derived (Badge No., the
- * signature timestamp, the signed name) are deliberately absent, because they
- * are read-outs of something else rather than fields of their own.
+ * incident's severity) are deliberately absent, because they are read-outs of
+ * something else rather than fields of their own.
  */
 export const REVIEW_SCALAR_PATHS = [
   'reporter_name',
-  'reporter_id_no',
   'reporter_contact',
-  'reporter_email',
   'reporter_address',
   'incident_type',
   'incident_datetime',
@@ -90,7 +85,6 @@ export const REVIEW_SCALAR_PATHS = [
   'narrative',
   'action_taken',
   'ioc_name',
-  'officer_initials',
 ];
 
 /** `vehicles[0].driver_name` → `{ groupKey, index, fieldKey }`, else null. */
