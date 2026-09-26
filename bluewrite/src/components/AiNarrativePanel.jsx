@@ -22,6 +22,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import NarrativeReveal from './NarrativeReveal.jsx';
+// TASK 9 — the bondpaper itself. The AI's words type into THE LETTER — the same
+// component the print portal draws, so the page reviewed and the page that
+// prints cannot drift — in this card, directly under the button that asked for
+// them (see `sheet` below). It is purely presentational: it computes the page's
+// facts from the report it is handed and never writes anything.
+import ReportSheetBody from './ReportSheetBody.jsx';
 // The ⓘ marker that carries this panel's explanations. It is a component rather than a
 // private function here because the account form uses the same marker for the sentences
 // under its fields — see InfoHint.jsx for the whole of its contract.
@@ -177,6 +183,9 @@ export default function AiNarrativePanel({
   // report that has never been saved (see the guard near the render).
   ensureReportId,
   canEdit,
+  // Task 4 — Regenerate from the editor's inline bondpaper. A nonce the panel
+  // watches: when it changes, the last press is re-run. 0/absent never fires.
+  regenSignal = 0,
   narrative,
   actionTaken = '',
   // The form's current Notable Findings text: shown in the Generate row so
@@ -239,6 +248,20 @@ export default function AiNarrativePanel({
   // terminology lookup opens on the language the officer is writing in when
   // it is one the table covers. Never changes the narrative; a default only.
   narrativeLanguage = 'en',
+  // TASK 9 — the bondpaper, typed into IN THIS CARD. The editor hands over
+  // everything the sheet needs to draw the letter for the report on screen
+  // ({ report, ts, stationHeader, recordedBy }), and a generated draft then
+  // TYPES ITSELF INTO THE LETTER inside this panel: the static chrome (header,
+  // date, title, certification boilerplate, every bold label) is on screen from
+  // the first frame and only the AI's own values are revealed, one character
+  // cursor walked across them top to bottom. The letter is here rather than in
+  // the narrative panel because THIS is where the officer pressed Generate —
+  // the words arrive where they are looked for, and the Accept / Regenerate /
+  // Close gate opens underneath once they have landed. The panel plays no
+  // reveal of its own and shows no plain boxes while the sheet is up, and
+  // nothing is written into the report until Accept. Absent → the panel keeps
+  // its original inline reveal, unchanged.
+  sheet = null,
 }) {
   const [mode, setMode] = useState('idle'); // idle|ready|loading|done|error|manual
   const [draft, setDraft] = useState(null); // { narrative, suggestions, possibleGaps, addedContentWarnings, gloss, sourceGloss, ambiguities, pinnedTerms }
@@ -283,6 +306,42 @@ export default function AiNarrativePanel({
   // chrome, not a window: hiding it keeps the draft (which lives in this tab,
   // keyed by report id) and "A draft is ready" is the way back in.
   const [panelOpen, setPanelOpen] = useState(false);
+  // TASK 9 — the draft that is being typed into the bondpaper in this card, and
+  // whether it has finished. `sheetDraft` is the same three-part shape the gate
+  // reviews ({ narrative, findingsText?, statusText?, scope }); it is what
+  // replaces the panel's plain boxes while the letter is being written, so the
+  // officer reads the page itself rather than a copy of it. Scope is 'generate'
+  // (the fact values type too) or 'tighten' (the narrative alone — that pass
+  // rewrites the officer's prose, not their fields). Never sent to the API.
+  const [sheetDraft, setSheetDraft] = useState(null);
+  // False while the sheet is still typing. The gate stays closed until it is
+  // true, so Accept can only be pressed on text the officer has watched land.
+  const [sheetTyped, setSheetTyped] = useState(true);
+  // The card the typing happens in. Scrolled to when a draft starts arriving for
+  // a press made OUTSIDE it (the inline bondpaper's Regenerate re-runs the last
+  // press through `regenSignal`), so the officer is never looking at the wrong
+  // end of the page while the letter types.
+  const sheetCardRef = useRef(null);
+  // The grey viewport the letter sits in. Task 10 gives that frame a fixed,
+  // fit-to-screen height so only the DOCUMENT scrolls, which means the values
+  // below its fold can no longer type themselves into view by themselves.
+  const sheetViewportRef = useRef(null);
+
+  // TASK 10 — keep the typing in view. ReportSheetBody reports how much of the
+  // sequence has landed and the frame is moved to match, so the page is written
+  // in front of the officer from the top down instead of filling in a viewport
+  // that is half a screen short of where the words are. Done with the ref and
+  // nothing else: a 16ms tick therefore costs no re-render. The typed slots are
+  // all in the letter's middle (the chrome above and the signature block below
+  // never type), so the travel is scaled rather than run edge to edge — the last
+  // value is reached with the end of the draft still on screen.
+  const followTyping = (fraction) => {
+    const el = sheetViewportRef.current;
+    if (!el) return;
+    const travel = el.scrollHeight - el.clientHeight;
+    if (travel <= 0) return; // the whole page already fits
+    el.scrollTop = Math.min(1, Math.max(0, fraction)) * travel * 0.75;
+  };
   const draftRef = useRef(null);
   draftRef.current = draft;
   const lastPayloadRef = useRef(null); // for regenerate
@@ -348,11 +407,31 @@ export default function AiNarrativePanel({
     }
   }, [reportId]);
 
+  // Regenerate from the inline bondpaper (Task 4). The editor bumps `regenSignal`
+  // and the panel re-runs the last press. Guarded by a ref so a re-render never
+  // re-fires it and a fresh mount (signal 0) never fires it at all.
+  const regenSeen = useRef(0);
+  useEffect(() => {
+    if (!regenSignal || regenSignal === regenSeen.current) return;
+    regenSeen.current = regenSignal;
+    generate(lastPress?.feedback ?? '');
+    // Intentionally keyed on the signal alone: `generate` and `lastPress` are
+    // read from the render that observed the bump.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regenSignal]);
+
   // Single source of truth for whether the draft body is actually VISIBLE.
   // Content exists while loading, on error, or when there is a draft to show:
   // an inline box with nothing inside it is the one thing this must not draw,
   // so the renderer's own guard below reads this and nothing else.
   const panelHasContent = mode === 'loading' || mode === 'error' || (mode === 'done' && !!draft);
+
+  // WHICH pass is running, for the loading state's own wording. `lastPress`
+  // remembers the officer's press; the guided flow does not set it, so a
+  // running guided step reads as a tighten. Falls back to generate, which is
+  // the panel's default press.
+  const runningKind =
+    lastPress?.kind === 'tighten' || !guidedIsTerminal(guided) ? 'tighten' : 'generate';
 
   // Keep the session store in sync with the current draft; clear it when
   // the draft is discarded (null).
@@ -367,6 +446,24 @@ export default function AiNarrativePanel({
       // Storage full/blocked — persistence is best-effort only.
     }
   }, [draft, reportId]);
+
+  // TASK 9 — a draft can be asked for from OUTSIDE this card: the inline
+  // bondpaper's own Regenerate re-runs the last press through `regenSignal`, and
+  // the officer's eye is on that page, a screen or more above the panel. The
+  // typing happens HERE, so when a new proposal starts the card is brought into
+  // view — and the page is left exactly where it is when the officer is already
+  // looking at it (the case for every press of Generate in this card, which is
+  // the whole point of typing the letter here instead of in the narrative panel
+  // the officer would have to scroll up to).
+  useEffect(() => {
+    const el = sheetCardRef.current;
+    if (!sheetDraft || !el || typeof el.scrollIntoView !== 'function') return;
+    const r = el.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    // Already in front of them — the press came from this card. Do nothing.
+    if (r.top >= 0 && r.top < vh * 0.6) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [sheetDraft]);
 
   // Escape hides the draft body — the same thing the ✕ does, and the same key
   // that dismissed the docked panel before the draft moved inline. Kept because
@@ -574,12 +671,14 @@ export default function AiNarrativePanel({
         // so the text the officer types is kept beside the narrative rather than
         // re-derived from the arrays on every keystroke — a round trip through
         // an array would silently drop the empty line they are mid-way through.
+        const findingsText = (Array.isArray(out.notableFindings) ? out.notableFindings : [])
+          .filter((l) => String(l).trim() !== '')
+          .join('\n');
+        const statusText = String(out.actionTaken || '');
         setDraft({
           ...out,
-          findingsText: (Array.isArray(out.notableFindings) ? out.notableFindings : [])
-            .filter((l) => String(l).trim() !== '')
-            .join('\n'),
-          statusText: String(out.actionTaken || ''),
+          findingsText,
+          statusText,
         });
         // Track C — the translation landed: the flow is now in the REVIEW step,
         // where nothing is applied until the officer presses the guided apply
@@ -596,10 +695,27 @@ export default function AiNarrativePanel({
         // all three parts wait in this panel and reach the report together, on
         // Accept (see acceptDraft). Closing the panel therefore leaves the
         // report exactly as the officer wrote it.
-        setRevealStage('facts'); // suggestions/gaps wait for the draft to arrive
+        // TASK 9 — with a sheet host the draft is typed INTO THE BONDPAPER, in
+        // this card: the panel plays no reveal of its own and shows none of its
+        // plain boxes, because the letter itself is what the officer reads. The
+        // verification gate sits under it, closed until the sheet has typed the
+        // last value. Without a host the original inline reveal runs exactly as
+        // before.
+        if (sheet) {
+          // All three parts go to the bondpaper in this card as ONE proposal:
+          // the panel plays no reveal of its own and shows no plain boxes (see
+          // `sheeted`), and the gate opens when the sheet reports the typing
+          // done. Nothing is committed here — Accept is still the only writer.
+          setRevealStage('done');
+          setRevealOn(false);
+          setSheetDraft({ narrative: out.narrative, findingsText, statusText, scope: 'generate' });
+          setSheetTyped(false);
+        } else {
+          setRevealStage('facts'); // suggestions/gaps wait for the draft to arrive
+          setRevealOn(true); // play the NarrativeReveal for THIS generation
+        }
         setMode('done');
         setThinkPhase('waiting'); // reset for the next generation
-        setRevealOn(true); // play the NarrativeReveal for THIS generation
         setGenCounter((g) => g + 1); // new resetKey → clean remount
         // DONE — leave the retry loop. Without this the loop ran all three
         // attempts on SUCCESS too: three provider calls per click (three times
@@ -695,13 +811,23 @@ export default function AiNarrativePanel({
       setResidual(out.residualRisk ?? []);
       setMode('done');
       setThinkPhase('waiting');
-      // Replay the typing reveal only when the prose actually changed — an
-      // untouched copy animating itself would claim work it did not do. No
-      // stage is set for an unchanged copy: nothing is animating, so the
-      // sequence is already over. A tighten result has no findings or status
-      // blocks either, so its one reveal ends the sequence on its own.
-      setRevealOn(out.tightened === true);
-      setRevealStage(out.tightened === true ? 'facts' : 'done');
+      if (out.tightened === true && sheet) {
+        // TASK 9 — the tightened narrative types into the letter too, and ONLY
+        // the narrative: this pass rewrites the officer's own prose, so the fact
+        // values stay the report's own (scope 'tighten' — see ReportSheetBody).
+        setRevealStage('done');
+        setRevealOn(false);
+        setSheetDraft({ narrative: out.narrative, scope: 'tighten' });
+        setSheetTyped(false);
+      } else {
+        // Replay the typing reveal only when the prose actually changed — an
+        // untouched copy animating itself would claim work it did not do. No
+        // stage is set for an unchanged copy: nothing is animating, so the
+        // sequence is already over. A tighten result has no findings or status
+        // blocks either, so its one reveal ends the sequence on its own.
+        setRevealOn(out.tightened === true);
+        setRevealStage(out.tightened === true ? 'facts' : 'done');
+      }
       setGenCounter((g) => g + 1);
     } catch (err) {
       setThinkPhase('waiting');
@@ -888,7 +1014,12 @@ export default function AiNarrativePanel({
   //
   // A draft restored from this tab's store plays no reveal, so nothing waits:
   // revealOn false means `revealing` is false and the whole panel draws at once.
-  const revealing = revealOn && revealStage !== 'done';
+  // TASK 9 — a draft being TYPED INTO THE BONDPAPER in this card waits too: the
+  // panel's plain boxes are suppressed (see `sheeted` below), the letter takes
+  // their place, and the gate stays closed until the sheet reports that the last
+  // value has landed.
+  const revealing = (revealOn && revealStage !== 'done') || (!!sheetDraft && !sheetTyped);
+  const sheeted = !!sheetDraft;
   // Each block fades up as its own turn arrives; the sequence itself is the
   // stage machine above, so there are no animation delays to keep in step.
   const arriveClass = (base) => (revealOn ? `${base} ai-draft-arrive` : base);
@@ -957,9 +1088,26 @@ export default function AiNarrativePanel({
     </div>
   );
 
+  // TASK 9 — the way back from the letter to the draft's own editable boxes,
+  // and the reason the letter can replace them at all. By the time this is on
+  // screen the typing has finished and the draft is still only a PROPOSAL, so
+  // correcting it before Accept has to stay possible — Accept is the one action
+  // that writes. Nothing is discarded or re-derived: the same draft is shown in
+  // the boxes it was typed from (the narrative, the formalised findings and the
+  // disposition), and Regenerate brings the letter back to type the result again.
+  const openDraftBoxes = () => {
+    setSheetDraft(null);
+    setSheetTyped(true);
+  };
+
   const closePanel = () => {
     setRevealOn(false); // unmounts NarrativeReveal — cancels its timer
     setRevealStage('done'); // reopened, the draft draws whole (see `revealing`)
+    // TASK 9 — a closed gate puts the letter away again: the uncommitted
+    // proposal is dropped (the panel's own boxes come back holding the draft,
+    // which is still here and still unwritten). Nothing reached the report.
+    setSheetDraft(null);
+    setSheetTyped(true);
     setPanelOpen(false);
   };
 
@@ -1055,6 +1203,28 @@ export default function AiNarrativePanel({
   // text is trimmed for the hint; the full text rides on the tooltip.
   const referenceText = String(actionTaken || '').replace(/\s+/g, ' ').trim().slice(0, 160);
   const findingsReference = String(notableFindings || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+
+  // TASK 10 — the card's title bar, defined once and placed according to what the
+  // card is showing. While the LETTER is up it belongs UNDER the page: this card
+  // is opened to read the draft, so the bondpaper is the first thing in it and
+  // the panel's own chrome — the ✕, the "Not saved" promise and the
+  // unmasked-name warning beneath it — follows the page, above the review
+  // controls. With no letter (the loading state, an error, or the draft's plain
+  // boxes) it is the card's head, which is where a title bar belongs.
+  const draftHeadBar = (
+    <header className="ai-inline-head">
+      <h3>AI draft</h3>
+      <button
+        type="button"
+        className="ai-side-close"
+        onClick={closePanel}
+        aria-label="Hide the AI draft"
+        title="Hide (Esc) — the draft is kept"
+      >
+        ✕
+      </button>
+    </header>
+  );
 
 
   return (
@@ -1232,19 +1402,42 @@ export default function AiNarrativePanel({
           after reloads): it only opens when there is actual content — a draft,
           a loading state, or an error to display. */}
       {panelOpen && panelHasContent && (
-        <section className="ai-inline" aria-label="AI narrative draft">
-          <header className="ai-inline-head">
-            <h3>AI draft</h3>
-            <button
-              type="button"
-              className="ai-side-close"
-              onClick={closePanel}
-              aria-label="Hide the AI draft"
-              title="Hide (Esc) — the draft is kept"
-            >
-              ✕
-            </button>
-          </header>
+        <section
+          className={`ai-inline${sheeted ? ' ai-inline--sheet' : ''}`}
+          ref={sheetCardRef}
+          aria-label="AI narrative draft"
+        >
+          {/* TASK 9/10 — the letter, FIRST in the card, and only while a draft
+              is being typed into it (see `draftHeadBar` below for why the title
+              bar is not above it). Rendered as a sibling rather than inside the
+              body so the page holds the card's own width and the chrome that
+              follows keeps its flush edges. */}
+          {sheeted && (
+            <div className="ai-inline-page">
+              {/* TASK 10 — the document viewer: a fit-to-screen frame the page
+                  scrolls inside, centered on a muted surface (see
+                  `.ai-sheet-preview`). The typewriter is followed by
+                  `followTyping`, so the words are never typed out of sight. */}
+              <div className="ai-sheet-preview" ref={sheetViewportRef}>
+                <div className="print-sheet">
+                  <ReportSheetBody
+                    report={sheet.report}
+                    ts={sheet.ts}
+                    stationHeader={sheet.stationHeader}
+                    recordedBy={sheet.recordedBy}
+                    pending={sheetDraft}
+                    // A new generation replays the typing from the top.
+                    revealKey={genCounter}
+                    onRevealComplete={() => setSheetTyped(true)}
+                    // Task 10 — the frame follows the words (see above).
+                    onProgress={followTyping}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {draftHeadBar}
 
           {/* The body keeps the indentation it had inside the docked panel, so
               the diff of moving it inline is the wrapper and nothing else. */}
@@ -1277,9 +1470,27 @@ export default function AiNarrativePanel({
                         aloud. The `slow` fallback below has its OWN live
                         region because it is actionable information. */}
                     <span className="sr-only">
-                      {thinkPhase === 'reading' ? 'Reading your account, please wait' : 'Generating draft, please wait'}
+                      {thinkPhase === 'reading'
+                        ? 'Reading your account, please wait'
+                        : runningKind === 'tighten'
+                          ? 'Tightening your draft, please wait'
+                          : 'Generating your narrative, please wait'}
                     </span>
-                    <span className="ai-spinner" aria-hidden="true" />
+                    <p className="ai-loading-head">
+                      {thinkPhase === 'reading'
+                        ? 'Reading your account'
+                        : runningKind === 'tighten'
+                          ? 'Tightening your draft'
+                          : 'Generating your narrative'}
+                    </p>
+                    {/* Skeleton prose: the shape of the draft that is about to
+                        replace it, so the panel does not jump when the text
+                        lands in the same box. */}
+                    <div className="ai-skeleton" aria-hidden="true">
+                      <span className="ai-skeleton-line" />
+                      <span className="ai-skeleton-line" />
+                      <span className="ai-skeleton-line ai-skeleton-line--short" />
+                    </div>
                     {thinkPhase === 'reading' ? (
                       // The account read: no rotating draft phrases, because
                       // nothing is being drafted yet — the model is reading
@@ -1328,10 +1539,25 @@ export default function AiNarrativePanel({
 
                 {mode === 'done' && draft && (
                   <>
-                    {!revealing && (
+                    {/* TASK 10 — the promise this note makes is about the DRAFT
+                        as a whole rather than about any sentence in it, so it is
+                        on screen from the first frame: it is the panel's chrome,
+                        and the letter animating in underneath it is the only
+                        thing that arrives late. (Every other note on this panel
+                        still waits for the text it describes — see
+                        `revealing`.) */}
                     <p className="ai-side-note">
                       Not saved — review before accepting. It is never written
                       into the report automatically.
+                    </p>
+                    {/* TASK 9/10 — and where the words are arriving: while the
+                        sheet is typing the draft, the panel says so and its own
+                        boxes stay out of the way until the letter has finished. */}
+                    {sheeted && !sheetTyped && (
+                    <p className="ai-side-note" role="status">
+                      Writing the draft into the bondpaper above — the AI&apos;s
+                      words arrive directly in the letter&apos;s final formatting.
+                      The review controls appear once it has finished.
                     </p>
                     )}
 
@@ -1370,7 +1596,7 @@ export default function AiNarrativePanel({
                       </div>
                     )}
 
-                    {!revealing && residual.length > 0 && (
+                    {residual.length > 0 && (
                       <div className="alert error" role="alert">
                         These names appear in your narrative but are not listed as
                         parties above and were possibly sent unmasked:{' '}
@@ -1407,12 +1633,24 @@ export default function AiNarrativePanel({
                         `draft.narrative` IS the live value, never a copy kept
                         beside it (which is why the edit writes it back into the
                         draft and every apply path reads it unchanged). */}
-                    {/* The draft is shown under the three names the printed
-                        sheet uses for the same three things — FACTS OF THE
-                        CASE, NOTABLE FINDINGS, ACTION TAKEN / STATUS — so the
-                        officer reviews the draft as the document it is about
-                        to become, and sees every part Generate wrote rather
-                        than the narrative alone. */}
+                    {/* TASK 9 — THE AI'S WORDS TYPE THEMSELVES INTO THE BONDPAPER,
+                        which is drawn at the TOP of this card (see
+                        `draftHeadBar`): the very component the print portal
+                        draws, on the page it will print on, so the officer reads
+                        the letter rather than a plain copy of it. Its static
+                        chrome — the seals, the org block, the office code and
+                        date, the POLICE REPORT title, the salutation, the
+                        certification boilerplate, the quoted incident type and
+                        every bold field LABEL — is on screen from the first
+                        frame, and only the AI's own values are revealed, one
+                        character cursor walked across them top to bottom. These
+                        plain boxes are therefore the fallback, shown only with
+                        no letter to read: while a draft is being typed into the
+                        sheet (and after, until `openDraftBoxes` asks for them)
+                        they stay out of the way. Nothing on the page is in the
+                        report yet, and the gate below stays shut until the last
+                        value lands. */}
+                    {!sheeted && (<>
                     <h4 className="ai-draft-label">Facts of the case</h4>
                     <div className="ai-draft">
                       {typing('facts') ? (
@@ -1443,6 +1681,7 @@ export default function AiNarrativePanel({
                         types itself in, so the wait here would hide the very
                         thing the sequence is playing. */}
                     {draftDetail}
+                    </>)}
 
                     {/* AI UNDERSTANDING — the gloss pair (Phase 6 Stage 3), now
                         headed and framed as a VERIFICATION AID: a reading to
@@ -1583,6 +1822,23 @@ export default function AiNarrativePanel({
                                 button used to make in the other direction. */}
                             {tightenDraft ? 'Accept into narrative' : 'Accept into report'}
                           </button>
+                          {/* TASK 9 — the letter is what the officer REVIEWS; this
+                              is what they correct it FROM. The words typed into
+                              the bondpaper above are the same draft, so the boxes
+                              behind this button hold it verbatim — nothing is
+                              re-derived from the page, and no keystroke here is
+                              written into the report until Accept. Offered in
+                              both non-guided results: a generated draft and a
+                              tightened one are equally the officer's to change. */}
+                          {sheeted && (
+                            <button
+                              type="button"
+                              onClick={openDraftBoxes}
+                              title="Shows this draft as its three editable boxes — the same text, so it can be corrected before accepting."
+                            >
+                              Edit the draft
+                            </button>
+                          )}
                           {/* Each result offers to repeat ITSELF: a generated draft
                               regenerates from the report, a tightened draft is
                               tightened again. Offering "Regenerate" on a tighten

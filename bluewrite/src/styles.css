@@ -1738,6 +1738,45 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   align-items: center;
   gap: 0.55rem;
   text-align: center;
+  /* Reserve roughly the height of a short draft so the panel does not jump
+     when the text lands in the same slot (see .ai-draft). */
+  min-height: 12rem;
+  justify-content: flex-start;
+}
+.ai-loading-head {
+  margin: 0.15rem 0 0;
+  color: var(--paper);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+/* Shimmering skeleton prose — the shape of the draft that is about to replace
+   it. Three animated gradient bars; a static, dimmed bar under
+   prefers-reduced-motion. */
+.ai-skeleton {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0.3rem 0;
+}
+.ai-skeleton-line {
+  display: block;
+  height: 0.6rem;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--line) 0%,
+    var(--line-bright) 40%,
+    var(--line) 80%
+  );
+  background-size: 220% 100%;
+  animation: ai-skeleton-shimmer 1.6s ease-in-out infinite;
+}
+.ai-skeleton-line:nth-child(2) { width: 92%; animation-delay: 0.14s; }
+.ai-skeleton-line--short { width: 58%; animation-delay: 0.28s; }
+@keyframes ai-skeleton-shimmer {
+  from { background-position: 220% 0; }
+  to { background-position: -80% 0; }
 }
 .ai-spinner {
   width: 26px;
@@ -1795,6 +1834,12 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   .ai-spinner { animation-duration: 2.4s; }
   .ai-dots span, .ai-loading-bar-fill { animation: none; }
   .ai-dots span { opacity: 0.8; }
+  /* The skeleton stops shimmering and becomes three steady, dimmed bars. */
+  .ai-skeleton-line {
+    animation: none;
+    background: var(--line-bright);
+    opacity: 0.7;
+  }
 }
 
 /* Docked AI panel (Claude-sidebar style): while the panel is open in full
@@ -2379,6 +2424,51 @@ body.profile-panel-open {
   border-color: var(--cyan);
   color: var(--cyan);
   background: var(--panel);
+}
+
+/* The self-service REQUEST form (Phase 1, S-04). Sits under the "Need it changed?"
+   row in Security: two kinds, an optional reason, one button. It records a request
+   and changes nothing — the Admin acts in User Management. */
+.profile-request-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.4rem 0 0.6rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  background: var(--panel-sunken, rgba(255, 255, 255, 0.03));
+}
+.profile-request-kinds { margin: 0; padding: 0; border: 0; }
+.profile-request-kind {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.profile-request-reason {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  background: var(--input-bg, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  resize: vertical;
+}
+.profile-request-message,
+.profile-request-error { min-height: 1rem; margin: 0; font-size: 0.78rem; line-height: 1.45; }
+.profile-request-message { color: var(--green-ink, #1c7c54); }
+.profile-request-error { color: var(--ir-red, #b3261e); }
+.profile-request-actions { display: flex; justify-content: flex-end; }
+.profile-request-actions .profile-inline-btn.primary {
+  border-color: var(--ir-blue, #1f4fbf);
+  background: var(--ir-blue, #1f4fbf);
+  color: #fff;
 }
 
 /* The form. Its hairline is drawn ABOVE it rather than under the row that opened
@@ -3418,6 +3508,9 @@ body.profile-panel-open {
    single scroll carries it exactly as it carries every other field. */
 .ai-inline {
   margin-top: 0.7rem;
+  /* Task 9/10 — the card is scrolled to when a draft starts typing into it, so
+     it has to land UNDER the sticky top bar rather than behind it. */
+  scroll-margin-top: 5.5rem;
   border: 1px solid var(--line-bright);
   border-radius: 4px;
   /* The card the assistant owns tints its ready state; the draft reads as a
@@ -3443,6 +3536,23 @@ body.profile-panel-open {
   color: var(--steel, #8fa3c8);
 }
 .ai-inline-body { padding: 0.9rem; }
+/* Task 10 — the page's own slot in the card. The letter comes FIRST, with the
+   title bar and the notes below it (see `draftHeadBar` in AiNarrativePanel), so
+   it takes the same inset the body has and nothing else. */
+.ai-inline-page { padding: 0.9rem; }
+/* Task 10 — while the letter is up, the card reads as a viewer: the body drops
+   one step away from the card's own surface so the muted frame and its white
+   page are the brightest things in it, and the banners above the page stay
+   clearly separate from it instead of sitting on the same tone.
+
+   A translucent black rather than a token, because the surfaces are inverted
+   between themes (--panel is #FFFFFF light and #161A21 dark), so a fixed token
+   would brighten the body in one of them. Darkening whatever is underneath is
+   the same move in both. */
+.ai-inline--sheet .ai-inline-body {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 0 0 4px 4px;
+}
 
 /* The three parts of the draft, under the names the printed sheet gives the
    same three things. FACTS OF THE CASE is the label on the editable box below
@@ -3515,6 +3625,61 @@ body.profile-panel-open {
   border: 1px dashed var(--line-bright);
   border-radius: 3px;
 }
+
+/* ---- TASK 9/10 — the bondpaper, typed into INSIDE the panel card ---------
+   The draft is not reviewed in a plain box first: the letter itself is drawn
+   here, in the card the officer pressed Generate in, and the AI's words are
+   revealed into its real slots top to bottom (ReportSheetBody + `sheet` in
+   AiNarrativePanel.jsx). The paper is `.print-sheet` — the same page the print
+   portal and the inline reveal draw — so the page being reviewed and the page
+   that prints cannot drift.
+
+   TASK 10 — it is a DOCUMENT VIEWER, not a growing block. The frame is sized
+   against the screen so the card's own chrome (the app header, the "AI draft"
+   head, the "Not saved" note and the unmasked-name warning above the page) and
+   the review gate below it all fit at once; the letter is taller than that, so
+   THE DOCUMENT is what scrolls — never the outer page. The page is centered in
+   the frame with even margins, on a muted surface, so it reads as paper lying on
+   a desk rather than as a grey box in a card.
+
+   The typewriter is kept in view by the component and not by this rule: the
+   frame is moved as the sequence lands (ReportSheetBody's `onProgress` →
+   `followTyping`), because a fixed-height viewport would otherwise show only the
+   letter's chrome while the words typed out of sight below it. */
+.ai-sheet-preview {
+  margin-top: 0.6rem;
+  /* What the panel's own chrome and the gate below need, taken off the screen;
+     whatever is left belongs to the page. `max()` keeps it usable when short. */
+  max-height: max(16rem, calc(100vh - 15rem));
+  overflow-y: auto;
+  padding: 0.85rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 4px;
+  /* A muted surface, so the white page reads as PAPER against it. */
+  background: #dfe3e8;
+  display: flex;
+  justify-content: center; /* centered like a print preview, not edge-flush */
+  align-items: flex-start;
+}
+
+/* The page as it would sit on a surface: a hairline edge and a soft shadow.
+   Scoped to this frame — the print portal's own `.print-sheet` is untouched.
+
+   `zoom` is what makes the page a little smaller here. It scales the rendered
+   page AND its layout box together, so the line wrap stays exactly the page's
+   own; narrowing the sheet instead would re-wrap the prose and the preview would
+   stop being the sheet that prints — the one thing this card exists to show. */
+.ai-sheet-preview .print-sheet {
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
+  zoom: 0.85;
+}
+
+/* The sequence IS one character cursor (see ReportSheetBody), so there is no
+   keyframe here to keep in step — this only marks the page as clickable while
+   it types, since a click finishes the reveal early. `prefers-reduced-motion`
+   shows the finished page immediately, which the component itself handles. */
+.ai-sheet-preview .pr-sheet-typing { cursor: pointer; }
 
 .ai-draft {
   /* Large, easy-to-read reading experience for the officer reviewing the
@@ -4456,7 +4621,15 @@ button.dash-kpi--link:focus-visible {
 
 /* ---- NOTABLE FINDINGS / ACTION TAKEN sections ---- */
 .pr-section { margin: 1rem 0; }
-.pr-entry { margin: 0.15rem 0 0.15rem 0.25in; }
+/* NOTABLE FINDINGS: dash-prefixed lines with a HANGING INDENT — a wrapped line
+   aligns under the entry's TEXT, not under the dash (Task 7, the scanned
+   sheet). The negative `text-indent` pulls the dash (and only the first line)
+   into the margin; `padding-left` keeps the continuation lines aligned. */
+.pr-entry {
+  margin: 0.15rem 0 0.15rem 0.25in;
+  padding-left: 0.6rem;
+  text-indent: -0.6rem;
+}
 
 /* IOC line: a signature space, same convention as the blank Noted-by line. */
 .pr-sign-blank {
@@ -4535,23 +4708,36 @@ button.dash-kpi--link:focus-visible {
    between them (the line-height alone sets the spacing). */
 .pr-recorded { margin: 0; }
 /* "Noted by:" sits immediately above its signature rule and the printed
-   name — no blank space left for a signature. */
+   name — no blank space left for a signature. The block holds the RIGHT margin
+   of the page: the noting official signs the side the letter closes on, so the
+   label and the name share one right edge.
+
+   BOTH properties, deliberately. `align-items` aligns the two BOXES, but the
+   text INSIDE a box follows `text-align`, and this sheet is full of centered
+   ancestors — the header band, the title, the appendix headings — so `center`
+   is what a bare label inherits. `flex-end` alone therefore moves the name (the
+   wider box, whose own `text-align` is stated below) and leaves the short label
+   reading as centred above it. Stating `text-align` on the block settles the
+   label against the same edge in the same breath, and no ancestor can pull
+   either line back to the middle. */
 .pr-noted {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
+  text-align: right;
   gap: 0;
   margin-top: 2.5rem;
 }
 .pr-noted-label { font-weight: 700; }
 /* The noting official's name prints straight under "Noted by:" — no
-   signature rule above it and no reserved blank space. */
+   signature rule above it and no reserved blank space — shut to the same right
+   edge as the label above it. */
 .pr-noted-name {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   min-width: 14rem;
-  text-align: center;
+  text-align: right;
 }
 
 .pr-foot {
@@ -5595,7 +5781,8 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   font-weight: 700;
   letter-spacing: 0.02em;
 }
-.pr-actions .pr-entry { margin-left: 0; }
+/* ACTION TAKEN / STATUS entries are flush-left (no dash, no hanging indent). */
+.pr-actions .pr-entry { margin-left: 0; padding-left: 0; text-indent: 0; }
 .pr-recorded strong { font-style: italic; }
 
 /* ---- Print review overlay: the sheet scrolls, the bar stays docked ----
@@ -6667,4 +6854,121 @@ body.users-fab-open .main {
   /* Neither does a conversation between two officers. (The bar's messages button
      used to be hidden here with it; the button no longer exists.) */
   .messages-box { display: none; }
+}
+
+/* ---- Sign-in health (migration 018) ----------------------------------------
+   The second factor's preflight on the Admin dashboard. Amber, not red: it warns
+   the station before a shift that sign-in codes may not get out, and it does not
+   block the page. Shown only when there is something to say. */
+.dash-signin-alert {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--amber-line, #e6c35c);
+  border-radius: 10px;
+  background: var(--amber-bg, #fff8e6);
+  color: var(--ir-text, #14213d);
+  font-size: 0.875rem;
+}
+.dash-signin-alert strong { display: block; margin-bottom: 0.35rem; }
+.dash-signin-alert ul { margin: 0; padding-left: 1.1rem; }
+.dash-signin-alert li { margin: 0.15rem 0; line-height: 1.5; }
+.dash-signin-alert .dash-signin-note { margin: 0.5rem 0 0; color: var(--ir-muted, #5b6577); }
+
+/* ---- Account requests (migration 019) --------------------------------------
+   An officer asking for a password reset or a sign-in-address fix. A flag list,
+   not a queue: each row names who and why, and one button clears it once the
+   Admin has acted in User Management (where the act itself is audited). */
+.dash-requests {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line-bright, #cfd6e2);
+  border-radius: 10px;
+  background: var(--ir-card, #fff);
+  color: var(--ir-text, #14213d);
+  font-size: 0.875rem;
+}
+.dash-requests > strong { display: block; margin-bottom: 0.5rem; }
+.dash-requests-list { list-style: none; margin: 0; padding: 0; }
+.dash-request {
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--ir-border, #e1e6ee);
+}
+.dash-request:first-child { border-top: 0; }
+.dash-request-head { display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+.dash-request-who { font-weight: 600; }
+.dash-request-meta { color: var(--ir-muted, #5b6577); font-weight: 400; font-size: 0.8125rem; }
+.dash-request-label {
+  flex: none;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--ir-blue, #1f4fbf);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  align-self: flex-start;
+}
+.dash-request-reason { margin: 0.35rem 0 0; color: var(--ir-text, #14213d); font-style: italic; }
+.dash-request-foot { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-top: 0.4rem; }
+.dash-request-age { color: var(--ir-muted, #5b6577); font-size: 0.8125rem; }
+.dash-request-handle {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--line-bright, #cfd6e2);
+  border-radius: 3px;
+  background: var(--ir-card, #fff);
+  color: var(--ir-blue, #1f4fbf);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dash-request-handle:hover { border-color: var(--ir-blue, #1f4fbf); }
+.dash-requests-note { margin: 0.5rem 0 0; color: var(--ir-muted, #5b6577); line-height: 1.5; }
+
+/* ---- Recovery codes (migration 018) ----------------------------------------
+   The on-screen sheet an Admin prints at enrolment, and its print twin. The
+   print overlay is hidden on screen and shown only in print (see the @media
+   print block below), so the browser prints the codes alone rather than the
+   directory behind the dialog. */
+.dialog--wide { max-width: 620px; }
+.recovery-sheet {
+  margin: 0.75rem 0;
+  padding: 0.9rem 1rem;
+  border: 1px dashed var(--ir-border, #cfd6e2);
+  border-radius: 8px;
+  background: var(--ir-page, #f7f9fc);
+}
+.recovery-sheet-head { font-weight: 600; margin-bottom: 0.5rem; }
+.recovery-sheet-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3rem 1.25rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+}
+.recovery-sheet-foot { margin: 0.6rem 0 0; font-size: 0.8125rem; color: var(--ir-muted, #5b6577); }
+
+.recovery-print-overlay { display: none; }
+
+@media print {
+  body.recovery-sheet-open .shell,
+  body.recovery-sheet-open .toast,
+  body.recovery-sheet-open .dialog-overlay,
+  body.recovery-sheet-open .sidebar,
+  body.recovery-sheet-open .profile-side-panel { display: none !important; }
+  body.recovery-sheet-open .recovery-print-overlay {
+    display: block !important;
+    color: #000;
+  }
+  body.recovery-sheet-open .recovery-print-overlay h1 { font-size: 16pt; margin: 0 0 0.25rem; }
+  body.recovery-sheet-open .recovery-print-account { margin: 0 0 1rem; font-size: 11pt; }
+  body.recovery-sheet-open .recovery-print-list {
+    columns: 2;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 14pt;
+    line-height: 2;
+    padding-left: 1.4rem;
+  }
+  body.recovery-sheet-open .recovery-print-foot { margin-top: 1.25rem; font-size: 10pt; }
 }

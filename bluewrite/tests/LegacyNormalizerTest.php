@@ -56,13 +56,23 @@ check('empty respondent column → no group', !isset($out['respondent']));
 $out = LegacyNormalizer::normalize(['complainant' => [['name' => 'New']]], ['complainant' => 'Old']);
 check('does not overwrite v3 group data', ($out['complainant'][0]['name'] ?? '') === 'New');
 
-// 5. hasLegacyShape
+// 5. Legacy flat suspect text → the first suspect row
+$out = LegacyNormalizer::normalize(['suspect_information' => 'One unidentified male, gray hoodie']);
+check('suspect_information → suspect row', ($out['respondent'][0]['suspect_description'] ?? '') === 'One unidentified male, gray hoodie');
+$out = LegacyNormalizer::normalize(['suspect_information' => 'blob', 'respondent' => [['name' => 'Pedro Reyes']]]);
+check('existing suspect rows win', ($out['respondent'][0]['name'] ?? '') === 'Pedro Reyes' && !isset($out['respondent'][0]['suspect_description']));
+$out = LegacyNormalizer::normalize(['suspect_information' => 'gray hoodie'], ['respondent' => 'Pedro Reyes']);
+check('column name + old description share one row', ($out['respondent'][0]['name'] ?? '') === 'Pedro Reyes' && ($out['respondent'][0]['suspect_description'] ?? '') === 'gray hoodie');
+check('blank suspect_information invents nobody', !isset(LegacyNormalizer::normalize(['suspect_information' => '  '])['respondent']));
+
+// 6. hasLegacyShape
 check('hasLegacyShape: legacy vehicle keys', LegacyNormalizer::hasLegacyShape(['vehicle_1_driver' => 'x']) === true);
 check('hasLegacyShape: scalar complainant', LegacyNormalizer::hasLegacyShape(['complainant' => 'text']) === true);
 check('hasLegacyShape: v3 array complainant', LegacyNormalizer::hasLegacyShape(['complainant' => [['name' => 'x']]]) === false);
+check('hasLegacyShape: legacy suspect blob', LegacyNormalizer::hasLegacyShape(['suspect_information' => 'gray hoodie']) === true);
 check('hasLegacyShape: empty', LegacyNormalizer::hasLegacyShape([]) === false);
 
-// 6. Idempotency: normalizing already-normalized output changes nothing
+// 7. Idempotency: normalizing already-normalized output changes nothing
 $once = LegacyNormalizer::normalize(['vehicle_1_driver_name' => 'A']);
 $twice = LegacyNormalizer::normalize($once);
 check('idempotent on second pass', $once === $twice);

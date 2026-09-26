@@ -287,6 +287,10 @@ export default function Users({ notify }) {
   // from. The row is what takes focus back when the menu was opened from the
   // keyboard rather than the mouse (see closeRowMenu).
   const [menu, setMenu] = useState(null);
+  // The generated recovery-code sheet (migration 018): null, or the codes the
+  // server just issued — shown ONCE in a dialog, and printable from there. It is
+  // the only moment they exist in readable form; the server keeps hashes.
+  const [recoverySheet, setRecoverySheet] = useState(null);
 
   // ---- The account's face ----------------------------------------------------
   //
@@ -481,6 +485,39 @@ export default function Users({ notify }) {
     });
   }
 
+  /**
+   * Issue a fresh set of OFFLINE recovery codes for an account (migration 018).
+   *
+   * THE ENROLMENT STEP the station chose: Admin-assisted, in person, so every
+   * Admin/Officer has a way in when mail cannot send. The server REPLACES any
+   * existing codes, so regenerating after a leak is the same press as the first
+   * issue, and the previous set stops working immediately.
+   *
+   * The response carries the plaintext codes and nothing else ever will — the
+   * database stores only a one-way hash of each. That is why the dialog is a
+   * PRINT moment rather than a manage screen: there is no "view them again".
+   */
+  async function askRecoveryCodes(u) {
+    try {
+      const res = await api(`/users/${u.id}/recovery-codes`, { method: 'POST' });
+      setRecoverySheet({
+        account: res.account || u.full_name,
+        username: u.username,
+        codes: Array.isArray(res.codes) ? res.codes : [],
+      });
+    } catch (err) {
+      notify(err.message || 'The recovery codes could not be generated.');
+    }
+  }
+
+  // The print twin is gated on a body class so a browser print of the recovery
+  // sheet prints ONLY the codes — the app hides behind it (see @media print).
+  useEffect(() => {
+    if (!recoverySheet) return undefined;
+    document.body.classList.add('recovery-sheet-open');
+    return () => document.body.classList.remove('recovery-sheet-open');
+  }, [recoverySheet]);
+
   function askResetPassword(u) {
     setResetFor(u);
     setResetPassword('');
@@ -554,7 +591,12 @@ export default function Users({ notify }) {
       { label: 'Edit details', onSelect: () => startEdit(u) },
       { label: 'Reset password', onSelect: () => askResetPassword(u) },
       ...(u.role === 'Admin' || u.role === 'Officer'
-        ? [{ label: 'Reset verification', onSelect: () => askResetMfa(u) }]
+        ? [
+            // The offline factor (migration 018) sits beside the mailbox one: one
+            // issues a printed way in, the other clears a stuck mailbox code.
+            { label: 'Issue recovery codes', onSelect: () => askRecoveryCodes(u) },
+            { label: 'Reset verification', onSelect: () => askResetMfa(u) },
+          ]
         : []),
       u.status === 'active'
         ? { label: 'Deactivate account', danger: true, onSelect: () => askDeactivate(u) }
@@ -1391,6 +1433,65 @@ export default function Users({ notify }) {
           onCapture={takePhoto}
           onClose={() => setCameraOpen(false)}
         />
+      )}
+
+      {recoverySheet && (
+        <div className="dialog-overlay" onClick={() => setRecoverySheet(null)}>
+          <div
+            className="dialog dialog--wide"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="recovery-sheet-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="recovery-sheet-title">Recovery codes — {recoverySheet.account}</h2>
+            <p>
+              Print <strong>two</strong> copies: one for the officer, and one to seal at the
+              station. These codes are shown <strong>once</strong> and cannot be retrieved
+              again — the server keeps only a one-way hash of each. Any previous codes for this
+              account no longer work.
+            </p>
+            <div className="recovery-sheet">
+              <div className="recovery-sheet-head">
+                BlueWrite recovery codes — {recoverySheet.username}
+              </div>
+              <ol className="recovery-sheet-list">
+                {recoverySheet.codes.map((code) => (
+                  <li key={code}>{code}</li>
+                ))}
+              </ol>
+              <p className="recovery-sheet-foot">
+                Each code can be used once, at the sign-in code screen, when email cannot be used.
+              </p>
+            </div>
+            <div className="actions">
+              <button type="button" onClick={() => setRecoverySheet(null)}>Close</button>
+              <button type="button" className="primary" onClick={() => window.print()}>Print</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* The PRINT twin of the sheet above: hidden on screen, shown only in print
+          (see @media print), so the browser prints the codes alone rather than the
+          whole directory behind the dialog. */}
+      {recoverySheet && (
+        <div className="recovery-print-overlay" aria-hidden="true">
+          <h1>BlueWrite recovery codes</h1>
+          <p className="recovery-print-account">
+            {recoverySheet.account}
+            {recoverySheet.username ? ` (${recoverySheet.username})` : ''}
+          </p>
+          <ol className="recovery-print-list">
+            {recoverySheet.codes.map((code) => (
+              <li key={code}>{code}</li>
+            ))}
+          </ol>
+          <p className="recovery-print-foot">
+            Each code can be used once, at the sign-in code screen, when email cannot be used.
+            Keep this sheet safe.
+          </p>
+        </div>
       )}
 
       {confirm && (

@@ -27,7 +27,7 @@
 // question of any draft.
 
 import { GROUP_CONFIG, TYPE_FIELDS } from './incidentTypes.js';
-import { hasGroupRows, meaningfulRows } from './reportRules.js';
+import { applyRowVisibility, hasGroupRows, meaningfulRows } from './reportRules.js';
 
 // The answer's scalar fields, in the order the form asks for them, with the
 // label the officer reads in the receipt line. One row per field: the key that
@@ -293,7 +293,10 @@ export function buildTypeDetailsFill(answer, draft) {
       }
     }
     if (changed) {
-      groups[groupKey] = rows;
+      // The row's own visibility decides what it keeps: a name the read heard
+      // for a person the officer recorded as unidentified is not that row's to
+      // hold (see rowFieldVisible, and the suspect schema it serves).
+      groups[groupKey] = rows.map((r) => applyRowVisibility(r, cfg.itemSchema));
       filled.push(cfg.label);
     }
   }

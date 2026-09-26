@@ -125,6 +125,12 @@ export const TYPE_FIELDS = {
       mirrorOf: { group: 'complainant', key: 'name' },
     }),
     f('location_of_property', 'Location of Property'),
+    // Task 7 — the scanned certification sheet carries a "Date of Discovery"
+    // line distinct from "Date & Time of Incident": a theft is often found
+    // later than it happened. Advisory, not required — the officer may not
+    // know, and the sheet omits a line with no recorded data rather than
+    // inventing one. Read by buildTypeFacts() (sheetFacts.js).
+    f('date_of_discovery', 'Date of Discovery', { date: true }),
     f('how_property_was_taken', 'Manner of Taking', { required: true }),
     f('cctv_available', 'CCTV Available', { select: ['Yes', 'No', 'Unknown'] }),
     f('cctv_description', 'CCTV Details', {
@@ -371,6 +377,10 @@ export const TYPE_FIELDS = {
       select: ['Yes', 'No', 'Unclear'],
       required: true,
     }),
+    // Task 7 — "Date of Discovery", distinct from the incident's own date:
+    // a break-in is commonly discovered on return. Advisory; the sheet prints
+    // the line only when the officer recorded one.
+    f('date_of_discovery', 'Date of Discovery', { date: true }),
     // Property Stolen stays advisory: an ATTEMPTED break-in takes nothing, and
     // forcing the officer to write "none" is worse than leaving it blank.
     // An ATTEMPTED break-in takes nothing, so Property Stolen stays optional —
@@ -401,7 +411,10 @@ export const TYPE_FIELDS = {
     f('persons_involved', 'Persons Involved'),
     f('property_involved', 'Property Involved'),
     f('injuries_or_damage', 'Injuries/Damage'),
-    f('suspect_information', 'Suspect Information'),
+    // Suspects are a STRUCTURED list on this type like every other (the
+    // `respondent` group below), not one free-text blob. A report saved under
+    // the old `suspect_information` field is read into the first suspect row
+    // at read time — see src/lib/normalizeLegacy.js.
     f('additional_information', 'Additional Information', { textarea: true, required: true }),
   ],
 };
@@ -458,13 +471,70 @@ export const VICTIM_ITEM_FIELDS = [
   f('representative_position', 'Representative Position'),
 ];
 
-// Suspect sub-schema (spec §1.4): the person plus Suspect Status and a
-// free-text description that is available whether or not the suspect is
-// identified — which is exactly how an unidentified suspect is recorded.
+// Suspect sub-schema (spec §1.4): the person, an IDENTITY toggle, and the
+// description an officer can give when there is no name to give.
+//
+// THE IDENTITY TOGGLE IS THE EXISTING suspect_status. Its STORED values stay
+// `Unidentified` / `Identified` — the AI's row vocabulary
+// (ReportRules::GROUP_SELECT_OPTIONS), the print vocabulary and the Rape
+// mirror all read those words, so renaming them would be a migration for a
+// synonym — but the officer CHOOSES between them as "Known" and "Unknown",
+// which is the question they are actually answering (see `optionLabels`).
+//
+// THE NAME IS ASKED FOR ONLY WHILE THE IDENTITY IS KNOWN. Choosing Unknown
+// hides it and the row editor CLEARS it (applyRowVisibility in reportRules.js),
+// which is what keeps an unidentified suspect from being filed under a name
+// nobody has and then printed under it. `''` is in `showIf.values` on purpose:
+// a row nothing has been chosen for yet still offers the name, which is the
+// ordinary order of typing (name first, decide later).
+//
+// The descriptor block is what an unknown person is recorded BY — sex and age
+// come from the person schema, the rest are here. All optional: the point is
+// that ANY of them is enough, and that a name is not.
 export const SUSPECT_ITEM_FIELDS = [
-  ...PERSON_ITEM_FIELDS,
-  f('suspect_status', 'Suspect Status', { select: ['Unidentified', 'Identified'] }),
+  f('suspect_status', 'Identity', {
+    select: ['Unidentified', 'Identified'],
+    // value → the words the officer sees. Only rendering reads this; the
+    // stored value and every vocabulary over it are untouched.
+    optionLabels: { Identified: 'Known', Unidentified: 'Unknown' },
+  }),
+  f('name', 'Full Name', {
+    type: 'name',
+    showIf: { key: 'suspect_status', values: ['Identified', ''] },
+  }),
+  // The rest of the person, minus the name already placed above.
+  ...PERSON_ITEM_FIELDS.filter((fld) => fld.key !== 'name'),
+  f('height', 'Height'),
+  f('build', 'Build'),
+  f('hair', 'Hair'),
+  f('clothing', 'Clothing / Attire'),
+  f('distinguishing_features', 'Distinguishing Features', { textarea: true }),
   f('suspect_description', 'Suspect Description', { textarea: true }),
+  // How this suspect relates to the incident — the officer's own words, and
+  // nothing about who the person IS. Deliberately NOT in
+  // SUSPECT_DESCRIPTOR_KEYS: "forced entry through the rear window" does not
+  // describe a person, so it cannot stand in for the name-or-description a
+  // recorded suspect row must carry. The printed sentence still reads it (see
+  // src/lib/suspectLine.js) and the AI still receives it.
+  f('relationship_to_incident', 'Relationship to Incident', { textarea: true }),
+];
+
+// Every field an unidentified person may be described by — what the rules
+// accept in place of a name (GROUP_ROW_RULES.respondent). ONE list, because the
+// rule and the printed sentence have to agree about what counts as a
+// description: a field added here that the print line did not read would be a
+// fact the officer recorded and the sheet silently dropped. The sheet orders
+// the clauses its own way (src/lib/suspectLine.js) but is asserted to read EVERY
+// key in this list, so the two cannot drift apart.
+export const SUSPECT_DESCRIPTOR_KEYS = [
+  'sex',
+  'age',
+  'height',
+  'build',
+  'hair',
+  'clothing',
+  'distinguishing_features',
+  'suspect_description',
 ];
 
 // Stolen / lost item row (spec §1.5). Quantity and unit are TEXT on purpose:
@@ -526,7 +596,22 @@ export const WITNESS_ITEM_FIELDS = [
 // app/rules/report_rules.php — keep the two in lockstep.
 export const GROUP_ROW_RULES = {
   complainant: { require: ['name'] },
-  respondent: { requireAny: [['name', 'suspect_description']] },
+  // A suspect row is a record once it carries EITHER a name or something that
+  // describes the person. `requireAnyWhen` then tightens that while the identity
+  // is Unknown: the name field is not on screen (see SUSPECT_ITEM_FIELDS), so a
+  // row that answered "Unknown" and nothing else would be a placeholder wearing
+  // a status. It has to describe the person instead.
+  respondent: {
+    requireAny: [['name', ...SUSPECT_DESCRIPTOR_KEYS]],
+    requireAnyWhen: [
+      {
+        key: 'suspect_status',
+        values: ['Unidentified'],
+        any: SUSPECT_DESCRIPTOR_KEYS,
+        label: 'a description of the person (sex, age, height, build, hair, clothing or distinguishing features)',
+      },
+    ],
+  },
   witness: { requireAny: [['name', 'statement_summary']] },
   injured_persons: { require: ['name'] },
   arrested_persons: { require: ['name'] },

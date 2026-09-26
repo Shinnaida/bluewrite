@@ -67,7 +67,20 @@ final class ReportRules
      */
     private const SUSPECT_ITEM = self::PERSON_ITEM + [
         'suspect_status' => ['select', false, null, null],
+        // The description an officer gives when there is no name to give. Sex
+        // and age come from PERSON_ITEM; these are what an unidentified person
+        // is recorded BY. All optional — the point is that ANY of them is
+        // enough, and that a name is not.
+        'height' => ['text', false, null, null],
+        'build' => ['text', false, null, null],
+        'hair' => ['text', false, null, null],
+        'clothing' => ['text', false, null, null],
+        'distinguishing_features' => ['text', false, null, null],
         'suspect_description' => ['text', false, null, null],
+        // How the suspect relates to the incident, in the officer's words. Not a
+        // description of the person, so it is absent from GROUP_ROW_RULES'
+        // requireAny list (it cannot substitute for a name/description).
+        'relationship_to_incident' => ['text', false, null, null],
     ];
 
     /**
@@ -167,7 +180,9 @@ final class ReportRules
      * @var array<string, string[]>
      */
     private const TYPE_FIELD_KEYS = [
-        'Theft' => ['location_of_property', 'how_property_was_taken', 'cctv_available', 'cctv_description', 'recovery_status'],
+        // date_of_discovery mirrors the same key in src/lib/incidentTypes.js
+        // (Task 7): the scanned sheet's "Date of Discovery" line.
+        'Theft' => ['location_of_property', 'date_of_discovery', 'how_property_was_taken', 'cctv_available', 'cctv_description', 'recovery_status'],
         'Robbery' => ['method_used', 'weapon_involved', 'weapon_description', 'direction_of_escape', 'vehicle_used', 'vehicle_description', 'cctv_available'],
         'Assault / Physical Injury' => ['relationship_between_parties', 'type_of_injury', 'body_part_injured', 'cause_of_injury', 'weapon_used', 'medical_treatment', 'medical_facility', 'medical_certificate_available'],
         'Traffic Accident' => ['accident_type', 'weather_condition', 'road_condition', 'suspected_cause', 'traffic_violation', 'insurance_information'],
@@ -179,8 +194,8 @@ final class ReportRules
         'Property Damage / Malicious Mischief' => ['damaged_property', 'property_description', 'type_of_damage', 'cause_of_damage', 'estimated_damage_cost', 'weapon_or_tool_used', 'cctv_available', 'photographs_available'],
         'Fire Incident' => ['type_of_property', 'property_description', 'fire_location', 'estimated_time_started', 'estimated_time_reported', 'possible_cause', 'extent_of_damage', 'estimated_property_loss', 'persons_evacuated', 'fire_department_response'],
         'Drug-Related Incident' => ['incident_classification', 'location_found', 'items_seized', 'quantity', 'packaging_description', 'evidence_found', 'operation_type', 'evidence_turnover'],
-        'Burglary / Break-In' => ['establishment_or_residence', 'entry_point', 'signs_of_forced_entry', 'tools_used', 'cctv_available', 'cctv_description', 'recovered_property'],
-        'Other Incident' => ['incident_category', 'persons_involved', 'property_involved', 'injuries_or_damage', 'suspect_information', 'additional_information'],
+        'Burglary / Break-In' => ['establishment_or_residence', 'entry_point', 'signs_of_forced_entry', 'date_of_discovery', 'tools_used', 'cctv_available', 'cctv_description', 'recovered_property'],
+        'Other Incident' => ['incident_category', 'persons_involved', 'property_involved', 'injuries_or_damage', 'additional_information'],
     ];
 
     /**
@@ -359,7 +374,41 @@ final class ReportRules
      */
     private const GROUP_ROW_RULES = [
         'complainant' => ['require' => ['name'], 'requireAny' => []],
-        'respondent' => ['require' => [], 'requireAny' => [['name', 'suspect_description']]],
+        // A suspect row is a record once it carries a name OR something that
+        // describes the person. `requireAnyWhen` then tightens that while the
+        // identity is Unknown: the name is not asked for then (see
+        // GROUP_ROW_VISIBILITY), so a row that answered "Unknown" and nothing
+        // else would be a placeholder wearing a status — it has to describe the
+        // person instead.
+        'respondent' => [
+            'require' => [],
+            'requireAny' => [[
+                'name',
+                'sex',
+                'age',
+                'height',
+                'build',
+                'hair',
+                'clothing',
+                'distinguishing_features',
+                'suspect_description',
+            ]],
+            'requireAnyWhen' => [[
+                'key' => 'suspect_status',
+                'values' => ['Unidentified'],
+                'any' => [
+                    'sex',
+                    'age',
+                    'height',
+                    'build',
+                    'hair',
+                    'clothing',
+                    'distinguishing_features',
+                    'suspect_description',
+                ],
+                'label' => 'a description of the person (sex, age, height, build, hair, clothing or distinguishing features)',
+            ]],
+        ],
         'witness' => ['require' => [], 'requireAny' => [['name', 'statement_summary']]],
         'injured_persons' => ['require' => ['name'], 'requireAny' => []],
         'arrested_persons' => ['require' => ['name'], 'requireAny' => []],
@@ -369,6 +418,68 @@ final class ReportRules
         'missing_person' => ['require' => ['name', 'physical_description'], 'requireAny' => []],
         'stolen_items' => ['require' => ['item_description'], 'requireAny' => []],
     ];
+
+    /**
+     * Which group-row fields a row is SHOWING — the PHP side of the `showIf` on
+     * an item schema entry in src/lib/incidentTypes.js.
+     *
+     * A suspect's Name is asked for only while the identity is KNOWN; choosing
+     * Unknown hides it, and the client clears the value as it does
+     * (applyRowVisibility). The engine has to know too, because a field that is
+     * not on screen cannot be demanded and is not this row's to answer. `''` is
+     * listed on purpose: a row nothing has been chosen for yet still offers the
+     * name, which is the ordinary order of typing.
+     *
+     * @var array<string, array<string, array{0:string,1:string[]}>>
+     */
+    private const GROUP_ROW_VISIBILITY = [
+        'respondent' => [
+            'name' => ['suspect_status', ['Identified', '']],
+        ],
+    ];
+
+    /** Is this row showing that field? Mirrors rowFieldVisible() in reportRules.js. */
+    private static function rowFieldVisible(string $groupKey, string $fieldKey, array $row): bool
+    {
+        $rule = self::GROUP_ROW_VISIBILITY[$groupKey][$fieldKey] ?? null;
+        if ($rule === null) {
+            return true;
+        }
+        return in_array(trim((string) ($row[$rule[0]] ?? '')), $rule[1], true);
+    }
+
+    /**
+     * Drop the values of group-row fields the row is no longer SHOWING — the
+     * PHP side of applyRowVisibility() in reportRules.js, and the reason an
+     * "unidentified" suspect cannot keep a name.
+     *
+     * Applied on every write, so a direct API call lands in the same shape the
+     * form would have produced: the status the officer recorded, and no name
+     * beside it for any consumer of the blob (the printed sheet, the AI context,
+     * an export) to read. Pure: the input is not mutated, a copy is returned.
+     *
+     * @param array<string, mixed> $ts parsed type_specific
+     * @return array<string, mixed>
+     */
+    public static function stripHiddenGroupFields(array $ts): array
+    {
+        foreach (self::GROUP_ROW_VISIBILITY as $groupKey => $fields) {
+            if (!isset($ts[$groupKey]) || !is_array($ts[$groupKey])) {
+                continue;
+            }
+            foreach ($ts[$groupKey] as $i => $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                foreach (array_keys($fields) as $fieldKey) {
+                    if (!self::rowFieldVisible($groupKey, $fieldKey, $row)) {
+                        unset($ts[$groupKey][$i][$fieldKey]);
+                    }
+                }
+            }
+        }
+        return $ts;
+    }
 
     /**
      * Scalars DERIVED from the v3 groups — the PHP side of `mirrorOf` on
@@ -719,6 +830,12 @@ final class ReportRules
 
             foreach ($meaningful as $i => $item) {
                 foreach ($cfg['fields'] as $fieldKey => [$type, $required, $min, $max]) {
+                    // Not on screen for this row → not this row's to answer. The
+                    // same resolution the form does, so a hidden field can neither
+                    // be demanded here nor complained about.
+                    if (!self::rowFieldVisible($groupKey, $fieldKey, $item)) {
+                        continue;
+                    }
                     $val = $item[$fieldKey] ?? null;
                     if (is_array($val)) {
                         $errors[] = "type_specific.{$groupKey}[{$i}].{$fieldKey} must be a scalar value.";
@@ -750,22 +867,41 @@ final class ReportRules
                                 . self::humanise($key) . ' required.';
                         }
                     }
-                    foreach ($rowRules['requireAny'] as $options) {
+                    // Conditional alternatives WIN over the base list. While a
+                    // suspect's identity is Unknown the name field is not on
+                    // screen, so accepting a name for that row would be accepting
+                    // a value nothing collected; the conditional list is what the
+                    // row must carry instead.
+                    $when = null;
+                    foreach ($rowRules['requireAnyWhen'] ?? [] as $rule) {
+                        if (in_array(trim((string) ($item[$rule['key']] ?? '')), $rule['values'], true)) {
+                            $when = $rule;
+                            break;
+                        }
+                    }
+                    $alternatives = $when !== null
+                        ? [['any' => $when['any'], 'label' => $when['label'] ?? null]]
+                        : array_map(
+                            static fn (array $any): array => ['any' => $any, 'label' => null],
+                            $rowRules['requireAny'] ?? [],
+                        );
+
+                    foreach ($alternatives as $alt) {
                         $filled = false;
-                        foreach ($options as $candidate) {
+                        foreach ($alt['any'] as $candidate) {
                             if (trim((string) ($item[$candidate] ?? '')) !== '') {
                                 $filled = true;
                                 break;
                             }
                         }
-                        if (!$filled) {
-                            $errors[] = "{$cfg['label']} " . ($i + 1) . ': '
-                                . implode(' or ', array_map(
-                                    static fn (string $k): string => self::humanise($k),
-                                    $options,
-                                ))
-                                . ' required.';
+                        if ($filled) {
+                            continue;
                         }
+                        $wording = $alt['label'] ?? implode(' or ', array_map(
+                            static fn (string $k): string => self::humanise($k),
+                            $alt['any'],
+                        ));
+                        $errors[] = "{$cfg['label']} " . ($i + 1) . ': ' . $wording . ' required.';
                     }
                 }
             }

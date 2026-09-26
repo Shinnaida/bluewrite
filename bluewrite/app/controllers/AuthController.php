@@ -19,6 +19,12 @@ use App\Core\LanguageRegistry;
 use App\Core\Mailer;
 use App\Core\MailUnavailableException;
 use App\Core\PasswordPolicy;
+// The OFFLINE second factor: single-use recovery codes, used when the mailed code
+// cannot be (see beginSecondFactor on why the pending sign-in is now created
+// before the mail is even attempted). Named here for the project's usual reason —
+// there is no autoloader, so a class on a request path but not listed in
+// api/index.php is a fatal error at the point of use.
+use App\Core\RecoveryCodes;
 use App\Core\Response;
 use App\Core\Session;
 use PDO;
@@ -179,8 +185,24 @@ final class AuthController
             // The profile panel's Security block reads this after sign-in, so a
             // freshly signed-in officer's panel is right without waiting for a
             // /me.
-            'mfa' => EmailOtp::status((int) $user['id'], (string) $user['role'], (string) ($user['email'] ?? '')),
+            'mfa' => $this->mfaPayload((int) $user['id'], (string) $user['role'], (string) ($user['email'] ?? '')),
         ];
+    }
+
+    /**
+     * The second factor's state for a SIGNED-IN account, in ONE place.
+     *
+     * EmailOtp::status() answers "is a code owed, to which address, and is the
+     * factor locked"; the OFFLINE route (migration 018) rides inside it as
+     * `recovery`, because the profile panel reports the two together — an account
+     * is reachable by mail, by a printed code, or not at all. Both the sign-in
+     * response and /me build `mfa` here, so the panel is right immediately after
+     * sign-in without a second request, and the client reads one shape.
+     */
+    private function mfaPayload(int $userId, string $role, string $email): array
+    {
+        return EmailOtp::status($userId, $role, $email)
+            + ['recovery' => RecoveryCodes::status($userId)];
     }
 
     /**
@@ -207,12 +229,15 @@ final class AuthController
     {
         $userId = (int) $user['id'];
         $email = trim((string) ($user['email'] ?? ''));
+        $recovery = RecoveryCodes::status($userId);
+        $hasRecovery = $recovery['remaining'] > 0;
 
-        // NO ADDRESS, NO FACTOR. The code goes to the account's own mailbox, so
-        // an Admin or Officer without one cannot finish signing in. Reported as
-        // the administrative fact it is, with the one action that fixes it —
-        // rather than as a wrong password, which is what an officer would assume.
-        if ($email === '') {
+        // NO FACTOR AT ALL. An account with neither an address nor an offline
+        // route cannot finish a sign-in, and that is an administrative fact:
+        // reported with the one action that fixes it, rather than as a wrong
+        // password. An account that HAS recovery codes but no address is a
+        // different case, handled below — it signs in offline.
+        if ($email === '' && !$hasRecovery) {
             Audit::log($userId, 'mfa.no_email', 'user', (string) $userId, 'no email address on file');
             Response::json(409, [
                 'error' => 'This account has no email address on file, so a sign-in code cannot be sent. Ask an administrator to add one.',
@@ -220,33 +245,33 @@ final class AuthController
             ]);
         }
 
-        $status = EmailOtp::status($userId, (string) $user['role'], $email);
-
-        // A locked factor is checked BEFORE a pending session exists, for the
-        // same reason the password lockout is checked before the password: it
-        // makes the wait visible instead of letting somebody spend it typing
-        // codes that cannot work.
-        if ($status['locked_until'] !== null) {
-            $mins = max(1, (int) ceil(((int) ($status['lock_seconds'] ?? 0)) / 60));
-            Audit::log($userId, 'mfa.locked', 'user', (string) $userId, 'second factor locked');
-            Response::json(423, [
-                'error' => "Too many incorrect sign-in codes. Try again in about {$mins} minute(s), or ask an administrator to reset your verification codes.",
-                'code' => 'mfa_locked',
-                'locked_until' => $status['locked_until'],
-            ]);
+        // A locked EMAIL factor is checked before a pending session exists (for
+        // the reason the password lockout is): it makes the wait visible rather
+        // than letting somebody spend it typing codes that cannot work. The
+        // recovery factor has its own lock, checked when a recovery code is
+        // submitted — the two are separate counters by design.
+        if ($email !== '') {
+            $status = EmailOtp::status($userId, (string) $user['role'], $email);
+            if ($status['locked_until'] !== null) {
+                $mins = max(1, (int) ceil(((int) ($status['lock_seconds'] ?? 0)) / 60));
+                Audit::log($userId, 'mfa.locked', 'user', (string) $userId, 'second factor locked');
+                Response::json(423, [
+                    'error' => "Too many incorrect sign-in codes. Try again in about {$mins} minute(s), or ask an administrator to reset your verification codes.",
+                    'code' => 'mfa_locked',
+                    'locked_until' => $status['locked_until'],
+                    // The offline route is untouched by the email lock, so a
+                    // locked mailbox does not have to mean a locked account.
+                    'mfa' => $this->secondFactorPayload($userId, $email),
+                ]);
+            }
         }
 
-        // A mailer that cannot send is a 503 before a sign-in is half-started.
-        // The officer is told the truth once, rather than being left on a code
-        // screen waiting for an inbox that will stay empty.
-        if (!Mailer::configured()) {
-            Audit::log($userId, 'mfa.mail_unavailable', 'user', (string) $userId, 'mailer not configured');
-            Response::json(503, [
-                'error' => 'This server cannot send sign-in codes yet. Ask an administrator to finish the mail settings.',
-                'code' => 'mfa_mail_failed',
-            ]);
-        }
-
+        // THE PENDING SESSION IS CREATED REGARDLESS OF WHETHER MAIL CAN SEND.
+        // This is the whole point of the offline fallback: the password has been
+        // proved, so the officer may use a recovery code even when the server
+        // cannot reach Gmail. Creating it only after a successful send — what
+        // this did before migration 018 — is exactly the door the fallback needs
+        // open.
         Session::start();
         session_regenerate_id(true);
         unset($_SESSION['user_id'], $_SESSION['role']);
@@ -264,17 +289,48 @@ final class AuthController
         // here would claim a session that does not exist.
         Audit::log($userId, 'login.password_ok', 'user', (string) $userId, 'second factor required (email code)');
 
-        // The code is issued and mailed LAST, so a mail failure is answered as
-        // itself. The pending session is left to the server's own ten-minute
-        // expiry; nothing is reachable with it, and the next sign-in replaces it.
+        // No address to send to: the payload offers the recovery route and no
+        // email code is issued. (Reached only with recovery codes present — the
+        // no-factor case returned above.)
+        if ($email === '') {
+            Response::json(200, [
+                'mfa' => $this->secondFactorPayload($userId, $email),
+                'csrf_token' => \App\Core\Csrf::token(),
+                'expires_at' => time() + self::MFA_PENDING_MINUTES * 60,
+            ]);
+        }
+
+        // The mailer cannot send at all (misconfiguration, not an outage). Still
+        // the honest 503, but the pending sign-in stands and the payload carries
+        // the fallback, so an officer holding recovery codes is not stranded.
+        if (!Mailer::configured()) {
+            Audit::log($userId, 'mfa.mail_unavailable', 'user', (string) $userId, 'mailer not configured');
+            Response::json(503, [
+                'error' => 'This server cannot send sign-in codes yet. Ask an administrator to finish the mail settings.',
+                'code' => 'mfa_mail_failed',
+                'csrf_token' => \App\Core\Csrf::token(),
+                'mfa' => $this->secondFactorPayload($userId, $email),
+                'expires_at' => time() + self::MFA_PENDING_MINUTES * 60,
+            ]);
+        }
+
+        // The code is issued and mailed. A failure is answered as itself, and the
+        // pending sign-in is LEFT ALIVE with the fallback in the payload — the
+        // offline route must work precisely when mail does not.
         try {
             $this->sendCode($user, $email);
         } catch (MailUnavailableException $e) {
+            // No ghost code: sendCode() issued one before the send failed, and a
+            // code that was never delivered must not sit as "outstanding" (nor
+            // count down a resend throttle for a message that never left).
+            EmailOtp::reset($userId);
             Audit::log($userId, 'mfa.mail_failed', 'user', (string) $userId, 'the sign-in code could not be sent');
             Response::json(503, [
                 'error' => $e->getMessage(),
                 'code' => 'mfa_mail_failed',
                 'csrf_token' => \App\Core\Csrf::token(),
+                'mfa' => $this->secondFactorPayload($userId, $email),
+                'expires_at' => time() + self::MFA_PENDING_MINUTES * 60,
             ]);
         }
 
@@ -312,6 +368,8 @@ final class AuthController
     private function secondFactorPayload(int $userId, string $email): array
     {
         $status = EmailOtp::status($userId, null, $email);
+        $recovery = RecoveryCodes::status($userId);
+        $email = trim($email);
         return [
             'required' => true,
             'stage' => 'verify',
@@ -320,6 +378,22 @@ final class AuthController
             'resend_in' => $status['resend_in'],
             'expires_in' => $status['expires_in'],
             'code_ttl_minutes' => EmailOtp::ttlMinutes(),
+            // ---- the offline route (migration 018) ---------------------------
+            // WHAT THE GATE NEEDS TO DRAW THE RIGHT SCREEN. The client cannot
+            // work out for itself whether a code was sent (it is not the one who
+            // sent it), whether the account even has an address, or whether a
+            // recovery route exists — so all three are stated here, and the code
+            // screen shows the mailbox form, the offline form, or both, from
+            // them rather than from a guess.
+            'has_email' => $email !== '',
+            'mailer_configured' => Mailer::configured(),
+            'code_pending' => $status['code_pending'],
+            'recovery' => [
+                'available' => $recovery['remaining'] > 0,
+                'remaining' => $recovery['remaining'],
+                'total' => $recovery['total'],
+                'locked' => $recovery['locked_until'] !== null,
+            ],
         ];
     }
 
@@ -463,9 +537,15 @@ final class AuthController
 
         $email = EmailOtp::emailFor($userId);
         if ($email === null) {
+            // No mailbox. An account with recovery codes is still signable
+            // offline, so do NOT answer `mfa_email_missing` when it has them —
+            // the client treats that code as "this sign-in is over", which would
+            // throw away a pending sign-in the officer can still finish with a
+            // code they hold.
+            $hasRecovery = RecoveryCodes::status($userId)['remaining'] > 0;
             Response::json(409, [
-                'error' => 'This account has no email address on file, so a sign-in code cannot be sent. Ask an administrator to add one.',
-                'code' => 'mfa_email_missing',
+                'error' => 'This account has no email address on file, so there is no code to resend. Use a recovery code instead.',
+                'code' => $hasRecovery ? 'mfa_resend_no_address' : 'mfa_email_missing',
             ]);
         }
 
@@ -535,6 +615,89 @@ final class AuthController
         }
 
         $this->completeSecondFactor($pending, 'mfa.verified', 'code accepted from the email message');
+    }
+
+    /**
+     * POST /mfa/recovery — a single-use recovery code, for when mail cannot send.
+     *
+     * The OFFLINE half of the second factor: an officer whose mailbox is
+     * unreachable (or who has no address at all) finishes the same pending
+     * sign-in with a code they hold on paper. It is the same state machine as
+     * mfaVerify — same pending session, same completion — so a sign-in proved
+     * this way is indistinguishable from one proved by email afterwards.
+     *
+     * WHY IT IS REACHABLE WHEN THE EMAIL CODE IS NOT: beginSecondFactor creates
+     * the pending session before it tries to send, so the officer has already
+     * proved their password by the time they get here. Nothing about the account
+     * is trusted from the body; the identity is the session's.
+     */
+    public function mfaRecovery(): void
+    {
+        Auth::requireCsrf();
+        Session::start();
+        $pending = $this->requirePendingSecondFactor();
+        $userId = (int) $pending['user_id'];
+        $code = trim((string) ($this->jsonBody()['code'] ?? ''));
+
+        $result = RecoveryCodes::verify($userId, $code);
+        if (!$result['ok']) {
+            $this->refuseRecovery($userId, (string) $result['reason'], $result);
+        }
+
+        $this->completeSecondFactor($pending, 'mfa.recovery_used', 'a single-use recovery code was accepted');
+    }
+
+    /**
+     * One place where a refused recovery code becomes an HTTP answer — the same
+     * shape as refuseSecondFactor, with its own codes so the client can tell the
+     * offline route's refusals from the mailbox's.
+     *
+     *   format       — 422, nothing charged: the field is not a whole code yet
+     *   not_enrolled — 401, no unspent code exists to compare against
+     *   nomatch      — 401, a real guess or typo, and the count that remains
+     *   locked       — 423, the counter ran out; no more tries until the window ends
+     */
+    private function refuseRecovery(int $userId, string $reason, array $result): void
+    {
+        $remaining = $result['remaining'] ?? null;
+
+        if ($reason === 'locked') {
+            Audit::log($userId, 'mfa.locked', 'user', (string) $userId, 'recovery attempts exhausted');
+            $mins = max(1, (int) ceil(((int) ($result['lock_seconds'] ?? 0)) / 60));
+            Response::json(423, [
+                'error' => "Too many incorrect recovery codes. Try again in about {$mins} minute(s), or ask an administrator to issue a new set.",
+                'code' => 'mfa_recovery_locked',
+            ]);
+        }
+        if ($reason === 'format') {
+            Response::json(422, [
+                'error' => 'Enter a recovery code from your printed sheet (' . RecoveryCodes::LENGTH . ' characters).',
+                'field' => 'code',
+                'attempts_remaining' => $remaining,
+            ]);
+        }
+        if ($reason === 'not_enrolled') {
+            Audit::log($userId, 'mfa.recovery_failed', 'user', (string) $userId, 'no unspent recovery code to verify');
+            Response::json(401, [
+                'error' => 'There is no recovery code left for this account. Ask an administrator to issue a new set.',
+                'code' => 'mfa_recovery_none',
+            ]);
+        }
+
+        Audit::log(
+            $userId,
+            'mfa.recovery_failed',
+            'user',
+            (string) $userId,
+            'wrong recovery code' . ($remaining === null ? '' : ", {$remaining} remaining")
+        );
+        $tail = $remaining === null ? '' : " {$remaining} code(s) left.";
+        Response::json(401, [
+            'error' => 'That recovery code is not right. Check your sheet and try again.' . $tail,
+            'code' => 'mfa_recovery_wrong',
+            'attempts_remaining' => $remaining,
+            'field' => 'code',
+        ]);
     }
 
     /**
@@ -642,6 +805,14 @@ final class AuthController
             'status' => $user['status'],
             'last_login_at' => $user['last_login_at'],
             'created_at' => $user['created_at'],
+            // The account's OWN sign-in address, in FULL (Phase 1, S-04). The
+            // sign-in GATE masks it (EmailOtp::maskEmail) because that screen may
+            // be watched at a shared station PC and the account is not yet
+            // proven; here the session IS the account, and an officer cannot
+            // confirm the address their codes go to from a mask. It is returned
+            // to its owner and to nobody else — the address remains an Admin-set
+            // fact, never editable from here.
+            'email' => $user['email'] === null || $user['email'] === '' ? null : (string) $user['email'],
             'languages' => self::languageRegistryPayload(),
             // The session's own face, as a URL to ask for (null when the account
             // has none, and its initials are drawn instead). Assembled by
@@ -656,11 +827,14 @@ final class AuthController
             // countdown reflects actual remaining time across reloads.
             'expires_at' => time() + (int) Config::get('app.session_idle_minutes', 30) * 60,
             // The profile panel's Security row: whether the role requires a
-            // second factor, the address the codes go to, and whether the factor
-            // is locked. Read here rather than from a new endpoint because every
-            // signed-in screen already asks this question on load, and the
-            // answer belongs to the session's own account.
-            'mfa' => EmailOtp::status((int) $user['id'], (string) $user['role'], (string) ($user['email'] ?? '')),
+            // second factor, the address the codes go to, whether the factor is
+            // locked, and how many OFFLINE recovery codes are left. Read here
+            // rather than from a new endpoint because every signed-in screen
+            // already asks this question on load, and the answer belongs to the
+            // session's own account. `recovery` is nested inside `mfa` so the
+            // client has ONE shape to read (the same one the sign-in gate
+            // carries) rather than two.
+            'mfa' => $this->mfaPayload((int) $user['id'], (string) $user['role'], (string) ($user['email'] ?? '')),
         ]);
     }
 

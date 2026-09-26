@@ -124,6 +124,24 @@
   --ir-btn-ink: var(--ink-dim);
   --ir-focus-ring: var(--focus-ring);
 
+  /* --- The report FOLDER (My Reports / All Reports, section II) -----------
+     The folder face is translucent NAVY — the same navy the top bar and the
+     section bars wear — so a shelf of folders reads as the station's own
+     stationery rather than as a generic blue. It is held here rather than
+     written into the folder rules because the folder sits on the app's PAGE,
+     which goes near-black in dark: the glass has to be restated for that (see
+     dark-theme.css), and a literal in the rule could not follow it.
+
+     The FACE is the opaque one on purpose. It carries the type name in white,
+     and white over a 20%-navy glass on a pale page would be unreadable — the
+     reference component's `text-white` assumes a saturated swatch behind it.
+     0.86 of the navy measures ~5:1 for the label, which is small text. */
+  --ir-folder-back: rgba(26, 43, 74, 0.30);
+  --ir-folder-sheet: rgba(26, 43, 74, 0.16);
+  --ir-folder-face: rgba(26, 43, 74, 0.86);
+  --ir-folder-edge: rgba(255, 255, 255, 0.28);
+  --ir-folder-ink: #ffffff;
+
   /* The sheet of paper's own writing margin, named once. The paper pads its
      content by this (see .ir-form--sheet) and the controls on the desk BELOW
      the paper pad by the same amount, so the reveal button, the AI panel and
@@ -944,7 +962,7 @@
      separation from the cards above them has to come from HERE now. */
   margin-top: clamp(1rem, 1.8vw, 1.5rem);
 }
-   One panel per step instead of one long scroll. Every card stays MOUNTED —
+/* One panel per step instead of one long scroll. Every card stays MOUNTED —
    `hidden` only takes it off screen — because the error jumps resolve by
    element id and a field that is outside the DOM can neither be focused nor
    scrolled to (ReportEditor.jumpTo reveals the owning step first). The grid
@@ -1702,13 +1720,22 @@
    corner (styles.css), so it enters none of this. A circle that inherited this
    fill would be a grey ring around a grey plus half a pixel from the bottom of
    the window — and it is the only control on that screen that CREATES anything,
-   which is the one fact its colour has to carry. */
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.primary):not(.danger) {
+   which is the one fact its colour has to carry.
+
+   .glass-folder__open IS THE LAST OF THEM, and the one this selector damaged
+   most: a folder is not a button that wears a face, it is a SILHOUETTE — a
+   glass shape with tabs that overhang its own box — and a rectangle drawn on
+   the box is a rectangle cutting across the folder. Here the neutral treatment
+   laid a hairline around the whole stage and turned that hairline BLUE on
+   hover, which is not a state anyone designed: it is this selector meeting a
+   shape it was never written for. The folder states its own surface, ink and
+   hover, so it enters none of this. See the folder block in section 5c. */
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.primary):not(.danger) {
   background: var(--ir-btn);
   border: 1px solid var(--ir-border);
   color: var(--ir-btn-ink);
 }
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.primary):not(.danger):hover {
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.primary):not(.danger):hover {
   border-color: var(--ir-blue);
   color: var(--ir-blue-ink);
   background: var(--ir-btn);
@@ -1972,6 +1999,495 @@
 }
 .ir-body .stale-note {
   border-left-color: var(--ir-amber);
+}
+
+/* ===========================================================================
+   5c. The register as a SHELF OF FOLDERS (My Reports / All Reports, II)
+
+   The register was a table. It is a shelf of glass folders now — one folder
+   per incident type per status shelf — and opening a folder lists the reports
+   inside it.
+
+   THE FOLDER IS THE REFERENCE DESIGN, ported to this app's plain CSS: a back
+   board with a tab on the left, three paper sheets stacked inside, and a front
+   cover tabbed on the right. On hover or keyboard focus the sheets fan out and
+   the cover tips open, so the folder VISIBLY holds a sheaf of reports.
+
+   WHY IT LOOKS LIKE THIS AND NOT LIKE THE APP'S OTHER CARDS. Every other block
+   on this screen is a document: paper, hairlines, a navy header. A folder is
+   not a document — it is a THING YOU OPEN — and a shelf of them is read by
+   shape before it is read by words. So it is navy glass, the same navy the top
+   bar and the section bars wear, which keeps it this station's stationery.
+
+   The face carries NO icon and NO thumbnail: the type name IS the folder's
+   identity. The glyph still exists (ReportTypeIcon) in the trail of an OPENED
+   folder, where it confirms which folder you are in.
+
+   Every colour is a role token (--ir-folder-*, declared on :root with the rest
+   of the document aliases) so the dark theme can restate the glass for a
+   near-black page without these rules knowing which theme is on.
+   =========================================================================== */
+
+/* ---- The shelf ---------------------------------------------------------- */
+.folder-shelves {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+  /* The register card is `flush` (its body owns no padding, for a full-bleed
+     table), so the shelf brings its own. */
+  padding: 1rem;
+}
+.folder-shelf {
+  min-width: 0;
+}
+.folder-shelf__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0 0 0.4rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--ir-border);
+  font-family: var(--font-hud);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ir-head-ink);
+}
+.folder-shelf__count {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--ir-muted);
+  white-space: nowrap;
+}
+.folder-shelf__empty {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  color: var(--ir-muted);
+}
+/* The folders sit DIRECTLY on the page — no card, no grid wrapper — so the
+   hover tilt has room to pop. flex + wrap is the whole layout: a shelf of
+   folders wraps like a row of books and no breakpoint has to be named. The
+   padding at the top is room for the tabs, which stand above the stage. */
+.folder-shelf__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem 1rem;
+  align-items: flex-end;
+  padding: 1.1rem 0.25rem 0.4rem;
+  margin-top: 0.5rem;
+}
+
+/* ---- The folder itself --------------------------------------------------
+   ONE button: a single click or tap opens it, Enter/Space opens it, and the
+   focus ring is the affordance a table row never had. Everything that moves
+   inside is decorative and hidden from assistive tech. */
+/* The wrapper exists so a folder can SHRINK on a narrow shelf: a flex item will
+   not go below its content's width without this, and the stage's 15rem would
+   then push the row wider than the card it sits in. */
+.glass-folder {
+  min-width: 0;
+}
+.glass-folder__open {
+  display: block;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+/* HOVER IS THE ANIMATION AND NOTHING ELSE — no surface, no border, no ink.
+   The element-level `button:hover` in styles.css paints a raised plate with
+   accent ink, and a :hover pseudo-class is worth a class, so it out-specifies
+   the rule above (the same clash every other restated control in this file
+   documents). On a folder a plate is a RECTANGLE behind a silhouette that is
+   not one: the tabs overhang the box, so the plate's edges show as a box drawn
+   round the whole folder. Restating the surface here is what leaves the fan
+   and the tipped cover as the only things that answer the pointer. */
+.glass-folder__open:hover {
+  background: none;
+  border: 0;
+  color: inherit;
+}
+/* The RING IS FOR THE KEYBOARD, and it stays: a mouse never matches
+   :focus-visible, so nothing here can fire on hover — but an officer who tabs
+   to a folder still has to see which one they are on. */
+.glass-folder__open:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 4px;
+  border-radius: 1rem;
+}
+
+/* THE BOX THE LEAVES ROTATE INSIDE. Without the perspective a rotateX reads as
+   a squash rather than as a lid coming up, and `transform-origin: bottom`
+   hinges each leaf at its base — the way a folder's paper actually moves. */
+.glass-folder__stage {
+  position: relative;
+  display: block;
+  width: 15rem;
+  max-width: 100%;
+  /* The reference's own 3:2 (240x160). */
+  aspect-ratio: 3 / 2;
+  perspective: 1500px;
+  transform-origin: bottom;
+  user-select: none;
+}
+
+/* The board, the sheets and the cover are the same glass; only the tint and
+   the angle differ. */
+.glass-folder__back,
+.glass-folder__sheet,
+.glass-folder__front {
+  position: absolute;
+  border-radius: 1rem;
+  border: 1px solid var(--ir-folder-edge);
+  backdrop-filter: blur(10px);
+}
+
+/* The back board: full size, with a TAB on the left standing above its top edge
+   and the diagonal shoulder that steps back down to the board. The two shapes
+   together are the folder silhouette — a plain rectangle with a lid is a tray. */
+.glass-folder__back {
+  inset: 0;
+  background: var(--ir-folder-back);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.glass-folder__back::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  width: 33%;
+  height: 10%;
+  border-radius: 1rem 1rem 0 0;
+  border: 1px solid var(--ir-folder-edge);
+  border-bottom: 0;
+  background: var(--ir-folder-back);
+}
+.glass-folder__back::after {
+  content: '';
+  position: absolute;
+  left: 31%;
+  bottom: 100%;
+  width: 7%;
+  height: 10%;
+  background: var(--ir-folder-back);
+  clip-path: polygon(0 0, 0 100%, 100% 100%);
+}
+
+/* The sheets inside: inset from the board, so the stack reads as paper IN a
+   folder rather than as more folder. At rest they lie exactly on top of one
+   another — which is what keeps the folder reading as ONE thing — and the fan
+   is what shows there are reports in it. */
+.glass-folder__sheet {
+  inset: 3% 3% 0;
+  background: var(--ir-folder-sheet);
+}
+.glass-folder__open:hover .glass-folder__sheet--1,
+.glass-folder__open:focus-visible .glass-folder__sheet--1 {
+  transform: rotateX(-20deg);
+}
+.glass-folder__open:hover .glass-folder__sheet--2,
+.glass-folder__open:focus-visible .glass-folder__sheet--2 {
+  transform: rotateX(-30deg);
+}
+.glass-folder__open:hover .glass-folder__sheet--3,
+.glass-folder__open:focus-visible .glass-folder__sheet--3 {
+  transform: rotateX(-38deg);
+}
+
+/* The cover: nearly the full height, anchored at the bottom, with its own tab
+   on the RIGHT. The two tabs are what make it a folder opened from the front
+   rather than a lid lifted off the top. The type name sits bottom-left. */
+.glass-folder__front {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 97.5%;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--ir-folder-face);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transform-origin: bottom;
+}
+.glass-folder__front::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  width: 61%;
+  height: 10%;
+  border-radius: 1rem 1rem 0 0;
+  border: 1px solid var(--ir-folder-edge);
+  border-bottom: 0;
+  background: var(--ir-folder-face);
+}
+.glass-folder__front::after {
+  content: '';
+  position: absolute;
+  right: 59%;
+  bottom: 100%;
+  width: 5%;
+  height: 10%;
+  background: var(--ir-folder-face);
+  clip-path: polygon(100% 0, 50% 100%, 100% 100%);
+}
+.glass-folder__open:hover .glass-folder__front,
+.glass-folder__open:focus-visible .glass-folder__front {
+  transform: rotateX(-46deg) translateY(1px);
+  box-shadow:
+    inset 0 20px 40px rgba(100, 149, 237, 0.4),
+    inset 0 -20px 40px rgba(65, 105, 225, 0.3);
+}
+.glass-folder__label {
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ir-folder-ink);
+  /* A long type name ("Property Damage / Malicious Mischief") wraps to two
+     lines and stops: the face is a label, not a paragraph. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.glass-folder__count {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-family: var(--font-hud);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--ir-folder-ink);
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* The motion is optional; the states are not. A reader who asked for less
+   motion still gets the fan and the lifted cover — they just arrive at once. */
+@media (prefers-reduced-motion: no-preference) {
+  .glass-folder__sheet,
+  .glass-folder__front {
+    transition: transform 300ms ease, box-shadow 300ms ease;
+  }
+}
+
+/* ---- The trail back out of an opened folder -----------------------------
+   Where you are, and the way back. A breadcrumb rather than only a back
+   button, because the register has two levels of scoping now (the shelf and
+   the type) and the officer should be able to read which two they are under
+   without counting clicks. */
+.report-trail {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 1rem 0.7rem;
+  border-bottom: 1px solid var(--ir-border);
+}
+.report-trail__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.76rem;
+  font-family: var(--font-hud);
+  letter-spacing: 0.04em;
+  color: var(--ir-text);
+  background: var(--ir-btn);
+  border: 1px solid var(--ir-border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.report-trail__back:hover {
+  border-color: var(--cyan);
+  color: var(--ir-blue-ink);
+}
+.report-trail__back:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+.report-trail__crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.report-trail__crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-hud);
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+}
+.report-trail__crumb + .report-trail__crumb::before {
+  content: '›';
+  color: var(--ir-border);
+}
+.report-trail__crumb[aria-current='page'] {
+  color: var(--ir-text);
+  font-weight: 700;
+}
+.report-trail__icon {
+  display: inline-flex;
+  color: var(--ir-blue-ink);
+}
+.report-trail__icon svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+/* The pager belongs to the LIST's own margins rather than to the card edge: the
+   register card is `flush`, so without this the Prev/Next row touches it. */
+.reports-pagination {
+  padding: 0 1rem 0.9rem;
+}
+
+/* ---- The reports inside an opened folder -------------------------------
+   A register list, one row per report. The row's number and badges lead, the
+   three facts the register has always shown follow, and the row's own actions
+   hold the right-hand rail — so a folder reads as a page of the blotter rather
+   than as a second kind of document. */
+.report-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.report-list > .report-row + .report-row {
+  border-top: 1px solid var(--ir-border);
+}
+.report-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+}
+.report-row:hover {
+  background: var(--ir-row-hover);
+}
+.report-row__open {
+  /* The row's whole left side is the control, so the click target is the row
+     and not only its number. */
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.1rem 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.report-row__open:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.report-row__head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+.report-row__num {
+  font-family: var(--font-hud);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ir-text);
+}
+.report-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.75rem;
+  font-size: 0.74rem;
+  color: var(--ir-muted);
+}
+.report-row__cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.report-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+.report-row__edit {
+  padding: 0.28rem 0.6rem;
+  font-size: 0.74rem;
+  font-family: var(--font-hud);
+  letter-spacing: 0.04em;
+  color: var(--ir-blue-ink);
+  background: var(--ir-btn);
+  border: 1px solid var(--ir-border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.report-row__edit:hover {
+  border-color: var(--cyan);
+}
+.report-row__edit:focus-visible,
+.report-row__menu:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+/* Always drawn, never a hover-only reveal: the whole point of the ⋮ is that
+   the actions are no longer something you have to already know about. */
+.report-row__menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--ir-muted);
+  background: var(--ir-btn);
+  border: 1px solid var(--ir-border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.report-row__menu:hover {
+  color: var(--ir-text);
+  border-color: var(--cyan);
+}
+
+/* ---- A LOCKED row (finalized, and not the administrator's to edit) ------
+   Muted, exactly as the row it replaces was: the register should read at a
+   glance as "these are the record, those are still yours to work on". The
+   status badge keeps its colour on purpose — it is WHY the row looks like
+   this — and the cursor stops promising an open it will not perform. */
+.report-row.is-locked .report-row__open {
+  cursor: default;
+}
+.report-row.is-locked .report-row__num,
+.report-row.is-locked .report-row__meta {
+  color: var(--cyan-dim);
+}
+
+/* The just-acted-on row (restored / archived an instant ago), the same green
+   flash the table used so the eye can find it again. */
+.report-row.is-flash {
+  box-shadow: inset 0 0 0 2px var(--green-line);
 }
 
 /* ===========================================================================
@@ -3325,6 +3841,68 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+/* ---- Task 4 — the inline bondpaper reveal -------------------------------
+   Shown in the narrative area once an AI draft is accepted: the SAME sheet
+   component the print portal draws, on an editor-owned frame. The inner
+   `.print-sheet` supplies the paper (white, Verdana, US Letter); this frame
+   only scrolls it and adds the reveal motion. */
+/* The narrative field is hidden (not unmounted) while the reveal is up, in
+   EVERY format. The stepped-only `[hidden]` rule above does not reach the
+   document/sheet formats, and `.ir-field`'s own display would otherwise win
+   over the UA default — so state it here, at higher specificity. */
+.ir-narrative[hidden] {
+  display: none;
+}
+.ir-sheet-reveal {
+  margin-top: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel-raised);
+}
+.ir-sheet-reveal-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.ir-sheet-reveal-label {
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+}
+.ir-sheet-reveal-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.ir-sheet-reveal-paper {
+  /* A letter page is taller than the card; scroll it rather than letting it
+     stretch the form. The page itself carries its own padding/shadow. */
+  max-height: min(70vh, 900px);
+  overflow: auto;
+  background: #e5e7eb;
+  padding: 0.75rem;
+}
+/* Task 9 — the AI's words TYPE THEMSELVES into the letter. The static chrome
+   (header, date, title, certification boilerplate, bold labels) is on screen
+   from the first frame; only the AI-filled values are revealed, one character
+   cursor walked across them top-to-bottom (see ReportSheetBody). There is no
+   keyframe animation to keep in step — the pacing lives in the component — so
+   this rule only marks the sheet while the sequence is running, scoped to the
+   inline reveal. The PRINT PORTAL renders the very same markup and never types
+   (it passes no `pending`), and `prefers-reduced-motion` is handled in the
+   component by showing the finished sheet immediately. Clicking the sheet
+   finishes the sequence early (the wrapper carries the handler + title). */
+.ir-sheet-reveal .pr-sheet-typing {
+  cursor: pointer;
 }
 
 .st-block {

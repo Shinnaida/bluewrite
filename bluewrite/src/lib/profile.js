@@ -237,15 +237,23 @@ export function preferencesSummary({ formFormat, mode, density } = {}) {
  *
  * "Set up" now means HAS SOMEWHERE TO SEND A CODE — `mfa.has_email` — because
  * that is what the factor rests on since it moved from an authenticator app to
- * an emailed one. The `mfa` argument is optional and every part of it is
- * optional too: an older payload without it renders exactly the sentence this
- * function used to return, and a Staff account (where the factor is not
- * required) never grows the prefix.
+ * an emailed one. An account with no address but a printed set of recovery codes
+ * (migration 018) is NOT "not set up": it can still finish a sign-in offline, so
+ * the header says so rather than reading as a lockout. The `mfa` argument is
+ * optional and every part of it is optional too: an older payload without it
+ * renders exactly the sentence this function used to return, and a Staff account
+ * (where the factor is not required) never grows the prefix.
  */
 export function securitySummary(idleMinutes = IDLE_LIMIT_MIN, mfa = null) {
   const parts = [];
   if (mfa && mfa.required) {
-    parts.push(mfa.has_email ? 'Two-step on' : 'Two-step not set up');
+    if (mfa.has_email) {
+      parts.push('Two-step on');
+    } else if (mfa.recovery?.remaining > 0) {
+      parts.push('Two-step by recovery code');
+    } else {
+      parts.push('Two-step not set up');
+    }
   }
   if (Number.isFinite(idleMinutes)) {
     parts.push(`Signs out after ${idleMinutes} min idle`);

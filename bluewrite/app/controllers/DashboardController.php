@@ -5,6 +5,10 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Database;
+// The sign-in code's mailer. Read only for its HEALTH (can this server send,
+// and over which transport) so the dashboard can show a station whether its
+// second factor can deliver before a shift starts — never for its credentials.
+use App\Core\Mailer;
 use App\Core\Response;
 use App\Core\Session;
 use PDO;
@@ -406,6 +410,11 @@ final class DashboardController
             'officerBreakdown' => $officerBreakdown,
             'finalizeTime' => $finalizeTime,
             'recentActivity' => $recentActivity,
+            // ---- Sign-in health (S-01 preflight) --------------------------
+            // Read so the station can see whether the second factor can
+            // actually send BEFORE a shift starts, rather than discovering it
+            // when an officer is already locked out. See signInHealth().
+            'signIn' => $this->signInHealth($pdo),
             'meta' => [
                 'from' => $from,
                 'to' => $to,
@@ -414,6 +423,51 @@ final class DashboardController
                 'availableTypes' => $availableTypes,
             ],
         ]);
+    }
+
+    /**
+     * The second factor's health, as the dashboard's own card.
+     *
+     * `mailConfigured` answers "can this server send a sign-in code at all" —
+     * Mailer::configured()'s own question. `mailTransport` says HOW: 'smtp' is a
+     * real deployment, 'log' means messages are written to a file and sent
+     * nowhere — correct for a dev machine, and a SILENT failure of the second
+     * factor on a station, which is exactly what this preflight exists to surface.
+     * `accountsWithRecovery` is how many Admin/Officer accounts have an OFFLINE
+     * route (migration 018). `accountsWithoutFactor` is the count that should be
+     * zero: active Admin/Officer accounts with neither an address nor a recovery
+     * code, which cannot finish a sign-in at all.
+     *
+     * The role list is the one hardcoded literal in the queries below; it mirrors
+     * EmailOtp::REQUIRED_ROLES and is never request input.
+     */
+    private function signInHealth(PDO $pdo): array
+    {
+        $roles = "('Admin', 'Officer')";
+        $withRecovery = (int) $pdo->query(
+            "SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id
+              WHERE r.name IN {$roles} AND u.status = 'active'
+                AND EXISTS (SELECT 1 FROM mfa_recovery_codes rc WHERE rc.user_id = u.id AND rc.used_at IS NULL)"
+        )->fetchColumn();
+        $withEmail = (int) $pdo->query(
+            "SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id
+              WHERE r.name IN {$roles} AND u.status = 'active'
+                AND u.email IS NOT NULL AND u.email <> ''"
+        )->fetchColumn();
+        $withoutFactor = (int) $pdo->query(
+            "SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id
+              WHERE r.name IN {$roles} AND u.status = 'active'
+                AND (u.email IS NULL OR u.email = '')
+                AND NOT EXISTS (SELECT 1 FROM mfa_recovery_codes rc WHERE rc.user_id = u.id AND rc.used_at IS NULL)"
+        )->fetchColumn();
+
+        return [
+            'mailConfigured' => Mailer::configured(),
+            'mailTransport' => Mailer::transportName(),
+            'accountsWithEmail' => $withEmail,
+            'accountsWithRecovery' => $withRecovery,
+            'accountsWithoutFactor' => $withoutFactor,
+        ];
     }
 
     /** Strict Y-m-d validation; anything else → null (caller applies default). */

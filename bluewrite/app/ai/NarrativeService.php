@@ -383,6 +383,14 @@ final class NarrativeService
             );
         }
 
+        // ---- Task 6: no blotter restatement in the narrative --------------
+        // The certification line on the printed sheet already carries the
+        // blotter entry number and its date, one paragraph above FACTS OF THE
+        // CASE; a narrative that opens by repeating them is pure duplication.
+        // The wrapper no longer adds one (see withReferences), and this strips
+        // one the model wrote anyway — code, not the prompt alone.
+        $narrative = self::stripLeadingBlotterRestatement($narrative);
+
         // ---- Phase 5 §2: deterministic redundancy analysis ---------------
         // Runs on the text the officer is about to read, and BEFORE the §3
         // reference wrapper so the wrapper's own two lines can never be
@@ -724,7 +732,21 @@ final class NarrativeService
             $out['note'] = 'The rewrite was discarded because it changed too much, so your wording is untouched. The merges below are still yours to apply.';
             return $out;
         }
-        if ($candidate === $narrative) {
+        // Task 6 — the blotter entry reference belongs to the certification
+        // line above the narrative, so a LEADING restatement is removed from
+        // BOTH sides of the comparison: the officer's own text may carry one,
+        // and an intentional removal must not be reported as a lost fact.
+        $baseline = self::stripLeadingBlotterRestatement($narrative);
+        $candidate = self::stripLeadingBlotterRestatement($candidate);
+        if ($candidate === $baseline) {
+            if ($baseline !== $narrative) {
+                // The only change is the removal the rule requires: return it as
+                // a proposal so the officer can apply it, and say why.
+                $out['narrative'] = $baseline;
+                $out['tightened'] = true;
+                $out['note'] = 'The blotter entry reference was removed from the opening — it already appears in the certification line above the narrative.';
+                return $out;
+            }
             $out['note'] = 'Already tight — the AI found no wording to remove.';
             return $out;
         }
@@ -732,7 +754,7 @@ final class NarrativeService
         // Checked AFTER the screen, on the text that would land. The screen
         // rejects gross changes; this names the specific tokens that went
         // missing, which is the one thing a length check cannot see.
-        $out['factLoss'] = NarrativeEconomy::missingFacts($narrative, $candidate);
+        $out['factLoss'] = NarrativeEconomy::missingFacts($baseline, $candidate);
 
         $out['narrative'] = $candidate;
         $out['tightened'] = true;
@@ -813,12 +835,18 @@ final class NarrativeService
      * Addendum §3 — record-grounded reference wrapper (deterministic data
      * belongs in deterministic code, NOT in model output):
      *
-     *   opening line:  blotter entry reference (always present — derived
-     *                  from the report id, same format as the UI/print
-     *                  sheet: BW-0001)
-     *   closing lines: "Investigated by: [rank] [name], City of Naga Police
-     *                  Station" from the logged-in officer's account (the
-     *                  same station name the printed sheet carries).
+     *   closing line: "Investigated by: [rank] [name], City of Naga Police
+     *                 Station" from the logged-in officer's account (the
+     *                 same station name the printed sheet carries).
+     *
+     * The wrapper used to ALSO prepend a "Blotter Entry No. BW-0001." opening
+     * line. That line duplicated the certification sentence on the printed
+     * sheet — "This is to certify that, according to the police blotter entry
+     * # BW-0001, dated …" sits directly above FACTS OF THE CASE — so the same
+     * reference appeared twice on one page. The blotter number belongs to the
+     * certification line alone; the narrative opens on the substantive facts
+     * (Task 6). See stripLeadingBlotterRestatement() for the second line of
+     * defence against a model that restates it anyway.
      *
      * Evidence-tag and CCTV-request tracking numbers are deliberately NOT
      * wired (addendum §5, open question): those modules do not exist in the
@@ -869,11 +897,6 @@ final class NarrativeService
             return $body;
         }
 
-        $id = (int) ($report['id'] ?? 0);
-        $openRef = $id > 0
-            ? 'Blotter Entry No. BW-' . str_pad((string) $id, 4, '0', STR_PAD_LEFT) . '. '
-            : '';
-
         $rank = trim((string) ($report['officer_rank'] ?? ''));
         $name = trim((string) ($report['officer_name'] ?? ''));
         $closeRef = '';
@@ -884,8 +907,43 @@ final class NarrativeService
                 . ', City of Naga Police Station.';
         }
 
-        $parts = array_values(array_filter([$openRef . $body, $closeRef], static fn ($s) => $s !== ''));
+        $parts = array_values(array_filter([$body, $closeRef], static fn ($s) => $s !== ''));
         return implode("\n\n", $parts);
+    }
+
+    /**
+     * Task 6 — belt-and-suspenders against a narrative that OPENS by restating
+     * the blotter entry: "Blotter Entry No. BW-0321. On or about …", "Blotter
+     * entry # BW-0321, dated 25 September 2026, …". The certification line on
+     * the printed sheet already carries the blotter number and its date, one
+     * paragraph above FACTS OF THE CASE, so a second statement of it is pure
+     * duplication — the reader learns nothing and the record reads as padded.
+     *
+     * This runs in CODE (on both the generate and tighten exit paths) rather
+     * than relying on the prompt alone, exactly like the leak gate: a rule the
+     * officer's record depends on is enforced, not merely requested. Only a
+     * LEADING restatement is stripped; the blotter number inside a later
+     * sentence is left for the prompt to prevent and the officer to review.
+     *
+     * Pure and offline; guarded by MaskingRoundTripTest / NarrativeTightenTest.
+     */
+    public static function stripLeadingBlotterRestatement(string $narrative): string
+    {
+        $text = ltrim($narrative);
+        if ($text === '' || stripos($text, 'blotter') !== 0) {
+            return $narrative;
+        }
+        // Strip the LEADING sentence whole. The "No." abbreviation in "Entry
+        // No." is matched explicitly, and `[^.]*` never crosses a later period;
+        // the greedy match takes the rest of that first sentence (a date the
+        // model appended, say) and stops at its full stop.
+        $stripped = preg_replace(
+            '/^\s*Blotter\s+(?:Entry\s+)?(?:(?:No|Number)\.?\s*|#\s*)?(?:BW[-\s]?)?\d+[^.]*\.\s*/i',
+            '',
+            $narrative,
+            1,
+        );
+        return trim((string) $stripped);
     }
 
     // ---- ai_requests queue -------------------------------------------------

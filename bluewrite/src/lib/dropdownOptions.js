@@ -57,3 +57,52 @@ export function filterOptions(options, value) {
   if (isChosenOption(options, value)) return options;
   return options.filter((option) => option.toLowerCase().includes(typed));
 }
+
+// ---------------------------------------------------------------------------
+// A field may be STORED under one word and SHOWN under another.
+//
+// A suspect's identity is stored as `Identified` / `Unidentified` because the
+// AI's row vocabulary, the printed sheet and the Rape mirror all already read
+// those words; the officer, though, is answering "Known" or "Unknown". Rather
+// than rename the value (a migration for a synonym) or teach Dropdown a second
+// option shape, the schema carries a `optionLabels` map and the caller passes
+// the LABELS to the dropdown, translating back on the way in. Two small pure
+// functions, because getting the pair out of step would silently store a label
+// as if it were an answer.
+// ---------------------------------------------------------------------------
+
+/**
+ * The words a stored value is shown as.
+ *
+ * @param {string} value the stored value
+ * @param {object<string,string>} [labels] value → label
+ * @returns {string}
+ */
+export function optionLabel(value, labels) {
+  return labels?.[value] ?? value;
+}
+
+/**
+ * The stored value a shown label stands for — the exact inverse of
+ * `optionLabel` over the field's own option list.
+ *
+ * A label no option claims is returned unchanged: a value that arrived from an
+ * older record (or a hand-typed API call) is kept rather than mapped onto
+ * whichever option happened to look similar.
+ *
+ * @param {string} label what the officer picked
+ * @param {string[]} options the field's stored values
+ * @param {object<string,string>} [labels] value → label
+ * @returns {string}
+ */
+export function optionValue(label, options = [], labels) {
+  for (const option of options) {
+    if (optionLabel(option, labels) === label) return option;
+  }
+  return label;
+}
+
+/** The option list as the dropdown must render it: stored values in, labels out. */
+export function optionLabels(options = [], labels) {
+  return options.map((option) => optionLabel(option, labels));
+}

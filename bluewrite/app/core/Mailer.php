@@ -40,6 +40,18 @@ namespace App\Core;
  */
 final class Mailer
 {
+    /**
+     * The transport's name, for the Admin dashboard's sign-in-health card.
+     *
+     * Public where transport() below stays private: the dashboard needs to say
+     * WHICH transport is in use — 'log' on a real station means the second factor
+     * sends nothing at all — without exposing any of the mail settings themselves.
+     */
+    public static function transportName(): string
+    {
+        return self::transport();
+    }
+
     /** How the message leaves the server: 'smtp' (default) or 'log'. */
     private static function transport(): string
     {

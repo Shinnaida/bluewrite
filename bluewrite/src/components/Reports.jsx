@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -10,8 +11,30 @@ import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/a
 // The row menu lives in its own file now: the dashboard chart offers the same
 // right-click menu on a day of "Reports over time".
 import RowMenu from './RowMenu.jsx';
+// The register is a SHELF OF FOLDERS now: one glass folder per incident type
+// per status shelf, and opening a folder lists the reports inside it.
+import GlassFolder from './GlassFolder.jsx';
+import ReportList from './ReportList.jsx';
+// The type glyph, worn by the header of an OPENED folder — the folder face
+// itself carries no icon (its label is the label), which is what the design
+// asks for. The glyph map, the shelf/tally folding and the sentences a folder
+// and a row say about themselves all live in the same pure module, so they can
+// be asserted in tests rather than eyeballed in the JSX.
+import ReportTypeIcon from './ReportTypeIcon.jsx';
+import {
+  typeIcon,
+  buildShelves,
+  shelvesFor,
+  folderTrail,
+  statusBucket,
+  reportNumber,
+} from '../lib/reportFolder.js';
 import { AI_ADVISORY } from '../lib/appInfo.js';
 import ReportPrint from './ReportPrint.jsx';
+// The same bondpaper the print sheet draws, rendered INLINE after the officer
+// accepts an AI draft (Task 4). One implementation, shared with ReportPrint, so
+// the reveal and the print-out cannot drift.
+import ReportSheetBody from './ReportSheetBody.jsx';
 // The two station seals, for the sheet format's page. The same files the printed
 // sheet sets in its header band — already in the bundle, since ReportPrint is
 // imported above — so the page and the print-out carry the same marks. See
@@ -34,12 +57,18 @@ import {
   syncMirrors,
   hasGroupRows,
   meaningfulRows,
+  // The review step's copy of a group row reads the same two rules the form
+  // does: which fields that row is showing, and the words a stored value is
+  // shown under (Identity: "Identified" is offered and read as "Known").
+  rowFieldVisible,
 } from '../lib/reportRules.js';
+import { optionLabel } from '../lib/dropdownOptions.js';
 // Phase 7 — the account read's merge rules (POST /ai/classify → the form).
 // Pure and separately tested: it owns the ONE rule the silent fill depends on,
 // which is that it fills blanks and touches nothing the officer has written.
 import { buildClassifyFill, buildTypeDetailsFill, classifyFillIsEmpty } from '../lib/classifyFill.js';
 import { normalizeLegacyTypeSpecific, hasLegacyShape } from '../lib/normalizeLegacy.js';
+import { stripLeadingBlotterRestatement } from '../lib/narrativeText.js';
 // The station's letterhead, for the sheet format's page. Same module the printed
 // sheet reads its header through, so the page you write on and the page that
 // prints carry the same lines.
@@ -171,6 +200,18 @@ function fmtIncident(v) {
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return String(v).replace('T', ' ');
   return `${DATE_FMT.format(d)} · ${TIME_FMT.format(d)}`;
+}
+
+// What an EMPTY shelf says. It names the shelf rather than a generic "nothing
+// here", because WHICH one is empty is the fact worth stating: no drafts is a
+// clean desk, nothing submitted is work still to do, and an empty archive is a
+// station that has never thrown a report away.
+function emptyShelfNote(shelf, { archived, awaiting }) {
+  if (archived) return 'Nothing is archived here.';
+  if (awaiting) return 'Nothing is waiting for a review.';
+  return shelf.key === 'draft'
+    ? 'No drafts here — a new report starts on this shelf.'
+    : 'Nothing submitted here yet.';
 }
 
 // Collapsible raw snapshot from a report_history row (Item 1).
@@ -362,7 +403,7 @@ function IrCard({
       {!headless && (
         <div className="ir-card-head">
           {num && <span className="ir-card-num">{num}.</span>}
-          <span>{title}</span>
+          {title && <span>{title}</span>}
           {/* Card-level actions (export, view toggles) sit in the header bar,
               not in a content row: they are not filters and would otherwise
               compete with them for the single filter line. */}
@@ -1335,7 +1376,12 @@ function ReportReview({ draft, user, complete, onGoToSection, edit }) {
                   ) : (
                     items.map((item, i) => {
                       const filled = (cfg.itemSchema ?? []).filter(
-                        (fld) => String(item?.[fld.key] ?? '').trim() !== '',
+                        // A field this row is not showing is not part of what the
+                        // row says, even if a stale value is still sitting in
+                        // the draft.
+                        (fld) =>
+                          rowFieldVisible(fld, item) &&
+                          String(item?.[fld.key] ?? '').trim() !== '',
                       );
                       return (
                         <div className="ir-review-item" key={i}>
@@ -1348,7 +1394,7 @@ function ReportReview({ draft, user, complete, onGoToSection, edit }) {
                                 <span className="ir-review-pair" key={fld.key}>
                                   <span className="ir-review-pair-k">{fld.label}</span>
                                   <span className="ir-review-pair-v">
-                                    {String(item[fld.key]).trim()}
+                                    {optionLabel(String(item[fld.key]).trim(), fld.optionLabels)}
                                   </span>
                                 </span>
                               ))
@@ -1616,6 +1662,24 @@ export function ReportEditor({
   // first sentence was typed. The field fills itself from the text (see
   // setNarrative), which is the only thing that can answer the question.
   const [draft, setDraft] = useState(() => (reportId === null ? EMPTY : null));
+  // Task 4 — the narrative area's view: the raw fields, or the bondpaper the
+  // accepted draft will print on. LOCAL UI state (like formFormat): it is never
+  // sent to the API and never written into `draft`. The editor is keyed per
+  // report, so navigating to a fresh report remounts this back to 'fields'.
+  // Accept (applyAiDraft) is the only thing that flips it to 'sheet' — the AI
+  // panel types an uncommitted draft into its OWN card (see the `sheet` prop
+  // below), so nothing here previews work that has not been accepted yet.
+  const [narrativeView, setNarrativeView] = useState('fields');
+  // Bumped by the inline sheet's Regenerate control; the AI panel watches it and
+  // re-runs the last press (see AiNarrativePanel's `regenSignal`).
+  const [regenNonce, setRegenNonce] = useState(0);
+  // The type_specific the inline sheet reads: normalized the same way the print
+  // sheet normalizes it (legacy flat keys → groups), so the reveal and the
+  // print-out agree about every fact. Purely derived; nothing is written back.
+  const inlineTs = useMemo(
+    () => normalizeLegacyTypeSpecific(draft?.type_specific ?? {}, draft?.incident_type ?? '', draft),
+    [draft],
+  );
   const [errors, setErrors] = useState({});
   // AI disposition helper: the officer types a rough note ("follow up
   // investigation") and the model rewrites it into the formal statement that
@@ -2145,7 +2209,13 @@ export function ReportEditor({
   // words, the language they were written in, and marks the report English in
   // the same save. Shared by the plain accept path and Track C's guided step 1.
   function applyAiNarrative(aiText, sourceMeta) {
-    set('narrative', aiText);
+    // Task 6 — the certification line above FACTS OF THE CASE already carries
+    // the blotter entry number and its date, so a leading restatement of it is
+    // dropped before the text reaches the report. The server does this too;
+    // this keeps the form's own copy identical for a draft that arrived by any
+    // other path.
+    const narrative = stripLeadingBlotterRestatement(aiText);
+    set('narrative', narrative);
     narrativeSourceRef.current = 'ai-assisted';
     if (sourceMeta && sourceMeta.language && sourceMeta.language !== 'en') {
       // The text IS the English translation of a known source: the language is
@@ -2158,7 +2228,7 @@ export function ReportEditor({
       // than translated from a stored source, so its language is read from the
       // text like any other. Detecting here keeps the rule in one place — the
       // AI writing English must leave the record saying English.
-      set('narrative_language', detectNarrativeLanguage(aiText));
+      set('narrative_language', detectNarrativeLanguage(narrative));
     }
   }
 
@@ -2197,9 +2267,35 @@ export function ReportEditor({
   // its narrative alone, because its two field proposals have their own buttons
   // and accepting the wording must not smuggle them in.
   function applyAiDraft(parts, sourceMeta) {
-    applyAiNarrative(String(parts?.narrative ?? ''), sourceMeta);
+    const narrative = String(parts?.narrative ?? '');
+    applyAiNarrative(narrative, sourceMeta);
     if (typeof parts?.findingsText === 'string') applyFindingsText(parts.findingsText);
     if (typeof parts?.statusText === 'string') applyActionTakenText(parts.statusText);
+    // Task 4 — accepting reveals the bondpaper the draft will print on, in place
+    // of the raw narrative field. The fields stay MOUNTED (hidden), so an error
+    // jump to r-narr still resolves; an empty narrative reveals nothing, because
+    // there would be no page to show. TASK 9 — this is also the FIRST time the
+    // recorded page appears in the FORM: the typing preview happens in the AI
+    // panel's own card (see the `sheet` prop below), where Generate was pressed,
+    // so Accept is what puts the words into the report and this view is what
+    // shows they arrived.
+    if (narrative.trim() !== '') setNarrativeView('sheet');
+  }
+
+  // The inline sheet's two controls. Edit returns to the raw fields; Regenerate
+  // asks the AI panel to run its last press again (the panel watches
+  // `regenNonce`), and the new accept reveals the sheet once more.
+  function editNarrativeFields() {
+    setNarrativeView('fields');
+  }
+
+  function regenerateNarrative() {
+    // TASK 9 — the new draft types into the AI panel's own bondpaper (see the
+    // `sheet` prop below), which is where the panel lives; the panel brings
+    // itself into view for a press made out here, so the officer follows the
+    // words instead of being left on the page they pressed from. The committed
+    // page stays exactly as it is until the new draft is accepted.
+    setRegenNonce((n) => n + 1);
   }
 
   // Phase 7 — the account read (POST /ai/classify), wired to the AI panel's
@@ -2880,6 +2976,9 @@ export function ReportEditor({
       // what saves the draft and hands the new id back (see ensureAiReportId).
       ensureReportId={ensureAiReportId}
       canEdit={canEdit}
+      // Regenerate from the inline sheet: the panel watches this nonce and
+      // re-runs its last press (see regenerateNarrative).
+      regenSignal={regenNonce}
       narrative={draft?.narrative || ''}
       // The AI closes the narrative with the recorded disposition,
       // so the panel shows which text it is working from.
@@ -2921,6 +3020,21 @@ export function ReportEditor({
       // does. It stays fully editable afterwards. The source tag lands in
       // report_history via the next save/finalize.
       onAccept={applyAiDraft}
+      // TASK 9 — the bondpaper, for the panel to type the draft into IN ITS OWN
+      // CARD. This hands over exactly what the sheet needs to draw the letter
+      // for the report on screen and nothing more; the panel owns the preview
+      // from there (it types the words, reports when they land, and holds its
+      // gate shut until they have), so a draft arrives where the officer pressed
+      // Generate, in EVERY format — including the stepped one, whose narrative
+      // panel is hidden at the step the AI panel lives on. Purely presentational
+      // input: the sheet computes the page's own facts (src/lib/sheetFacts.js)
+      // and writes nothing.
+      sheet={{
+        report: { ...(draft || {}), id: draft?.id ?? editingId },
+        ts: inlineTs,
+        stationHeader,
+        recordedBy: { name: user?.full_name || user?.name || draft?.created_by_name },
+      }}
       // Phase 6 Stage 5 (Track C) — step 1 of the guided "Translate & tighten"
       // flow: apply AND save the reviewed draft, so step 2 can run against a
       // record the server already knows is English.
@@ -3417,7 +3531,7 @@ export function ReportEditor({
                 </span>
               </div>
             )}
-            <div className="ir-field ir-narrative">
+            <div className="ir-field ir-narrative" hidden={narrativeView === 'sheet'}>
               <IrLabel htmlFor="r-narr" icon="lines" required>
                 Detailed Description of Events
               </IrLabel>
@@ -3452,6 +3566,47 @@ export function ReportEditor({
                   "no approved report terminology published yet" disclaimer. It
                   mounts back under this line when the glossary has entries. */}
             </div>
+            {/* Task 4 — the accepted draft's bondpaper, inline. Purely
+                presentational and shared with the print sheet (ReportSheetBody);
+                the raw fields above stay MOUNTED and hidden, so every error jump
+                (r-narr included) still resolves. */}
+            {narrativeView === 'sheet' && (
+              <div className="ir-sheet-reveal">
+                {/* TASK 9 — this strip belongs to the COMMITTED page, and that
+                    is all this reveal ever is: the draft was typed into the AI
+                    panel's own bondpaper (where Generate was pressed) and
+                    Accept is what puts the recorded page here. So Edit (the way
+                    back to the raw fields) and Regenerate are always offered —
+                    there is no uncommitted moment left to hide them for. */}
+                <div className="ir-sheet-reveal-bar">
+                  <span className="ir-sheet-reveal-label">
+                    Bondpaper preview — this is what will print
+                  </span>
+                  <div className="ir-sheet-reveal-actions">
+                    <button type="button" onClick={editNarrativeFields}>
+                      Edit
+                    </button>
+                    <button type="button" className="primary" onClick={regenerateNarrative}>
+                      Regenerate
+                    </button>
+                  </div>
+                </div>
+                <div className="ir-sheet-reveal-paper">
+                  {/* `.print-sheet` carries the paper's own colours, font and
+                      page width, and the h1/h2/h3 override that keeps the
+                      title dark — the same stylesheet the print portal uses,
+                      so the reveal is the printed page, not a lookalike. */}
+                  <div className="print-sheet">
+                    <ReportSheetBody
+                      report={{ ...draft, id: draft.id ?? editingId }}
+                      ts={inlineTs}
+                      stationHeader={stationHeader}
+                      recordedBy={{ name: user?.full_name || user?.name || draft.created_by_name }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
             {/* Where the AI panel lives is settled PER FORMAT — one home each,
                 never two, because the panel owns the slide-in side panel and the
                 body class that reserves its space, so two live copies would
@@ -4002,8 +4157,11 @@ export function ReportEditor({
             <p>{confirm.message}</p>
             <div className="actions">
               <button onClick={() => setConfirm(null)}>Cancel</button>
+              {/* The confirm's own tone wins where it has one: a destructive
+                  default is right for archiving and wrong for EDITING a draft,
+                  which is an ordinary action wearing a red button. */}
               <button
-                className={confirm.confirmLabel === 'Finalize Report' ? 'primary' : 'danger'}
+                className={confirm.tone ?? (confirm.confirmLabel === 'Finalize Report' ? 'primary' : 'danger')}
                 onClick={runConfirm}
               >
                 {confirm.confirmLabel}
@@ -4021,44 +4179,13 @@ export function ReportEditor({
 // Officers see their own reports; admins see everything.
 // ===========================================================================
 
-/**
- * What the STATUS heading cycles through, in this order. The register's own
- * order comes first, then the two groupings an officer actually wants from a
- * status sort: the unfinished work on top, and the settled record on top when
- * they are reading the blotter rather than working it.
- *
- * The first state is not "unsorted" — it is the register's normal
- * newest-incident order, the same thing the sort dropdown opens on, which is why
- * the cycle has to come back to it rather than never leaving it.
- *
- * The two status sorts are the server's own `status` column, ascending and
- * descending, so they agree with the dropdown's "Status A→Z / Z→A" and with the
- * export, which reuses the same query. In alphabetical order that reads as
- * draft → finalized (and the reverse); a third status, `submitted`, would sort
- * BETWEEN them rather than after them, which is worth knowing before one is ever
- * used in earnest (see the brief).
- *
- * `hint` is the whole explanation of the state — it is the tooltip, and the only
- * place the state is written out: the heading itself stays the plain word
- * STATUS, with an arrow only while this column is the one sorting.
- */
-const STATUS_SORTS = [
-  {
-    sort: 'incident_datetime',
-    dir: 'desc',
-    hint: 'Register order — newest incident first. Click for drafts first.',
-  },
-  {
-    sort: 'status',
-    dir: 'asc',
-    hint: 'Draft reports first, then finalized. Click to put finalized first.',
-  },
-  {
-    sort: 'status',
-    dir: 'desc',
-    hint: 'Finalized reports first, then drafts. Click for the register order.',
-  },
-];
+// The register's STATUS sort cycle used to live here as a sortable table
+// heading (STATUS_SORTS / statusSort / cycleStatusSort). The grid has no heading
+// row, so it went with the table — and every one of its three states is still
+// reachable from the filter bar's own sort dropdown ("Newest/Oldest incident"
+// and "Status A→Z / Z→A"), which drives the SAME `query` state the heading used
+// to. No sort capability was lost, only the duplicate affordance a table header
+// hid it behind.
 
 export function ReportsTable({
   user,
@@ -4140,9 +4267,46 @@ export function ReportsTable({
   const [pagination, setPagination] = useState(null);
   const [search, setSearch] = useState('');
   const [flashId, setFlashId] = useState(null);
+  // ---- The folder shelf ----------------------------------------------------
+  // The per-type tally behind the folders. `null` until the first answer, so
+  // "nothing found" and "not asked yet" cannot be drawn the same way.
+  const [folders, setFolders] = useState(null);
+  // Which folder is open, or null for the shelf of folders:
+  //   { shelf, label, type }  — shelf is the bucket the contents are scoped to
+  //   ('draft' / 'submitted'), or null in a mode that draws a single shelf (the
+  //   archive, the translation queue), where the type alone is the scope.
+  //
+  // Deliberately NOT part of `query`: opening a folder must not make the filter
+  // bar claim the officer chose a type they only opened. The request the
+  // contents list makes is composed from the two (see listParams/folderParams).
+  const [openFolder, setOpenFolder] = useState(null);
+  // One id prefix for the per-type section headings. `useId` rather than a slug
+  // of the type name: two types can differ only in punctuation, and a slug
+  // could collide with an element elsewhere on the page. The suffix is the
+  // group's index, so the id is stable for the life of the render.
+  const groupId = useId();
 
   const canFinalize = user.role === 'Admin' || user.role === 'Officer';
 
+  // ---- What the register is showing ----------------------------------------
+  // The list's own name, for the breadcrumb: the page head shouts it, the trail
+  // states it.
+  const listTitle = user.role === 'Admin' ? 'All Reports' : 'My Reports';
+  // The translation queue is a MODE of this same list, and the register draws it
+  // as ONE shelf rather than Draft/Submitted — an archived report was archived
+  // whatever it was, and a report awaiting a translation review is waiting on a
+  // language, not on a stage (see shelvesFor).
+  const awaiting = query.verification === 'awaiting';
+  // The shelves, with their folders, folded here from the server's raw status
+  // tally — the ONE place that tally enters the UI.
+  const shelves = useMemo(
+    () =>
+      buildShelves(folders, {
+        shelves: shelvesFor({ archived: showArchived, awaiting }),
+        typeOrder: typeOptions,
+      }),
+    [folders, showArchived, awaiting, typeOptions],
+  );
   // Which list request this is. Typing fires a request every few hundred
   // milliseconds now (see the debounce effect below), so two can be in flight at
   // once and the NETWORK decides which lands first — a slow "rob" arriving after
@@ -4151,17 +4315,40 @@ export function ReportsTable({
   // dropped, answer and error alike.
   const loadSeq = useRef(0);
 
+  // The list's own query string, with ONE spelling for every caller: the
+  // contents list, the folder tally and the CSV export. All three have to agree
+  // about what is being looked at — a folder whose face counted a set the list
+  // inside it did not show would be a register lying to itself, and an export
+  // that ignored the open folder would put the whole blotter in a CSV the
+  // officer asked for one shelf of. `extra` carries the folder itself (bucket +
+  // type) and OVERWRITES anything the filter bar set, which is what makes an
+  // opened folder authoritative over the list it opens onto.
+  function listParams(extra = {}) {
+    const params = new URLSearchParams();
+    if (showArchived) {
+      params.set('archived', '1');
+    } else {
+      for (const [k, v] of Object.entries(query)) {
+        if (v !== '' && !(k === 'page' && v === 1)) params.set(k, String(v));
+      }
+    }
+    for (const [k, v] of Object.entries(extra)) {
+      if (v === null || v === undefined || v === '') continue;
+      params.set(k, String(v));
+    }
+    return params;
+  }
+
+  // The open folder as list filters: the shelf IS the bucket, the folder IS the
+  // type. Empty when no folder is open, so the register's ordinary list is the
+  // plain filtered set. A single-shelf mode (the archive, the translation queue)
+  // has no bucket to state — the type alone is its scope.
+  const folderParams = openFolder ? { bucket: openFolder.shelf, type: openFolder.type } : {};
+
   async function load() {
     const seq = ++loadSeq.current;
     try {
-      const params = new URLSearchParams();
-      if (!showArchived) {
-        for (const [k, v] of Object.entries(query)) {
-          if (v !== '' && !(k === 'page' && v === 1)) params.set(k, String(v));
-        }
-      }
-      if (showArchived) params.set('archived', '1');
-      const qs = params.toString();
+      const qs = listParams(folderParams).toString();
       const data = await api(`/reports${qs ? `?${qs}` : ''}`);
       if (seq !== loadSeq.current) return;
       setReports(data.reports);
@@ -4184,10 +4371,42 @@ export function ReportsTable({
     }
   }
 
+  // The FOLDER SHELF. Its own request rather than a count of the rows the list
+  // returned: the list is paged, so counting its rows answers for one page and
+  // not for the register. Shares `loadSeq` with load() — the two are mutually
+  // exclusive (one or the other view is showing), so a slow answer for the view
+  // the officer has left can never repaint the one they are on.
+  async function loadFolders() {
+    const seq = ++loadSeq.current;
+    try {
+      const qs = listParams().toString();
+      const data = await api(`/reports/folders${qs ? `?${qs}` : ''}`);
+      if (seq !== loadSeq.current) return;
+      setFolders(Array.isArray(data.folders) ? data.folders : []);
+      setConn(null);
+      setError(null);
+    } catch (err) {
+      if (seq !== loadSeq.current) return;
+      if (isUnreachable(err)) {
+        setConn(classifyError(err));
+        setFolders((cur) => cur ?? []);
+        onConnError?.(err);
+      } else {
+        setError(err.message);
+      }
+    }
+  }
+
+  /** Re-read whatever the register is showing — the shelf, or the open folder. */
+  function refresh() {
+    return openFolder ? load() : loadFolders();
+  }
+
   useEffect(() => {
-    load();
+    if (openFolder) load();
+    else loadFolders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showArchived, query]);
+  }, [showArchived, query, openFolder]);
 
   // ---- Search runs as you type (there is no Search button any more) --------
   // The box is the immediate value; `query.q` follows it after a pause. The
@@ -4212,10 +4431,17 @@ export function ReportsTable({
   async function runConfirm() {
     const c = confirm;
     setConfirm(null);
+    // An EDIT confirm is not a mutation: it opens the report in the writer, so
+    // there is nothing to announce and nothing to re-read — the writer loads the
+    // record itself.
+    if (c.kind === 'edit') {
+      c.action();
+      return;
+    }
     try {
       await c.action();
       notify(c.doneMessage);
-      await load();
+      await refresh();
       onMutated?.();
       setFlashId(c.flashId ?? null);
       if (c.flashId) {
@@ -4301,32 +4527,74 @@ export function ReportsTable({
   }
 
   /**
-   * Which of the three the CURRENT query is on. Derived from sort/dir rather
-   * than stored, so the heading stays true when the sort dropdown is used
-   * instead: picking "Status A→Z" there lands on the same state as one click
-   * here. `-1` (sorted by something else) reads as the default state, which is
-   * also what the next click moves on from.
+   * Everything a register ROW needs to know about itself, in one call.
+   *
+   * The list is a presentation shell (see ReportList), so this is where the
+   * rules stay: which reports open, which are locked, what the ⋮ menu holds, and
+   * whether the row offers Edit. Computing it per row rather than passing five
+   * booleans keeps the rules readable and in one place — the shape the old card
+   * grid used for the same reason.
    */
-  const statusSort = Math.max(
-    0,
-    STATUS_SORTS.findIndex((s) => s.sort === query.sort && s.dir === query.dir),
-  );
-
-  /** STATUS heading: default → draft first → finalized first → default. */
-  function cycleStatusSort() {
-    const { sort, dir } = STATUS_SORTS[(statusSort + 1) % STATUS_SORTS.length];
-    // Back to page one: page 4 of the new order is a different set of reports,
-    // and every other sort control resets the page for the same reason.
-    setQuery((q) => ({ ...q, sort, dir, page: 1 }));
+  function rowMeta(r) {
+    return {
+      dateText: fmtIncident(r.incident_datetime),
+      locked: rowLocked(r),
+      archived: showArchived,
+      // The click OPENS a report, so it is the list's own `rowCanOpen` — false in
+      // the archive (a report was never opened from there) and false for a
+      // finalized report a non-admin may not edit.
+      canOpen: rowCanOpen(r),
+      // ...while restoring is the archive's separate, admin-only action, which
+      // is why the ⋮ menu and the "Restore archived" wording answer to it
+      // rather than to `canOpen`.
+      canRestore: showArchived && user.role === 'Admin',
+      hasMenu: showArchived ? user.role === 'Admin' : true,
+      // Edit is the DRAFT's own action: a submitted report has already gone to
+      // the station, and an archived draft is restore-only.
+      canEdit: !showArchived && statusBucket(r.status) === 'draft' && rowCanOpen(r),
+    };
   }
 
-  /** What the row tells the officer on hover, which is also its state. */
-  function rowHint(r) {
-    if (rowCanOpen(r)) return 'Double-click to open · right-click for actions';
-    if (showArchived) {
-      return user.role === 'Admin' ? 'Archived — right-click to restore' : 'Archived report';
-    }
-    return 'Finalized — locked. Right-click for actions.';
+  /**
+   * Edit a draft — ASK FIRST.
+   *
+   * Opening the writer is a deliberate act with a confirmation in front of it,
+   * so an officer cannot land in the middle of a half-written report by
+   * brushing a row. Confirming then opens exactly the same editor the row's own
+   * click does (`setOpenId`), pre-loaded with the report — the officer edits it
+   * in place rather than starting a new one.
+   */
+  function askEdit(r) {
+    setConfirm({
+      title: `Edit draft report ${reportNumber(r.id)}?`,
+      message:
+        'This draft will open in Write Report with everything already recorded in it. Nothing changes until you save it there.',
+      confirmLabel: 'Edit Draft',
+      // Confirming an edit is not a destructive act; it opens the writer.
+      tone: 'primary',
+      kind: 'edit',
+      action: () => setOpenId(r.id),
+    });
+  }
+
+  // ---- Opening and closing a folder ----------------------------------------
+  // Both reset to page one: the page the officer was on belonged to the list
+  // they were looking at, not to the one they are looking at now.
+  function openFolderAt(shelf, type) {
+    setOpenFolder({ shelf: shelf.all ? null : shelf.key, label: shelf.label, type });
+    // Clear the list the LAST view was showing: keeping it would put the
+    // folder's name over another folder's reports for as long as the request
+    // takes, which reads as a folder that lies about its contents.
+    setReports(null);
+    setPagination(null);
+    setQuery((q) => (q.page === 1 ? q : { ...q, page: 1 }));
+  }
+
+  function closeFolder() {
+    setOpenFolder(null);
+    setReports(null);
+    setPagination(null);
+    setQuery((q) => (q.page === 1 ? q : { ...q, page: 1 }));
   }
 
   /**
@@ -4414,18 +4682,6 @@ export function ReportsTable({
 
       <div className="ir-status">
         <span className="badge draft">{user.role}</span>
-        <span>
-          {user.role === 'Admin'
-            ? 'Every report in the station — search, filter, and sort.'
-            : 'The reports you recorded — search, filter, and sort.'}
-          {/* The row's actions are behind a right-click now, so the screen has
-              to say so somewhere: this is where the officer reads what the page
-              does, and the per-row `title` repeats it on hover. */}
-          {' '}
-          {showArchived
-            ? 'Archived reports are restore-only — right-click a row to restore it.'
-            : 'Double-click a row to open it; right-click a row for its actions.'}
-        </span>
       </div>
 
       {/* Connection failures are reported to Shell (onConnError) which
@@ -4444,8 +4700,6 @@ export function ReportsTable({
       )}
 
       <IrCard
-        num="I"
-        title="Search & Filter"
         actions={
           <>
             {user.role === 'Admin' && (
@@ -4453,19 +4707,16 @@ export function ReportsTable({
                 {showArchived ? 'Show Active' : 'Show Archived'}
               </button>
             )}
-            {/* Export honors the CURRENT filters (the server reuses the same
-                query pipeline) — what you see is what you get. */}
+            {/* Export honors the CURRENT filters AND the open folder (the server
+                reuses the same query pipeline) — what you see is what you get,
+                down to the shelf. */}
             <a
               className="button-link"
-              href={(() => {
-                const params = new URLSearchParams();
-                for (const [k, v] of Object.entries(showArchived ? { archived: '1' } : query)) {
-                  if (v !== '' && !(k === 'page' && v === 1)) params.set(k, String(v));
-                }
-                if (showArchived) params.set('archived', '1');
-                const qs = params.toString();
-                return `/api/v1/reports/export${qs ? `?${qs}` : ''}`;
-              })()}
+              href={`/api/v1/reports/export${
+                listParams(folderParams).toString()
+                  ? `?${listParams(folderParams).toString()}`
+                  : ''
+              }`}
               download="bluewrite-reports.csv"
             >
               Export CSV
@@ -4510,7 +4761,15 @@ export function ReportsTable({
               <select
                 aria-label="Filter by incident type"
                 value={query.type}
-                onChange={(e) => setQuery((q) => ({ ...q, type: e.target.value, page: 1 }))}
+                onChange={(e) => {
+                  // A folder IS an incident type, so choosing one here leaves the
+                  // folder you were in: the register must not keep showing one
+                  // folder's reports under another type's filter. (While a folder
+                  // is open the bar shows "All types", because the officer did
+                  // not CHOOSE a type — they opened a folder.)
+                  setOpenFolder(null);
+                  setQuery((q) => ({ ...q, type: e.target.value, page: 1 }));
+                }}
               >
                 <option value="">All types</option>
                 {typeOptions.map((t) => (
@@ -4580,6 +4839,10 @@ export function ReportsTable({
                   type="button"
                   onClick={() => {
                     setSearch('');
+                    // Clearing the filters puts the officer back on the shelf:
+                    // a folder is a view OF a filtered set, and there is no
+                    // filtered set left to be inside.
+                    setOpenFolder(null);
                     setQuery((q) => ({ q: '', type: '', status: '', date_from: '', date_to: '', sort: q.sort, dir: q.dir, page: 1, verification: '' }));
                   }}
                 >
@@ -4590,151 +4853,135 @@ export function ReportsTable({
         </div>
       </IrCard>
 
-      <IrCard
-        num="II"
-        wide
-        flush
-        title={`Report Register${pagination ? ` — ${pagination.total} found` : ''}`}
-      >
-        {reports && reports.length === 0 && !showArchived && !conn ? (
-          <p className="ir-card-empty">
-            <strong>No reports found.</strong> Adjust the filters above, or start a new report from Home.
-          </p>
-        ) : (conn || !reports) && (!reports || reports.length === 0) ? (
-          <p className="ir-card-empty">
-            {conn ? 'Waiting for the connection to come back…' : 'Loading reports…'}
-          </p>
-        ) : (
+      <IrCard wide flush headless>
+        {openFolder ? (
           <>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th className="num">Report No.</th>
-                  <th>Type</th>
-                  <th>Date of Incident</th>
-                  <th>Location</th>
-                  <th
-                    className="status"
-                    // The register's one sortable heading. The states are NOT
-                    // printed under it (by request — the heading stays the plain
-                    // word); the arrow beside it appears only while this column is
-                    // the sort, and the tooltip names which state it is in.
-                    // aria-sort is the same thing for assistive tech, and it
-                    // matches what the server is actually told to do.
-                    aria-sort={statusSort === 0 ? 'none' : statusSort === 1 ? 'ascending' : 'descending'}
-                  >
-                    <button
-                      type="button"
-                      className="th-sort"
-                      onClick={cycleStatusSort}
-                      title={STATUS_SORTS[statusSort].hint}
-                    >
-                      Status
-                      {/* Just the word, as asked. The one thing that has to stay
-                          is SOME sign that a click took effect: the arrow shows
-                          only while this column is sorting, and it is what says
-                          which way the statuses are grouped. The tooltip above
-                          spells all three states out. */}
-                      {statusSort > 0 && (
-                        <span className="th-sort-arrow" aria-hidden="true">
-                          {statusSort === 1 ? '↑' : '↓'}
-                        </span>
-                      )}
-                    </button>
-                  </th>
-                  <th>Recorded By</th>
-                  {/* No Actions column: the actions are the row's context menu
-                      now (right-click), and a double-click opens the report.
-                      Keeping the column would have left a header with nothing
-                      under it. */}
-                </tr>
-              </thead>
-              <tbody>
-                {reports &&
-                  reports
-                    .map((r) => (
-                    <tr
-                      key={r.id}
-                      // Focusable: with the buttons gone, this is what keeps a
-                      // row's actions reachable without a mouse — Enter opens,
-                      // Shift+F10 / the Menu key opens the menu at the row.
-                      tabIndex={0}
-                      aria-haspopup="menu"
-                      className={rowLocked(r) ? 'row-locked' : undefined}
-                      title={rowHint(r)}
-                      onDoubleClick={() => {
-                        if (rowCanOpen(r)) setOpenId(r.id);
-                      }}
-                      onContextMenu={(e) => {
-                        if (!openRowMenu(r, { x: e.clientX, y: e.clientY }, e.currentTarget, false)) return;
-                        e.preventDefault();
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && rowCanOpen(r)) {
-                          e.preventDefault();
-                          setOpenId(r.id);
-                          return;
-                        }
-                        if (e.key !== 'ContextMenu' && !(e.shiftKey && e.key === 'F10')) return;
-                        // A keyboard has no pointer to open at, so the menu drops
-                        // from the row's own box — left edge, just below it.
-                        e.preventDefault();
-                        const box = e.currentTarget.getBoundingClientRect();
-                        openRowMenu(r, { x: box.left + 12, y: box.bottom }, e.currentTarget, true);
-                      }}
-                      style={flashId === r.id ? { transition: 'background 300ms ease', background: 'var(--green-bg)' } : undefined}
-                    >
-                      <td className="num">BW-{String(r.id).padStart(4, '0')}</td>
-                      <td>{r.incident_type}</td>
-                      <td>{fmtIncident(r.incident_datetime)}</td>
-                      <td>{r.location}</td>
-                      <td className="status">
-                        <span className={`badge ${r.status}`}>{r.status}</span>
-                        {/* Phase 6 Stage 4 (D5/D8) — the translation status,
-                            derived server-side from the SAME function every
-                            other surface uses. Only shown when there is
-                            something to say: a report with no source is left
-                            exactly as it was. */}
-                        {r.verification_status && r.verification_status !== 'english_original' && (
-                          <span
-                            className={`rv-badge rv-badge--sm ${statusClass(r.verification_status)}`}
-                            title={statusLabel(r.verification_status)}
-                          >
-                            {statusLabel(r.verification_status)}
+            {/* ---- One folder, OPEN: the reports inside it --------------- */}
+            {/* Where you are, and the way back. A breadcrumb rather than only a
+                back button, because the register has two levels of scoping now
+                (the shelf and the type) and the officer should be able to read
+                which two they are under without counting clicks. */}
+            <nav className="report-trail" aria-label="Folder">
+              <button type="button" className="report-trail__back" onClick={closeFolder}>
+                <span aria-hidden="true">←</span> All folders
+              </button>
+              <ol className="report-trail__crumbs">
+                {folderTrail(listTitle, openFolder.label, openFolder.type).map(
+                  (crumb, i, all) => {
+                    const last = i === all.length - 1;
+                    return (
+                      <li
+                        key={crumb}
+                        className="report-trail__crumb"
+                        aria-current={last ? 'page' : undefined}
+                      >
+                        {last && (
+                          <span className="report-trail__icon" aria-hidden="true">
+                            <ReportTypeIcon name={typeIcon(openFolder.type)} />
                           </span>
                         )}
-                      </td>
-                      <td>{r.created_by_name || '—'}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-          {pagination && pagination.total_pages > 1 && (
-            <div
-              className="reports-pagination"
-              style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginTop: '0.75rem' }}
-            >
-              <button
-                type="button"
-                disabled={pagination.page <= 1}
-                onClick={() => setQuery((q) => ({ ...q, page: pagination.page - 1 }))}
+                        {crumb}
+                      </li>
+                    );
+                  },
+                )}
+              </ol>
+            </nav>
+
+            {reports === null ? (
+              <p className="ir-card-empty">
+                {conn ? 'Waiting for the connection to come back…' : 'Loading reports…'}
+              </p>
+            ) : reports.length === 0 ? (
+              <p className="ir-card-empty">
+                {conn
+                  ? 'Waiting for the connection to come back…'
+                  : 'No reports in this folder.'}
+              </p>
+            ) : (
+              <ReportList
+                reports={reports}
+                rowMeta={rowMeta}
+                flashId={flashId}
+                onOpen={setOpenId}
+                onEdit={askEdit}
+                onMenu={openRowMenu}
+              />
+            )}
+
+            {pagination && pagination.total_pages > 1 && (
+              <div
+                className="reports-pagination"
+                style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginTop: '0.75rem' }}
               >
-                Prev
-              </button>
-              <span style={{ fontFamily: 'var(--font-hud)', fontSize: '0.75rem', color: 'var(--cyan-dim)' }}>
-                Page {pagination.page} of {pagination.total_pages} — {pagination.total} report(s)
-              </span>
-              <button
-                type="button"
-                disabled={pagination.page >= pagination.total_pages}
-                onClick={() => setQuery((q) => ({ ...q, page: pagination.page + 1 }))}
-              >
-                Next
-              </button>
-            </div>
-          )}
+                <button
+                  type="button"
+                  disabled={pagination.page <= 1}
+                  onClick={() => setQuery((q) => ({ ...q, page: pagination.page - 1 }))}
+                >
+                  Prev
+                </button>
+                <span style={{ fontFamily: 'var(--font-hud)', fontSize: '0.75rem', color: 'var(--cyan-dim)' }}>
+                  Page {pagination.page} of {pagination.total_pages} — {pagination.total} report(s)
+                </span>
+                <button
+                  type="button"
+                  disabled={pagination.page >= pagination.total_pages}
+                  onClick={() => setQuery((q) => ({ ...q, page: pagination.page + 1 }))}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* ---- The SHELF of folders ----------------------------------
+                One glass folder per incident type per shelf, and only the types
+                the shelf actually holds — an empty folder is a promise it
+                cannot keep. The counts come from the server's own tally, folded
+                through the SAME filter pipeline the list uses, so a folder's
+                face and the list inside it cannot disagree. */}
+            {folders === null ? (
+              <p className="ir-card-empty">
+                {conn ? 'Waiting for the connection to come back…' : 'Loading reports…'}
+              </p>
+            ) : (
+              <div className="folder-shelves">
+                {shelves.map((shelf, i) => (
+                  <section
+                    className="folder-shelf"
+                    key={shelf.key}
+                    aria-labelledby={`${groupId}-${i}`}
+                  >
+                    {/* A real heading, so the shelf can be reached by landmark
+                        the way the eye reaches it by colour. */}
+                    <h3 className="folder-shelf__head" id={`${groupId}-${i}`}>
+                      <span className="folder-shelf__name">{shelf.label}</span>
+                      <span className="folder-shelf__count">
+                        {shelf.total} {shelf.total === 1 ? 'report' : 'reports'}
+                      </span>
+                    </h3>
+                    {shelf.folders.length === 0 ? (
+                      <p className="folder-shelf__empty">
+                        {emptyShelfNote(shelf, { archived: showArchived, awaiting })}
+                      </p>
+                    ) : (
+                      <div className="folder-shelf__row">
+                        {shelf.folders.map((folder) => (
+                          <GlassFolder
+                            key={folder.type}
+                            type={folder.type}
+                            count={folder.count}
+                            onOpen={(type) => openFolderAt(shelf, type)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                ))}
+              </div>
+            )}
           </>
         )}
       </IrCard>
@@ -4813,8 +5060,11 @@ export function ReportsTable({
             <p>{confirm.message}</p>
             <div className="actions">
               <button onClick={() => setConfirm(null)}>Cancel</button>
+              {/* The confirm's own tone wins where it has one: a destructive
+                  default is right for archiving and wrong for EDITING a draft,
+                  which is an ordinary action wearing a red button. */}
               <button
-                className={confirm.confirmLabel === 'Finalize Report' ? 'primary' : 'danger'}
+                className={confirm.tone ?? (confirm.confirmLabel === 'Finalize Report' ? 'primary' : 'danger')}
                 onClick={runConfirm}
               >
                 {confirm.confirmLabel}

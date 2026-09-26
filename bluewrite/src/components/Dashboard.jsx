@@ -190,6 +190,9 @@ export default function Dashboard({ user, notify, onConnError, onOpenReports }) 
   const [{ from, to }, setDates] = useState(datesForPreset(30));
   const [type, setType] = useState('');
   const [updatedAt, setUpdatedAt] = useState(null);
+  // The open self-service recovery requests (Phase 1, S-04), read from their own
+  // endpoint so a failure there cannot take the charts down with it.
+  const [requests, setRequests] = useState(null);
   const live = useRef(true);
 
   useEffect(() => {
@@ -226,15 +229,46 @@ export default function Dashboard({ user, notify, onConnError, onOpenReports }) 
     load();
   }, [load]);
 
+  // The open requests. A read of local state like the rest of the dashboard, and
+  // deliberately NOT part of the stats call: a failure here leaves the charts up
+  // and simply does not draw the card.
+  const loadRequests = useCallback(async () => {
+    try {
+      const out = await api('/account-requests');
+      if (live.current) setRequests(Array.isArray(out?.requests) ? out.requests : []);
+    } catch {
+      // Left as whatever it was; the card is a convenience, never the page.
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRequests();
+  }, [loadRequests]);
+
+  /** Clear a request's flag once an Admin has acted on it. The ACT itself is done
+   *  in User Management and is audited there; this only closes the flag. */
+  async function handleRequest(id) {
+    try {
+      await api(`/account-requests/${id}/handle`, { method: 'POST' });
+      setRequests((list) => (list ?? []).filter((r) => r.id !== id));
+      notify?.('Request marked handled.');
+    } catch (err) {
+      notify?.(err.message || 'The request could not be marked handled.');
+    }
+  }
+
   // Silent auto-refresh every 60s: supervisors leave this open on a wall
   // screen. Only when there is no error showing, so a real failure stays
   // visible until the viewer acknowledges it with a retry.
   useEffect(() => {
     const iv = setInterval(() => {
-      if (!error) load();
+      if (!error) {
+        load();
+        loadRequests();
+      }
     }, 60000);
     return () => clearInterval(iv);
-  }, [load, error]);
+  }, [load, loadRequests, error]);
 
   const applyPreset = (days) => {
     setPreset(days);
@@ -285,6 +319,70 @@ export default function Dashboard({ user, notify, onConnError, onOpenReports }) 
 
   return (
     <div className="dash">
+      {/* ---- Sign-in health (migration 018 / S-01) -------------------------
+          The second factor's preflight, so the station can see its factor is
+          healthy BEFORE a shift starts rather than when an officer is already
+          locked out. The endpoint is Admin-only because the whole dashboard is,
+          and it reports no credentials — only whether mail can send, over which
+          transport, and how many accounts hold an offline route. */}
+      {data?.signIn && (data.signIn.mailTransport === 'log' || !data.signIn.mailConfigured || data.signIn.accountsWithoutFactor > 0) && (
+        <div className="dash-signin-alert" role="status">
+          <strong>Sign-in health</strong>
+          <ul>
+            {!data.signIn.mailConfigured && (
+              <li>The sign-in email is not configured — Officer and Admin accounts cannot receive a code.</li>
+            )}
+            {data.signIn.mailTransport === 'log' && (
+              <li>Sign-in codes are being written to the server log, not emailed. Set the mail transport to SMTP for the station.</li>
+            )}
+            {data.signIn.accountsWithoutFactor > 0 && (
+              <li>
+                {data.signIn.accountsWithoutFactor} active Admin/Officer account(s) have neither an email
+                address nor recovery codes, and cannot sign in at all.
+              </li>
+            )}
+          </ul>
+          <p className="dash-signin-note">
+            {data.signIn.accountsWithRecovery} account(s) hold offline recovery codes.
+          </p>
+        </div>
+      )}
+
+      {/* ---- Account requests (migration 019 / S-04) -----------------------
+          An officer asking for what they cannot change alone: a password reset
+          or a fix to the sign-in address their code goes to. This is the FLAG,
+          not the act — the Admin resets or edits in User Management, where it is
+          audited; "Mark handled" only clears the flag. Admin-only, because the
+          whole dashboard is. */}
+      {requests && requests.length > 0 && (
+        <div className="dash-requests" role="region" aria-label="Account requests">
+          <strong>Account requests ({requests.length})</strong>
+          <ul className="dash-requests-list">
+            {requests.map((r) => (
+              <li key={r.id} className="dash-request">
+                <div className="dash-request-head">
+                  <span className="dash-request-who">
+                    {r.full_name}
+                    <span className="dash-request-meta"> {r.username} · {r.role} · {r.badge_number}</span>
+                  </span>
+                  <span className="dash-request-label">{r.kind_label}</span>
+                </div>
+                {r.reason ? <p className="dash-request-reason">“{r.reason}”</p> : null}
+                <div className="dash-request-foot">
+                  <span className="dash-request-age">{r.created_label}</span>
+                  <button type="button" className="dash-request-handle" onClick={() => handleRequest(r.id)}>
+                    Mark handled
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="dash-requests-note">
+            Reset the password or fix the address in User Management — that is the recorded act this flag points at.
+          </p>
+        </div>
+      )}
+
       <header className="dash-topbar">
         <div>
           <h1>Dashboard</h1>

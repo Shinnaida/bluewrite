@@ -61,11 +61,21 @@ AI-assisted police incident report system for the Naga City Police Station, Cebu
    never appear. It needs no folder and no writable path — the rows are the
    record. See `docs/MESSAGES.md`.
 
-   `016_message_typing.sql` is the last one: the latch behind the "somebody is
+   `016_message_typing.sql` is the next one: the latch behind the "somebody is
    typing" dots. Missing it is quiet in the other direction — the panel still
    opens and messages still send, and only the thread read 500s — on the table
    it cannot find. Nothing depends on it and it holds one row per pair
    of colleagues, so it is the cheapest table here to add or drop.
+
+   `018_recovery_codes.sql` is the next one: the OFFLINE second factor. Missing
+   it means the request guard (which now accepts a mailbox OR an unspent recovery
+   code) and the recovery sign-in route hit a table that is not there. Apply it
+   with the code that needs it. See `docs/RECOVERY_CODES.md`.
+
+   `019_account_requests.sql` is the last one: the self-service recovery REQUEST
+   (`docs/ACCOUNT_REQUESTS.md`). Missing it means the sign-in "request help"
+   route, the Profile request, and the Admin dashboard card hit a table that is
+   not there. Apply it with the code that needs it.
 
 
    Optional: insert two fully filled SAMPLE draft reports (a Theft and a
@@ -92,10 +102,12 @@ AI-assisted police incident report system for the Naga City Police Station, Cebu
    Alternative without vhost, quick smoke test:
 
    ```bash
-   php -S 127.0.0.1:8000 -t public
+   php -S 127.0.0.1:8000 -t public router.php
    ```
 
-   (The built-in server ignores `.htaccess`; use Laragon/XAMPP Apache for full parity.)
+   (The built-in server ignores `.htaccess`, so `router.php` is what sends
+   `/api/*` to `public/api.php`; without it every API call 404s. Use
+   Laragon/XAMPP Apache for full parity.)
 
 6. Build the frontend for Apache to serve:
 
@@ -152,12 +164,28 @@ emailed to the account's own address. Staff accounts are unchanged.
   `Resend code` on the same screen issues a new one after a short throttle.
 - **Five wrong codes lock the factor** for the same window as the password
   lockout, announced at sign-in rather than at the code screen.
-- **Locked out or mailbox changed** → an Admin runs `Reset verification` from the
-  account's row in User Management (right-click the row), which is audited. It clears the outstanding code and the lock, and
-  leaves the address and password alone. There are no recovery codes to print.
+- **When mail cannot send** → every Admin and Officer is also issued a printed set
+  of **single-use offline recovery codes** (`Issue recovery codes` on the account's
+  row in User Management), usable at the same code screen with no mail and no
+  network beyond the LAN. This is what keeps a station signable when the link is
+  down. See `docs/RECOVERY_CODES.md`.
+- **Locked out, mailbox changed, or codes lost** → an Admin runs `Reset verification`
+  (clears the outstanding code and lock) or `Issue recovery codes` (reprints the
+  offline set) from the account's row, both audited. If the server has to be
+  touched physically, `scripts/break-glass.php` is the audited last resort — see
+  `docs/BREAK_GLASS.md`.
 - **The mailer** is a Gmail sender configured in `config/config.php`
   (`mail` block) with an App Password. Read `docs/EMAIL_OTP.md` before you need
-  it, and note the trade: signing in now requires the internet.
+  it. The ordinary route needs the internet; the printed offline codes do not.
+- **Mail health preflight** → the Admin dashboard's **sign-in health** card shows
+  whether the server can send, over which transport, and how many Admin/Officer
+  accounts hold an offline route — so a station sees a mail problem before a shift,
+  not when an officer is already locked out.
+- **Can't sign in, or the address is wrong?** → **Request help** on the sign-in
+  screen (no session needed) or in Profile ▸ Security. It changes nothing — it
+  records an audited request an Admin acts on, with the reason and the time. Admins
+  see open requests on the dashboard and clear the flag once they have acted. See
+  `docs/ACCOUNT_REQUESTS.md`.
 
 ## Roles & permissions (Phase 1)
 

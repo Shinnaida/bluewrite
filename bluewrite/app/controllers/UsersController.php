@@ -23,6 +23,11 @@ use App\Core\EmailOtp;
 // it — account creation and the reset. The literal `strlen(...) < 10` that used
 // to sit in each was a rule with two answers.
 use App\Core\PasswordPolicy;
+// The OFFLINE second factor (migration 018). An administrator issues a fresh set
+// of single-use recovery codes for an account — this is the Admin-assisted
+// enrolment the station chose, and it is the only route that can CREATE the
+// codes, because only the server can hash them.
+use App\Core\RecoveryCodes;
 use App\Core\Response;
 use App\Core\Validator;
 use PDO;
@@ -49,12 +54,22 @@ final class UsersController
         // the account has existed, and whether they have been at a desk recently. Both
         // are raw stamps rather than "3 days ago", for the reason the Last sign-in
         // column gives: a station PC's clock is whatever somebody set it to.
+        // `recovery_remaining` / `recovery_total` / `recovery_locked_until` ride
+        // along for the same reason the email factor's columns do: an Admin has
+        // to be able to see which accounts actually have an OFFLINE route (the
+        // whole point of migration 018) and whether that route is locked, without
+        // opening each account. Two correlated counts rather than a grouped join:
+        // the directory is small and the counts are exact.
         $rows = $pdo->query(
             'SELECT u.id, u.full_name, u.badge_number, u.username, u.email, u.status, u.last_login_at,
                     u.created_at, u.last_seen_at, u.languages_read, u.photo_path, u.photo_updated_at,
-                    r.name AS role, eo.locked_until AS otp_locked_until
+                    r.name AS role, eo.locked_until AS otp_locked_until,
+                    rs.locked_until AS recovery_locked_until,
+                    (SELECT COUNT(*) FROM mfa_recovery_codes rc WHERE rc.user_id = u.id AND rc.used_at IS NULL) AS recovery_remaining,
+                    (SELECT COUNT(*) FROM mfa_recovery_codes rc2 WHERE rc2.user_id = u.id) AS recovery_total
              FROM users u JOIN roles r ON r.id = u.role_id
              LEFT JOIN email_otp_codes eo ON eo.user_id = u.id
+             LEFT JOIN mfa_recovery_state rs ON rs.user_id = u.id
              ORDER BY u.full_name'
         )->fetchAll();
 
@@ -442,6 +457,75 @@ final class UsersController
             'note' => $had
                 ? 'Verification cleared for ' . $existing['full_name'] . '. Their outstanding code no longer works; a fresh one will be sent at their next sign-in.'
                 : 'This account had no outstanding sign-in code.',
+        ]);
+    }
+
+    /**
+     * POST /users/:id/recovery-codes — issue a fresh set of OFFLINE sign-in codes.
+     *
+     * THE ENROLMENT STEP, and it is Admin-assisted on purpose: the station chose
+     * that every Admin/Officer be given an offline route at onboarding, in person,
+     * which also fits the fact that the deployment has no TLS yet (NIST accepts
+     * in-person delivery of look-up secrets precisely where a protected channel
+     * is not available).
+     *
+     * REPLACES, never adds. A regeneration after a set leaks or runs low must
+     * leave the old codes dead, so this deletes the account's existing rows first
+     * (inside RecoveryCodes::generate's transaction) and returns a fresh set.
+     *
+     * THE PLAINTEXT IS RETURNED EXACTLY ONCE, here, and never again: the server
+     * stores only bcrypt hashes, so no endpoint — not this one, not a re-read —
+     * can ever show these codes a second time. The response carries the two
+     * copies the station asked for: one for the officer, one to seal.
+     */
+    public function generateRecoveryCodes(string $id): void
+    {
+        $admin = Auth::requireRole('Admin');
+        $userId = (int) $id;
+        if ($userId <= 0) {
+            Response::json(404, ['error' => 'Account not found.']);
+        }
+
+        $pdo = Database::pdo();
+        $existing = $this->fetchUser($pdo, $userId);
+        if ($existing === null) {
+            Response::json(404, ['error' => 'Account not found.']);
+        }
+
+        try {
+            $codes = RecoveryCodes::generate($userId);
+        } catch (\Throwable $e) {
+            // The generation itself failed (a database error, most likely).
+            // Recorded as its own action so the trail shows an ATTEMPT that left
+            // no codes behind, rather than a success that did not happen.
+            Audit::log(
+                (int) $admin['id'],
+                'mfa.recovery_regen_failed',
+                'user',
+                (string) $userId,
+                'username: ' . $existing['username'] . ' — issuing recovery codes failed'
+            );
+            error_log('[BlueWrite] recovery code generation failed: ' . $e->getMessage());
+            Response::json(500, ['error' => 'The recovery codes could not be generated. Try again.']);
+        }
+
+        Audit::log(
+            (int) $admin['id'],
+            'mfa.recovery_regenerated',
+            'user',
+            (string) $userId,
+            'username: ' . $existing['username'] . ', ' . count($codes) . ' codes issued'
+        );
+
+        Response::json(201, [
+            'ok' => true,
+            'account' => $existing['full_name'],
+            'count' => count($codes),
+            // Formatted for print (ABCDE-FGHJK). The server stores the folded
+            // form, so the grouping is presentation only.
+            'codes' => array_map(static fn (string $c): string => RecoveryCodes::format($c), $codes),
+            'note' => 'These codes are shown once and cannot be retrieved again. Print two copies: one for '
+                . $existing['full_name'] . ', and one to seal at the station.',
         ]);
     }
 

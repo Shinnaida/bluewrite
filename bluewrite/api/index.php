@@ -21,6 +21,17 @@ require __DIR__ . '/../app/core/Auth.php';
 require __DIR__ . '/../app/core/MailUnavailableException.php';
 require __DIR__ . '/../app/core/Mailer.php';
 require __DIR__ . '/../app/core/EmailOtp.php';
+// The OFFLINE second factor (migration 018): single-use recovery codes. Required
+// here beside the emailed factor because Auth::requireUser consults it on every
+// request for an Admin/Officer with no email address, and AuthController's new
+// POST /mfa/recovery route verifies against it — a missing line here is a fatal
+// error at the point of use, as with every class in this list.
+require __DIR__ . '/../app/core/RecoveryCodes.php';
+// The self-service recovery REQUEST (Phase 1, S-04, migration 019): an officer
+// asking for a password reset or an email change. Required beside RecoveryCodes
+// because AccountRequestsController — whose public submit route runs before the
+// auth gate — is a request-path class like every other in this list.
+require __DIR__ . '/../app/core/AccountRequests.php';
 require __DIR__ . '/../app/core/Validator.php';
 // The password rule. Required HERE, with the rest: this project has no
 // autoloader, so a class that is named anywhere on a request path and not listed
@@ -58,6 +69,7 @@ require __DIR__ . '/../app/ai/NarrativeService.php';
 require __DIR__ . '/../app/controllers/NarrativeController.php';
 require __DIR__ . '/../app/controllers/NotificationsController.php';
 require __DIR__ . '/../app/controllers/AuthController.php';
+require __DIR__ . '/../app/controllers/AccountRequestsController.php';
 require __DIR__ . '/../app/controllers/PresenceController.php';
 // Messages between officers. TWO ENTRY POINTS, not one: the /messages routes below,
 // and PresenceController::heartbeat, which constructs this controller to carry the
@@ -72,6 +84,7 @@ require __DIR__ . '/../app/controllers/AuditsController.php';
 require __DIR__ . '/../app/controllers/StationController.php';
 require __DIR__ . '/../app/controllers/VerificationController.php';
 
+use App\Controllers\AccountRequestsController;
 use App\Controllers\AuditsController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
@@ -126,6 +139,16 @@ try {
         (new AuthController())->logout();
     }
 
+    // A LOCKED-OUT OFFICER ASKING FOR HELP (Phase 1, S-04). Registered before the
+    // gate, like /login and /mfa, because the officer cannot sign in and so has
+    // no session to authenticate with. It changes NOTHING about the account — it
+    // records a request an Admin acts on — and it answers the same whether or not
+    // the username exists, so the sign-in screen cannot be used as a username
+    // oracle (see AccountRequestsController).
+    if ($seg0 === 'account-requests' && $seg1 === null && $method === 'POST') {
+        (new AccountRequestsController())->store();
+    }
+
     // ---- The second factor, before the gate ---------------------------------
     //
     // These run on a PENDING session: the password was accepted and NOTHING is
@@ -151,6 +174,13 @@ try {
         }
         if ($seg1 === 'cancel' && $method === 'POST') {
             $c->mfaCancel();
+        }
+        // The offline route: a single-use recovery code, accepted on the same
+        // pending session as an emailed one. Registered here, before the gate,
+        // for the same reason as the rest of /mfa — this is how a sign-in that
+        // cannot use mail finishes, and the session it uses has no user_id yet.
+        if ($seg1 === 'recovery' && $method === 'POST') {
+            $c->mfaRecovery();
         }
     }
 
@@ -183,6 +213,28 @@ try {
     }
     if ($seg0 === 'me' && $seg1 === 'photo' && $method === 'DELETE') {
         (new AuthController())->clearPhoto();
+    }
+
+    // The officer asking for a reset or an email change while signed in (Profile).
+    // Under /me like the password change, and for the same reason: an officer
+    // asks about their own account and only their own, so identity is the session
+    // and there is no id to tamper with. Registered AFTER the gate, so the CSRF
+    // token is required as it is for every other state-changing call.
+    if ($seg0 === 'me' && $seg1 === 'account-request' && $method === 'POST') {
+        (new AccountRequestsController())->storeMine();
+    }
+
+    // The Admin's view of the request flags (Phase 1, S-04): the open list for the
+    // dashboard card, and the clear action after the Admin has acted. Both are
+    // Admin-only inside the controller. GET is a read; the handle POST is audited.
+    if ($seg0 === 'account-requests') {
+        $c = new AccountRequestsController();
+        if ($seg1 === null && $method === 'GET') {
+            $c->index();
+        }
+        if ($seg1 !== null && ($parts[2] ?? null) === 'handle' && $method === 'POST') {
+            $c->handle((string) $seg1);
+        }
     }
 
     if ($seg0 === 'users') {
@@ -241,6 +293,13 @@ try {
         // to the same address.
         if ($seg1 !== null && ($parts[2] ?? null) === 'mfa-reset' && !isset($parts[3]) && $method === 'POST') {
             $c->resetMfa((string) $seg1);
+        }
+        // POST /users/:id/recovery-codes — issue a fresh set of OFFLINE sign-in
+        // codes (migration 018). Admin-only inside the controller, like every
+        // other route in this block, and audited. The plaintext codes are in the
+        // response and nowhere else: the server keeps hashes only.
+        if ($seg1 !== null && ($parts[2] ?? null) === 'recovery-codes' && !isset($parts[3]) && $method === 'POST') {
+            $c->generateRecoveryCodes((string) $seg1);
         }
     }
 
@@ -352,6 +411,11 @@ try {
         }
         if ($seg1 === 'export' && $method === 'GET') {
             $c->exportCsv();
+        }
+        // The folder shelf: per-type counts for the register's Draft/Submitted
+        // folders, under the same filters as the list (see folders()).
+        if ($seg1 === 'folders' && $method === 'GET') {
+            $c->folders();
         }
         if ($seg1 === null && $method === 'POST') {
             $c->store();

@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { filterOptions, isChosenOption } from '../../src/lib/dropdownOptions.js';
+import {
+  filterOptions,
+  isChosenOption,
+  optionLabel,
+  optionLabels,
+  optionValue,
+} from '../../src/lib/dropdownOptions.js';
 
 // The station's own type list, in the order the form offers it — the list the bug
 // was filed against. Fourteen rows, which is also why the card has to scroll.
@@ -79,4 +85,38 @@ test('isChosenOption only recognises a whole option', () => {
   assert.equal(isChosenOption(TYPES, 'Violence'), false);
   assert.equal(isChosenOption(TYPES, ''), false);
   assert.equal(isChosenOption(TYPES, undefined), false);
+});
+
+// ---------------------------------------------------------------------------
+// Stored value vs. shown word. A suspect's identity is STORED as
+// Identified/Unidentified (the AI's row vocabulary, the printed sheet and the
+// Rape mirror all read those words) but the officer answers Known/Unknown. The
+// pair has to be exact inverses, or the form would store a label as an answer.
+// ---------------------------------------------------------------------------
+
+test('a stored value and the word it is shown under are exact inverses', () => {
+  const options = ['Unidentified', 'Identified'];
+  const labels = { Identified: 'Known', Unidentified: 'Unknown' };
+
+  assert.equal(optionLabel('Identified', labels), 'Known');
+  assert.equal(optionLabel('Unidentified', labels), 'Unknown');
+  // The list the dropdown renders is labels, in the options' own order.
+  assert.deepEqual(optionLabels(options, labels), ['Unknown', 'Known']);
+
+  assert.equal(optionValue('Known', options, labels), 'Identified');
+  assert.equal(optionValue('Unknown', options, labels), 'Unidentified');
+  // Round trip, both ways, for every option.
+  for (const option of options) {
+    assert.equal(optionValue(optionLabel(option, labels), options, labels), option);
+  }
+});
+
+test('a field with no label map is offered and stored as itself', () => {
+  assert.equal(optionLabel('Male'), 'Male');
+  assert.deepEqual(optionLabels(['Male', 'Female', 'Unknown']), ['Male', 'Female', 'Unknown']);
+  assert.equal(optionValue('Female', ['Male', 'Female']), 'Female');
+  // A value no option claims is kept as typed rather than mapped onto whichever
+  // option happened to look similar.
+  assert.equal(optionValue('At large', ['Unidentified', 'Identified']), 'At large');
+  assert.equal(optionValue('', ['Unidentified', 'Identified']), '');
 });

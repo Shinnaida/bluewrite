@@ -19,6 +19,7 @@ the trade is real and is the reason 012 chose the app in the first place.
 | `app/core/Mailer.php` | One message over Gmail SMTP, with no library. `transport: log` writes to `config/mail.log` instead of sending |
 | `app/core/MailUnavailableException.php` | "This server cannot send it", as distinct from "that code is wrong" |
 | `migrations/013_email_otp.sql` | `users.email`, `email_otp_codes`, and the removal of 012's tables |
+| `migrations/018_recovery_codes.sql` | The OFFLINE fallback: `mfa_recovery_codes` + `mfa_recovery_state` (see [`RECOVERY_CODES.md`](RECOVERY_CODES.md)) |
 | `tests/EmailOtpTest.php` | The sign-in flow, end to end over HTTP |
 | `tests/rules/mfa.test.mjs` | The client's mirror of the same rules, pinned to the PHP constants |
 | `tests/rules/codeBoxes.test.mjs` | Every keystroke rule of the row, including the overtype/paste distinction |
@@ -112,6 +113,11 @@ In order of likelihood:
    address.
 3. **The factor is locked** after five wrong codes. It clears on its own after
    `app.lockout_minutes`, or an Admin runs `Reset verification`.
+4. **The mail (or the whole link) is down and there is no code to receive.** This
+   is what migration 018 exists for: use one of the account's **printed offline
+   recovery codes** at the code screen. See [`RECOVERY_CODES.md`](RECOVERY_CODES.md).
+   A station can also see the problem **before** a shift, not when someone is
+   already locked out, on the Admin dashboard's **sign-in health** card.
 
 `User Management` → the account's row → `Reset verification` (right-click the row,
 or press the Menu key on it; the row's tooltip says so) deletes the outstanding code
@@ -119,9 +125,10 @@ and the attempt counter and nothing else: the address and the password are untou
 the account is **not** a session — the officer still receives and enters a code
 like everyone else. It is audited (`mfa.reset_by_admin`).
 
-There are deliberately **no recovery codes**. Ten codes you print and lose are
-worse than one route that an administrator can audit, and the mailbox is already
-the recovery route.
+The row's menu also carries **`Issue recovery codes`** (migration 018): it prints a
+fresh set of single-use offline codes, shown once, for the account. The mailbox is
+the ordinary route, and the printed sheet is the one that still works when the
+mailbox cannot.
 
 ## The mailer
 
@@ -218,19 +225,24 @@ Migration 013 removes `mfa_credentials` and `mfa_recovery_codes` and adds
 Officer accounts**; accounts created before 013 have none, and an Admin must fill
 them in before those officers can sign in again.
 
-**The second factor now needs the internet.** 012 chose an authenticator app
-precisely so an Admin sign-in would work with the link down; an emailed code
-cannot be generated offline. The station accepted that trade — the mailbox is
-where its accounts already live — but it is the trade, and it should be a
-conscious one rather than a surprise the first time Gmail is unreachable.
+**The second factor's ordinary route needs the internet.** 012 chose an
+authenticator app precisely so an Admin sign-in would work with the link down;
+an emailed code cannot be generated offline. The station accepted that trade —
+the mailbox is where its accounts already live — but migration 018 answers the
+cost: every Admin and Officer is issued a printed set of single-use **offline
+recovery codes**, so a sign-in still finishes with no mail and no network beyond
+the LAN. See [`RECOVERY_CODES.md`](RECOVERY_CODES.md) and
+[`BREAK_GLASS.md`](BREAK_GLASS.md).
 
 ## Audit actions
 
 `login.password_ok` (a correct password with nothing signed in), `mfa.verified`,
 `mfa.verify_failed`, `mfa.code_expired`, `mfa.code_missing`, `mfa.code_resent`,
 `mfa.locked`, `mfa.no_email`, `mfa.mail_unavailable`, `mfa.mail_failed`,
-`mfa.reset_by_admin`. Codes, addresses in full and message bodies never reach the
-trail or an API response.
+`mfa.reset_by_admin`. The offline route (migration 018) adds
+`mfa.recovery_used`, `mfa.recovery_failed`, `mfa.recovery_regenerated`,
+`mfa.recovery_regen_failed` and `mfa.break_glass`. Codes, addresses in full and
+message bodies never reach the trail or an API response.
 
 ## Deployment
 

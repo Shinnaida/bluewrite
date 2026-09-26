@@ -207,6 +207,11 @@ final class ReportsController
         // both end up with a report the sheet can print. See ReportRules::MIRRORS.
         if ($incidentType !== null) {
             $clean = ReportRules::applyMirrors($clean, $incidentType);
+            // ...and take off a value the row is no longer SHOWING before it is
+            // stored, not only before it is printed: a suspect recorded as
+            // unidentified must not keep a name that the sheet, the AI context
+            // and any export would then have to remember to ignore.
+            $clean = ReportRules::stripHiddenGroupFields($clean);
         }
 
         // Gate 2: per-item rule validation for the given type.
@@ -280,6 +285,59 @@ final class ReportsController
                 'total_pages' => (int) max(1, ceil($total / $perPage)),
             ],
         ]);
+    }
+
+    /**
+     * The register's FOLDER SHELF: how many reports of each incident type sit
+     * on each status shelf, under exactly the filters the list itself uses.
+     *
+     * WHY ITS OWN ENDPOINT. The list is paged, so counting the rows it returns
+     * answers for one page and not for the register; paging through every page
+     * to tally in the browser would ship the whole blotter to the client to draw
+     * a dozen numbers. One GROUP BY against the SAME filter pipeline gives the
+     * shelf the truth about itself — which is also what makes a folder's count
+     * and the list inside it impossible to disagree.
+     *
+     * It returns the raw (status, incident_type) tally rather than ready-made
+     * buckets: which statuses share a shelf is the REGISTER's decision
+     * (`statusBucket` in src/lib/reportFolder.js), and stating it a second time
+     * here would be a second copy of the same rule.
+     */
+    public function folders(): void
+    {
+        $user = Auth::requireUser();
+        $pdo = Database::pdo();
+
+        // The archive is Admin-only, exactly as it is on the list itself.
+        $showArchived = ($_GET['archived'] ?? null) === '1';
+        if ($showArchived) {
+            Auth::requireRole('Admin');
+        }
+
+        [$where, $params] = $this->listQueryFilters($user, $showArchived);
+        $whereSql = implode(' AND ', $where);
+
+        $stmt = $pdo->prepare(
+            "SELECT r.status, r.incident_type, COUNT(*) AS n
+             FROM reports r JOIN users u ON u.id = r.created_by
+             WHERE {$whereSql}
+             GROUP BY r.status, r.incident_type"
+        );
+        $stmt->execute($params);
+
+        $folders = [];
+        $total = 0;
+        foreach ($stmt->fetchAll() as $row) {
+            $n = (int) $row['n'];
+            $total += $n;
+            $folders[] = [
+                'status' => (string) $row['status'],
+                'incident_type' => (string) $row['incident_type'],
+                'count' => $n,
+            ];
+        }
+
+        Response::json(200, ['folders' => $folders, 'total' => $total]);
     }
 
     /**
@@ -554,6 +612,24 @@ final class ReportsController
                 $params[':status'] = $status;
             } else {
                 Response::json(422, ['error' => 'Unknown status filter.']);
+            }
+        }
+
+        // Folder bucket. The register's folder shelf asks a DIFFERENT question
+        // from the status filter: "is this still being written, or has it gone
+        // forward?" — so `submitted` is everything that has left the officer's
+        // hands, and a finalized report (the locked end state of submitted)
+        // belongs on that shelf too. Enforced here, in the same pipeline, so the
+        // folder count, the contents list inside a folder and the CSV export
+        // cannot disagree about which reports a shelf holds.
+        $bucket = trim((string) ($_GET['bucket'] ?? ''));
+        if ($bucket !== '') {
+            if ($bucket === 'draft') {
+                $where[] = "r.status = 'draft'";
+            } elseif ($bucket === 'submitted') {
+                $where[] = "r.status IN ('submitted', 'finalized')";
+            } else {
+                Response::json(422, ['error' => 'Unknown folder filter.']);
             }
         }
 

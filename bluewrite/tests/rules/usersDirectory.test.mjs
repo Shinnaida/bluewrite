@@ -190,9 +190,13 @@ test('the actions are the app’s own row menu, and destruction is last and alon
   assert.match(items, /label: 'Deactivate account', danger: true/);
   assert.equal((items.match(/danger: true/g) || []).length, 1);
 
-  // Reset verification is ABSENT for a Staff account rather than disabled: there is
-  // no factor to clear, and a dead item asks the officer to work out why.
-  assert.match(items, /u\.role === 'Admin' \|\| u\.role === 'Officer' \? \[\{ label: 'Reset verification'/);
+  // The FACTOR items are ABSENT for a Staff account rather than disabled: there is no
+  // factor to clear and none to issue, and a dead item asks the officer to work out why.
+  // Both live behind the same role gate: the email-code reset, and the offline recovery
+  // codes (migration 018) that print a way in when mail cannot send.
+  const factorItems = items.slice(items.indexOf("u.role === 'Admin'"), items.indexOf('u.status ==='));
+  assert.match(factorItems, /\{ label: 'Issue recovery codes', onSelect: \(\) => askRecoveryCodes\(u\) \}/);
+  assert.match(factorItems, /\{ label: 'Reset verification', onSelect: \(\) => askResetMfa\(u\) \}/);
   // A deactivated row's menu is where the way back lives, so it is never empty.
   assert.match(items, /u\.status === 'active' \? \{ label: 'Deactivate account'/);
   assert.match(items, /\{ label: 'Reactivate account', onSelect: \(\) => askReactivate\(u\) \}/);

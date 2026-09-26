@@ -87,6 +87,42 @@ export function isPartialCode(value) {
   return new RegExp(`^\\d{0,${MFA_DIGITS}}$`).test(normalizeCode(value));
 }
 
+// ---- the offline route (migration 018) -------------------------------------
+//
+// Single-use recovery codes, mirroring app/core/RecoveryCodes.php. The MIRROR is
+// the point, as it is for the emailed code above: the length the client refuses
+// to submit short of, and the folding it applies before submitting, must be the
+// server's — a client that believed a different length would reject a valid code
+// or send a malformed one. tests/rules/mfa.test.mjs pins each constant below to
+// the PHP file it mirrors.
+
+/** Characters in a recovery code, mirroring RecoveryCodes::LENGTH. */
+export const RECOVERY_LENGTH = 10;
+
+/** Wrong recovery codes before the offline factor locks, mirroring RecoveryCodes::MAX_ATTEMPTS. */
+export const RECOVERY_MAX_ATTEMPTS = 5;
+
+/**
+ * Fold a typed recovery code the way the server does, BEFORE it is submitted.
+ *
+ * Uppercase, separators removed, and Crockford's look-alike substitutions applied
+ * (O -> 0, I/L -> 1) — see RecoveryCodes::normalise(), which this mirrors. Doing
+ * it here is a courtesy, not a security boundary: the server folds again and
+ * refuses what it cannot fold to a code regardless of what this sends.
+ */
+export function normalizeRecoveryCode(value) {
+  return String(value ?? '')
+    .toUpperCase()
+    .replace(/[^0-9A-Z]/g, '')
+    .replace(/O/g, '0')
+    .replace(/[IL]/g, '1');
+}
+
+/** Whether the field holds a complete recovery code: exactly RECOVERY_LENGTH characters. */
+export function isCompleteRecoveryCode(value) {
+  return normalizeRecoveryCode(value).length === RECOVERY_LENGTH;
+}
+
 /**
  * The sentence that explains a refusal, from the server's own code.
  *

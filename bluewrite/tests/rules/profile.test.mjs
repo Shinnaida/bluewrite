@@ -220,6 +220,17 @@ test('the security summary states the second factor before the idle rule', () =>
     securitySummary(30, { required: true, has_email: false }),
     'Two-step not set up · Signs out after 30 min idle',
   );
+  // No address BUT a printed offline route (migration 018): the account can still
+  // finish a sign-in, so the header says so rather than reading as a lockout.
+  assert.equal(
+    securitySummary(30, { required: true, has_email: false, recovery: { remaining: 4, total: 10 } }),
+    'Two-step by recovery code · Signs out after 30 min idle',
+  );
+  // The mailbox, when present, is still the headline even with codes to spare.
+  assert.equal(
+    securitySummary(30, { required: true, has_email: true, recovery: { remaining: 4, total: 10 } }),
+    'Two-step on · Signs out after 30 min idle',
+  );
   // Staff: not required, so the header is exactly what it was before the factor
   // existed — no "not set up" on an account that is never asked to set one up.
   assert.equal(securitySummary(30, { required: false, has_email: false }), 'Signs out after 30 min idle');

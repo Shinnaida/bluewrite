@@ -102,6 +102,17 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // without it would simply estimate every day from the trail, and the tests that
         // assert a MEASURED day would pass for the wrong reason.
         $this->runSqlFile(__DIR__ . '/../migrations/017_presence_days.sql');
+        // 018 is the OFFLINE second factor: mfa_recovery_codes + mfa_recovery_state.
+        // Auth::requireUser consults RecoveryCodes::hasAny() for any Admin/Officer
+        // with no email address, and the new POST /mfa/recovery route reads both
+        // tables — so the scratch DB must carry them or those tests fail as
+        // unknown-table 500s rather than assertions.
+        $this->runSqlFile(__DIR__ . '/../migrations/018_recovery_codes.sql');
+        // 019 is the self-service recovery REQUEST table (S-04).
+        // AccountRequestsController reads it on the public submit, the /me submit
+        // and the Admin list, so the scratch DB must carry it or those routes
+        // fail as unknown-table 500s rather than as assertions.
+        $this->runSqlFile(__DIR__ . '/../migrations/019_account_requests.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         // Every account that OWES a second factor has an email address, because
@@ -425,5 +436,18 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
     protected function patchReport(string $cookie, string $csrf, int $id, array $body): array
     {
         return $this->request('PATCH', "/reports/{$id}", $body, $cookie, $csrf);
+    }
+
+    /**
+     * An account's id, by username — for the routes that take one (the Admin's
+     * recovery-code generation, in particular). Named `accountId` rather than the
+     * obvious `userId` because EmailOtpTest already declares its own `userId`,
+     * and a parent method with that name would collide with it.
+     */
+    protected function accountId(string $username): int
+    {
+        $stmt = $this->db()->prepare('SELECT id FROM bluewrite_test.users WHERE username = :u');
+        $stmt->execute([':u' => $username]);
+        return (int) $stmt->fetchColumn();
     }
 }

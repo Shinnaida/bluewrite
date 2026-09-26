@@ -45,6 +45,19 @@ final class AuditsController
         'mfa.locked', 'mfa.code_replayed', 'mfa.stage_stale', 'mfa.completed_inactive',
         'mfa.recovery_used', 'mfa.recovery_failed', 'mfa.recovery_regenerated', 'mfa.recovery_regen_failed',
         'mfa.reset_by_admin',
+        // The last resort (S-01): an operator with physical access to the server
+        // regenerating a locked-out account's offline codes via the CLI, after
+        // mail AND the officer's own codes have failed. Its whole justification
+        // is that every use is recorded (docs/BREAK_GLASS.md).
+        'mfa.break_glass',
+        // Self-service recovery REQUESTS (Phase 1, S-04, migration 019). The
+        // officer asking for what they cannot change alone, and the Admin clearing
+        // the flag. The REQUEST is separate from the ACT: the Admin's reset or
+        // address edit is audited as `user.password_reset` / `user.update`, while
+        // these two record that help was asked for and that the flag was closed.
+        // `account.request_unmatched` is the sign-in-screen attempt for a username
+        // that does not exist — kept so the request form cannot be used quietly.
+        'account.request_submitted', 'account.request_handled', 'account.request_unmatched',
         'report.create', 'report.update', 'report.finalize', 'report.archive', 'report.restore', 'report.print', 'report.export',
         'ai.narrative.generate',
     ];

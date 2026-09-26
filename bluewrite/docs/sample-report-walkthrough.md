@@ -31,7 +31,9 @@ php database/sample_report.php theft
 
 ```bash
 # Terminal 1 — PHP API (Laragon PHP is at C:\laragon\bin\php\...)
-php -S 127.0.0.1:8000 -t public
+# router.php is required: the built-in server ignores .htaccess, so it is what
+# routes /api/* to public/api.php.
+php -S 127.0.0.1:8000 -t public router.php
 
 # Terminal 2 — React dev server (proxies /api to :8000)
 npm run dev

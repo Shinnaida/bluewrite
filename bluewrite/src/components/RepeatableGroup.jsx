@@ -12,6 +12,15 @@
 
 import React from 'react';
 import { DEFAULT_SOFT_WARN_AT } from '../lib/incidentTypes.js';
+// The row-level twin of a field's `showIf` (and the clearing that follows from
+// it): a suspect's Name is asked for only while the identity is Known, and is
+// taken off the row when it stops being. Shared with the rule engine and the
+// review step so the three cannot disagree about what a row is answering.
+import { applyRowVisibility, rowFieldVisible } from '../lib/reportRules.js';
+// A stored value may be shown under another word (Identity: Identified →
+// "Known"). The dropdown is handed the LABELS and the value translated back,
+// so the two can never drift.
+import { optionLabel, optionLabels, optionValue } from '../lib/dropdownOptions.js';
 // The dropdown every `select` field in a row is drawn with, so a Sex or a
 // Status list looks the same here as the incident type does in Panel II — see
 // the component for why the list is not a native <select>.
@@ -44,7 +53,11 @@ export default function RepeatableGroup({
 
   const setItemField = (i, key, value) => {
     const next = list.map((item, idx) =>
-      idx === i ? { ...item, [key]: value } : { ...item },
+      // A field that has just been hidden does not keep its value: choosing
+      // "Unknown" takes the suspect's name off the row with it.
+      idx === i
+        ? applyRowVisibility({ ...item, [key]: value }, itemSchema)
+        : { ...item },
     );
     onChange(next);
   };
@@ -91,19 +104,23 @@ export default function RepeatableGroup({
             </button>
           </legend>
           <div className="form-grid">
-            {itemSchema.map((fld) => {
+            {itemSchema.filter((fld) => rowFieldVisible(fld, item)).map((fld) => {
               const id = `${idPrefix}${groupKey}-${i}-${fld.key}`;
               const fieldErr = errors?.[`${groupKey}[${i}].${fld.key}`];
               const control = fld.select ? (
                 <Dropdown
                   id={id}
-                  options={fld.select}
+                  // Shown as the officer's own words; stored as the value the
+                  // rest of the system already reads.
+                  options={optionLabels(fld.select, fld.optionLabels)}
                   // A select needs a way back to "nothing chosen", which the
                   // option list itself never carries.
                   emptyLabel="Select…"
                   placeholder="Select…"
-                  value={item?.[fld.key] ?? ''}
-                  onChange={(next) => setItemField(i, fld.key, next)}
+                  value={optionLabel(item?.[fld.key], fld.optionLabels) ?? ''}
+                  onChange={(next) =>
+                    setItemField(i, fld.key, optionValue(next, fld.select, fld.optionLabels))
+                  }
                   disabled={disabled}
                   invalid={!!fieldErr}
                 />

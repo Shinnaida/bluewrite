@@ -38,6 +38,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
 import { useResolvedTheme, useThemeSpread } from '../lib/theme.js';
 import { AI_ADVISORY, APP_VERSION } from '../lib/appInfo.js';
+// The self-service recovery REQUEST (Phase 1, S-04): an officer who cannot sign
+// in can ASK an administrator, from this screen, without a session. It changes
+// nothing on its own — it records a request an Admin acts on.
+import { REASON_MAX, REQUEST_KINDS, requestLabel } from '../lib/accountRequests.js';
 import { setLanguageRegistry } from '../lib/languageRegistry.js';
 // The second factor's own rules: what a six-digit code is, and which refusals
 // mean the sign-in is over. See lib/mfa.js — the numbers are mirrored from the
@@ -51,6 +55,9 @@ import {
   MFA_RESEND_SECONDS,
   normalizeCode,
   stageFrom,
+  normalizeRecoveryCode,
+  isCompleteRecoveryCode,
+  RECOVERY_LENGTH,
 } from '../lib/mfa.js';
 // THE SIX BOXES. Six real inputs, one per digit, so each can carry its own
 // accessible name and its own error state — see components/CodeBoxes.jsx. Their
@@ -276,6 +283,24 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
   // server's number and a locally assumed one cannot drift from it.
   const [resendIn, setResendIn] = useState(0);
   const [resendBusy, setResendBusy] = useState(false);
+  // THE OFFLINE ROUTE (migration 018). `recoveryMode` swaps the six emailed-code
+  // boxes for a single recovery-code field; `recoveryCode` is what is typed in it,
+  // and `recoveryError` is that field's own reserved line. Whether the route exists
+  // at all comes from the server (`mfa.recovery.available`) — the client never
+  // decides that for itself, and never shows a form that cannot succeed.
+  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [recoveryError, setRecoveryError] = useState('');
+  // THE LOCKED-OUT REQUEST (Phase 1, S-04). A fold below the password form, so
+  // an officer who cannot get in at all still has a documented, audited way to
+  // ask. `helpMessage` is the server's own receipt, kept apart from the sign-in
+  // error band because it is not an authentication failure.
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpKind, setHelpKind] = useState('password');
+  const [helpReason, setHelpReason] = useState('');
+  const [helpBusy, setHelpBusy] = useState(false);
+  const [helpMessage, setHelpMessage] = useState('');
+  const [helpError, setHelpError] = useState('');
   // The six box elements. CodeBoxes fills this array in and moves focus WITHIN
   // the row; it is owned HERE because this screen has to move focus INTO the row
   // at the two moments the row itself cannot know about — a code the server
@@ -330,6 +355,9 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
     setCodeMarking('none');
     setMfaError('');
     setResendIn(0);
+    setRecoveryMode(false);
+    setRecoveryCode('');
+    setRecoveryError('');
     setPassword('');
   }
 
@@ -420,8 +448,117 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
     // boxes are the truth, so the boxes are what gets cleared.
     setCodeValues(emptyValues(MFA_DIGITS));
     setMfaError('');
+    setRecoveryMode(defaultRecoveryMode(res.mfa));
+    setRecoveryCode('');
+    setRecoveryError('');
     setResendIn(Number.isFinite(res.mfa?.resend_in) ? res.mfa.resend_in : MFA_RESEND_SECONDS);
     return true;
+  }
+
+  /**
+   * Whether the OFFLINE route should be the one on screen by default.
+   *
+   * True when the account has unspent recovery codes AND the mailbox route is
+   * not usable — no address on file, or no code was actually sent. In that state
+   * the six boxes have nothing to expect, so showing them first would be a form
+   * that cannot succeed.
+   */
+  function defaultRecoveryMode(m) {
+    if (!m || !m.recovery || !m.recovery.available) return false;
+    return m.has_email === false || m.code_pending === false;
+  }
+
+  /**
+   * Open the code screen from a STATE READ rather than a response that already
+   * carried the payload — used when the mail could not be sent, where the 503
+   * explains the mail but the still-open pending sign-in (and any offline route)
+   * has to be fetched separately.
+   */
+  async function enterSecondFactorFromStatus(message) {
+    try {
+      const res = await api('/mfa/status');
+      if (!res?.mfa?.required) return false;
+      setMfa(res.mfa);
+      setStep('verify');
+      setCodeValues(emptyValues(MFA_DIGITS));
+      setMfaError(message || '');
+      setRecoveryMode(defaultRecoveryMode(res.mfa));
+      setRecoveryCode('');
+      setRecoveryError('');
+      setResendIn(Number.isFinite(res.mfa?.resend_in) ? res.mfa.resend_in : 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Send a recovery code and act on the answer — the offline twin of verifyCode.
+   *
+   * A refusal belongs to the recovery FIELD (not the mailbox's six boxes), so a
+   * wrong or locked code is written under it. Only a refusal that ends the
+   * pending sign-in, or an unreachable server, changes the screen.
+   */
+  async function submitRecovery(e) {
+    e.preventDefault();
+    const typed = normalizeRecoveryCode(recoveryCode);
+    if (!isCompleteRecoveryCode(typed)) {
+      setRecoveryError(`Enter all ${RECOVERY_LENGTH} characters of a recovery code.`);
+      return;
+    }
+    setSubmitting(true);
+    setRecoveryError('');
+    setMfaError('');
+    setCodeError('');
+    setConn('ok');
+    try {
+      const res = await api('/mfa/recovery', { method: 'POST', body: { code: typed } });
+      setCodeSuccess('Recovery code accepted. Opening your workspace…');
+      verifiedTimer.current = window.setTimeout(() => finishSignIn(res), VERIFIED_PAUSE_MS);
+    } catch (err) {
+      if (isUnreachable(err)) {
+        setConn(classifyError(err));
+      } else if (isSignInOver(err?.code)) {
+        const message = err.message || 'Your sign-in expired. Enter your password again.';
+        resetSecondFactor();
+        setError(message);
+      } else {
+        setRecoveryError(err.message || 'That recovery code was not accepted. Try again.');
+        setRecoveryCode('');
+      }
+      setSubmitting(false);
+    }
+  }
+
+  /**
+   * The locked-out officer's request, sent WITHOUT a session.
+   *
+   * It changes nothing — the server records it for an Admin — and the answer is
+   * deliberately the same whether or not the identifier exists (no username
+   * oracle on the sign-in screen). The receipt is the server's own sentence, so
+   * the two cannot tell different stories about what just happened.
+   */
+  async function submitAccountRequest(e) {
+    e.preventDefault();
+    if (!username.trim()) {
+      setHelpError('Enter your operator ID so the request can name you.');
+      return;
+    }
+    setHelpBusy(true);
+    setHelpError('');
+    setHelpMessage('');
+    try {
+      const res = await api('/account-requests', {
+        method: 'POST',
+        body: { username: username.trim(), kind: helpKind, reason: helpReason },
+      });
+      setHelpMessage(res?.message || 'Your request has been recorded for an administrator.');
+      setHelpReason('');
+    } catch (err) {
+      setHelpError(err.message || 'The request could not be sent. Tell an administrator in person instead.');
+    } finally {
+      setHelpBusy(false);
+    }
   }
 
   async function handleSubmit(e) {
@@ -455,6 +592,15 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
       // A mailer problem is the server's sentence about THIS account, not an
       // outage, so it lands in the error band rather than the connection notice.
       if (isMfaServerIssue(err)) {
+        // A MAIL FAILURE IS NOT NECESSARILY THE END. The server creates the
+        // pending sign-in BEFORE it tries to send, so an account with recovery
+        // codes can still finish offline. Ask for the state; if a second factor
+        // is still owed, open the code screen (carrying the mail sentence in its
+        // band) rather than stopping at the password.
+        if (err.code === 'mfa_mail_failed' && (await enterSecondFactorFromStatus(err.message))) {
+          setSubmitting(false);
+          return;
+        }
         setError(err.message || 'A sign-in code could not be sent for this account.');
       } else if (isUnreachable(err)) {
         setConn(classifyError(err));
@@ -601,6 +747,7 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
         // One stage exists now; the server's own answer is still what puts the
         // screen here, so a future second stage would arrive through this line.
         setStep('verify');
+        setRecoveryMode(defaultRecoveryMode(res.mfa));
         setResendIn(Number.isFinite(res.mfa?.resend_in) ? res.mfa.resend_in : 0);
       })
       .catch(() => {
@@ -778,8 +925,9 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
 
                   <h1 className="la-verify-title">Verify your identity</h1>
                   <p className="la-verify-lede">
-                    Enter the {MFA_DIGITS}-digit code we sent to your registered email. It
-                    expires in {MFA_CODE_TTL_MINUTES} minutes.
+                    {recoveryMode
+                      ? `Enter one of the single-use recovery codes from your printed sheet (${RECOVERY_LENGTH} characters).`
+                      : `Enter the ${MFA_DIGITS}-digit code we sent to your registered email. It expires in ${MFA_CODE_TTL_MINUTES} minutes.`}
                   </p>
 
                   {/* WHERE THE CODE WENT, in the mono face, because that is the
@@ -787,7 +935,7 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
                       Masked by the SERVER (j***@gmail.com): the screen never holds
                       the address, so it cannot print one on a shared station
                       display. */}
-                  {mfa?.email_hint && (
+                  {!recoveryMode && mfa?.email_hint && (
                     <p className="la-verify-sent">
                       <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">
                         <rect x="3" y="5" width="18" height="14" rx="2" />
@@ -817,6 +965,38 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
                       that Enter is implicit submission of exactly one question
                       (the row) and the resend control beside it stays a plain
                       button rather than a second submit. */}
+                  {/* WHEN THE MAILBOX ROUTE CANNOT RUN, say so plainly: the six
+                      boxes would be a form with nothing to receive. Which sentence
+                      applies comes from the server's own state, never a guess. */}
+                  {!mfa?.has_email && mfa?.recovery?.available && (
+                    <div className="la-verify-alert" role="status">
+                      <p>No email address is on file for this account. Use a recovery code to finish signing in.</p>
+                    </div>
+                  )}
+                  {mfa?.has_email && mfa?.code_pending === false && mfa?.recovery?.available && (
+                    <div className="la-verify-alert" role="status">
+                      <p>The sign-in code could not be emailed right now. Use a recovery code to finish signing in.</p>
+                    </div>
+                  )}
+
+                  {/* THE OFFLINE ROUTE (migration 018), offered whenever the account
+                      holds unspent recovery codes — as the only way when mail cannot
+                      send, and as an alternative when it can. */}
+                  {mfa?.has_email && mfa?.recovery?.available && (
+                    <div className="la-verify-mode">
+                      <button
+                        type="button"
+                        className="la-verify-mode-btn"
+                        onClick={() => { setRecoveryMode((v) => !v); setRecoveryError(''); }}
+                        disabled={submitting}
+                      >
+                        {recoveryMode ? 'Use the emailed code instead' : 'Use a recovery code instead'}
+                      </button>
+                    </div>
+                  )}
+
+                  {!recoveryMode && (
+                    <>
                   <form className="la-verify-form" onSubmit={handleSecondFactor} noValidate>
                     <span className="la-verify-label" id="la-code-label">
                       Verification code
@@ -893,6 +1073,39 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
                           : 'Resend code'}
                     </button>
                   </div>
+                    </>
+                  )}
+
+                  {recoveryMode && (
+                    <form className="la-verify-form" onSubmit={submitRecovery} noValidate>
+                      <label className="la-verify-label" htmlFor="la-recovery">
+                        Recovery code
+                      </label>
+                      <input
+                        id="la-recovery"
+                        className="la-verify-recovery-input"
+                        type="text"
+                        inputMode="text"
+                        autoComplete="one-time-code"
+                        spellCheck={false}
+                        autoFocus
+                        placeholder="XXXXX-XXXXX"
+                        value={recoveryCode}
+                        onChange={(e) => { setRecoveryCode(e.target.value); setRecoveryError(''); }}
+                        disabled={submitting || conn !== 'ok'}
+                      />
+                      <p className="la-verify-message" aria-live="polite">
+                        {recoveryError ? <span className="is-error">{recoveryError}</span> : null}
+                      </p>
+                      <button
+                        className="la-verify-submit"
+                        type="submit"
+                        disabled={submitting || conn !== 'ok'}
+                      >
+                        {submitting ? 'Verifying…' : 'Use recovery code'}
+                      </button>
+                    </form>
+                  )}
 
                   <div className="la-verify-foot">
                     <button type="button" className="la-verify-again" onClick={cancelSecondFactor}>
@@ -1038,6 +1251,85 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
                     </svg>
                   </button>
                 </form>
+
+                {/* THE LOCKED-OUT WAY TO ASK (Phase 1, S-04). Below the password
+                    form because it is what is used when that form does not work:
+                    a forgotten password, or a sign-in address that is wrong. It
+                    records a REQUEST for an Admin and changes nothing itself, and
+                    the server answers the same whether or not the ID exists, so
+                    this is not a way to test usernames. */}
+                {!helpOpen ? (
+                  <button
+                    type="button"
+                    className="la-help-open"
+                    onClick={() => { setHelpOpen(true); setHelpError(''); }}
+                  >
+                    Can&rsquo;t sign in? Request help
+                  </button>
+                ) : (
+                  <form className="la-help" onSubmit={submitAccountRequest} noValidate>
+                    <h3 className="la-help-title">Request help</h3>
+                    <p className="la-help-sub">
+                      This records a request for an administrator — it does not reset anything
+                      automatically. If you cannot sign in at all, also tell an administrator in person.
+                    </p>
+                    <div className="la-field">
+                      <label className="la-label" htmlFor="la-help-user">Operator ID</label>
+                      <input
+                        id="la-help-user"
+                        className="la-input"
+                        type="text"
+                        autoComplete="username"
+                        value={username}
+                        onChange={(e) => { setUsername(e.target.value); setHelpError(''); }}
+                        disabled={helpBusy}
+                      />
+                    </div>
+                    <fieldset className="la-help-kinds">
+                      <legend className="la-label">What do you need?</legend>
+                      {REQUEST_KINDS.map((kind) => (
+                        <label key={kind} className="la-help-kind">
+                          <input
+                            type="radio"
+                            name="la-help-kind"
+                            value={kind}
+                            checked={helpKind === kind}
+                            onChange={() => setHelpKind(kind)}
+                            disabled={helpBusy}
+                          />
+                          <span>{requestLabel(kind)}</span>
+                        </label>
+                      ))}
+                    </fieldset>
+                    <div className="la-field">
+                      <label className="la-label" htmlFor="la-help-reason">Reason (optional)</label>
+                      <textarea
+                        id="la-help-reason"
+                        className="la-textarea"
+                        rows={3}
+                        maxLength={REASON_MAX}
+                        value={helpReason}
+                        onChange={(e) => setHelpReason(e.target.value)}
+                        disabled={helpBusy}
+                        placeholder="e.g. My sign-in code never arrives at the address on file."
+                      />
+                    </div>
+                    <p className="la-help-message" role="status">{helpMessage}</p>
+                    <p className="la-help-error" role="alert">{helpError}</p>
+                    <div className="la-help-actions">
+                      <button
+                        type="button"
+                        onClick={() => { setHelpOpen(false); setHelpMessage(''); setHelpError(''); }}
+                        disabled={helpBusy}
+                      >
+                        Close
+                      </button>
+                      <button className="primary" type="submit" disabled={helpBusy}>
+                        {helpBusy ? 'Sending…' : 'Send request'}
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
             </section>
             )}

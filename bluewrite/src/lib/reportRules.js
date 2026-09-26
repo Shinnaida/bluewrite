@@ -374,6 +374,52 @@ function checkField(rule, value) {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Row-level visibility (the group-row twin of a field's `showIf`).
+//
+// A scalar `showIf` asks a question of the whole draft (`cctv_available` is
+// "Yes"); a row's asks it of the ROW the field lives on — which is how a
+// suspect's Name is asked for only while the identity is Known. Resolved in one
+// place because the form, the review step and the engine must agree: a hidden
+// field cannot be demanded, and it must not keep a value either, or the sheet
+// would print what the officer just un-said.
+// ---------------------------------------------------------------------------
+
+/**
+ * Is this group-row field on screen for THIS row?
+ *
+ * @param {object} fld an itemSchema entry (may carry `showIf`)
+ * @param {object} row the row it would be answered on
+ * @returns {boolean}
+ */
+export function rowFieldVisible(fld, row) {
+  if (!fld?.showIf) return true;
+  const value = String(row?.[fld.showIf.key] ?? '').trim();
+  return fld.showIf.values.includes(value);
+}
+
+/**
+ * Drop the values of fields this row is no longer showing. Pure — returns a
+ * new row.
+ *
+ * Called on every row edit, so switching a suspect from Known to Unknown takes
+ * the name with it. That matters beyond tidiness: an "unidentified" person
+ * still holding a name would be a record that contradicts itself, and the
+ * printed sheet is built to trust the status rather than the stray value.
+ *
+ * @param {object} row
+ * @param {Array<object>} itemSchema
+ * @returns {object}
+ */
+export function applyRowVisibility(row, itemSchema) {
+  const next = { ...(row ?? {}) };
+  for (const fld of itemSchema ?? []) {
+    if (rowFieldVisible(fld, next)) continue;
+    if (String(next[fld.key] ?? '') !== '') delete next[fld.key];
+  }
+  return next;
+}
+
 function err(path, message) {
   return { level: 'error', path, message };
 }
@@ -414,6 +460,10 @@ function validateGroups(draft, level) {
     const labelOf = (key) => (cfg.itemSchema.find((f) => f.key === key) ?? { label: key }).label;
     meaningful.forEach((item, i) => {
       for (const fld of cfg.itemSchema) {
+        // Not on screen for this row → not this row's to answer. The same
+        // resolution the form does (rowFieldVisible), so a hidden field can
+        // neither be demanded here nor complained about.
+        if (!rowFieldVisible(fld, item)) continue;
         const rule = {
           label: fld.label,
           required: fld.required === true,
@@ -434,13 +484,22 @@ function validateGroups(draft, level) {
           problems.push(err(`${groupKey}[${i}].${key}`, `${cfg.label} ${i + 1}: ${labelOf(key)} required.`));
         }
       }
-      for (const options of rowRules.requireAny ?? []) {
+      // Conditional alternatives WIN over the base list. While a suspect's
+      // identity is Unknown the name field is off the screen, so accepting a
+      // name for that row would be accepting a value nothing collected; the
+      // conditional list is what the row must carry instead.
+      const when = (rowRules.requireAnyWhen ?? []).find((rule) =>
+        rule.values.includes(String(item?.[rule.key] ?? '').trim()),
+      );
+      const alternatives = when ? [{ any: when.any, label: when.label }] : rowRules.requireAny ?? [];
+      for (const alt of alternatives) {
+        const options = alt.any ?? alt;
         const filled = options.some((k) => String(item?.[k] ?? '').trim() !== '');
         if (!filled) {
           problems.push(
             err(
               `${groupKey}[${i}].${options[0]}`,
-              `${cfg.label} ${i + 1}: ${options.map(labelOf).join(' or ')} required.`,
+              `${cfg.label} ${i + 1}: ${alt.label ?? options.map(labelOf).join(' or ')} required.`,
             ),
           );
         }

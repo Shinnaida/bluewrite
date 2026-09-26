@@ -148,6 +148,34 @@ final class MaskingNativeTextTest extends TestCase
         $this->assertStringContainsString('[VICTIM_1]', $m);
     }
 
+    /**
+     * Task 8 — a name whose tokens are typed with no separator between them
+     * (a dropped space, a hyphen or a slash) used to be masked token by token,
+     * leaving the SAME placeholder back-to-back: "[VICTIM_1][VICTIM_1]". The
+     * model echoed that doubled token into its writing suggestions. One person
+     * is one placeholder, so the run collapses.
+     */
+    public function testAdjacentlyTypedNameTokensCollapseToOnePlaceholder(): void
+    {
+        foreach (['PedroReyes', 'Pedro-Reyes', 'Pedro/Reyes'] as $joined) {
+            $m = $this->maskNotes("{$joined} was at the market.");
+            $this->assertStringNotContainsString('[VICTIM_1][VICTIM_1]', $m, "joined case: {$joined}");
+            $this->assertStringNotContainsString('[VICTIM_1]-[VICTIM_1]', $m, "joined case: {$joined}");
+            $this->assertStringNotContainsString('[VICTIM_1]/[VICTIM_1]', $m, "joined case: {$joined}");
+            $this->assertStringContainsString('[VICTIM_1]', $m, "joined case: {$joined}");
+        }
+    }
+
+    /**
+     * The collapse is surgical: two genuine mentions separated by a sentence
+     * boundary are two facts and must both survive.
+     */
+    public function testSeparateMentionsAreNotCollapsed(): void
+    {
+        $m = $this->maskNotes('Pedro Reyes reported the loss. Pedro Reyes left.');
+        $this->assertSame(2, substr_count($m, '[VICTIM_1]'), $m);
+    }
+
     // =====================================================================
     // 2. Leak-gate coverage — every way a placeholder can come back mangled
     // =====================================================================

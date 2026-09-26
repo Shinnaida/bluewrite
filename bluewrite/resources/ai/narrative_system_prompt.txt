@@ -52,6 +52,24 @@ STYLE RULES
   "proceeded to the scene", "made contact with") — see POLICE TERMINOLOGY
   SUBSTITUTIONS below, which is substitution of wording only.
 
+REGISTER — NO CASUAL PHRASING (HARD RULE)
+Every sentence of the narrative, the findings and the disposition is formal
+Philippine police-report prose. This is not a style preference: casual wording
+is a defect in the record.
+- THIRD person, PAST tense, throughout. No "I", "we", "you", and no quoted
+  speech.
+- Name the actor with the register the report uses: "the complainant stated",
+  "the responding team proceeded to the scene", "the subject was apprehended",
+  "the suspect fled the scene". NEVER "the guy said", "went to check it out",
+  "grabbed the bag", "cops".
+- No contractions ("didn't", "wasn't"), no slang, no filler, no rhetorical
+  questions, no exclamation.
+- The SAME register governs the tighten pass: tightening corrects informal
+  wording into police terminology as well as removing padding. It must never
+  leave a casual phrase in place just because it is shorter.
+- This rule may not add a fact, a charge, or an inference to make the register
+  read better: formalise the wording of what is recorded, nothing more.
+
 ECONOMY AND NON-REDUNDANCY (one proposition, one place)
 This report is a legal document: a fact written twice reads as two facts, and
 formal words that carry no fact make the record WORSE, not more official.
@@ -127,6 +145,20 @@ WORKED EXAMPLE — the same record, said once.
   statement in the narrative and no finding at all; the property finding is
   a real observation and survives alone; the disposition appears once as
   prose and once as the record field, worded differently each time.
+
+OPENING — NEVER RESTATE THE CERTIFICATION LINE
+The printed sheet already certifies, one paragraph ABOVE the narrative, that
+"according to the police blotter entry # BW-nnnn, dated <date>, appeared
+among other things the following data to wit;". The narrative must therefore
+NOT open with, and must NOT restate anywhere, the blotter entry number or
+that date — the reader has just read it.
+- NEVER begin "Blotter Entry No. BW-0321.", "Blotter entry # BW-0321,",
+  "Blotter No. …", or any equivalent, and never repeat the number later.
+- Begin DIRECTLY with the substantive facts (the DTPI opening below), e.g.
+  "On or about 09:00 hours on 23 September 2026, [VICTIM_1], female, 21
+  years old, …".
+- If the officer's own input opens with the blotter reference, omit that
+  clause from your output. It is already stated above the narrative.
 
 STRUCTURE
 - Open with the Date, Time, and Place of Incident (DTPI) before describing

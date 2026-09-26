@@ -7,6 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   validateReport,
   validateReporterParty,
@@ -15,11 +16,15 @@ import {
   stolenItemsTotal,
   deriveMirrors,
   syncMirrors,
+  rowFieldVisible,
+  applyRowVisibility,
 } from '../../src/lib/reportRules.js';
 import { normalizeLegacyTypeSpecific, hasLegacyShape } from '../../src/lib/normalizeLegacy.js';
 import {
   GROUP_CONFIG,
   GROUP_ROW_RULES,
+  SUSPECT_ITEM_FIELDS,
+  SUSPECT_DESCRIPTOR_KEYS,
   INCIDENT_TYPES,
   TYPE_FIELDS,
 } from '../../src/lib/incidentTypes.js';
@@ -290,10 +295,50 @@ test('mixed legacy + partial new shape normalizes safely', () => {
   assert.equal(out.vehicles[0].plate_number, 'NEW0001');
 });
 
+test('a legacy single suspect_information blob becomes the first suspect row', () => {
+  const out = normalizeLegacyTypeSpecific(
+    { suspect_information: 'One unidentified male, gray hoodie' },
+    'Other Incident',
+  );
+  assert.deepEqual(out.respondent, [
+    { suspect_description: 'One unidentified male, gray hoodie' },
+  ]);
+
+  // A report that already files suspects as rows keeps them — the blob is
+  // ignored rather than folded in a second time.
+  const kept = normalizeLegacyTypeSpecific(
+    { suspect_information: 'blob', respondent: [{ name: 'Pedro Reyes' }] },
+    'Other Incident',
+  );
+  assert.deepEqual(kept.respondent, [{ name: 'Pedro Reyes' }]);
+
+  // A name from the legacy `respondent` column and the old description
+  // describe the SAME person, so they share one row.
+  const merged = normalizeLegacyTypeSpecific(
+    { suspect_information: 'gray hoodie' },
+    'Other Incident',
+    { respondent: 'Pedro Reyes' },
+  );
+  assert.deepEqual(merged.respondent, [
+    { name: 'Pedro Reyes', suspect_description: 'gray hoodie' },
+  ]);
+
+  // A blank blob invents nobody.
+  assert.equal(
+    normalizeLegacyTypeSpecific({ suspect_information: '  ' }, 'Other Incident').respondent,
+    undefined,
+  );
+});
+
 test('hasLegacyShape detects both old and new', () => {
   assert.equal(hasLegacyShape({ vehicle_1_driver: 'x' }), true);
   assert.equal(hasLegacyShape({ complainant: 'text' }), true);
   assert.equal(hasLegacyShape({ complainant: [{ name: 'x' }] }), false);
+  // The old single-suspect blob is a legacy shape too: it is migrated into the
+  // Suspects group, so a surface that only normalizes known-legacy input has to
+  // recognize it.
+  assert.equal(hasLegacyShape({ suspect_information: 'gray hoodie' }), true);
+  assert.equal(hasLegacyShape({ suspect_information: '  ' }), false);
   assert.equal(hasLegacyShape({}), false);
 });
 
@@ -760,6 +805,9 @@ test('a recorded row has to be a record: a name — or, for a suspect, a descrip
   });
   assert.equal(validateReport(unidentifiedSuspect, 'finalize').errors.length, 0);
 
+  // A row that says only "Unknown" describes nobody. The NAME is not what the
+  // engine complains about any more — that field is not on screen for this row —
+  // so the complaint lands on a field the officer can actually see.
   const emptySuspect = validBase('Theft', {
     type_specific: {
       ...theftFields,
@@ -767,10 +815,136 @@ test('a recorded row has to be a record: a name — or, for a suspect, a descrip
       respondent: [{ suspect_status: 'Unidentified' }],
     },
   });
+  const emptyErrors = validateReport(emptySuspect, 'finalize').errors;
   assert.ok(
-    validateReport(emptySuspect, 'finalize').errors.some((e) => e.path === 'respondent[0].name'),
+    emptyErrors.some((e) => e.path.startsWith('respondent[0].')),
     'a suspect row with neither name nor description is caught',
   );
+  assert.match(emptyErrors.map((e) => e.message).join(' '), /description of the person/);
+});
+
+// ---- 9b. An unidentified person: no name, but never nobody --------------
+//
+// A report has to be able to describe somebody the officer cannot name. The
+// name field is asked for only while the identity is KNOWN, the row describes
+// the person instead, and the printed sheet states that person rather than a
+// blank (see src/lib/suspectLine.js for the sentence itself).
+
+test('the suspect row asks for a name only while the identity is known', () => {
+  const schema = GROUP_CONFIG['Theft'].respondent.itemSchema;
+  const nameField = schema.find((f) => f.key === 'name');
+  const identity = schema.find((f) => f.key === 'suspect_status');
+
+  // The officer answers the question they are actually being asked, while the
+  // stored value stays the one the rest of the system already reads. The two
+  // cannot drift: the labels are a map over the very option list that is stored.
+  assert.deepEqual(identity.select, ['Unidentified', 'Identified']);
+  assert.deepEqual(identity.optionLabels, { Identified: 'Known', Unidentified: 'Unknown' });
+  for (const value of identity.select) {
+    assert.ok(identity.optionLabels[value], `${value} has no label for the officer to read`);
+  }
+
+  // Known (and nothing chosen yet) offers the name; Unknown does not.
+  assert.equal(nameField.showIf.key, 'suspect_status');
+  assert.equal(rowFieldVisible(nameField, { suspect_status: 'Identified' }), true);
+  assert.equal(rowFieldVisible(nameField, {}), true, 'nothing chosen yet still offers the name');
+  assert.equal(rowFieldVisible(nameField, { suspect_status: 'Unidentified' }), false);
+  assert.equal(rowFieldVisible({ key: 'sex' }, { suspect_status: 'Unidentified' }), true);
+});
+
+test('choosing Unknown takes the name off the row with it', () => {
+  const schema = GROUP_CONFIG['Theft'].respondent.itemSchema;
+
+  const known = { suspect_status: 'Identified', name: 'Pedro Reyes', sex: 'Male' };
+  const switched = applyRowVisibility({ ...known, suspect_status: 'Unidentified' }, schema);
+  assert.equal(switched.name, undefined, 'the name goes with the identity that justified it');
+  assert.equal(switched.sex, 'Male', 'the description is untouched');
+
+  // Known, or undecided, keeps it — a switch back and forth is not destructive
+  // beyond the field it hides.
+  assert.equal(applyRowVisibility(known, schema).name, 'Pedro Reyes');
+  assert.equal(
+    applyRowVisibility({ suspect_status: '', name: 'Pedro Reyes' }, schema).name,
+    'Pedro Reyes',
+  );
+  // Pure: the row handed in is not mutated.
+  assert.equal(known.suspect_status, 'Identified');
+});
+
+test('an unknown suspect must be described — and any one detail is enough', () => {
+  const rowErrors = (respondent) => {
+    const draft = validBase('Theft', {
+      type_specific: { ...theftFields, complainant: [{ name: 'Ana Cruz' }], respondent },
+    });
+    return validateReport(draft, 'finalize').errors.filter((e) => e.path.startsWith('respondent'));
+  };
+
+  // Status alone is a placeholder wearing a status, not a record.
+  assert.ok(rowErrors([{ suspect_status: 'Unidentified' }]).length > 0);
+
+  // Every field the printed sentence can read counts as the description — the
+  // schema's list and the rule's must be the same list, or a detail the officer
+  // recorded would be refused by the engine that accepts it elsewhere.
+  for (const key of SUSPECT_DESCRIPTOR_KEYS) {
+    // Age is the one descriptor the schema types (a number), so it is given a
+    // number; every other key is free text.
+    const sample = key === 'age' ? '34' : 'anything recorded';
+    assert.deepEqual(
+      rowErrors([{ suspect_status: 'Unidentified', [key]: sample }]),
+      [],
+      `a row described only by ${key} is a record`,
+    );
+  }
+
+  // A name is not a way out of it: the field is not on screen for this row, so
+  // a value left behind by an older record cannot stand in for a description.
+  assert.ok(rowErrors([{ suspect_status: 'Unidentified', name: 'Pedro Reyes' }]).length > 0);
+
+  // Known: the name is the record, and the description stays optional.
+  assert.deepEqual(rowErrors([{ suspect_status: 'Identified', name: 'Pedro Reyes' }]), []);
+  // Undecided: either half counts, which is what keeps a legacy row valid.
+  assert.deepEqual(rowErrors([{ name: 'Pedro Reyes' }]), []);
+  assert.deepEqual(rowErrors([{ clothing: 'dark jacket' }]), []);
+});
+
+test('the PHP suspect schema and its row rules stay in lockstep', () => {
+  // The suspect row is stated twice — the JS schema the form renders and the
+  // PHP table the validator reads — and the two have to agree about which
+  // fields exist, which of them is hidden, and what an Unknown identity must
+  // carry. A drift here would not throw: the API would simply accept (or
+  // refuse) something the form never offered.
+  const php = readFileSync(new URL('../../app/rules/report_rules.php', import.meta.url), 'utf8');
+  const keysIn = (constName) => {
+    const block = php.match(new RegExp(`const ${constName} = [^[]*\\[([\\s\\S]*?)\\n    \\];`))?.[1] ?? '';
+    return [...block.matchAll(/'([a-z0-9_]+)' => \[/g)].map((m) => m[1]);
+  };
+
+  // The same fields, added to the parent row: PHP uses `+`, so only what THIS
+  // table states is compared against the JS keys the person schema does not
+  // already carry.
+  const personKeys = keysIn('PERSON_ITEM');
+  const jsKeys = SUSPECT_ITEM_FIELDS.map((f) => f.key).filter((k) => !personKeys.includes(k));
+  assert.deepEqual(keysIn('SUSPECT_ITEM'), jsKeys);
+  assert.deepEqual(keysIn('SUSPECT_ITEM'), [
+    'suspect_status',
+    'height',
+    'build',
+    'hair',
+    'clothing',
+    'distinguishing_features',
+    'suspect_description',
+    'relationship_to_incident',
+  ]);
+
+  // The hidden field, and the condition it is hidden under.
+  assert.match(php, /'name' => \['suspect_status', \['Identified', ''\]\]/);
+  // The conditional requirement, and the same descriptor list on both sides.
+  const respondent = php.match(/'respondent' => \[([\s\S]*?)\n        \],/)?.[1] ?? '';
+  assert.match(respondent, /'key' => 'suspect_status'/);
+  assert.match(respondent, /'values' => \['Unidentified'\]/);
+  for (const key of SUSPECT_DESCRIPTOR_KEYS) {
+    assert.ok(respondent.includes(`'${key}'`), `PHP's respondent rule never mentions ${key}`);
+  }
 });
 
 test('a witness the complainant cannot name is a record if they said something', () => {

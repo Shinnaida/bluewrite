@@ -58,6 +58,27 @@ check('serialized payload has NO address', stripos(json_encode($m), 'Purok') ===
 check('location masked', ($m['where'] ?? '') === '[LOCATION]');
 check('map has location', ($out['map']['[LOCATION]'] ?? '') === 'Public market, Barangay Dagatan');
 
+// ---- 1b. Suspect description reaches the narrative ---------------------------
+// A suspect the officer described must be describable in the narrative: an
+// UNNAMED one via the role phrase, a NAMED one via the structured fields —
+// never the name itself.
+$tsD = [
+    'respondent' => [
+        ['suspect_status' => 'Unidentified', 'sex' => 'Male', 'age' => '30', 'build' => 'medium', 'clothing' => 'gray hoodie'],
+        ['suspect_status' => 'Identified', 'name' => 'Pedro Reyes', 'height' => "5'7\"", 'suspect_description' => 'dark jacket'],
+    ],
+];
+$outD = MaskingGateway::buildMaskedPayload(['incident_type' => 'Theft', 'location' => 'Market'], $tsD, '');
+$phraseD = (string) ($outD['map']['[RESPONDENT_1]'] ?? '');
+echo "\nSuspect description reaching the narrative\n";
+check('unnamed suspect phrase carries the clothing', str_contains($phraseD, 'gray hoodie'), $phraseD);
+check('unnamed suspect phrase carries the build', str_contains($phraseD, 'medium'), $phraseD);
+$gD = (array) ($outD['masked']['groups']->respondents ?? []);
+$namedD = $gD[1] ?? [];
+check('named suspect carries the description', ($namedD['suspect_description'] ?? '') === 'dark jacket', json_encode($namedD));
+check('named suspect carries the height', ($namedD['height'] ?? '') === "5'7\"", json_encode($namedD));
+check('named suspect name still never sent', !isset($namedD['name']), json_encode($namedD));
+
 // ---- 2. Multi-vehicle masking ------------------------------------------------
 $tsV = ['vehicles' => [
     ['plate_number' => 'ABC1234', 'driver_name' => 'Driver One', 'make_model' => 'Toyota Vios', 'damage_description' => 'Front bumper'],
@@ -167,6 +188,23 @@ echo "\nFree-text masking\n";
 check('free text has no Maria Santos', stripos($outN['masked']['officer_notes'], 'Maria Santos') === false);
 check('free text uses placeholders', str_contains($outN['masked']['officer_notes'], '[VICTIM_1]') && str_contains($outN['masked']['officer_notes'], '[VICTIM_2]'));
 check('both occurrences replaced', substr_count($outN['masked']['officer_notes'], '[VICTIM_1]') === 2);
+
+// ---- 3b. Doubled placeholder collapse (Task 8) --------------------------------
+// A person's full name and each of its 3+-character tokens map to the SAME
+// placeholder, so two tokens typed directly together (dropped space, hyphen,
+// slash) used to come back doubled — "[VICTIM_1][VICTIM_1]" — which the model
+// then echoed into the draft and its writing suggestions.
+$outC = MaskingGateway::buildMaskedPayload(
+    ['incident_type' => 'Theft', 'location' => 'Market'],
+    ['complainant' => [['name' => 'Shaine Jayme', 'sex' => 'Female']]],
+    'ShaineJayme was seen. Shaine-Jayme fled. Shaine/Jayme returned.',
+);
+$notesC = (string) ($outC['masked']['officer_notes'] ?? '');
+echo "\nDoubled placeholder collapse\n";
+check('no back-to-back placeholder survives', !str_contains($notesC, '[VICTIM_1][VICTIM_1]'), $notesC);
+check('hyphen-joined tokens collapse', !str_contains($notesC, '[VICTIM_1]-[VICTIM_1]'), $notesC);
+check('slash-joined tokens collapse', !str_contains($notesC, '[VICTIM_1]/[VICTIM_1]'), $notesC);
+check('the collapsed mention is still masked', substr_count($notesC, '[VICTIM_1]') === 3, $notesC);
 
 // ---- 4. Residual risk ---------------------------------------------------------
 $notesStranger = 'Bystander Pedro Reyes helped chase the suspect.';

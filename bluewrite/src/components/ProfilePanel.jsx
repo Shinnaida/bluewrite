@@ -63,6 +63,9 @@ import {
   MIN_LENGTH,
   passwordHint,
 } from '../lib/passwordPolicy.js';
+// The self-service recovery REQUEST (Phase 1, S-04): the two things an officer
+// cannot change alone, offered as a recorded ask rather than a control.
+import { REASON_MAX, REQUEST_KINDS, requestLabel } from '../lib/accountRequests.js';
 import { MoonIcon, SunIcon } from './ThemeIcons.jsx';
 
 /**
@@ -342,6 +345,42 @@ export default function ProfilePanel({
   // administrative fact, and the only way past a lost mailbox is an Admin
   // resetting the account (see Users ▸ Reset verification).
   const mfaState = user.mfa ?? null;
+  // THE ADDRESS IN FULL, to its owner (Phase 1, S-04). /me returns `user.email`
+  // for the signed-in account; a mask (mfaState.email_hint) cannot be checked
+  // for a typo, and confirming what is on file is the point. It is still NOT
+  // editable here — the address is an administrative fact.
+  const mfaEmail = typeof user.email === 'string' && user.email !== '' ? user.email : null;
+
+  // ---- The self-service request (S-04) -------------------------------------
+  //
+  // An officer asking an Admin for what they cannot change alone. It records a
+  // request and changes nothing; the Admin acts with the tools User Management
+  // already has, each of which is audited.
+  const [reqOpen, setReqOpen] = useState(false);
+  const [reqKind, setReqKind] = useState('password');
+  const [reqReason, setReqReason] = useState('');
+  const [reqBusy, setReqBusy] = useState(false);
+  const [reqMessage, setReqMessage] = useState('');
+  const [reqError, setReqError] = useState('');
+
+  async function submitAccountRequest(e) {
+    e.preventDefault();
+    setReqBusy(true);
+    setReqError('');
+    setReqMessage('');
+    try {
+      const res = await api('/me/account-request', {
+        method: 'POST',
+        body: { kind: reqKind, reason: reqReason },
+      });
+      setReqMessage(res?.message || 'Your request has been recorded for an administrator.');
+      setReqReason('');
+    } catch (err) {
+      setReqError(err.message || 'The request could not be sent. Try again, or tell an administrator.');
+    } finally {
+      setReqBusy(false);
+    }
+  }
 
   function resetPasswordForm() {
     setPwCurrent('');
@@ -773,22 +812,91 @@ export default function ProfilePanel({
               Order follows the sign-in itself: the password first, then the code
               from the email. READ-ONLY, and deliberately so: the factor rests on
               the address an Admin recorded for the account, which is an
-              administrative fact rather than something an officer changes here,
-              and there are no recovery codes any more to replace. A row that
-              offered a button would be offering something this app does not
-              have. */}
+              administrative fact rather than something an officer changes here.
+              The OFFLINE route (migration 018) is shown BESIDE it, not as a
+              button: the printed codes are issued by an Admin in User
+              Management and handed over in person, so what the officer needs
+              here is to know they hold one, and how many are left — not an
+              action that would have to reprint them. */}
           {mfaState?.required && (
             <div className="ir-pref-row">
               <span className="ir-pref-text">
                 <span className="ir-pref-name">Two-step verification</span>
                 <span className="ir-pref-hint">
                   {mfaState.has_email
-                    ? `Codes are sent to ${mfaState.email_hint}`
+                    ? `Codes are sent to ${mfaEmail ?? mfaState.email_hint}`
                     : 'No email address on file — ask an administrator to add one.'}
                   {mfaState.locked_until ? ' · temporarily locked after incorrect codes' : ''}
                 </span>
+                <span className="ir-pref-hint">
+                  {mfaState.recovery?.remaining > 0
+                    ? `Offline recovery codes: ${mfaState.recovery.remaining} of ${mfaState.recovery.total} left — use one at the code screen when mail cannot send.`
+                    : 'No offline recovery codes — ask an administrator to issue a set.'}
+                </span>
               </span>
             </div>
+          )}
+
+          {/* THE ASK (Phase 1, S-04). Beside the factor it is about: a password
+              reset and a sign-in-address fix are the two things an officer cannot
+              do alone, and both are shown here as REQUESTS — recorded, then acted
+              on by an Admin — rather than as controls this panel pretends to have. */}
+          {mfaState?.required && (
+            <div className="ir-pref-row">
+              <span className="ir-pref-text">
+                <span className="ir-pref-name">Need it changed?</span>
+                <span className="ir-pref-hint">
+                  Ask an administrator to reset your password or fix the sign-in address. The request is recorded.
+                </span>
+              </span>
+              <button
+                type="button"
+                className="profile-inline-btn"
+                aria-expanded={reqOpen}
+                aria-controls="profile-request-form"
+                onClick={() => { setReqOpen((v) => !v); setReqError(''); setReqMessage(''); }}
+              >
+                {reqOpen ? 'Close' : 'Request help'}
+              </button>
+            </div>
+          )}
+          {mfaState?.required && reqOpen && (
+            <form className="profile-request-form" id="profile-request-form" onSubmit={submitAccountRequest} noValidate>
+              <fieldset className="profile-request-kinds">
+                <legend className="ir-pref-name">What do you need?</legend>
+                {REQUEST_KINDS.map((kind) => (
+                  <label key={kind} className="profile-request-kind">
+                    <input
+                      type="radio"
+                      name="profile-request-kind"
+                      value={kind}
+                      checked={reqKind === kind}
+                      onChange={() => setReqKind(kind)}
+                      disabled={reqBusy}
+                    />
+                    <span>{requestLabel(kind)}</span>
+                  </label>
+                ))}
+              </fieldset>
+              <label className="ir-pref-name" htmlFor="profile-request-reason">Reason (optional)</label>
+              <textarea
+                id="profile-request-reason"
+                className="profile-request-reason"
+                rows={3}
+                maxLength={REASON_MAX}
+                value={reqReason}
+                onChange={(e) => setReqReason(e.target.value)}
+                disabled={reqBusy}
+                placeholder="e.g. I have forgotten my password."
+              />
+              <p className="profile-request-message" role="status">{reqMessage}</p>
+              <p className="profile-request-error" role="alert">{reqError}</p>
+              <div className="profile-request-actions">
+                <button type="submit" className="profile-inline-btn primary" disabled={reqBusy}>
+                  {reqBusy ? 'Sending…' : 'Send request'}
+                </button>
+              </div>
+            </form>
           )}
 
           <div className="ir-pref-row">

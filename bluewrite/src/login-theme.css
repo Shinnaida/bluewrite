@@ -811,6 +811,55 @@
   cursor: default;
 }
 
+/* THE MODE SWITCH (migration 018): the mailbox code and the offline recovery
+   code are two routes to the same step, and this is how the officer chooses.
+   A quiet text control rather than a second filled button — the filled button is
+   still the action. */
+.la-verify-mode {
+  margin: 0 0 0.9rem;
+}
+.la-verify-mode-btn {
+  padding: 0.2rem 0;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--ir-blue-ink);
+  font-family: var(--font-family);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.la-verify-mode-btn:hover:not(:disabled) { text-decoration: underline; }
+.la-verify-mode-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.la-verify-mode-btn:disabled { color: var(--ir-muted); cursor: default; }
+
+/* THE RECOVERY FIELD. One field, not six boxes: a recovery code is read off a
+   printed sheet and typed or pasted whole, and the mono face is what makes the
+   groups easy to check against the paper. */
+.la-verify-recovery-input {
+  display: block;
+  width: 100%;
+  height: 44px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 8px;
+  background: var(--ir-page);
+  color: var(--ir-text);
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.la-verify-recovery-input:focus-visible {
+  outline: none;
+  border-color: var(--ir-navy);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.la-verify-recovery-input:disabled { opacity: 0.55; cursor: not-allowed; }
+
 /* THE FOOT: the way out on the left, the rule that will stop it on the right. */
 .la-verify-foot {
   display: flex;
@@ -1050,3 +1099,101 @@
   .la-hero { font-size: clamp(1.9rem, 1.15rem + 3vw, 3.5rem); }
   .la-tagline { font-size: 0.62rem; }
 }
+
+/* ---- the locked-out help fold (Phase 1, S-04) -------------------------------
+   Below the password form, because it is what an officer uses when that form
+   does not work: a forgotten password, or a code that never arrives. It records
+   a REQUEST for an administrator and resets nothing itself. */
+.la-help-open {
+  display: block;
+  width: 100%;
+  margin-top: 0.9rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ir-blue);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+.la-help-open:hover { text-decoration: underline; }
+
+.la-help {
+  margin-top: 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 4px;
+  background: var(--ir-card);
+}
+.la-help-title {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ir-text);
+}
+.la-help-sub {
+  margin: 0 0 0.9rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--ir-muted);
+}
+.la-help-kinds {
+  margin: 0 0 0.9rem;
+  padding: 0;
+  border: 0;
+}
+.la-help-kind {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--ir-text);
+  cursor: pointer;
+}
+.la-textarea {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 3px;
+  background: var(--input-bg);
+  color: var(--ir-text);
+  font: inherit;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+.la-textarea:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.la-help-message,
+.la-help-error {
+  min-height: 1.1rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+.la-help-message { color: var(--green-ink); }
+.la-help-error { color: var(--ir-red); }
+.la-help-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+.la-help-actions button {
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ir-text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.la-help-actions button.primary {
+  border-color: var(--ir-blue);
+  background: var(--ir-blue);
+  color: #fff;
+}
+.la-help-actions button:disabled { opacity: 0.6; cursor: default; }

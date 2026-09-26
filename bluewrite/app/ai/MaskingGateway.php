@@ -42,6 +42,27 @@ final class MaskingGateway
     /** Object groups with their identifying field → placeholder suffix. */
     private const VEHICLE_GROUP = ['vehicles', 'vehicle'];
 
+    /**
+     * The fields a suspect row is RECORDED BY — mirrors SUSPECT_ITEM_FIELDS in
+     * src/lib/incidentTypes.js (minus the `name`/`address`/`sex`/`age` the
+     * NEVER_SEND / attribute rules already cover). None of them identifies a
+     * person on its own: a narrative has to describe an unidentified suspect
+     * ("a man in a gray hoodie") or state how a named one looked, and without
+     * these the writer gets a bare role label instead of the recorded
+     * description. They reach the model as structured fields for a NAMED
+     * suspect and ride in the unnamed-party phrase for an UNNAMED one, exactly
+     * like the existing sex/age attributes.
+     */
+    private const SUSPECT_DESCRIPTOR_FIELDS = [
+        'height',
+        'build',
+        'hair',
+        'clothing',
+        'distinguishing_features',
+        'suspect_description',
+        'relationship_to_incident',
+    ];
+
     /** Fields never sent, per §4.1. */
     private const NEVER_SEND = ['name', 'address', 'age', 'plate_number', 'driver_name', 'contact_number'];
 
@@ -221,9 +242,11 @@ final class MaskingGateway
         if ($band !== null) {
             $attrs[] = $band;
         }
-        // Free-form identifying attributes (occupation, clothing, build…)
-        // that future schemas may add to person items.
-        foreach (['occupation', 'description'] as $k) {
+        // Free-form identifying attributes (occupation, clothing, build…): the
+        // generic pair plus the suspect descriptor fields the form actually
+        // records — the comment above always meant to read these, and now the
+        // recorded description of an unidentified suspect reaches the sheet.
+        foreach (array_merge(['occupation', 'description'], self::SUSPECT_DESCRIPTOR_FIELDS) as $k) {
             $v = trim((string) ($item[$k] ?? ''));
             if ($v !== '') {
                 $attrs[] = $v;
@@ -410,7 +433,12 @@ final class MaskingGateway
                 if ($band !== null) {
                     $record['age_band'] = $band;
                 }
-                foreach (['sex', 'injury_status', 'statement_summary'] as $keep) {
+                foreach (
+                    array_merge(
+                        ['sex', 'injury_status', 'statement_summary'],
+                        self::SUSPECT_DESCRIPTOR_FIELDS,
+                    ) as $keep
+                ) {
                     $v = trim((string) ($item[$keep] ?? ''));
                     if ($v !== '') {
                         $record[$keep] = $v;
@@ -522,7 +550,34 @@ final class MaskingGateway
         foreach ($values as $real => $placeholder) {
             $text = str_ireplace($real, $placeholder, $text);
         }
-        return $text;
+        // A person's full name AND each of its 3+-character tokens all map to
+        // the SAME placeholder (see maskPersons). When two of those tokens sit
+        // directly together — a dropped space ("ShaineJayme"), a hyphen or
+        // slash ("Shaine-Jayme"), or the same name typed twice with no space —
+        // each is swapped on its own and the placeholder lands back-to-back:
+        // "[VICTIM_1][VICTIM_1]". One person is ONE placeholder, so the run is
+        // collapsed before the text reaches the provider (which would otherwise
+        // echo the doubled token into the draft and its suggestions).
+        return self::collapseRepeatedPlaceholders($text);
+    }
+
+    /**
+     * Collapse a placeholder inserted immediately next to itself into a single
+     * token. Only IDENTICAL placeholders separated solely by whitespace or a
+     * hyphen/slash/ampersand/comma are affected — a sentence boundary between
+     * two genuine mentions keeps both. Pure and offline; guarded by
+     * MaskingGatewayTest / MaskingNativeTextTest.
+     */
+    private static function collapseRepeatedPlaceholders(string $text): string
+    {
+        if (!str_contains($text, ']')) {
+            return $text;
+        }
+        return (string) preg_replace(
+            '/(\[[A-Z][A-Z0-9_]*\])(?:[\s\-\/&,]*\1)+/',
+            '$1',
+            $text,
+        );
     }
 
     /** Restore real values into the provider's narrative. */

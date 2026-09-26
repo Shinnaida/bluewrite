@@ -270,6 +270,18 @@
      the page's own near-black as the ink — 8.1:1, and unmistakably "unfiled". */
   --ir-flag-fill: var(--amber);
   --ir-flag-ink: var(--void);
+
+  /* ---- The report FOLDER (what it is FOR is in incident-report.css) ----
+     The glass is restated rather than inherited, for the reason every other
+     alpha in this file is: a navy 30% wash over a near-black page is invisible,
+     so the same intent needs a LIGHTER blue and a smaller alpha. The cover
+     takes the theme's own lifted navy, so a shelf of folders reads as the same
+     stationery as the bars above it — and it stays opaque, which is what keeps
+     its white label measurable (13:1 here). */
+  --ir-folder-back: rgba(111, 168, 255, 0.16);
+  --ir-folder-sheet: rgba(111, 168, 255, 0.1);
+  --ir-folder-face: rgba(34, 53, 92, 0.9);
+  --ir-folder-edge: rgba(255, 255, 255, 0.14);
 }
 
 /* The bar is delimited by its own colour in light (navy against a light-grey

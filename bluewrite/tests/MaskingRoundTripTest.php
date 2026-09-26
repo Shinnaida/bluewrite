@@ -155,16 +155,46 @@ $wrapped = NarrativeService::withReferences(
     'On or about 22:00 hours, the vendor saw the suspect flee.',
     ['id' => 8, 'officer_name' => 'Juan Dela Cruz', 'officer_rank' => 'Pat'],
 );
-check('opening blotter reference present', str_contains($wrapped, 'Blotter Entry No. BW-0008.'), $wrapped);
+check('narrative does NOT restate the blotter reference', !str_contains($wrapped, 'Blotter Entry No.'), $wrapped);
 check('closing investigator line present', str_contains($wrapped, 'Investigated by: Pat Juan Dela Cruz, City of Naga Police Station.'), $wrapped);
-check('body preserved between references', str_contains($wrapped, 'the vendor saw the suspect flee'), $wrapped);
+check('body preserved', str_contains($wrapped, 'the vendor saw the suspect flee'), $wrapped);
 
 $noOfficer = NarrativeService::withReferences('Body text.', ['id' => 8]);
 check('no investigator line when officer unknown', !str_contains($noOfficer, 'Investigated by'), $noOfficer);
-check('blotter reference still present without officer', str_contains($noOfficer, 'Blotter Entry No. BW-0008.'), $noOfficer);
 
 $noRef = NarrativeService::withReferences('Body text.', []);
-check('no references when report has no id', $noRef === 'Body text.', $noRef);
+check('no references when report has no officer', $noRef === 'Body text.', $noRef);
+
+// Task 6 — the defensive strip of a leading blotter restatement (code, not
+// prompt alone: the certification line already carries this reference).
+echo "\nTask 6 \u{2014} leading blotter restatement strip\n";
+check(
+    'model-style restatement stripped',
+    NarrativeService::stripLeadingBlotterRestatement('Blotter Entry No. BW-0321. On or about 09:00 hours, the subject fled.')
+        === 'On or about 09:00 hours, the subject fled.',
+    NarrativeService::stripLeadingBlotterRestatement('Blotter Entry No. BW-0321. On or about 09:00 hours, the subject fled.')
+);
+check(
+    'lower-case and hash restatement stripped',
+    NarrativeService::stripLeadingBlotterRestatement('blotter entry # BW-0321. On or about 09:00 hours, the subject fled.')
+        === 'On or about 09:00 hours, the subject fled.',
+    NarrativeService::stripLeadingBlotterRestatement('blotter entry # BW-0321. On or about 09:00 hours, the subject fled.')
+);
+check(
+    'a restatement carrying its own date is stripped whole',
+    NarrativeService::stripLeadingBlotterRestatement('Blotter Entry No. BW-0321, dated 25 September 2026. The subject fled.')
+        === 'The subject fled.',
+    NarrativeService::stripLeadingBlotterRestatement('Blotter Entry No. BW-0321, dated 25 September 2026. The subject fled.')
+);
+check(
+    'a later mention is left alone',
+    str_contains(NarrativeService::stripLeadingBlotterRestatement('On or about 09:00 hours the subject fled; see Blotter Entry No. BW-0321.'), 'Blotter Entry No.'),
+);
+check(
+    'a plain narrative is untouched',
+    NarrativeService::stripLeadingBlotterRestatement('On or about 09:00 hours, the subject fled.')
+        === 'On or about 09:00 hours, the subject fled.'
+);
 
 // legalBasis (§3.2) — JSON valid + only stable-citation types carry it.
 $vocab = json_decode((string) file_get_contents(__DIR__ . '/../resources/ai/type_vocabulary.json'), true);

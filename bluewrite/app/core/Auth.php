@@ -29,14 +29,19 @@ final class Auth
 
         // THE SECOND FACTOR IS ENFORCED ON EVERY REQUEST, not only at sign-in.
         //
-        // What the factor now rests on is the account's EMAIL ADDRESS, so that
-        // is what is checked here: an Admin or an Officer whose address is
-        // missing cannot complete a sign-in, and a session that was already open
-        // when the address was removed must not keep working under a requirement
-        // it no longer meets. The session is destroyed rather than parked, and
-        // the response carries a code the client turns into a sentence — the
-        // officer is told an administrator has to record an address.
-        if (EmailOtp::isRequired((string) $user['role']) && trim((string) ($user['email'] ?? '')) === '') {
+        // What the factor rests on is now EITHER the account's email address OR
+        // an enrolled set of offline recovery codes (migration 018) — so the
+        // session is refused only when the account has NEITHER. An Admin or an
+        // Officer with no address but unspent recovery codes can sign in (and
+        // hold a session) entirely offline; an account with neither cannot
+        // complete a sign-in, and a session that was already open when both were
+        // removed must not keep working under a requirement it no longer meets.
+        // The session is destroyed rather than parked, and the response carries a
+        // code the client turns into a sentence — the officer is told an
+        // administrator has to record an address or issue recovery codes.
+        if (EmailOtp::isRequired((string) $user['role'])
+            && trim((string) ($user['email'] ?? '')) === ''
+            && !RecoveryCodes::hasAny((int) $user['id'])) {
             self::logout();
             Response::json(401, [
                 'error' => 'This account has no email address on file, so it cannot receive a sign-in code. Ask an administrator to add one.',
