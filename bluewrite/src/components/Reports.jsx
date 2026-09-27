@@ -119,6 +119,7 @@ import {
   caseNumber,
   reportDateValue,
   specDate,
+  stationClock,
   CUSTOM_TYPE,
   incidentTypeBoxValue,
   resolveIncidentTypeInput,
@@ -264,9 +265,10 @@ const FIELD_LABELS = {
 // Small pieces of the Write Report screen's chrome.
 // ---------------------------------------------------------------------------
 
-// Line icons for the field labels (spec: a small icon sits left of each
-// label). Inline SVG, 14px, currentColor — no icon dependency, and they
-// inherit the label's muted colour.
+// Line icons for the screen's small chrome: the field labels (spec: a small
+// icon sits left of each label) and the case bar's two actions with the mark
+// on its save line. Inline SVG, 14px, currentColor — no icon dependency, and
+// they inherit the ink of whatever they sit in.
 const LABEL_ICONS = {
   person: <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-3.3 0-7 1.7-7 4v1h14v-1c0-2.3-3.7-4-7-4Z" />,
   id: (
@@ -303,6 +305,23 @@ const LABEL_ICONS = {
   ),
   hash: <path d="M9.5 4 8 20M16 4l-1.5 16M4.5 9h15M4 15h15" />,
   lines: <path d="M5 6.5h14M5 12h14M5 17.5h9" />,
+  // The case bar's three marks: the sheet going to the printer, the record
+  // being committed, and the tick on the save line. Drawn at the same size and
+  // hairline weight as the fields' so the bar does not read as a third style.
+  printer: (
+    <>
+      <path d="M7 9.5V4.5h10v5" />
+      <path d="M3.5 9.5h17v6.2a1.3 1.3 0 0 1-1.3 1.3H4.8a1.3 1.3 0 0 1-1.3-1.3V9.5Z" />
+      <path d="M7 14.6h10v5H7z" />
+    </>
+  ),
+  stamp: (
+    <>
+      <path d="M12 3.6 19.4 6.4v5.9c0 4-2.9 7.2-7.4 8.6-4.5-1.4-7.4-4.6-7.4-8.6V6.4L12 3.6Z" />
+      <path d="m8.7 11.7 2.3 2.3 4.3-4.5" />
+    </>
+  ),
+  check: <path d="m5 12.6 4.6 4.6L19 7.4" />,
 };
 
 function LabelIcon({ name }) {
@@ -366,6 +385,11 @@ function IrLabel({ htmlFor, children, icon, required }) {
 function IrCard({
   num,
   title,
+  // The light right-aligned label on the section bar (the reference's
+  // "Complainant / Informant"). Presentation only: it names what the section
+  // holds, and the title already names the section, so it is never the only
+  // thing identifying it.
+  context,
   children,
   wide,
   // A card that is NOT one of the report's ordinary sections: accent-edged and
@@ -402,8 +426,18 @@ function IrCard({
     >
       {!headless && (
         <div className="ir-card-head">
+          {/* The seal-amber marker that opens every section bar (Tasks 11/12).
+              It is the one accent in the document that is a MARK rather than a
+              STATE — nothing is "amber duty" — so a run of panels reads as the
+              station's own stationery. The numeral and title already name the
+              section, so it is decorative and carries no text. */}
+          <span className="ir-card-dot" aria-hidden="true" />
           {num && <span className="ir-card-num">{num}.</span>}
           {title && <span>{title}</span>}
+          {/* The right-aligned context label, pushed to the far edge by its own
+              margin (see the stylesheet) so it aligns whether or not the card
+              also carries actions. */}
+          {context && <span className="ir-card-context">{context}</span>}
           {/* Card-level actions (export, view toggles) sit in the header bar,
               not in a content row: they are not filters and would otherwise
               compete with them for the single filter line. */}
@@ -670,17 +704,42 @@ function TypeSpecificFields({ incidentType, values, onChange, disabled, errors, 
 // stepper is a read-out of `validateReport`, never a second validator, so it
 // cannot disagree with the red banner, the inline errors or Gate 2.
 // ===========================================================================
+// `numeral` is the section number the card and every control that points at the
+// section are named by, so one list holds the number AND the name.
 const STEPPER_STEPS = [
-  { label: 'Reporting party', paths: ['reporter_name', 'reporter_contact', 'reporter_address'] },
-  { label: 'Incident details', paths: ['incident_type', 'incident_datetime', 'location'] },
-  { label: 'Narrative', paths: ['narrative'] },
+  { numeral: 'I', label: 'Reporting party', paths: ['reporter_name', 'reporter_contact', 'reporter_address'] },
+  { numeral: 'II', label: 'Incident details', paths: ['incident_type', 'incident_datetime', 'location'] },
+  // NO NUMERAL, deliberately. The numerals count the FORMS the officer fills in
+  // and files; the narrative is the written account of the facts that sits
+  // between them. That is why the way forward from the narrative reads "Proceed
+  // to III. Parties Involved", and why the numbers still run I, II, III, IV down
+  // the page in the order the officer meets them.
+  { numeral: null, label: 'Narrative', paths: ['narrative'] },
   // The polymorphic section: the repeatable groups (a bare key like `vehicles`
   // or a per-item path like `vehicles[2].plate_number`) plus any per-type
   // scalar path. Checked against the type chosen NOW, so a group that does not
   // exist for this type can never count against it.
-  { label: 'Type-specific', paths: [], typeSpecific: true },
-  { label: 'Action taken', paths: ['action_taken', 'ioc_name'] },
+  { numeral: 'III', label: 'Parties Involved', paths: [], typeSpecific: true },
+  { numeral: 'IV', label: 'Action taken', paths: ['action_taken', 'ioc_name'] },
 ];
+
+/** The wording a way forward is named by — "Proceed to III. Parties Involved". */
+function sectionName(section) {
+  return section.numeral ? `${section.numeral}. ${section.label}` : section.label;
+}
+
+/**
+ * WHICH SECTIONS SHARE A SCREEN in the document deck.
+ *
+ * The report has always OPENED on three panels together — the reporting party
+ * and the incident details side by side, the narrative spanning the row beneath
+ * them — and that opening is ONE screen here too: Proceed replaces all three at
+ * once, which is also why the way forward from it names the section AFTER them.
+ * The parties form and the disposition take a screen each.
+ *
+ * Indexes into STEPPER_STEPS, and every step appears exactly once.
+ */
+const DOCUMENT_SLIDES = [[0, 1, 2], [3], [4]];
 
 // Index of the polymorphic section above, named so the bucketing reads itself
 // out rather than repeating `findIndex`.
@@ -816,28 +875,34 @@ const StepperReview = (
  * The progress stepper: one hairline track behind five dots, filled up to the
  * current section, with an uppercase label under each dot.
  *
- * It is a progress read-out and a jump-nav, NOT a wizard: the form stays one
- * long scroll, every section stays editable in any order, and clicking a dot
- * only scrolls — it never validates, locks or touches `draft`.
+ * It is a progress read-out and a jump-nav, NOT a wizard: every section stays
+ * editable in any order, and clicking a dot only moves to it — it never
+ * validates, locks or touches `draft`.
  *
- * Emphasis follows the officer: in the stepped format it lands on the panel on
- * screen (`here`), and in the document format on the first open section
- * (`current`), because there is no panel to be on. The dots' faces — tick or
- * empty ring — always mean completeness and never move with position. */
+ * Emphasis follows the officer: in both deck formats it lands on the section on
+ * screen (`here`), and in the SHEET format, which has no position to report, on
+ * the first open section (`current`). The dots' faces — tick or empty ring —
+ * always mean completeness and never move with position. */
 function ReportProgressStepper({ complete, current, onJump, withReview = false, here = null }) {
   // Two channels, kept strictly independent — that separation IS the design:
   //   FACE = completeness. The tick or the empty ring, identical in both
   //          formats, and the only thing that ever answers "is this finished?".
-  //   RING = the node the officer is STANDING ON. The stepped format shows one
-  //          panel at a time, so the emphasis has to follow the panel on screen;
-  //          the document format has no steps, so there it falls back to the
-  //          first open section — "the work", the closest thing one long scroll
-  //          has to a position.
-  // `here` is that node's index, or null in the document format.
+  //   RING = the node the officer is STANDING ON. The deck formats show one
+  //          section at a time, so the emphasis follows the section on screen;
+  //          the SHEET format draws the whole report, so there it falls back to
+  //          the first open section — "the work", the closest thing one page has
+  //          to a position.
+  // `here` is that node's index, or null in the sheet format.
   const nodes = STEPPER_STEPS.map((step, i) => ({
     label: step.label,
     face: complete[i] ? 'done' : 'pending',
-    here: here === null ? i === current && !complete[i] : here === i,
+    // POSITION NEVER DEPENDS ON COMPLETENESS. It used to read
+    // `i === current && !complete[i]`, which meant that the moment every section
+    // was filled there was no OPEN section and the whole row came out
+    // unmarked — a finished report showed five identical tiles and no "you are
+    // here" at all. The face already answers "is this done?"; the ring and the
+    // tint are the position channel, so they follow `current` alone.
+    here: here === null ? i === current : here === i,
   }));
   if (withReview) {
     // The review node is never done (no field fills it in), so its face is
@@ -859,6 +924,11 @@ function ReportProgressStepper({ complete, current, onJump, withReview = false, 
     '--ir-stepper-inset': `${50 / count}%`,
     '--ir-stepper-dots': count,
   };
+  // The progress the reference's pill shows ("SECTION 1 OF 5 • 20%"). Derived
+  // from the same `complete` array the tick faces use, so the number and the
+  // tiles can never disagree.
+  const doneCount = complete.filter(Boolean).length;
+  const pct = Math.round((doneCount / STEPPER_STEPS.length) * 100);
   return (
     <div className="ir-stepper">
       <div className="ir-stepper-head">
@@ -870,18 +940,24 @@ function ReportProgressStepper({ complete, current, onJump, withReview = false, 
             panel on screen, review included). A head that disagreed with the
             dot it sits above is exactly the bug this replaced. */}
         <span className="ir-stepper-count">
+          {/* The word follows the WALK: "Step" where there is a Review step to
+              walk to, "Section" where the five sections are the whole flow. */}
           {here === null
             ? `Section ${current + 1} of ${STEPPER_STEPS.length}`
-            : `Step ${here + 1} of ${count}`}
+            : withReview
+              ? `Step ${here + 1} of ${count}`
+              : `Section ${here + 1} of ${STEPPER_STEPS.length}`}
+          {' • '}
+          {pct}%
         </span>
       </div>
-      {/* The variables live on the RAIL, not on the list: the track is the
-          list's sibling, and a custom property only reaches descendants. */}
-      <div className="ir-stepper-rail" style={style}>
-        <div className="ir-stepper-track" aria-hidden="true">
-          <span className="ir-stepper-track-fill" />
-        </div>
-        <ol className="ir-stepper-steps">
+      {/* The steps are TILES now (spec: the reference's five progress tiles),
+          so the connecting track the rail used to draw has no job and is gone.
+          The custom properties still ride on the LIST, which is the grid that
+          needs them. Nothing about the behaviour changed: each tile is still
+          one button that jumps to its step, and the faces still mean
+          completeness while the tint means position. */}
+      <ol className="ir-stepper-steps" style={style}>
           {nodes.map((step, i) => {
             const { face } = step;
             return (
@@ -901,12 +977,28 @@ function ReportProgressStepper({ complete, current, onJump, withReview = false, 
                   <span className={`ir-stepper-label ir-stepper-label--${face}`}>
                     {step.label}
                   </span>
+                  {/* The tile's second line: what this step's state IS, in
+                      words, so the tile answers "am I done here?" without the
+                      officer decoding the dot. Derived from the same face and
+                      position the dot uses — never a second truth. */}
+                  <span className="ir-stepper-sub">
+                    {step.review
+                      ? 'Final check'
+                      : step.here
+                        ? // A section you are ON that is also FILLED cannot say
+                          // "in progress" — the tick beside it says otherwise.
+                          face === 'done'
+                          ? 'Current'
+                          : 'In progress'
+                        : face === 'done'
+                          ? 'Completed'
+                          : 'Not started'}
+                  </span>
                 </button>
               </li>
             );
           })}
-        </ol>
-      </div>
+      </ol>
     </div>
   );
 }
@@ -1517,10 +1609,10 @@ export function ReportWelcome({ user, onNew, onOpenReport, onMyReports, reports,
   return (
     <div className="ir-home">
       {/* Home's backdrop: the React Bits ShapeGrid, behind everything and
-          marking nothing (see HomeGrid.jsx for the tokens it reads, why it
-          stands down for reduced motion, and the numbers). FIRST child, so it
-          is the bottom layer; it is absolutely positioned, so it costs the
-          layout nothing. */}
+          marking nothing (see HomeGrid.jsx for the tokens it reads, why it now
+          renders unconditionally, and the numbers). FIRST child, so it is the
+          bottom layer; it is absolutely positioned, so it costs the layout
+          nothing. */}
       <HomeGrid />
 
       {/* The BlueWrite wordmark back on the page — the old hero, now on the
@@ -1757,18 +1849,36 @@ export function ReportEditor({
   // ---- The stepped form format (Profile ▸ Preferences) --------------------
   // Which panel is on screen. Every other panel stays mounted but hidden, so a
   // field is always resolvable by id; jumpTo below reveals the owning step
-  // before focusing. `steppedEnteredRef` marks that the officer has been placed
+  // before focusing. `deckEnteredRef` marks that the officer has been placed
   // once, so the panel never moves under their hands afterwards.
   const stepped = formFormat === 'steps';
+  // ---- THE DECK: the formats that show ONE SECTION AT A TIME -----------------
+  // Steps has always been a deck. Document is one now too: the reference's flow
+  // REPLACES the section on screen with the next one — "Proceed to III. Parties
+  // Involved" swaps the Reporting party / Incident details / Narrative the
+  // officer is reading for the Parties Involved form — rather than making them
+  // scroll past three sections to reach it.
+  //
+  // The two differ in exactly one thing, and it is what still separates them in
+  // Profile: Steps ends with a Review step that reads the whole report back
+  // before the commit cluster, and Document's five sections are the whole walk.
+  // Every panel stays MOUNTED in both, `hidden` rather than unmounted, because
+  // the error jumps resolve by element id and a field outside the DOM can
+  // neither be focused nor scrolled to.
+  //
+  // Sheet is the only format that still draws the whole report at once.
+  const deck = stepped || formFormat === 'document';
   // ---- The sheet form format (Profile ▸ Preferences) ----------------------
-  // The THIRD format, and deliberately not a third tree: it renders exactly what
-  // the document format renders — every panel, nothing hidden, no stepper-driven
-  // navigation — and differs only in the class on the form, which re-dresses
-  // cards as a page and fields as blanks to write on. One tree means a field, a
-  // rule, an error jump or a group can never work in two of the three formats
-  // and not the third, which is the failure a second layout would eventually
-  // have. `stepped` stays false for it on purpose: the stepper's one-panel rule
-  // is the thing this format exists to avoid.
+  // The third format, and deliberately not a third tree: it renders the same
+  // cards through the same fields and the same rules, and differs only in the
+  // class on the form, which re-dresses cards as a page and fields as blanks to
+  // write on. One tree means a field, a rule, an error jump or a group can never
+  // work in two of the three formats and not the third, which is the failure a
+  // second layout would eventually have.
+  //
+  // It is the ONLY format that leaves the whole report on screen, and `deck` is
+  // false for it on purpose: the page you write on has no position to report and
+  // no panel to hide — you are wherever you are reading.
   const sheet = formFormat === 'sheet';
   // Whether the sheet format is showing the rest of the report. False is the
   // format's opening state: the station's letterhead on a blank page and nothing
@@ -1780,20 +1890,31 @@ export function ReportEditor({
   const [sheetFields, setSheetFields] = useState(false);
   const sheetBlank = sheet && !sheetFields;
   const [activeStep, setActiveStep] = useState(0);
-  const steppedEnteredRef = useRef(false);
+  // When this draft last reached the server, for the case bar's save line (null
+  // = nothing written yet in this sitting, so the line is not drawn at all).
+  // Stamped at the WRITES themselves — see writeDraft and saveDraft — so the
+  // 30s autosave, the exit flush, Save Draft and the first write a Generate has
+  // to make all report through one read-out instead of each keeping its own.
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+  // Which edge the next section slides in from. Read when the step moves, NOT
+  // derived from the step itself: the two are only the same while the officer
+  // walks forwards, and a jump made by the stepper or an error banner has a
+  // direction too. View state on one report, so it is deliberately not stored.
+  const [deckDir, setDeckDir] = useState('next');
+  const deckEnteredRef = useRef(false);
   useEffect(() => {
-    if (!stepped) {
-      steppedEnteredRef.current = false; // re-entering opens on the current step
+    if (!deck) {
+      deckEnteredRef.current = false; // re-entering opens on the current section
       return;
     }
-    if (!draft || steppedEnteredRef.current) return;
-    steppedEnteredRef.current = true;
+    if (!draft || deckEnteredRef.current) return;
+    deckEnteredRef.current = true;
     // Open on the section the stepper calls current — the next thing to do —
     // rather than always at the first panel. Keyed on entry only, on purpose:
     // a section completing while the officer types must not yank the panel.
     setActiveStep(computeStepProgress(draft, visitedSections).current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepped, draft]);
+  }, [deck, draft]);
 
   // ---- Editing from the review step --------------------------------------
   // Which read-back row of the review has its editor open (null = none). It
@@ -1974,6 +2095,13 @@ export function ReportEditor({
       if (inFlightRef.current === request) inFlightRef.current = null;
     };
     request.then(clear, clear);
+    // The save line's clock, taken off the write rather than off each caller.
+    // A rejection deliberately leaves the stamp alone: the line must never show
+    // a time for a write that did not happen, and the next tick retries.
+    request.then(
+      () => setLastSavedAt(new Date()),
+      () => {},
+    );
     return request;
   }, []);
 
@@ -2553,6 +2681,7 @@ export function ReportEditor({
           setDraft((prev) => ({ ...prev, id: created.report.id, created_by: user.id }));
         }
       dirtyRef.current = false;
+      setLastSavedAt(new Date());
       notify('Draft saved.');
       onMutated?.();
     } catch (err) {
@@ -2609,10 +2738,15 @@ export function ReportEditor({
     // Walking away from the review closes whatever row was open in it: the
     // read-back is something you come back to read, not a form left half open.
     if (step !== REVIEW_STEP) setEditingReviewRow(null);
-    if (!stepped) {
+    if (!deck) {
       scrollToSection(step);
       return;
     }
+    // WHICH WAY THE SLIDE TRAVELS, read BEFORE the step moves: the section
+    // coming in then slides from the edge the officer is walking away from.
+    // The stepper's tiles and the error banner's jumps come through here too,
+    // so a jump backwards in the document still reads as one.
+    setDeckDir(step < activeStep ? 'prev' : 'next');
     setActiveStep(step);
     // One tick for the panel to paint: scrollToSection then lands on the
     // section's first card and flashes every card in it, so the officer sees
@@ -2634,21 +2768,23 @@ export function ReportEditor({
       window.setTimeout(() => focusField(path), 60);
       return;
     }
-    if (stepped) {
+    if (deck) {
       // Already reading the report back? Then the fix happens HERE: the review
       // carries its own copy of the field, so a blocked Submit opens the row in
       // place instead of throwing the officer back a step to hunt for it. The
       // row is the same control the form has — same setter, same rules — and if
       // the review has no row for the path the jump falls through to the step
-      // walk below, exactly as before.
+      // walk below, exactly as before. (The review step exists only in the
+      // stepped format, so this branch is only ever reached there.)
       const row = reviewRowForPath(path);
-      if (canEdit && activeStep === REVIEW_STEP && REVIEW_SCALAR_PATHS.includes(row)) {
+      if (stepped && canEdit && activeStep === REVIEW_STEP && REVIEW_SCALAR_PATHS.includes(row)) {
         beginReviewEdit(path);
         window.setTimeout(() => focusField(path), 60);
         return;
       }
       const step = stepperSectionForPath(path, draft.incident_type);
       if (step !== -1 && step !== activeStep) {
+        setDeckDir(step < activeStep ? 'prev' : 'next');
         setActiveStep(step);
         window.setTimeout(() => focusField(path), 60);
         return;
@@ -2902,26 +3038,48 @@ export function ReportEditor({
   // dots keep pace with typing exactly like the red banner does.
   const stepProgress = computeStepProgress(draft, visitedSections);
 
-  // The stepped format shows one step's cards and hides the rest — hidden,
-  // never unmounted, so `getElementById` and the error jumps keep working.
-  const panelHidden = (step) => (stepped && step !== activeStep ? true : undefined);
+  // WHICH SECTIONS ARE ON SCREEN, as groups of STEPPER_STEPS indexes. The
+  // document's walk opens on the three panels the report has always opened on
+  // (see DOCUMENT_SLIDES); Steps shows one section at a time and ends on the
+  // Review. Built per render — it is a handful of small arrays.
+  const slides = stepped
+    ? [...STEPPER_STEPS.map((_, i) => [i]), [REVIEW_STEP]]
+    : DOCUMENT_SLIDES;
+  const slideIndex = slides.findIndex((group) => group.includes(activeStep));
+  // A step the map does not know about rides with the first screen rather than
+  // nowhere: no section should ever be able to fall off the deck.
+  const activeSlide = slideIndex === -1 ? 0 : slideIndex;
+  const slideOf = (step) => {
+    const i = slides.findIndex((group) => group.includes(step));
+    return i === -1 ? 0 : i;
+  };
 
-  // Which section's cards are CURRENT, i.e. get their headers tinted and their
-  // left edge marked. Same index the stepper's emphasis follows, so the rail and
-  // the body can never point at different places: the panel on screen in the
-  // stepped format (the review step included, which has no section of its own
-  // and so matches no card except the review's), and the first section still
-  // open in the document format, which has no position to report.
+  // The deck shows the active screen's cards and hides the rest — hidden, never
+  // unmounted, so `getElementById` and the error jumps keep working.
+  const panelHidden = (step) => (deck && slideOf(step) !== activeSlide ? true : undefined);
+
+  // Which section's cards are CURRENT, i.e. carry aria-current. Same index the
+  // stepper's emphasis follows, so the rail and the body cannot point at
+  // different places: the section the officer moved to is the one they are on.
   //
-  // A COMPLETE report highlights nothing in the document format — the rail
-  // drops its emphasis once every section is filled, and "the first open
-  // section" would otherwise quietly point at section 5 forever, so the two
-  // would disagree about a report that is finished.
-  const currentSection = stepped
+  // The SHEET format has no position to report, so it asks the rules: the first
+  // section still open, and NOTHING once every section is filled — otherwise
+  // "the first open section" would quietly point at section 5 forever on a
+  // report that is finished.
+  const currentSection = deck
     ? activeStep
     : stepProgress.complete.every(Boolean)
       ? null
       : stepProgress.current;
+
+  // The screens either side of this one, and the SECTION each is named by — the
+  // first it holds. Null at either end of the walk. Read by the row AND by the
+  // buttons' labels, so the words on a control and the screen it opens are never
+  // two different answers.
+  const nextSlide = slides[activeSlide + 1] ?? null;
+  const prevSlide = slides[activeSlide - 1] ?? null;
+  const nextSection = nextSlide ? STEPPER_STEPS[nextSlide[0]] : null;
+  const prevSection = prevSlide ? STEPPER_STEPS[prevSlide[0]] : null;
 
   // The AI writing panel (UC-006/007/008) — the officer's Generate control.
   //
@@ -3088,11 +3246,18 @@ export function ReportEditor({
     types: typeOptions,
   };
 
-  // The action row — Save Draft and the rest of the secondary row, then the one
-  // full-width Submit — plus the advisory footer that goes with it. Extracted so
-  // the sheet format can put it BELOW the paper instead of inside it: everything
-  // within `.ir-form--sheet` is the page, and an officer who asked for a blank
-  // sheet should not find the report's commit row printed at the foot of it.
+  // The action row — Save Draft and the rest of the secondary row — plus the
+  // advisory footer that goes with it. Extracted so the sheet format can put it
+  // BELOW the paper instead of inside it: everything within `.ir-form--sheet` is
+  // the page, and an officer who asked for a blank sheet should not find the
+  // report's commit row printed at the foot of it.
+  //
+  // It no longer carries SUBMIT. The one commit control moved to the case bar at
+  // the top of the page (see .ir-case-actions), where the reference puts it and
+  // where it is reachable from every slide, every step and the sheet — one
+  // Submit, in one place, on the same handler and the same permission check. Two
+  // copies of it would be two chances to commit by accident, so it was moved and
+  // not mirrored.
   //
   // One element, rendered in one of two places depending on the format (see
   // below): the sheet branch and the in-form branch are mutually exclusive, so
@@ -3130,19 +3295,6 @@ export function ReportEditor({
             Close
           </button>
         </div>
-        <button
-          type="button"
-          className="ir-submit"
-          onClick={finalize}
-          disabled={!canEdit || !canFinalize}
-          title={
-            canFinalize
-              ? 'Validate and submit this report for the record'
-              : 'Your role does not have permission to submit reports'
-          }
-        >
-          Submit Official Report
-        </button>
       </div>
 
       {/* Footer (spec §5): the system's real writing-assistance advisory —
@@ -3159,77 +3311,159 @@ export function ReportEditor({
           screen contributes only its document content. The print sheet and
           the dialogs below render outside the form so the document stylesheet
           can never repaint an official sheet. */}
-      <div className="ir-page-head">
-        <h1 className="ir-title">POLICE INCIDENT REPORT</h1>
-        {/* Labelled pairs rather than "CASE NO: …" run-on strings: the key
-            says what the value IS, the value carries the weight, and both
-            line up on the right edge of the masthead as a block. */}
-        <div className="ir-meta">
-          <div className="ir-meta-row">
-            <span className="ir-meta-key">Case no.</span>
-            <span className="ir-meta-val">{caseNumber(draft)}</span>
+      {/* THE CASE PANEL — the report's head as ONE field. The case bar, the
+          record strip and the progress read-out used to be three separate
+          cards with a gap between each, so the top of the screen read as three
+          unrelated boxes; they are one card now, divided by hairlines (see
+          .ir-case-panel in the stylesheet). Nothing moved: same nodes, same
+          order, same data, same behaviour. */}
+      <div className="ir-case-panel">
+        <div className="ir-page-head">
+          {/* LEFT: what the document IS — its title and status flag, the two
+              identifiers that name it, and the save line. RIGHT: the two things
+              an officer does to it from the top of the page. */}
+          <div className="ir-head-main">
+            <div className="ir-case-title">
+              <h1 className="ir-title">POLICE INCIDENT REPORT</h1>
+              {/* The reference's status flag, inline beside the case title and
+                  read from the SAME `draft.status` the record strip below uses —
+                  so the flag and the strip can never disagree about what state
+                  the report is in. It states the state; it changes nothing. */}
+              <span className="ir-draft-flag">
+                {draft.status === 'finalized' ? 'Finalized' : 'Draft stage'}
+              </span>
+            </div>
+
+            {/* The identifiers, as one line of labelled pairs: the key says what
+                the value IS, the value carries the weight, and a bullet rules
+                the two pairs apart. */}
+            <div className="ir-case-meta">
+              <span className="ir-meta-row">
+                <span className="ir-meta-key">Assigned case no.</span>
+                <span className="ir-meta-val ir-meta-val--code">{caseNumber(draft)}</span>
+              </span>
+              <span className="ir-meta-sep" aria-hidden="true">
+                •
+              </span>
+              <span className="ir-meta-row">
+                <span className="ir-meta-key">Record date</span>
+                <span className="ir-meta-val">
+                  {specDate(reportDateValue(draft, new Date().toISOString().slice(0, 10)))}
+                </span>
+              </span>
+            </div>
+
+            {/* When the draft last reached the server — the station's clock, and
+                only after a write that actually succeeded (see lastSavedAt). A
+                read-out, not a live region: the save toast already announces
+                itself, and a second announce every 30 seconds would be noise. */}
+            {lastSavedAt && (
+              <p className="ir-save-note">
+                <LabelIcon name="check" />
+                Auto-saved to station disk ({stationClock(lastSavedAt)} PHT)
+              </p>
+            )}
           </div>
-          <div className="ir-meta-row">
-            <span className="ir-meta-key">Date</span>
-            <span className="ir-meta-val">
-              {specDate(reportDateValue(draft, new Date().toISOString().slice(0, 10)))}
-            </span>
+
+          {/* The two things an officer does to the report from the top of the
+              page. Both are controls the editor ALREADY owns, moved here and not
+              copied: Print Slip is the same print portal the foot used to reach,
+              and Submit is the same finalize on the same permission check — it
+              now opens the page, which is why it is no longer repeated at the
+              foot of the document (see actionsCluster).
+
+              The reference's third button, "Export Blotter PDF", is not drawn:
+              there is no per-report export anywhere in the API — the only export
+              route is the register's CSV, on My Reports — so the control would
+              have nothing to call. An unreachable button is worse than an absent
+              one. */}
+          <div className="ir-case-actions">
+            {draft.id && (
+              <button type="button" onClick={() => setPrinting(true)}>
+                <LabelIcon name="printer" />
+                Print Slip
+              </button>
+            )}
+            <button
+              type="button"
+              className="ir-submit"
+              onClick={finalize}
+              disabled={!canEdit || !canFinalize}
+              title={
+                canFinalize
+                  ? 'Validate and submit this report for the record'
+                  : 'Your role does not have permission to submit reports'
+              }
+            >
+              <LabelIcon name="stamp" />
+              Submit Official Record
+            </button>
           </div>
         </div>
-      </div>
 
-      <div className="ir-status ir-status--flag">
-        <span className={`badge ${draft.status || 'draft'}`}>{draft.status || 'draft'}</span>
-        <span>
-          {draft.id
-            ? `Report BW-${String(draft.id).padStart(4, '0')} · Recorded by ${user.full_name} · Badge ${user.badge_number}`
-            : 'Not saved yet — the first save assigns the report number.'}
-        </span>
-        {/* Phase 6 Stage 4 (D5/D8) — the translation status, wherever the
-            report is. Shown only once the server has reported one, so a report
-            with no source (and a report not yet read) says nothing here. */}
-        {verificationStatus && verificationStatus !== 'english_original' && (
-          <span className={`rv-badge ${statusClass(verificationStatus)}`}>
-            {statusLabel(verificationStatus)}
-          </span>
+        {/* The record strip — a NOTICE, and it only draws when it has a notice to
+            give: the report's own reference once it has a number, the server's
+            translation status once there is one, or the lock warning when this
+            officer may not edit.
+
+            It no longer carries the report's status chip or a placeholder
+            sentence for an unsaved report: the case bar directly above already
+            carries both (the title's "Draft stage" flag and the pending case
+            number), so a fresh draft used to draw an empty amber band that said
+            nothing new. Nothing else about the strip changed — the same element,
+            the same amber rule, the same three notices when they apply. */}
+        {(draft.id || (verificationStatus && verificationStatus !== 'english_original') || !canEdit) && (
+          <div className="ir-status ir-status--flag">
+            {draft.id && (
+              <span>{`Report BW-${String(draft.id).padStart(4, '0')} · Recorded by ${user.full_name} · Badge ${user.badge_number}`}</span>
+            )}
+            {/* Phase 6 Stage 4 (D5/D8) — the translation status, wherever the
+                report is. Shown only once the server has reported one, so a
+                report with no source (and a report not yet read) is silent. */}
+            {verificationStatus && verificationStatus !== 'english_original' && (
+              <span className={`rv-badge ${statusClass(verificationStatus)}`}>
+                {statusLabel(verificationStatus)}
+              </span>
+            )}
+            {!canEdit && (
+              <span>This report is locked. Only an administrator can make further changes.</span>
+            )}
+          </div>
         )}
-        {!canEdit && (
-          <span>This report is locked. Only an administrator can make further changes.</span>
+
+        {/* The progress stepper, under the record strip it belongs with: the
+            officer's position in the document, read out of the same rules the
+            error banner uses. It only navigates (never locks or edits), so it is
+            safe on a locked report too.
+
+            NOT rendered in the sheet format. The stepper is an instrument of the
+            form's own structure — a dot per panel, and in the stepped format the
+            thing that decides which panel is on screen — while the sheet's whole
+            point is that the panels are not what you are looking at: it is one
+            page you read and write on, with no position to report. Left in, it
+            would be a progress meter sitting above a sheet of lined paper.
+
+            Nothing the sheet needs is lost with it: the review step it could
+            navigate to is itself stepped-only (see the review card below), and
+            every other section is already on the page. This is a display choice
+            like the format itself — switching back to Document or Steps brings
+            the stepper straight back. */}
+        {!sheet && (
+          <ReportProgressStepper
+            complete={stepProgress.complete}
+            current={stepProgress.current}
+            onJump={goToStep}
+            // The review node exists only where it can be reached: the stepped
+            // format. It is the one dot whose face is never filled.
+            withReview={stepped}
+            // Where the officer is standing — the section on screen — which is
+            // what the emphasis and the count above it both follow. The SHEET
+            // format is the only one with no position to report, and there the
+            // stepper is not rendered at all.
+            here={deck ? activeStep : null}
+          />
         )}
       </div>
-
-      {/* Progress stepper, below the status row and above the error banner:
-          the officer's position in the document, read out of the same rules
-          the banner uses. It only navigates (never locks or edits), so it is
-          safe on a locked report too.
-
-          NOT rendered in the sheet format. The stepper is an instrument of the
-          form's own structure — a dot per panel, and in the stepped format the
-          thing that decides which panel is on screen — while the sheet's whole
-          point is that the panels are not what you are looking at: it is one
-          page you read and write on, with no position to report. Left in, it
-          would be a progress meter sitting above a sheet of lined paper.
-
-          Nothing the sheet needs is lost with it: the review step it could
-          navigate to is itself stepped-only (see the review card below), and
-          every other section is already on the page. This is a display choice
-          like the format itself — switching back to Document or Steps brings the
-          stepper straight back. */}
-      {!sheet && (
-        <ReportProgressStepper
-          complete={stepProgress.complete}
-          current={stepProgress.current}
-          onJump={goToStep}
-          // The review node exists only where it can be reached: the stepped
-          // format. It is the one dot whose face is never filled.
-          withReview={stepped}
-          // Where the officer is standing, which is what the emphasis and the
-          // count above it both follow in the stepped format. In the document
-          // format there are no steps, so the emphasis falls back to the first
-          // open section (`current`).
-          here={stepped ? activeStep : null}
-        />
-      )}
 
       {error && (
         <div
@@ -3268,23 +3502,14 @@ export function ReportEditor({
         </div>
       )}
 
-      {/* The asterisk key. Not shown on the blank sheet: it explains a marker
-          that is not on screen, since every field carrying one is behind the
-          sheet's control. */}
-      {!sheetBlank && (
-        <p className="ir-required-note">
-          <span className="req">*</span> Required before the report can be submitted.
-        </p>
-      )}
-
       {/* The sheet's chrome — the AI panel and the officer's dictionary — is on
           the desk BELOW the paper: see the block after </form>. Nothing sits
           between an officer and the page they came here to write. */}
       <form
         onSubmit={(e) => e.preventDefault()}
         className={`ir-form${stepped ? ' ir-form--stepped' : ''}${sheet ? ' ir-form--sheet' : ''}${
-          sheetBlank ? ' ir-form--blank' : ''
-        }`}
+          deck ? ` ir-form--deck ir-form--deck-${deckDir}` : ''
+        }${sheetBlank ? ' ir-form--blank' : ''}`}
       >
         {/* The screen's opening panels: Panels I and II side by side on
             desktop, and the narrative (Panel III) SPANNING the row beneath them
@@ -3299,8 +3524,9 @@ export function ReportEditor({
           {/* Panel I is the stepper's section 1. `onFocus`/`onBlur` on the card
               mark it visited — no per-field listener needed. */}
           <IrCard
-            num="I"
+            num={STEPPER_STEPS[0].numeral}
             title="Reporting Party Information"
+            context="Complainant / Informant"
             step={0}
             current={currentSection === 0}
             hidden={panelHidden(0)}
@@ -3352,8 +3578,9 @@ export function ReportEditor({
           </IrCard>
 
           <IrCard
-            num="II"
+            num={STEPPER_STEPS[1].numeral}
             title="Incident Details"
+            context="Classification & Locus Criminis"
             step={1}
             current={currentSection === 1}
             hidden={panelHidden(1)}
@@ -3473,8 +3700,9 @@ export function ReportEditor({
           </IrCard>
 
           <IrCard
-            num="III"
+            num={STEPPER_STEPS[2].numeral}
             title="Incident Narrative"
+            context="Facts of the Case"
             wide
             step={2}
             current={currentSection === 2}
@@ -3657,7 +3885,9 @@ export function ReportEditor({
             (`step={3}`) so the dot's jump flashes them together, and the rule
             engine's paths from either bucket into section 4. */}
         <IrCard
+          num={STEPPER_STEPS[3].numeral}
           title="Parties Involved"
+          context="Complainants · Respondents · Witnesses"
           wide
           step={3}
           current={currentSection === STEPPER_TYPE_SPECIFIC}
@@ -3718,15 +3948,29 @@ export function ReportEditor({
             onBlur={() => markVisited(3)}
           >
             <p className="section-hint">Fill in only what applies. Blank fields are left out of the report.</p>
-            <TypeSpecificFields
-              incidentType={draft.incident_type}
-              values={draft.type_specific}
-              onChange={setTypeSpecific}
-              disabled={!canEdit}
-              // The rule engine's per-type errors, keyed by path, so each field
-              // can say what is wrong with IT rather than only the banner.
-              errors={errors}
-            />
+            {/* The reference frames the per-type block as its own TINTED
+                SUB-PANEL with a mini-header and a reference tag. Presentation
+                only: the fields, their order, their rules, their errors and
+                their ids are all untouched — the wrapper draws a box around
+                what was already rendered. The tag is the report's OWN case
+                number, not an invented form code. */}
+            <div className="ir-typebox">
+              <div className="ir-typebox-head">
+                <span className="ir-typebox-title">
+                  Type-specific entity: {draft.incident_type} record
+                </span>
+                <span className="ir-typebox-ref">{caseNumber(draft)}</span>
+              </div>
+              <TypeSpecificFields
+                incidentType={draft.incident_type}
+                values={draft.type_specific}
+                onChange={setTypeSpecific}
+                disabled={!canEdit}
+                // The rule engine's per-type errors, keyed by path, so each field
+                // can say what is wrong with IT rather than only the banner.
+                errors={errors}
+              />
+            </div>
             {/* Notable findings: the officer's own observations that don't fit
                 any structured field (CCTV insight, tool marks, behavior…) —
                 printed in the NOTABLE FINDINGS block of the sheet and given
@@ -3782,7 +4026,9 @@ export function ReportEditor({
               submitted without it. It follows the four spec panels and sits
               directly above the submit bar. */}
           <IrCard
+            num={STEPPER_STEPS[4].numeral}
             title="Action Taken / Status"
+            context="Disposition"
             step={4}
             current={currentSection === 4}
             hidden={panelHidden(4)}
@@ -3827,6 +4073,7 @@ export function ReportEditor({
               panel beside it) — it is not repeated here. */}
           <IrCard
             title="Investigator-on-Case"
+            context="Noting & Sign-off"
             step={4}
             current={currentSection === 4}
             hidden={panelHidden(4)}
@@ -3918,29 +4165,126 @@ export function ReportEditor({
         )}
 
         {/* Stepped format: the way forward sits at the END of the panel, where
-            the officer finishes reading it. Previous/Next walk the steps in
-            order; the stepper above stays the direct route to any step, and
-            its head reads the same "Step N of 6" because both name the panel
-            on screen — there is one position, and the two never disagree. */}
-        {stepped && (
-          <div className="ir-step-nav">
+            the officer finishes reading it — one section per slide, changed by
+            the buttons under it. No scrolling past a section reaches the next
+            one; this row is the only way and the stepper above is the direct
+            route to any step, so its head reads the same "Step N of 6" and the
+            two never disagree about the position.
+
+            WIRING ONLY, like the document format's own row: every control here
+            already exists. The save is the editor's `saveDraft`, and both walks
+            go through `goToStep`, the very call the stepper's tiles make — so
+            nothing is validated, locked or written by pressing them, and the
+            draft is untouched.
+
+            The buttons NAME the step they lead to (the reference's "Proceed to
+            Step 5: Action Taken"), which is the whole point of a slide flow:
+            the control says where it goes instead of making the officer guess
+            from "Next". The labels come from the same STEPPER_STEPS list the
+            stepper and the card heads read, so a renamed section renames the
+            button that points at it. */}
+        {stepped && (() => {
+          // The step you are LEAVING, and the step you are going TO. The review
+          // step is not in STEPPER_STEPS (nothing fills it in), so its index is
+          // the one that needs naming separately in both directions.
+          const prevLabel = activeStep === 0
+            ? null
+            : activeStep - 1 === REVIEW_STEP
+              ? REVIEW_LABEL
+              : STEPPER_STEPS[activeStep - 1].label;
+          const nextLabel = activeStep === STEP_COUNT - 1
+            ? null
+            : activeStep + 1 === REVIEW_STEP
+              ? REVIEW_LABEL
+              : STEPPER_STEPS[activeStep + 1].label;
+          return (
+            <div className="ir-step-nav">
+              {canEdit && (
+                <button type="button" onClick={saveDraft}>
+                  Save Partial Draft
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => goToStep(activeStep - 1)}
+                disabled={activeStep === 0}
+                title={prevLabel ? `Back to ${prevLabel}` : 'This is the first step'}
+              >
+                {prevLabel ? `← Previous: ${prevLabel}` : '← Previous'}
+              </button>
+              <span className="ir-step-nav-where">
+                Step {activeStep + 1} of {STEP_COUNT}
+              </span>
+              {/* Rendered only when there IS a next step. On the review step
+                  the row ends: the commit cluster follows directly under it, and
+                  a second primary control beside Submit is the one thing this
+                  row must never grow. */}
+              {nextLabel && (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => goToStep(activeStep + 1)}
+                  title={`Go to ${nextLabel}`}
+                >
+                  Proceed to Step {activeStep + 2}: {nextLabel} →
+                </button>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ---- THE WAY FORWARD (spec: the reference's "Save Partial Draft" /
+            "← Previous: …" / "Proceed to …" row) --------------------------
+            The DOCUMENT format's only navigation, at the FOOT of whatever
+            section is on screen — which is where a slide's controls belong, and
+            why it renders here rather than between the cards: with the
+            non-current sections hidden, the end of the form IS the end of the
+            slide the officer is on.
+
+            WIRING ONLY — every control already exists. The save is the editor's
+            own `saveDraft`, and both walks go through `goToStep`, the very call
+            the stepper's tiles make, so nothing is validated, locked or written
+            by pressing them and the draft is untouched.
+
+            The buttons NAME the section they lead to (the reference's "Proceed
+            to III. Parties Involved"), which is the whole point of a slide flow:
+            the control says where it goes instead of making the officer guess
+            from "Next". Both labels come from STEPPER_STEPS — the same list the
+            stepper, the card heads and the error jumps read — so a renamed
+            section renames every control that points at it.
+
+            Not in the sheet format (a page has no way forward) and not in the
+            stepped format, which carries its own row because it has one more
+            step to walk: Review. */}
+        {formFormat === 'document' && (
+          <div className="ir-doc-nav">
+            {canEdit && (
+              <button type="button" onClick={saveDraft}>
+                Save Partial Draft
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => goToStep(activeStep - 1)}
-              disabled={activeStep === 0}
+              onClick={() => prevSlide && goToStep(prevSlide[0])}
+              disabled={!prevSlide}
+              title={prevSection ? `Back to ${prevSection.label}` : 'This is the first screen'}
             >
-              ← Previous
+              {prevSection ? `← Previous: ${prevSection.label}` : '← Previous'}
             </button>
-            <span className="ir-step-nav-where">
-              Step {activeStep + 1} of {STEP_COUNT}
-            </span>
-            <button
-              type="button"
-              onClick={() => goToStep(activeStep + 1)}
-              disabled={activeStep === STEP_COUNT - 1}
-            >
-              Next →
-            </button>
+            {/* Rendered only when there IS a next section. On the last one the
+                row ends and the commit cluster under it takes over: a second
+                primary control beside Submit is the one thing this row must
+                never grow. */}
+            {nextSlide && (
+              <button
+                type="button"
+                className="primary"
+                onClick={() => goToStep(nextSlide[0])}
+                title={`Go to ${nextSection.label}`}
+              >
+                Proceed to {sectionName(nextSection)} →
+              </button>
+            )}
           </div>
         )}
 
@@ -3953,19 +4297,19 @@ export function ReportEditor({
             Submit keeps the same completeness gate as before, so a report
             cannot be submitted with required fields missing.
 
-            In the stepped format this whole cluster — Save/History/Print/
-            Archive/Close, Submit, and the advisory footer — belongs to the
-            LAST step, which is the review: every earlier step is its own
-            panel, and committing the report is the end of the flow, not
-            something offered while the officer is still on the first panel —
-            nor before they have read the report back in one piece.
+            In BOTH deck formats this whole cluster — Save/History/Print/
+            Archive/Close, Submit, and the advisory footer — belongs to the LAST
+            slide and to no other: every earlier section is its own panel, and
+            committing the report is the end of the flow, not something offered
+            while the officer is still on the first form — nor, in Steps, before
+            they have read the report back in one piece.
 
             NOT in the sheet format, where it goes below the paper instead — see
             the block after </form>. That is why the `!sheet` sits beside the
-            step condition rather than inside it: the two answers are "this
+            slide condition rather than inside it: the two answers are "this
             format's position" and "the sheet's position", and only one of them
             can apply. */}
-        {(!stepped || activeStep === STEP_COUNT - 1) && !sheet && actionsCluster}
+        {(!deck || activeSlide === slides.length - 1) && !sheet && actionsCluster}
       </form>
 
       {/* ---- The desk BELOW the paper ----------------------------------------

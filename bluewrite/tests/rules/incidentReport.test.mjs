@@ -8,6 +8,7 @@ import {
   reportYear,
   specDate,
   specTimestamp,
+  stationClock,
   CUSTOM_TYPE,
   incidentTypeBoxValue,
   resolveIncidentTypeInput,
@@ -45,6 +46,18 @@ test('specTimestamp adds a 12-hour clock, and drops it when absent', () => {
   assert.equal(specTimestamp('2026-09-16 00:30:00'), 'SEPTEMBER 16, 2026, 12:30 AM');
   assert.equal(specTimestamp('2026-09-16 12:00:00'), 'SEPTEMBER 16, 2026, 12:00 PM');
   assert.equal(specTimestamp('2026-09-16'), 'SEPTEMBER 16, 2026');
+});
+
+test('stationClock reads the STATION clock, not the machine clock', () => {
+  // 06:08:21 UTC is 14:08:21 in Manila, in whatever zone the test machine runs.
+  // The save line reports a time the record has to agree with, so it is pinned
+  // to Philippine Standard Time rather than to the officer's browser.
+  assert.equal(stationClock(new Date('2026-09-16T06:08:21Z')), '14:08:21');
+  assert.equal(stationClock(new Date('2026-09-16T06:08:21Z').getTime()), '14:08:21');
+  // Nothing to say rather than "Invalid Date" — the caller renders no line.
+  assert.equal(stationClock(''), '');
+  assert.equal(stationClock('not a date'), '');
+  assert.equal(stationClock(null), '');
 });
 
 test('dateParts never shifts the day through a timezone', () => {

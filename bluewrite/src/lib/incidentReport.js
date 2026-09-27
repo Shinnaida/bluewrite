@@ -63,6 +63,35 @@ export function specTimestamp(value) {
   return `${date}, ${hour12}:${String(p.mm).padStart(2, '0')} ${suffix}`;
 }
 
+/**
+ * A Date -> "14:08:21" on the STATION's clock, for the case bar's save line.
+ *
+ * The time a draft was last written is part of the record, so it is read on
+ * Philippine Standard Time rather than the officer's own zone: a machine set to
+ * anything else would otherwise show a time the blotter entry does not agree
+ * with. Same IANA-zone approach as the login screen's PHT clock, and the reason
+ * this is a formatter rather than `toLocaleTimeString()`.
+ *
+ * Invalid or missing input -> '', so a caller can render nothing rather than
+ * "Invalid Date".
+ */
+const PHT_CLOCK = new Intl.DateTimeFormat('en-PH', {
+  timeZone: 'Asia/Manila',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+
+export function stationClock(value) {
+  // Stated rather than left to `new Date(value)`: that constructor reads null as
+  // the epoch, which would date a missing stamp to 1970 on the station clock.
+  if (value === null || value === undefined || value === '') return '';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return PHT_CLOCK.format(d);
+}
+
 /** The date the report is dated with: the report's own date when recorded. */
 export function reportDateValue(report, fallback = null) {
   const candidates = [

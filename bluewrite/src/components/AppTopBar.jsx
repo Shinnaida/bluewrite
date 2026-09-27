@@ -123,7 +123,11 @@ export default function AppTopBar({
           <img src={logo} alt="" />
         </span>
         <span className="ir-brand-text">
-          <span className="ir-brand-line1">Public Safety Department</span>
+          {/* The reference's eyebrow line: who the system is FOR, stated above
+              the system's own name. Static and generic — no station code is
+              invented here, because the deployment's own letterhead already
+              names the station inside the app and on every printed sheet. */}
+          <span className="ir-brand-line1">Republic of the Philippines · Public Safety Department</span>
           <span className="ir-brand-line2">Official Incident Reporting System</span>
         </span>
       </button>

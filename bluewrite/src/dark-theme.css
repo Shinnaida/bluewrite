@@ -265,11 +265,6 @@
      its text. Both are re-measured against the dark well (3.2:1 / 5.1:1). */
   --ir-field-border: #5E6778;
   --ir-placeholder: var(--cyan-dim);
-  /* The DRAFT flag's fill/ink pair in dark: the light #9A5B00 would be a muddy
-     smear on this page, so the flag takes this theme's amber as the PLATE and
-     the page's own near-black as the ink — 8.1:1, and unmistakably "unfiled". */
-  --ir-flag-fill: var(--amber);
-  --ir-flag-ink: var(--void);
 
   /* ---- The report FOLDER (what it is FOR is in incident-report.css) ----
      The glass is restated rather than inherited, for the reason every other
@@ -290,6 +285,16 @@
 :root[data-theme='dark'] .ir-nav,
 :root[data-theme='dark'] .la-topbar {
   border-bottom: 1px solid var(--line-bright);
+}
+
+/* THE GATE'S OWN NAVY, IN DARK. login-theme.css declares the pair on .la-page so
+   the document layer can never repaint the sign-in screen; a value declared on
+   that element is not something the :root block above can override, so the dark
+   step is stated at the same place the pair is set. Same lift, same reason: the
+   light navy is 1.35:1 against this page. */
+:root[data-theme='dark'] .la-page {
+  --la-navy: #1E2E50;
+  --la-navy-hi: #22355C;
 }
 
 /* The register's row hover is `--panel-sunken`, which is only one step off the

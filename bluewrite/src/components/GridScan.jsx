@@ -1,9 +1,26 @@
-// Vendored from React Bits (https://reactbits.dev) — GridScan, JavaScript + CSS
-// variant. Kept byte-faithful below this header so a future update can be
-// diffed against the source rather than re-derived. Anything this project
-// needed on top of it lives in GateGridScan.jsx, not here.
+// BLUEWRITE — GridScan
+//
+// The React Bits GridScan component, vendored so a future update can be diffed
+// against the source, exactly as ShapeGrid.jsx is (see HomeGrid.jsx for the
+// wrapper pattern this follows, and GateGridScan.jsx for the project's opinion
+// about it). It renders on the two sign-in screens and nowhere else.
+//
+// ONE DELIBERATE DEVIATION FROM THE VENDORED SOURCE. The face-tracking models
+// were loaded unconditionally on mount, from `modelsPath` — which defaults to a
+// cdn.jsdelivr.net URL — in an effect with no `enableWebcam` guard. This screen
+// never enables the webcam, so that was an outbound request to a third-party CDN
+// per gate load, which the project's no-CDN rule forbids. The model-loading
+// effect below now returns early when `enableWebcam` is false, and the effect
+// depends on `enableWebcam` so switching it on still loads them. Everything else
+// is byte-faithful to the source.
 import * as faceapi from 'face-api.js';
-import { BloomEffect, ChromaticAberrationEffect, EffectComposer, EffectPass, RenderPass } from 'postprocessing';
+import {
+  BloomEffect,
+  ChromaticAberrationEffect,
+  EffectComposer,
+  EffectPass,
+  RenderPass,
+} from 'postprocessing';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import './GridScan.css';
@@ -312,7 +329,7 @@ export const GridScan = ({
   snapBackDelay = 250,
   lightMode = false,
   className,
-  style
+  style,
 }) => {
   const containerRef = useRef(null);
   const videoRef = useRef(null);
@@ -341,7 +358,7 @@ export const GridScan = ({
   const MAX_SCANS = 8;
   const scanStartsRef = useRef([]);
 
-  const pushScan = t => {
+  const pushScan = (t) => {
     const arr = scanStartsRef.current.slice();
     if (arr.length >= MAX_SCANS) arr.shift();
     arr.push(t);
@@ -374,7 +391,7 @@ export const GridScan = ({
     const el = containerRef.current;
     if (!el) return;
     let leaveTimer = null;
-    const onMove = e => {
+    const onMove = (e) => {
       if (uiFaceActive) return;
       if (leaveTimer) {
         clearTimeout(leaveTimer);
@@ -448,7 +465,11 @@ export const GridScan = ({
 
     const uniforms = {
       iResolution: {
-        value: new THREE.Vector3(container.clientWidth, container.clientHeight, renderer.getPixelRatio())
+        value: new THREE.Vector3(
+          container.clientWidth,
+          container.clientHeight,
+          renderer.getPixelRatio()
+        ),
       },
       iTime: { value: 0 },
       uSkew: { value: new THREE.Vector2(0, 0) },
@@ -468,10 +489,12 @@ export const GridScan = ({
       uPhaseTaper: { value: scanPhaseTaper },
       uScanDuration: { value: scanDuration },
       uScanDelay: { value: scanDelay },
-      uScanDirection: { value: scanDirection === 'backward' ? 1 : scanDirection === 'pingpong' ? 2 : 0 },
+      uScanDirection: {
+        value: scanDirection === 'backward' ? 1 : scanDirection === 'pingpong' ? 2 : 0,
+      },
       uScanStarts: { value: new Array(MAX_SCANS).fill(0) },
       uScanCount: { value: 0 },
-      uLightMode: { value: lightMode ? 1 : 0 }
+      uLightMode: { value: lightMode ? 1 : 0 },
     };
 
     const material = new THREE.ShaderMaterial({
@@ -480,7 +503,7 @@ export const GridScan = ({
       fragmentShader: frag,
       transparent: true,
       depthWrite: false,
-      depthTest: false
+      depthTest: false,
     });
     materialRef.current = material;
 
@@ -499,7 +522,7 @@ export const GridScan = ({
       const bloom = new BloomEffect({
         intensity: 1.0,
         luminanceThreshold: bloomThreshold,
-        luminanceSmoothing: bloomSmoothing
+        luminanceSmoothing: bloomSmoothing,
       });
       bloom.blendMode.opacity.value = Math.max(0, bloomIntensity);
       bloomRef.current = bloom;
@@ -507,7 +530,7 @@ export const GridScan = ({
       const chroma = new ChromaticAberrationEffect({
         offset: new THREE.Vector2(chromaticAberration, chromaticAberration),
         radialModulation: true,
-        modulationOffset: 0.0
+        modulationOffset: 0.0,
       });
       chromaRef.current = chroma;
 
@@ -518,8 +541,13 @@ export const GridScan = ({
 
     const onResize = () => {
       renderer.setSize(container.clientWidth, container.clientHeight);
-      material.uniforms.iResolution.value.set(container.clientWidth, container.clientHeight, renderer.getPixelRatio());
-      if (composerRef.current) composerRef.current.setSize(container.clientWidth, container.clientHeight);
+      material.uniforms.iResolution.value.set(
+        container.clientWidth,
+        container.clientHeight,
+        renderer.getPixelRatio()
+      );
+      if (composerRef.current)
+        composerRef.current.setSize(container.clientWidth, container.clientHeight);
     };
     window.addEventListener('resize', onResize);
 
@@ -530,7 +558,14 @@ export const GridScan = ({
       last = now;
 
       lookCurrent.current.copy(
-        smoothDampVec2(lookCurrent.current, lookTarget.current, lookVel.current, smoothTime, maxSpeed, dt)
+        smoothDampVec2(
+          lookCurrent.current,
+          lookTarget.current,
+          lookVel.current,
+          smoothTime,
+          maxSpeed,
+          dt
+        )
       );
 
       const tiltSm = smoothDampFloat(
@@ -555,10 +590,17 @@ export const GridScan = ({
       yawCurrent.current = yawSm.value;
       yawVel.current = yawSm.v;
 
-      const skew = new THREE.Vector2(lookCurrent.current.x * skewScale, -lookCurrent.current.y * yBoost * skewScale);
+      const skew = new THREE.Vector2(
+        lookCurrent.current.x * skewScale,
+        -lookCurrent.current.y * yBoost * skewScale
+      );
       material.uniforms.uSkew.value.set(skew.x, skew.y);
       material.uniforms.uTilt.value = tiltCurrent.current * tiltScale;
-      material.uniforms.uYaw.value = THREE.MathUtils.clamp(yawCurrent.current * yawScale, -0.6, 0.6);
+      material.uniforms.uYaw.value = THREE.MathUtils.clamp(
+        yawCurrent.current * yawScale,
+        -0.6,
+        0.6
+      );
 
       material.uniforms.iTime.value = now / 1000;
       renderer.clear(true, true, true);
@@ -612,7 +654,7 @@ export const GridScan = ({
     yBoost,
     tiltScale,
     yawScale,
-    lightMode
+    lightMode,
   ]);
 
   useEffect(() => {
@@ -663,12 +705,12 @@ export const GridScan = ({
     scanPhaseTaper,
     scanDuration,
     scanDelay,
-    lightMode
+    lightMode,
   ]);
 
   useEffect(() => {
     if (!enableGyro) return;
-    const handler = e => {
+    const handler = (e) => {
       if (uiFaceActive) return;
       const gamma = e.gamma ?? 0;
       const beta = e.beta ?? 0;
@@ -684,12 +726,17 @@ export const GridScan = ({
   }, [enableGyro, uiFaceActive]);
 
   useEffect(() => {
+    // THE WEB FACE-TRACKING MODELS ARE ONLY FETCHED WHEN THE WEBCAM IS IN USE.
+    // See the note at the top of this file: without this guard the models load
+    // from `modelsPath` (a CDN URL by default) on mount, which the sign-in screens
+    // never need and the project's no-CDN rule forbids.
+    if (!enableWebcam) return undefined;
     let canceled = false;
     const load = async () => {
       try {
         await Promise.all([
           faceapi.nets.tinyFaceDetector.loadFromUri(modelsPath),
-          faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelsPath)
+          faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelsPath),
         ]);
         if (!canceled) setModelsReady(true);
       } catch {
@@ -700,7 +747,7 @@ export const GridScan = ({
     return () => {
       canceled = true;
     };
-  }, [modelsPath]);
+  }, [modelsPath, enableWebcam]);
 
   useEffect(() => {
     let stop = false;
@@ -714,7 +761,7 @@ export const GridScan = ({
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false
+          audio: false,
         });
         video.srcObject = stream;
         await video.play();
@@ -724,7 +771,7 @@ export const GridScan = ({
 
       const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
 
-      const detect = async ts => {
+      const detect = async (ts) => {
         if (stop) return;
 
         if (ts - lastDetect >= 33) {
@@ -798,7 +845,7 @@ export const GridScan = ({
       stop = true;
       if (video) {
         const stream = video.srcObject;
-        if (stream) stream.getTracks().forEach(t => t.stop());
+        if (stream) stream.getTracks().forEach((t) => t.stop());
         video.pause();
         video.srcObject = null;
       }
@@ -806,7 +853,11 @@ export const GridScan = ({
   }, [enableWebcam, modelsReady, depthResponse]);
 
   return (
-    <div ref={containerRef} className={`gridscan${className ? ` ${className}` : ''}`} style={style}>
+    <div
+      ref={containerRef}
+      className={`gridscan${className ? ` ${className}` : ''}`}
+      style={style}
+    >
       {showPreview && (
         <div className="gridscan__preview">
           <video ref={videoRef} muted playsInline autoPlay className="gridscan__video" />

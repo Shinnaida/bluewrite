@@ -231,7 +231,25 @@
   /* League Spartan is self-hosted (src/fonts/fonts.css) as a 100-900 variable
      font, so bold here is a drawn weight, not faux-bold. System fonts stay
      in the stack as the fallback if the bundle's fonts are ever missing. */
-  --font-family: 'League Spartan', 'Segoe UI', system-ui, sans-serif;
+  /* The reference's type roles (spec §1). Each stack LEADS with the reference's
+     own face so a machine that has it shows the intended type, and keeps the
+     bundle's self-hosted League Spartan next so a station PC never falls
+     through to a generic system face. Nothing is fetched from a CDN: the app
+     still ships its own font, and the extra names are only preferences. */
+  --font-family: 'Inter', 'Public Sans', 'League Spartan', 'Segoe UI', system-ui, sans-serif;
+  /* Serif, for the DOCUMENT areas only (the sheet's title, certification line
+     and facts of the case). Georgia is the fallback so the civic/formal read
+     survives on a machine without Merriweather. */
+  --font-serif: 'Merriweather', Georgia, 'Times New Roman', serif;
+  /* Mono, for coded/reference strings: case numbers, badge numbers, form refs.
+     Platform mono first after the reference's face, so nothing is downloaded. */
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* The reference's elevation pair (spec §1): one DEEP shadow for the floated
+     document (a page lifted off a desk) and one FLAT one for ordinary UI cards,
+     used consistently instead of a single drop-shadow everywhere. */
+  --shadow-document: 0 10px 30px -5px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.06);
+  --shadow-subtle: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
   /* The old HUD-mono slot now aliases the body font: labels are uppercase
      sans with letterspacing, matching the printed report. */
   --font-hud: var(--font-family);
@@ -4512,6 +4530,16 @@ button.dash-kpi--link:focus-visible {
   color: #111;
   width: 100%;
   max-width: 8.5in; /* US Letter, the station's paper */
+  /* SHORT BOND, 8.5 × 11 in. The WIDTH was already Letter, but the HEIGHT was
+     driven purely by content — so a short report previewed as a stub of a page
+     instead of as a leaf, and the live preview next to the form never read as
+     bondpaper at all. A sheet of short bond is 11in tall whatever is written on
+     it, so the page keeps that floor and grows only when the report needs more.
+     `box-sizing: border-box` (styles.css) means the floor INCLUDES the margins
+     below, so the paper is 11in overall rather than 11in of ink plus margins.
+     The same rule serves the print portal, the inline reveal and the AI draft
+     preview — there is one sheet class and this is it. */
+  min-height: 11in;
   padding: clamp(0.75in, 4vw, 1in);
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
   border-radius: 2px;
@@ -4767,6 +4795,14 @@ button.dash-kpi--link:focus-visible {
 .print-actions button.primary { background: #111; color: #fff; border-color: #111; }
 
 @media print {
+  /* The station's paper, stated to the print engine, so a report is laid out on
+     SHORT BOND (8.5 × 11 in / Letter) rather than on whatever the workstation's
+     default happened to be. Margins are deliberately left to the browser: the
+     sheet's own padding is removed in print (below), so the page needs them. */
+  @page {
+    size: letter;
+  }
+
   /* The sheet is portaled to document.body (body.print-sheet-open is set
      while it's mounted), so the ENTIRE app can be hidden wholesale and the
      sheet printed alone. Previously the sheet lived inside the editor
@@ -4803,6 +4839,11 @@ button.dash-kpi--link:focus-visible {
     box-shadow: none;
     max-width: none;
     padding: 0;
+    /* The paper is ALREADY Letter in print, so the screen's 11in floor would
+       only invite a rounding blank second page when the content lands near the
+       boundary. The floor is a screen affordance — it makes the preview look
+       like paper — not something the printed sheet needs. */
+    min-height: 0;
   }
   .no-print { display: none !important; }
 }

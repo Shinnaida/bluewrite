@@ -7,8 +7,9 @@ import './GateGridScan.css';
  *
  * The two sign-in screens are the ONLY place this renders, and this wrapper is
  * the whole of the project's opinion about it — GridScan.jsx itself is vendored
- * unmodified, so a future update can be diffed against the source, exactly as
- * ShapeGrid.jsx is (see HomeGrid.jsx for the pattern this follows).
+ * apart from one gated line (see below), so a future update can be diffed
+ * against the source, exactly as ShapeGrid.jsx is (see HomeGrid.jsx for the
+ * pattern this follows).
  *
  * WHAT THIS ADDS, and why each piece could not live in the component:
  *
@@ -43,13 +44,19 @@ import './GateGridScan.css';
  *    `isolation: isolate` — without it the blend group extends past the page and
  *    the backdrop would be multiplied against whatever sits behind it.
  *
- *  - NO MOTION WHEN LESS MOTION IS ASKED FOR. The component has no static mode
- *    and no way to be paused through its props. Rather than ship a full-height
- *    animation to somebody who has asked the OS for less movement, the backdrop
- *    does not render at all and the gate is exactly what it was before. The
- *    preference is watched, not sampled once. (theme.js makes the same call for
- *    the appearance switch, and HomeGrid for Home's grid — this is the third
- *    use of one pattern, not a new one.)
+ *  - IT RUNS EVEN WHEN LESS MOTION IS ASKED FOR — A DELIBERATE EXCEPTION. This
+ *    wrapper used to do what the other backdrops do and return null under
+ *    `prefers-reduced-motion: reduce`. That was reversed by request, after the
+ *    guard was traced to a gate that looked broken rather than deliberately
+ *    still on a workstation whose OS animations are switched off: the
+ *    preference is invisible, the missing backdrop is not, and the two read as
+ *    "the background disappeared". So the animation on this ONE screen is now
+ *    unconditional. Home's grid, the report sheet and the appearance switch
+ *    still honour the preference — the exception is scoped to the gate, where
+ *    the moving surface is the backdrop to a form rather than anything read.
+ *    The component has no static mode and no way to be paused through its
+ *    props, so there is no half-measure available here: it renders or it does
+ *    not.
  *
  *  - THE ANIMATION IS DECORATION, AND IS MARKED AS SUCH. The wrapper carries
  *    aria-hidden: it holds no content and a screen reader should not hear about
@@ -67,13 +74,17 @@ import './GateGridScan.css';
  *    sweep and the grid's own drift carry the motion, both of which are
  *    time-driven and unaffected.
  *
- * WHAT IS KNOWN AND ACCEPTED: GridScan imports face-api.js at module scope and
- * loads its face-tracking models from a CDN on mount, in an effect with no
- * enableWebcam guard — so this backdrop brings TensorFlow.js into the bundle and
- * makes one outbound request to cdn.jsdelivr.net per gate load, on a screen that
- * never uses the webcam. That was raised before it was installed and taken
- * knowingly. The component was left byte-faithful rather than patched; the
- * one-line guard in the modelsPath effect is the fix if it is ever wanted.
+ *  - THE FACETRACKING NEVER RUNS, AND ITS MODELS ARE NEVER FETCHED. Webcam
+ *    face-tracking is off (`enableWebcam` defaults to false and is not passed),
+ *    so the only pointer-driven depth trick the component offers is unused here
+ *    anyway. The models themselves used to load from a CDN on mount regardless
+ *    (an effect with no `enableWebcam` guard); GridScan.jsx now returns early
+ *    from that effect when the webcam is off, so the gate makes no outbound
+ *    request to cdn.jsdelivr.net — the project's no-CDN rule holds. That is the
+ *    one deliberate deviation from the vendored source, and it is documented at
+ *    the top of GridScan.jsx. `face-api.js` still reaches the bundle through the
+ *    component's module-scope import; stripping it would mean a dynamic import,
+ *    which is a larger change than the guard.
  *
  * NUMBERS ARE PROVISIONAL. The values below are a first pass chosen to be calm
  * behind a form — slow, thin, unlit — and are single-number changes wanting a
@@ -112,8 +123,6 @@ const SCAN_OPACITY_LIGHT = 0.25;
 const SCAN_DURATION = 3.2;
 const SCAN_DELAY = 3.2;
 
-const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
-
 function readToken(styles, name, fallback) {
   const value = styles.getPropertyValue(name).trim();
   return value || fallback;
@@ -139,26 +148,8 @@ function readInk() {
   };
 }
 
-function prefersReducedMotion() {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia(REDUCED_MOTION).matches
-  );
-}
-
 export default function GateGridScan() {
-  const [reduceMotion, setReduceMotion] = useState(prefersReducedMotion);
   const [ink, setInk] = useState(readInk);
-
-  // Watched rather than sampled: the preference can change with the gate open.
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return undefined;
-    const mq = window.matchMedia(REDUCED_MOTION);
-    const onChange = (event) => setReduceMotion(event.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
 
   // The theme lands on <html> as data-theme (see applyTheme in lib/theme.js), so
   // that attribute is the whole signal — no polling, and no second copy of the
@@ -171,8 +162,6 @@ export default function GateGridScan() {
     return () => observer.disconnect();
   }, []);
 
-  if (reduceMotion) return null;
-
   return (
     <div className="gate-gridscan" data-light={ink.light ? '' : undefined} aria-hidden="true">
       {/* lightMode is the component's own light pass; the wrapper's blend rule is
@@ -184,7 +173,10 @@ export default function GateGridScan() {
           enablePost is OFF, which is where the "no glow" part of this screen's
           brief is honoured: no bloom, no chromatic aberration, no grain. The
           beam is therefore a lit band rather than a lens flare, which is the
-          intent on a form somebody is reading a six-digit code off. */}
+          intent on a form somebody is reading a six-digit code off.
+
+          enableWebcam is left off, so the face-tracking models are never fetched
+          (see the note above and GridScan.jsx). */}
       <GridScan
         linesColor={ink.line}
         scanColor={ink.scan}
@@ -196,6 +188,7 @@ export default function GateGridScan() {
         scanDuration={SCAN_DURATION}
         scanDelay={SCAN_DELAY}
         enablePost={false}
+        enableWebcam={false}
         bloomIntensity={0}
         noiseIntensity={0}
         chromaticAberration={0}

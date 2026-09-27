@@ -9,11 +9,14 @@
    app read as one product instead of two.
 
    Colours are shared tokens from styles.css / incident-report.css
-   (--void --panel --line --paper --steel --cyan --ir-navy …) instead of hex
+   (--void --panel --line --paper --steel --cyan --ir-border …) instead of hex
    literals, which is what keeps the gate and the workspace from drifting: the
    palette changes once and both screens follow. The only values written out
    longhand are the white-alpha inks on the navy bar, which have no token
-   because nothing else sits on navy except the workspace's own nav links.
+   because nothing else sits on navy except the workspace's own nav links —
+   plus the gate's own navy pair (--la-navy / --la-navy-hi, declared on
+   .la-page below), which is deliberately NOT shared: the document layer owns
+   --ir-navy, and a restyle of the report sheet must not repaint this screen.
 
    Deliberately still login-only: the two-column arrangement (brand and system
    context beside the access panel), the PHT clock, and the SYS_STATUS /
@@ -31,14 +34,24 @@
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
-  background: var(--void);
-  /* The backdrop layer (components/GateGridScan.css) is multiply-blended in the
-     light theme, and a blend takes its backdrop from the nearest ancestor that
-     forms a stacking context. `.la-page` is positioned but has no z-index, so it
-     was not one — the group would have reached past the page and multiplied the
-     grid against whatever sits behind it. This makes the page its own group, so
-     the grid blends against --void and nothing else. */
+  /* THE BACKDROP'S BLEND GROUP ENDS HERE. The GridScan backdrop
+     (GateGridScan.css) multiplies its light pass into the page; without a
+     stacking context on this box the blend group would extend past the gate and
+     the backdrop would be multiplied against whatever sits behind it. This is a
+     fact about the page's box rather than about the backdrop, which is why it is
+     declared here and not there. */
   isolation: isolate;
+  background: var(--void);
+  /* THE GATE'S OWN NAVY, STATED HERE RATHER THAN INHERITED. This screen reads a
+     navy for the top bar and for the second step's panel, and it used to read
+     the document layer's --ir-navy for both. The report sheet's restyle retuned
+     that pair for the document's own bars, so work on a different screen
+     repainted this one. The gate keeps the navy it shipped with: the pair is
+     declared on the page, and no document-layer token can reach it. Dark
+     restates the same pair, for the reason it restates --ir-navy there —
+     #1a2b4a is only 1.35:1 against the dark page. */
+  --la-navy: #1a2b4a;
+  --la-navy-hi: #26406c;
   color: var(--paper);
   font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
@@ -65,7 +78,7 @@
   flex-wrap: wrap;
   gap: 0.6rem 1rem;
   padding: 0.7rem clamp(1rem, 3vw, 2rem);
-  background: var(--ir-navy);
+  background: var(--la-navy);
   color: #fff;
 }
 
@@ -562,11 +575,12 @@
    share the page with.
 
    EVERY COLOUR HERE IS A TOKEN, which is what makes the dark theme work without
-   a second palette: --ir-navy is the department's navy (it lifts in dark so it
-   does not dissolve into a near-black page), --panel-sunken is an empty field,
-   --ir-border the hairline, --ir-muted the body copy. The few values written
-   longhand are the inks that sit ON the navy, which have no token for the reason
-   section 1 gives: navy is the one surface that is navy in both themes.
+   a second palette: --la-navy is the department's navy as THIS screen states it
+   (it lifts in dark so it does not dissolve into a near-black page — see
+   .la-page), --panel-sunken is an empty field, --ir-border the hairline,
+   --ir-muted the body copy. The few values written longhand are the inks that
+   sit ON the navy, which have no token for the reason section 1 gives: navy is
+   the one surface that is navy in both themes.
    ============================================================ */
 
 /* ---- the card ---- */
@@ -591,7 +605,7 @@
   align-items: flex-start;
   gap: 0.7rem;
   padding: 28px 22px;
-  background: var(--ir-navy);
+  background: var(--la-navy);
   color: #fff;
 }
 .la-verify-shield {
@@ -754,9 +768,9 @@
   justify-content: center;
   gap: 0.5rem;
   margin-top: 0.9rem;
-  border: 1px solid var(--ir-navy);
+  border: 1px solid var(--la-navy);
   border-radius: 8px;
-  background: var(--ir-navy);
+  background: var(--la-navy);
   color: #fff;
   font-family: var(--font-family);
   font-size: 0.875rem;
@@ -765,8 +779,8 @@
   transition: background 160ms ease, border-color 160ms ease;
 }
 .la-verify-submit:hover:not(:disabled) {
-  background: var(--ir-navy-hi);
-  border-color: var(--ir-navy-hi);
+  background: var(--la-navy-hi);
+  border-color: var(--la-navy-hi);
 }
 .la-verify-submit:disabled { opacity: 0.55; cursor: not-allowed; }
 .la-verify-submit:focus-visible {
@@ -855,7 +869,7 @@
 }
 .la-verify-recovery-input:focus-visible {
   outline: none;
-  border-color: var(--ir-navy);
+  border-color: var(--la-navy);
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .la-verify-recovery-input:disabled { opacity: 0.55; cursor: not-allowed; }

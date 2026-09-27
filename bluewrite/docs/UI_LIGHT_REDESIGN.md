@@ -67,9 +67,12 @@ document page is the app's atmosphere now.
 > **Later change (see §"The sign-in gate").** "For good" did not hold for the
 > gate specifically: the two sign-in screens were given a backdrop again. It is a
 > different animal from the one retired here — a React Bits `GridScan`, drawn
-> from the palette's own tokens, unlit (no bloom, no grain) and static when the
-> OS asks for less motion — but it is a reversal of this sentence, and this note
+> from the palette's own tokens, unlit (no bloom, no grain) and running even when
+> the OS asks for less motion — but it is a reversal of this sentence, and this note
 > is here so the record says so rather than reading as if the code drifted.
+> (It was removed on 2026-09-27 and then re-applied the same day from a newer
+> React Bits source — see the later change notes in §"The sign-in gate", which
+> are now the authority on the gate's backdrop.)
 
 ### Move 2: one top bar, rendered once
 
@@ -307,6 +310,41 @@ but the canvas sits under `.la-content`, a full-size scroll container at a highe
 layer, and clearing that container would break wheel scrolling. The layer is
 `pointer-events: none`, so the sweep and the grid's own drift carry the motion;
 the skew never runs.
+
+> **Later change (2026-09-27).** The backdrop above was removed on request, and
+> with it everything it brought: `GateGridScan.jsx`, `GateGridScan.css` and the
+> vendored `GridScan.jsx` / `GridScan.css` now live in
+> `.design-backup/revert-landing-backdrop-2026-09-27/` rather than in `src/`. So
+> the gate has no backdrop at all — the page's own `--void` fill is the
+> atmosphere, exactly as it is in the workspace — and the costs listed above are
+> gone with it: no `three`/`postprocessing`/`face-api.js` on this screen, no
+> outbound request to `cdn.jsdelivr.net` per load, and the page-level
+> `isolation: isolate` the light-mode blend needed (login-theme.css) is reverted
+> too. The gate now states its own navy pair (`--la-navy` / `--la-navy-hi`, on
+> `.la-page`, restated for dark in dark-theme.css) instead of reading the
+> document layer's `--ir-navy`, so a restyle of the report sheet can never
+> repaint the sign-in screen again.
+
+> **Later change (2026-09-27, later the same day).** The backdrop came back, on
+> request, rebuilt from a NEWER React Bits `GridScan` source than the one that
+> was removed. That source adds `lightMode` (the gate already used it),
+> `lineStyle`, `lineJitter`, `scanOnClick`, `scanGlow`, `scanSoftness`,
+> `scanPhaseTaper`, an `enableGyro` option and a `showPreview` HUD — none of
+> which the gate opts into. `isolation: isolate` is back on `.la-page` with it.
+> One departure from a byte-faithful vendoring was taken deliberately this time:
+> the model-loading effect now returns early when `enableWebcam` is false, so the
+> gate no longer makes its per-load request to `cdn.jsdelivr.net` (documented at
+> the top of `GridScan.jsx`, and the guard the previous note called "a decision
+> to take deliberately"). `face-api.js` still reaches the bundle through the
+> component's module-scope import, so the weight note above still stands — the
+> guard removed the outbound request, not the dependency.
+>
+> It also **stopped standing down under `prefers-reduced-motion`**. The guard the
+> other backdrops share was traced to a gate that read as broken rather than
+> deliberately still on a workstation with OS animations switched off, so it was
+> dropped for this one screen. The exception is scoped to the gate and argued in
+> `GateGridScan.jsx`; Home's grid, the report sheet and the appearance switch
+> still honour the preference.
 
 **What was kept deliberately:** the two-column arrangement, the PHT clock, the
 `SYS_STATUS` / `ENC_LEVEL` readout (an officer should see a connection problem

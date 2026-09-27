@@ -27,14 +27,20 @@ import './HomeGrid.css';
  *                      accent wash, which is what a hover feedback state should
  *                      borrow rather than inventing an alpha.
  *
- *  - NO MOTION WHEN LESS MOTION IS ASKED FOR. The component cannot be paused
- *    through its props: `updateAnimation` floors the speed at 0.1, so `speed={0}`
- *    still moves. There is likewise no static mode. Rather than ship a
- *    decorative animation to someone who has asked the OS for less movement, the
- *    grid does not render at all and Home is exactly what it was before. The
- *    preference is watched, not sampled once, so toggling it takes effect
- *    without a reload. (theme.js already makes the same call for the appearance
- *    switch, which is where the pattern comes from.)
+ *  - IT RUNS EVEN WHEN LESS MOTION IS ASKED FOR — A DELIBERATE EXCEPTION. This
+ *    wrapper used to do what the rest of the app does and return null under
+ *    `prefers-reduced-motion: reduce`. That was reversed by request, after the
+ *    guard was traced to a Home that looked broken rather than deliberately
+ *    still on a workstation whose OS animations are switched off: the preference
+ *    is invisible, the missing grid is not, and the two read as "the background
+ *    disappeared". Home's grid is now unconditional — the same call, for the
+ *    same reason, as the gate's backdrop (see GateGridScan.jsx). The rest of the
+ *    app still honours the preference; the exception is scoped to the two
+ *    landing surfaces.
+ *
+ *    There is no half-measure available here: `updateAnimation` floors the speed
+ *    at 0.1, so `speed={0}` still moves, and the component has no static mode.
+ *    So it renders or it does not, and it now renders.
  *
  *  - THE ANIMATION IS DECORATION, AND IS MARKED AS SUCH. The canvas carries
  *    aria-hidden: it holds no content, and a screen reader should not hear about
@@ -71,8 +77,6 @@ const HOVER_TOKEN = '--cyan-bg-strong';
  */
 const FALLBACK = { border: '#C2C9D6', hover: 'rgba(31, 95, 208, 0.25)' };
 
-const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
-
 function readToken(styles, name, fallback) {
   const value = styles.getPropertyValue(name).trim();
   return value || fallback;
@@ -88,27 +92,8 @@ function readInk() {
   };
 }
 
-function prefersReducedMotion() {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia(REDUCED_MOTION).matches
-  );
-}
-
 export default function HomeGrid() {
-  const [reduceMotion, setReduceMotion] = useState(prefersReducedMotion);
   const [ink, setInk] = useState(readInk);
-
-  // Watched rather than sampled: the officer can change the OS setting (or the
-  // app's own theme) with Home already open.
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return undefined;
-    const mq = window.matchMedia(REDUCED_MOTION);
-    const onChange = (event) => setReduceMotion(event.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
 
   // The theme lands on <html> as data-theme (see applyTheme in lib/theme.js), so
   // that attribute is the whole signal — no polling, and no second copy of the
@@ -119,8 +104,6 @@ export default function HomeGrid() {
     observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
     return () => observer.disconnect();
   }, []);
-
-  if (reduceMotion) return null;
 
   return (
     <div className="home-grid" aria-hidden="true">

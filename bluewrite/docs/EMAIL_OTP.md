@@ -27,8 +27,6 @@ the trade is real and is the reason 012 chose the app in the first place.
 | `src/lib/codeBoxes.js` | The arithmetic of the row: which box a digit goes to, which one Backspace empties, where a paste lands, where the caret ends up |
 | `src/components/CodeBoxes.jsx` | The six boxes as six real inputs — one accessible name and one error state each. No animation library; plain CSS |
 | `src/components/Login.jsx` | The code screen (the `step === 'verify'` branch) |
-| `src/components/GridScan.jsx` | The React Bits `GridScan`, vendored unmodified — the gate's backdrop |
-| `src/components/GateGridScan.jsx` | The gate's whole opinion about that backdrop: the two tokens it reads, the light-mode blend, no motion when the OS asks for less, and the fact it never takes the pointer |
 
 ## Signing in
 
@@ -94,13 +92,14 @@ Rules the code enforces:
 - **Server-level problems do not read as typing errors.** A code that could not
   be sent (`mfa_mail_failed`) or a sign-in the server has dropped is shown in a
   band above the field, not in the field's own line.
-- **It sits on the gate's backdrop, and only the gate has one.** Both sign-in
-  screens are over a `GridScan` layer (`GateGridScan.jsx`), drawn from
-  `--line-bright` and `--cyan`, unlit, and not rendered at all when the OS asks
-  for reduced motion. It takes no pointer events — deliberately, so a decorative
-  layer can never swallow a click on one of the six boxes. Nothing else in the
-  app has a backdrop; the workspace's light document page is the atmosphere (see
-  `UI_LIGHT_REDESIGN.md`, including the note about what this backdrop costs).
+- **The backdrop is decoration, and nothing depends on it.** Both sign-in
+  screens sit on the page's own fill and carry the React Bits `GridScan` layer
+  (`GateGridScan.jsx`) over it — token-driven, unlit and rendered
+  unconditionally, including under `prefers-reduced-motion` (a deliberate
+  exception to the app's usual pattern, argued in `GateGridScan.jsx`). It adds no
+  box, takes no pointer, and the code screen works exactly the same with it off.
+  `UI_LIGHT_REDESIGN.md` records its history, including the CDN the face-tracking
+  models used to fetch.
 
 ## An officer cannot get in
 

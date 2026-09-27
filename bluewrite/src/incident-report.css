@@ -19,8 +19,13 @@
    now, and they source their colours from the one palette in styles.css so
    the document layer and the app chrome can never drift apart. */
 :root {
-  --ir-navy: #1a2b4a;
-  --ir-navy-hi: #26406c;
+  /* The reference's navy (spec §1): govNavy-900 for the bars and govNavy-800 for
+     the raised/hover step. Deeper than the value this layer shipped with, so the
+     top bar, the section bars and the stepper's fill all read as the reference's
+     chrome. White on either measures well above 12:1, so nothing loses contrast
+     by the change. */
+  --ir-navy: #0b2545;
+  --ir-navy-hi: #133e87;
   --ir-page: var(--void);
   --ir-card: var(--panel);
   --ir-card-head: var(--card-head);
@@ -36,13 +41,11 @@
      backs table headers, and a table is a slice of the document, not a section
      of it (see .ir-card-head, which says the rest). */
   --ir-bar: var(--ir-navy);
-  /* The "not yet filed" flag (the DRAFT chip in .ir-status). A FILL rather than
-     the shared ghost chip, because it is the badge that means "this report lives
-     only in this browser". #9A5B00 holds white at 5.4:1 — the app's --amber as a
-     fill would only reach 4.24:1 with white, which is under AA for an 11px caps
-     label. Dark restates the pair (see dark-theme.css). */
-  --ir-flag-fill: #9A5B00;
-  --ir-flag-ink: #ffffff;
+  /* The accent that sits ON a navy bar — the active nav tab's rule, and the
+     marker a bar-level element wears. --amber is chosen against WHITE paper and
+     reads muddy on #1a2b4a; the bar is a fixed navy surface in both themes, so
+     its accent gets a value measured against navy instead (~7:1). */
+  --ir-bar-accent: #E0A526;
   --ir-border: var(--line);
   /* A FIELD's own hairline, and it has to be a legible one: the boundary of an
      input is a UI component, so it is measured against the well it draws rather
@@ -223,13 +226,15 @@
 .ir-nav-link {
   background: transparent;
   border: 0;
-  border-radius: 0;
+  /* The active tab is a PLATE with a SQUARED bottom (spec): a rounded box would
+     bend the accent rule under it, and the reference's underline is straight. */
+  border-radius: 6px 6px 0 0;
   color: rgba(255, 255, 255, 0.86);
   font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 0.4rem 0.1rem;
+  padding: 0.45rem 0.7rem;
   border-bottom: 2px solid transparent;
 }
 .ir-nav-link:hover {
@@ -237,9 +242,14 @@
   color: #fff;
   border-bottom-color: rgba(255, 255, 255, 0.55);
 }
+/* "You are here": a lighter navy plate and an amber rule, which is how the
+   reference marks the current destination. The plate is what carries it at a
+   glance; the rule is the same accent the section bars wear, so the two read as
+   one palette rather than two unrelated highlights. */
 .ir-nav-link[aria-current='page'] {
   color: #fff;
-  border-bottom-color: #fff;
+  background: var(--ir-navy-hi);
+  border-bottom-color: var(--ir-bar-accent);
 }
 
 /* ===========================================================================
@@ -280,41 +290,105 @@
    header the way a form's letterhead rule does, so the title block reads
    as the head of the page rather than as text floating above the panels.
    The padding is the clearance between that rule and the meta block. */
+/* THE CASE BAR (spec: the reference's case-title bar). The head of the screen
+   is a white band with its own edge that sits directly under the navy top bar,
+   so "a case is open" reads before a single field is reached — instead of a
+   letterhead rule drawn on the page. Same node, same order, same data: this is
+   surface only, and the badge row (.ir-status) still follows it. */
 .ir-page-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem clamp(1rem, 4vw, 3rem);
   flex-wrap: wrap;
-  padding-bottom: 0.75rem;
+  padding: clamp(0.8rem, 1.5vw, 1.1rem) clamp(0.9rem, 1.6vw, 1.3rem);
   margin-bottom: 1rem;
-  border-bottom: 1px solid var(--ir-border);
+  background: var(--ir-card);
+  border: 1px solid var(--ir-border);
+  border-radius: 6px;
+  box-shadow: var(--shadow-xs);
+}
+
+/* ---- THE CASE PANEL — the report's head as ONE field ---------------------
+   The case bar, the record strip and the progress read-out: three blocks that
+   used to be three cards with a gap between each, so the top of the screen read
+   as three unrelated boxes. They are ONE card now, divided by hairlines the way
+   a document's masthead groups its own lines.
+
+   Each child gives up the chrome it was wearing as a standalone card — its
+   outer border, its radius, its shadow and the margin that separated it from
+   its neighbours — and keeps its own surface and ink, so the amber notice strip
+   still reads as a notice. The selectors are deliberately over-specific
+   (`.ir-case-panel > .ir-status.ir-status--flag` beats that component's own
+   rule on specificity, not on source order) because all three of these blocks
+   are drawn on other screens too and none of THOSE may change: the panel class
+   exists on the Write Report header and nowhere else. */
+.ir-case-panel {
+  margin-bottom: 1rem;
+  background: var(--ir-card);
+  border: 1px solid var(--ir-border);
+  border-radius: 6px;
+  box-shadow: var(--shadow-xs);
+  /* So a child's own surface cannot bleed past the rounded corner. */
+  overflow: hidden;
+}
+.ir-case-panel > .ir-page-head {
+  margin-bottom: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+/* The record strip keeps its amber tint AND its left rule — that rule is what
+   says "notice" — and loses the box that was drawn around it. */
+.ir-case-panel > .ir-status.ir-status--flag {
+  margin: 0;
+  border-width: 1px 0 1px 4px;
+  border-radius: 0;
+  border-left-color: var(--amber);
+}
+/* The stepper: no plate of its own, just the hairline that closes the head, so
+   the head reads as one field rather than a card inside a card. */
+.ir-case-panel > .ir-stepper {
+  margin: 0;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--ir-border);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .ir-title {
   /* The page titles used a Georgia serif for the "official document" read.
      The project's one typeface (League Spartan, see src/fonts/fonts.css)
-     replaces it; the serif is gone, not falling back. */
+     replaces it; the serif is gone, not falling back. The reference's case
+     title is a heavy, tight, near-black navy — reached by WEIGHT and colour,
+     not by a second family, so the drop-the-serif decision still holds. The
+     ink stays --ir-text (theme-aware), never the literal --ir-navy, which the
+     dark theme does not repaint and which would vanish on a near-black page. */
   font-family: var(--font-family);
-  font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.1rem);
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-size: clamp(1.3rem, 1.05rem + 1.2vw, 1.75rem);
+  font-weight: 800;
+  letter-spacing: -0.005em;
   color: var(--ir-text);
   margin: 0;
 }
 
-/* The masthead's right-hand block: each fact is a labelled PAIR, key then
-   value, right-aligned as a unit. The key is the quiet half (small, tracked,
-   muted) and the value carries the weight — so "Case no." names the field
-   and BW-0313 is what the eye lands on. Tabular figures keep the case
-   number and date from jittering between renders. Rows are a grid rather
-   than plain divs so every key column ends on the same right edge. */
+/* One labelled PAIR: the key names the fact, the value carries it — so
+   "Assigned case no." says what the identifier IS and the number is what the eye
+   lands on.
+
+   The pairs used to be grid rows pinned to the RIGHT edge of the masthead. They
+   are one line of provenance under the case title now, whole and left-aligned
+   with it, ruled apart by a bullet (.ir-meta-sep) — a masthead states the record
+   it belongs to in the reading order, and the numbers are the first thing under
+   the title rather than a block across the page from it. Still a flex row rather
+   than plain inline text so the key's baseline and the value's plate line up. */
 .ir-meta-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, auto);
-  justify-content: end;
+  display: inline-flex;
   align-items: baseline;
-  column-gap: 0.6rem;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .ir-meta-key {
@@ -326,11 +400,58 @@
 }
 
 .ir-meta-val {
-  font-size: 0.9rem;
+  /* The value wears the reference's REFERENCE treatment: monospace, the way the
+     sheet already sets a coded string, so an identifier reads as one rather than
+     as prose. Tabular figures keep the case number and date from jittering
+     between renders. The stack is the platform's own mono — no webfont is
+     fetched, per the bundle-only font rule. */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   color: var(--ir-text);
   font-variant-numeric: tabular-nums;
+}
+/* The PLATE is for the number alone, not for every value: a case number is a
+   token an officer reads character by character and copies out, while the record
+   date is a date. Boxing both would shout the quiet one up to the loud one. */
+.ir-meta-val--code {
+  background: var(--ir-raised);
+  border: 1px solid var(--ir-border);
+  border-radius: 4px;
+  padding: 0.08rem 0.45rem;
+}
+
+.ir-meta-sep {
+  color: var(--ir-muted);
+  font-size: 0.8rem;
+}
+
+/* The save line: when this draft last reached the server, on the station's
+   clock. It is the quietest line in the head — it is reassurance, not an
+   identifier — so it stays small and muted, with the tick carrying the only
+   colour. Drawn only after a write that succeeded (see lastSavedAt). */
+.ir-save-note {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--ir-muted);
+}
+.ir-save-note svg {
+  color: var(--green-ok);
+}
+
+/* The left column of the case bar: title and flag, the identifier line, the save
+   line — stacked in reading order. `min-width: 0` so a long case number cannot
+   push the actions group off the row. */
+.ir-head-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  min-width: 0;
 }
 
 .ir-meta {
@@ -362,34 +483,122 @@
   color: var(--ir-muted);
 }
 
-/* THE "NOT FILED YET" FLAG — scoped to this screen's status row.
-   .ir-status--flag marks THIS row: three screens share .ir-status, and the
-   register paints an officer's role on .badge.draft — a solid plate there would
-   out-shout its column; it also out-specifies .ir-body .badge.draft below.
+/* THE STATION NOTICE BAND (Tasks 11/12). The record strip reads as the
+   reference's notice: a tinted surface with an amber rule down its LEFT edge, so
+   it scans as an announcement rather than as one more grey panel, and the lines
+   inside it come up to full ink instead of staying muted — they are information
+   the officer needs, not a caption. Dark answers through
+   --amber/--amber-bg/--amber-line (see dark-theme.css) and needs no rule.
 
-   A FILL, not a ghost: this is the one badge that says the report exists only in
-   this browser, so it has to be read at a glance from the top of the page.
-   Bigger, heavier and solid — with the ink measured rather than assumed (white
-   on a plain --amber fill is 4.24:1 and under AA at this size; the light pair
-   below is 5.4:1, the dark pair 8.1:1). */
-.ir-status.ir-status--flag .badge.draft {
-  background: var(--ir-flag-fill);
-  color: var(--ir-flag-ink);
-  border-color: var(--ir-flag-fill);
-  font-size: 0.8rem;
-  font-weight: 800;
+   The solid DRAFT chip that used to open this band is gone: the case bar above
+   carries the report's status flag ("Draft stage" / "Finalized") and its case
+   number, so the chip was a third restatement of the same fact and the band
+   rendered empty on a fresh draft. The strip itself is drawn only when it has a
+   reference, a translation status or a lock warning to show. */
+.ir-status.ir-status--flag {
+  background: var(--amber-bg);
+  border-color: var(--amber-line);
+  border-left: 4px solid var(--amber);
+  color: var(--ir-text);
+}
+
+/* ---- The case-title bar's own parts (spec §2) -----------------------------
+   The title and its status flag on the left, the reference block and the case
+   action on the right. */
+.ir-case-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* The reference's pulsing status flag beside the case title. It is read from
+   the report's own status, and the pulse is pure decoration — stopped for
+   anyone who has asked the OS for less motion (see the reduced-motion block). */
+.ir-draft-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: none;
+  padding: 0.18rem 0.6rem;
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-line);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ir-text);
+}
+.ir-draft-flag::before {
+  content: '';
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: ir-flag-pulse 1.8s ease-in-out infinite;
+}
+@keyframes ir-flag-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+/* Quality floor (spec §8): the flag still states the report's state without the
+   pulse, so a reader who asked for less motion loses nothing but the blink. */
+@media (prefers-reduced-motion: reduce) {
+  .ir-draft-flag::before {
+    animation: none;
+  }
+}
+
+.ir-case-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem 0.55rem;
+  flex-wrap: wrap;
+}
+
+/* The case bar's action group. Only controls that already exist on this screen
+   are placed here, and they keep their own handlers — each is the same control
+   MOVED, never a second one added. Print Slip is hidden until the report has a
+   number (there is nothing to print before the first save), and Submit carries
+   its own permission check, so the group shrinks to one control on a new draft
+   and to just Submit for a role that may not finalize. */
+.ir-case-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  /* Pinned right, however short the left column is. */
+  margin-left: auto;
+}
+.ir-case-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.5rem 0.85rem;
+  border-radius: 6px;
+}
+/* Submit, at the width of its own label. The base rule makes this button a
+   full-width plate, because it used to close the document at the foot of the
+   page; in the case bar it sits beside Print Slip. Scoped to the group rather
+   than changed on .ir-submit, which Home's call-to-action also wears. */
+.ir-case-actions .ir-submit {
+  width: auto;
+  font-size: 0.72rem;
   letter-spacing: 0.1em;
-  padding: 0.32rem 0.75rem;
-  border-radius: 3px;
-  box-shadow: var(--shadow-xs);
+  padding: 0.52rem 0.95rem;
 }
 
-.ir-required-note {
-  margin: 0 0 1rem;
-  font-size: 0.78rem;
-  color: var(--ir-muted);
-}
-.ir-required-note .req,
 .ir-body .req {
   color: var(--ir-red);
 }
@@ -397,7 +606,7 @@
 /* ---- Progress stepper (Write Report) -------------------------------------
    The officer's position in the document: one hairline track behind five
    dots, filled up to the current section, with a label under each dot. A
-   read-out and a jump-nav, not a wizard — the form stays one long scroll, so
+   read-out and a jump-nav, not a wizard — it only moves between sections, so
    this is content, never a second sticky bar.
 
    NOT PANELLED, and it must not be. This block used to wear the same bordered
@@ -420,11 +629,17 @@
      the track is absolutely positioned from the rail's top edge, so its
      centre line must be pad + dot/2 or the rail slips above the dots. */
   --ir-stepper-node-pad: 0.3rem;
-  margin: 0 0 1.1rem;
-  /* The SAME horizontal clamp .ir-card-head uses, so "REPORT COMPLETION" and
-     its hairline line up with the section titles and the field column below
-     rather than hanging off the page's edge. */
-  padding: 0 clamp(0.9rem, 1.6vw, 1.25rem);
+  /* A CARD now: the reference draws progress inside a bordered panel of its
+     own, so the rail reads as an instrument of the document rather than as a
+     band floating on the page. The horizontal padding is the same clamp
+     .ir-card-head uses, so "Report completion" and its hairline still line up
+     with the section titles and the field column below. */
+  margin: 0 0 1rem;
+  padding: 0.65rem clamp(0.9rem, 1.6vw, 1.25rem) 0.55rem;
+  background: var(--ir-card);
+  border: 1px solid var(--ir-border);
+  border-radius: 6px;
+  box-shadow: var(--shadow-xs);
 }
 
 .ir-stepper-head {
@@ -596,6 +811,87 @@
   outline-offset: 2px;
 }
 
+/* The step the officer is ON wears a STANDING tint, not only a ring (Tasks
+   11/12). The reference draws its active step as a tinted card, and until now
+   form separated "here" from "elsewhere" for the dot alone — a ring on a card
+   that looked like every other one. The tint is the accent's own background
+   token, the same plate hover and focus already use, so the resting, hover and
+   focus states are one family instead of three. Colour is never the only
+   signal: the ring, the aria-current and the count above all still say it. */
+.ir-stepper-node--here {
+  background: var(--cyan-bg);
+}
+
+/* ---- THE STEPPER AS TILES (spec: the reference's five progress tiles) -----
+   The rail's dot-and-line becomes a row of TILES: each step is a small bordered
+   card carrying its number, its name, and a one-line state. NOTHING about the
+   behaviour changed — a tile is still one button that jumps to its step, the
+   tick face still means completeness, and the tint still means position. This
+   block only redraws the same five nodes, and it is stated after the rail's own
+   rules so it wins on order rather than on a specificity fight.
+
+   The rail's connecting track has no job once the dots are tiles, so it is
+   switched off rather than left to draw behind them. */
+.ir-stepper-track {
+  display: none;
+}
+.ir-stepper-steps {
+  gap: 0.5rem;
+}
+.ir-stepper-node {
+  gap: 0.25rem;
+  padding: 0.45rem 0.35rem 0.38rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+/* The tile the officer is ON: the reference tints and rings it, so position is
+   read from the surface as well as from the dot. */
+.ir-stepper-node--here {
+  border-color: var(--cyan-bg-strong);
+}
+.ir-stepper-dot {
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 0;
+  background: var(--panel-raised);
+  color: var(--steel);
+  font-size: 0.7rem;
+}
+.ir-stepper-dot--pending {
+  background: var(--panel-raised);
+  color: var(--steel);
+}
+/* The filled face keeps --step-bar, the palette token that already follows the
+   theme (navy in light, a bright blue in dark) — the reference's navy disc,
+   without pinning a literal that the dark theme would have to fight. */
+.ir-stepper-dot--done,
+.ir-stepper-node--here .ir-stepper-dot {
+  background: var(--step-bar);
+  color: var(--on-accent);
+}
+/* A finished tile you are standing on keeps its filled face; the ring is what
+   says "here", exactly as it did on the rail. */
+.ir-stepper-node--here .ir-stepper-dot--done {
+  outline: 3px solid var(--cyan-bg-strong);
+  outline-offset: 2px;
+}
+/* The label no longer needs a fixed width — a tile is one column wide by
+   construction — so it wraps inside the tile instead of reserving 9.5rem. */
+.ir-stepper-label {
+  width: auto;
+  font-size: 0.66rem;
+}
+/* The tile's state line: quieter than the label above it, because the label is
+   the step's NAME and this is only its state. */
+.ir-stepper-sub {
+  font-size: 0.62rem;
+  line-height: 1.15;
+  color: var(--steel);
+}
+.ir-stepper-node--here .ir-stepper-sub {
+  color: var(--ir-blue-ink);
+}
+
 /* A fixed width per label, so a longer name wraps instead of shifting the
    row it sits in. */
 .ir-stepper-label {
@@ -631,9 +927,19 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  /* The buttons NAME the step they lead to ("Proceed to Step 5: Action taken"),
+     so the row is wider than the bare Previous/Next it used to hold: it wraps
+     rather than overflowing on a narrow viewport. */
+  flex-wrap: wrap;
   /* Previous/Next sit at the END of the panel — where the officer finishes
      reading it — so the space belongs above the row. */
   margin: 1.25rem 0 0.25rem;
+}
+/* The way forward holds the right edge whether or not the save is drawn (a
+   locked report shows no save) — the same rule the document format's own row
+   uses, so the two rows cannot disagree about where the primary control sits. */
+.ir-step-nav .primary {
+  margin-left: auto;
 }
 .ir-step-nav button:disabled {
   opacity: 0.45;
@@ -937,6 +1243,51 @@
   display: block;
 }
 
+/* ---- THE TWO-COLUMN WORKSPACE (spec §2/§5) --------------------------------
+   The reference reads as a 7/5 split in the document format: the report's own
+   panels down the left, and the writing assistant — which already renders the
+   live document preview inside itself once a draft exists — pinned in a sticky
+   column on the right, staying in view while the officer scrolls. That is what
+   the assistant is FOR: it is pressed from anywhere in the report, and the
+   officer should not have to scroll to the foot of the page to reach it.
+
+   LAYOUT ONLY. No control moves, no id changes, no handler is re-registered:
+   every direct child keeps its DOM position and its own column, and the ONE
+   card that changes column is placed by a grid rule rather than by moving its
+   markup. Steps and Sheet keep their single-column layouts (excluded below),
+   and every format is single-column under the breakpoint, which is the
+   reference's own md/xl behaviour (§8). */
+@media (min-width: 1101px) {
+  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: clamp(1rem, 2vw, 1.75rem);
+    align-items: start;
+  }
+  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > * {
+    grid-column: 1;
+    min-width: 0;
+  }
+  /* A "wide" panel means the whole REPORT, not the whole workspace: left as
+     1 / -1 it would drag the narrative and every other full-width card under
+     the assistant, so inside the workspace it is pinned to the form column. */
+  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-card--wide {
+    grid-column: 1;
+  }
+  /* The assistant and its live preview. Definite column AND row, so it is placed
+     before auto-placement runs and cannot drag the panels after it out of the
+     form column; the row span is what gives `sticky` an area to travel in, and
+     empty implicit rows cost no height. */
+  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-card--accent {
+    grid-column: 2;
+    grid-row: 1 / span 50;
+    margin-top: 0;
+    position: sticky;
+    top: 1rem;
+    align-self: start;
+  }
+}
+
 .ir-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -962,16 +1313,72 @@
      separation from the cards above them has to come from HERE now. */
   margin-top: clamp(1rem, 1.8vw, 1.5rem);
 }
-/* One panel per step instead of one long scroll. Every card stays MOUNTED —
-   `hidden` only takes it off screen — because the error jumps resolve by
-   element id and a field that is outside the DOM can neither be focused nor
-   scrolled to (ReportEditor.jumpTo reveals the owning step first). The grid
-   drops to a single column so the visible panel gets the full measure. */
+/* ---- THE DECK: one section on screen at a time ----------------------------
+   Both deck formats — Steps and the Document walk — show the section the
+   officer is on and hide the rest. Every card stays MOUNTED; `hidden` only
+   takes it off screen, because the error jumps resolve by element id and a
+   field outside the DOM can neither be focused nor scrolled to (jumpTo reveals
+   the owning step first). The panel grid drops to a single column, so the
+   section on screen gets the full measure instead of half of it. */
+/* The STEPPED format shows ONE section per screen, so its grid of panels folds
+   to a single column and that section fills the measure. The DOCUMENT walk keeps
+   the two-column grid, because its first screen holds the three panels the
+   report opens on — the reporting party and the incident details side by side,
+   the narrative spanning beneath them. */
 .ir-form--stepped .ir-grid {
   grid-template-columns: minmax(0, 1fr);
 }
-.ir-form--stepped [hidden] {
+.ir-form--deck [hidden] {
   display: none;
+}
+
+/* THE SLIDE. The section coming in travels a short way from the edge the officer
+   is walking from and fades up; the one it replaces is simply gone (it is
+   `hidden` — there is nothing left to animate). It restarts on every step
+   change on its own, because a card going from `display: none` to displayed
+   restarts its animations, and the DIRECTION comes from the form's own modifier,
+   which goToStep sets from the way the step moved.
+
+   The assistant's card is excluded on purpose: it is not a section, it stays on
+   screen for the whole walk, and an animation on it would fight the sticky
+   placement the workspace grid gives it. */
+.ir-form--deck .ir-card:not([hidden]):not(.ir-card--accent) {
+  animation: ir-deck-in-next 0.26s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.ir-form--deck-prev .ir-card:not([hidden]):not(.ir-card--accent) {
+  animation-name: ir-deck-in-prev;
+}
+@keyframes ir-deck-in-next {
+  from {
+    opacity: 0;
+    transform: translateX(1.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ir-deck-in-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-1.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Quality floor (spec §8): the section still changes without the travel, so a
+   reader who asked for less motion loses the slide and keeps the navigation.
+
+   The selector is spelled to MATCH the rule above rather than simplify it: a
+   `:not()` carries the specificity of its argument, so the shorter
+   `.ir-form--deck .ir-card:not([hidden])` would score one class less and lose
+   to the rule it is meant to switch off. */
+@media (prefers-reduced-motion: reduce) {
+  .ir-form--deck .ir-card:not([hidden]):not(.ir-card--accent) {
+    animation: none;
+  }
 }
 
 .ir-card {
@@ -1048,6 +1455,132 @@
 .ir-card-head .ir-card-num {
   color: var(--on-accent);
   font-weight: 500;
+}
+
+/* The seal-amber marker that opens every section bar (Tasks 11/12).
+   The one accent on the page that is a MARK rather than a STATE: it says
+   "this is the station's own form", not "something is wrong here" — which is
+   why it is the palette's --amber in both themes rather than a status hue.
+   The bar already carries the numeral and the title, so it is decorative and
+   is aria-hidden in the markup; it must never be the only thing naming a
+   section. Fixed size and `flex: none` so it can never be squeezed off the bar
+   by a long title at a narrow width. */
+.ir-card-dot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--ir-bar-accent);
+}
+
+/* The section bar's right-hand context label (the reference's "Complainant /
+   Informant"). Pushed to the far edge by its own auto margin so it aligns the
+   same whether or not the card also carries actions. It inherits the bar's
+   white ink at a lighter step — 85% white on #1a2b4a still measures ~11:1, so
+   the step is a hierarchy in weight only and never spends contrast. It is
+   sentence case, unlike the title: it describes the section rather than naming
+   it, and the two must not read as one long title.
+
+   It truncates rather than wrapping, because a bar is one line by definition —
+   a wrapped label would change the height of the heading it sits on. The title
+   beside it is never truncated, so the section is always identifiable. */
+.ir-card-context {
+  margin-left: auto;
+  min-width: 0;
+  padding-left: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--on-accent);
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- THE STEP FOOTER (spec: the reference's "Save Partial Draft" / "Proceed
+   to …" row) ---------------------------------------------------------------
+   The document format's one navigation affordance: the save on the left, the
+   way forward on the right, exactly as the reference lays it out. It describes
+   the DOCUMENT rather than the viewport — the same treatment the stepper's own
+   head uses — so it reads as part of the report and not as a toolbar.
+
+   Colour is never the only signal: the primary button is the app's own filled
+   action (its `.primary` class), so the "way forward" is distinguishable from
+   "keep my work" with the accent off as well. */
+.ir-doc-nav {
+  display: flex;
+  align-items: center;
+  /* Save and Previous sit together at the LEADING edge, the way forward holds
+     the trailing one — not space-between, which would strand the Previous
+     button in the middle of the row with a gap either side of it. */
+  justify-content: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: clamp(1rem, 1.8vw, 1.5rem) 0 0;
+}
+/* The proceed button holds the right edge whether or not the save is drawn
+   (a locked report shows no save), so the row never looks half-empty. */
+.ir-doc-nav .primary {
+  margin-left: auto;
+}
+
+/* ---- The per-type SUB-PANEL (spec: the reference's tinted "Type-Specific
+   Entity" box) -------------------------------------------------------------
+   A tinted inset with a mini-header, so the fields belonging to the incident
+   TYPE read as a distinct block inside the section rather than as more of the
+   section's own fields. Presentation only: it WRAPS the fields exactly as they
+   were rendered, and every id, rule, error path and hint inside is unchanged. */
+.ir-typebox {
+  margin-top: 0.65rem;
+  padding: 0.7rem 0.8rem 0.4rem;
+  background: var(--cyan-bg);
+  border: 1px solid var(--cyan-bg-strong);
+  border-radius: 5px;
+}
+.ir-typebox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--cyan-bg-strong);
+}
+.ir-typebox-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ir-blue-ink);
+}
+.ir-typebox-ref {
+  flex: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ir-muted);
+}
+/* On the sheet the box is screen furniture and is unwrapped: the page's own
+   field labels and headings already group what each block holds, and a tinted
+   panel is not part of the official document. */
+.ir-form--sheet .ir-typebox {
+  margin-top: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+.ir-form--sheet .ir-typebox-head {
+  display: none;
+}
+
+/* The sheet's mono strings take the reference's mono role rather than a
+   hand-written stack, so every coded string on the screen and on the page is
+   spelled by ONE token. */
+.ir-meta-val,
+.ir-typebox-ref {
+  font-family: var(--font-mono);
 }
 
 .ir-card-body {
@@ -1678,15 +2211,6 @@
   gap: 0.4rem;
   flex-wrap: wrap;
   margin-top: 0.55rem;
-}
-
-/* The report's secondary actions now sit ABOVE the commit button — Save Draft
-   has to come before the irreversible one — so the 0.7rem that used to open
-   the row moves to the button beneath it. Written as a sibling selector and
-   not on .ir-submit itself: Home's own action row holds its Submit INSIDE it,
-   so this cannot reach that screen. */
-.ir-actions-row + .ir-submit {
-  margin-top: 0.45rem;
 }
 
 /* .ir-stepper-node is excluded for the same reason .ir-submit is: it is not
@@ -3869,14 +4393,30 @@
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--line);
-  background: var(--panel);
+  /* The reference's preview toolbar is a MUTED strip, not a white one, so the
+     white page below reads as paper on a desk rather than as a second panel. */
+  background: var(--panel-raised);
 }
 .ir-sheet-reveal-label {
+  display: flex;
+  align-items: center;
   font-family: var(--font-hud);
   font-size: 0.72rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--cyan-dim);
+}
+/* The reference marks the preview as LIVE with a green dot before its title.
+   Drawn, not typed, so it never enters the accessible name; the label beside
+   it already says what the panel is. */
+.ir-sheet-reveal-label::before {
+  content: '';
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.45rem;
+  border-radius: 50%;
+  background: var(--green-ok);
 }
 .ir-sheet-reveal-actions {
   display: flex;
@@ -3885,11 +4425,20 @@
 }
 .ir-sheet-reveal-paper {
   /* A letter page is taller than the card; scroll it rather than letting it
-     stretch the form. The page itself carries its own padding/shadow. */
+     stretch the form. The page itself carries its own padding/shadow.
+
+     The page is CENTRED on a muted desk (the reference's preview centres its
+     sheet the way a PDF viewer does), so it reads as one page on a surface
+     rather than as a panel pinned to one edge. `align-items: flex-start` keeps
+     the page at its own natural height instead of stretching it to the well,
+     and the literal grey is now the palette's own sunken surface. */
   max-height: min(70vh, 900px);
   overflow: auto;
-  background: #e5e7eb;
-  padding: 0.75rem;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: var(--panel-sunken);
+  padding: 0.9rem;
 }
 /* Task 9 — the AI's words TYPE THEMSELVES into the letter. The static chrome
    (header, date, title, certification boilerplate, bold labels) is on screen
@@ -4186,6 +4735,18 @@
   border-left: 4px solid var(--ir-blue);
   background: var(--cyan-bg);
 }
+
+/* The AI card's header wears the reference's navy band: a dark gradient bar
+   with the amber marker on it, so the one block on the page that is not the
+   officer's own record reads as a distinct instrument. The BODY stays light on
+   purpose — the panel inside is a form the officer reads and edits, and a dark
+   form would fight the document grammar the rest of the page is written in.
+   The sheet format's own rule (a page has no filled bars) is later in this
+   file and still wins. */
+.ir-card--accent .ir-card-head {
+  background: linear-gradient(90deg, var(--ir-navy) 0%, var(--ir-navy-hi) 100%);
+  border-bottom-color: var(--ir-navy-hi);
+}
 .ir-form--sheet .ir-card--wide {
   margin-top: 1.6rem;
 }
@@ -4225,6 +4786,20 @@
 .ir-form--sheet .ir-card-head .ir-card-num {
   color: inherit;
   font-weight: inherit;
+}
+
+/* The amber marker is SCREEN furniture and is dropped from the sheet, for the
+   same reason the fill above is cleared: the page IS the official document, and
+   a decorative seal dot is not part of it — the letterhead in the page head is
+   what identifies the station on paper. Without this the dot would print as a
+   stray amber speck beside every section title. */
+.ir-form--sheet .ir-card-dot {
+  display: none;
+}
+/* The context label goes with it: on the page there is no section bar for it to
+   sit on, and the sheets' own field labels already say what each block holds. */
+.ir-form--sheet .ir-card-context {
+  display: none;
 }
 
 /* NOTHING KEYS ON --current HERE ANY MORE, and that is the point rather than a

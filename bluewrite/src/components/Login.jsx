@@ -63,11 +63,6 @@ import {
 // accessible name and its own error state — see components/CodeBoxes.jsx. Their
 // arithmetic (advance, backspace, paste, arrows) is in lib/codeBoxes.js.
 import CodeBoxes from './CodeBoxes.jsx';
-// THE PAGE'S BACKDROP — the React Bits GridScan, on both gate screens. It is a
-// decoration and never a target (see GateGridScan.jsx for the tokens it reads,
-// the light-mode blend, why it takes no pointer, and the known cost of the
-// component's own CDN fetch).
-import GateGridScan from './GateGridScan.jsx';
 import { codeOf, emptyValues, emptyIndexes, allIndexes } from '../lib/codeBoxes.js';
 import { MoonIcon, SunIcon } from './ThemeIcons.jsx';
 // The navy master artwork, not the knockout: this screen is light, so the mark
@@ -76,6 +71,11 @@ import { MoonIcon, SunIcon } from './ThemeIcons.jsx';
 import logoNavy from '../assets/bluewrite-logo.png';
 import logoKnockout from '../assets/bluewrite-logo-light.png';
 import ConnectionNotice from './ConnectionNotice.jsx';
+// THE BACKDROP. The React Bits GridScan, fitted to this screen by the wrapper in
+// GateGridScan.jsx — token-driven, unlit, and rendered unconditionally, including
+// when the OS asks for less motion (a deliberate exception scoped to this
+// screen; see that file for why).
+import GateGridScan from './GateGridScan.jsx';
 
 /**
  * The second factor's server-side problems that are NOT connection failures.
@@ -805,11 +805,14 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
    */
   const isStep2 = step === 'verify';
 
-
   return (
     <main className={`la-page${isStep2 ? ' la-page--step2' : ''}`}>
-      {/* The bottom layer, on BOTH screens: it is chrome, not content, so it sits
-          under the bar and both panels rather than inside either. */}
+      {/* THE BACKDROP, on both screens, at the bottom layer. It adds no box and
+          takes no pointer (see GateGridScan.css): the page's own fill is still
+          the base the panels sit on, and the grid is drawn over it. It renders
+          unconditionally — it does NOT stand down under prefers-reduced-motion,
+          which is a deliberate exception to this project's usual pattern and is
+          argued in GateGridScan.jsx. */}
       <GateGridScan />
       <TopStatusBar connState={conn} step2={isStep2} />
       <ThemeToggle mode={mode} onToggle={onTheme} />
