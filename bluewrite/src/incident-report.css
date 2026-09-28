@@ -323,14 +323,19 @@
    rule on specificity, not on source order) because all three of these blocks
    are drawn on other screens too and none of THOSE may change: the panel class
    exists on the Write Report header and nowhere else. */
+/* NO CARD AROUND THE HEAD. The title, the two identifiers that name the report
+   and the officer's own actions are the TOP OF A DOCUMENT — the same three
+   facts the sheet prints as a heading, a reference line and a letterhead — and
+   a bordered, raised card around them made the opening of the report read as a
+   field to fill in.
+
+   What is left is the spacing the card also carried: the three blocks below it
+   (the head, the notice strip, the progress rail) are separated by their own
+   rules and margins, exactly as they were inside the card, so nothing had to be
+   re-spaced to survive the box leaving. `overflow: hidden` went with the border
+   it existed for — there is no rounded corner left to bleed past. */
 .ir-case-panel {
   margin-bottom: 1rem;
-  background: var(--ir-card);
-  border: 1px solid var(--ir-border);
-  border-radius: 6px;
-  box-shadow: var(--shadow-xs);
-  /* So a child's own surface cannot bleed past the rounded corner. */
-  overflow: hidden;
 }
 .ir-case-panel > .ir-page-head {
   margin-bottom: 0;
@@ -505,11 +510,18 @@
 /* ---- The case-title bar's own parts (spec §2) -----------------------------
    The title and its status flag on the left, the reference block and the case
    action on the right. */
+/* The title and its status flag, CENTRED on their own line across the whole
+   head. `flex: 1 1 100%` is what gives them the full measure to centre in —
+   without it the box is only as wide as the words and `justify-content` has
+   nothing to distribute. The identifiers and the actions take the line below,
+   left and right respectively (see .ir-page-head). */
 .ir-case-title {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+  flex: 1 1 100%;
   min-width: 0;
 }
 
@@ -935,9 +947,10 @@
      reading it — so the space belongs above the row. */
   margin: 1.25rem 0 0.25rem;
 }
-/* The way forward holds the right edge whether or not the save is drawn (a
-   locked report shows no save) — the same rule the document format's own row
-   uses, so the two rows cannot disagree about where the primary control sits. */
+/* The way forward holds the right edge however few controls lead it (a locked
+   report shows no Save in the case bar, and there is no way BACK on the first
+   step) — the same rule the document format's own row uses, so the two rows
+   cannot disagree about where the primary control sits. */
 .ir-step-nav .primary {
   margin-left: auto;
 }
@@ -1261,7 +1274,17 @@
   .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) {
     display: grid;
     grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-    gap: clamp(1rem, 2vw, 1.75rem);
+    /* COLUMN gap only, and the row spacing comes from the margins the blocks
+       already carry (.ir-doc-nav) — which is how that row is separated below
+       this breakpoint too, where the form is not a grid at all.
+
+       The reason is the assistant's row span (see below): the card crosses
+       rows 1-50, so the grid really does have fifty rows, and a ROW GAP is
+       charged for every one of them — forty-six of which hold nothing at all.
+       That was over a thousand pixels of blank page under the last row: the
+       officer could scroll past Save/Submit into nothing. Zero-height rows
+       still cost their gaps; they do not cost any height of their own. */
+    column-gap: clamp(1rem, 2vw, 1.75rem);
     align-items: start;
   }
   .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > * {
@@ -1276,8 +1299,14 @@
   }
   /* The assistant and its live preview. Definite column AND row, so it is placed
      before auto-placement runs and cannot drag the panels after it out of the
-     form column; the row span is what gives `sticky` an area to travel in, and
-     empty implicit rows cost no height. */
+     form column; the row span is what gives `sticky` an area to travel in — the
+     whole height of the form, so the card is still beside the officer when they
+     reach Submit. The card is a bounded inner scroller so its complete set of
+     controls stays reachable as it sticks beside the form.
+
+     NOTE: those extra rows are not free — each one costs a row gap, which is
+     why the grid above states a column gap and leaves the row rhythm to the
+     blocks' own margins. */
   .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-card--accent {
     grid-column: 2;
     grid-row: 1 / span 50;
@@ -1285,6 +1314,10 @@
     position: sticky;
     top: 1rem;
     align-self: start;
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
   }
 }
 
@@ -1295,7 +1328,18 @@
      one field cell from the next, so it is spent here rather than on each
      field's own margin. */
   gap: clamp(1rem, 1.8vw, 1.5rem);
-  align-items: start;
+  /* THE CARDS IN A ROW ARE THE SAME HEIGHT. This was `start`, which let each
+     card stop where its own fields ran out — so on the form's opening screen
+     Panel I ended under Home Address while Panel II, one field longer, ran on
+     70px past it, and the two boxes the officer meets first did not match.
+     `stretch` is the grid's own default and makes them one height: the shorter
+     card carries the slack at its foot.
+
+     It only reaches cards that SHARE a row, so it cannot touch the full-width
+     panels — the narrative and every other `--wide` card span the row alone,
+     and their row is only ever as tall as they are. The pair that had to agree
+     is exactly the pair this changes. */
+  align-items: stretch;
 }
 
 /* ---- A ROW OF CARDS — two half-width panels side by side ------------------
@@ -1308,7 +1352,19 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: clamp(1rem, 1.8vw, 1.5rem);
-  align-items: start;
+  /* THE TWO CARDS ARE ONE HEIGHT — the same rule `.ir-grid` now carries, for the
+     same reason. A row of two half-width boxes IS the pair, and a pair whose
+     boxes stop at different heights does not read as one: the Action Taken card
+     is a four-row textarea against a single-line name field, so it ran 127px
+     past the IOC card at the width this screen is actually used at, and 146px
+     at a wider one. `stretch` is the grid's own default and makes them agree;
+     the IOC card carries the slack at its foot.
+
+     It only reaches cards that SHARE a row, and these two always do: both are
+     step 4 with the same hidden flag, so the stepped format shows or hides them
+     together and this can never leave one card stretched against an empty cell.
+     The blank state drops the whole row (see .ir-form--blank .ir-card-row). */
+  align-items: stretch;
   /* These two were `.ir-card--wide` blocks before they became a row, so the
      separation from the cards above them has to come from HERE now. */
   margin-top: clamp(1rem, 1.8vw, 1.5rem);
@@ -1446,6 +1502,11 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  /* The bar may take a second line rather than drop a word from the context
+     label sitting on it — see .ir-card-context below for why, and what that
+     replaced. The title is on line one either way, so what moves down is always
+     the label. */
+  flex-wrap: wrap;
 }
 /* The numeral keeps a step of hierarchy on the filled bar, but by WEIGHT rather
    than by a faded white. At 0.72 alpha the composite measured 3.4:1 — under AA,
@@ -1481,22 +1542,83 @@
    sentence case, unlike the title: it describes the section rather than naming
    it, and the two must not read as one long title.
 
-   It truncates rather than wrapping, because a bar is one line by definition —
-   a wrapped label would change the height of the heading it sits on. The title
-   beside it is never truncated, so the section is always identifiable. */
-.ir-card-context {
+   IT MOVES TO ITS OWN LINE RATHER THAN LOSING A CHARACTER. This truncated with
+   an ellipsis, on the argument that the title already identifies the section so
+   the label was the cheap thing to cut. The label is not the cheap thing to
+   cut: it is a name, and "Complainant / Inf…" is not a shorter name but a
+   broken one — and it was broken on the two panels the officer meets before
+   anything else, at the width this screen is actually used at. Measured: at
+   331px-wide cards Panel I was losing 39px of "Complainant / Informant" and
+   Panel II 22px of its own, and Panel I was still clipping 7px of it at 419px —
+   it only ever appeared in full once the card passed ~470px.
+
+   So the bar wraps instead: the title is on line one and, when the two cannot
+   share it, the label drops below and this rule's own auto margin right-aligns
+   it under the title. Nothing is hidden at any width, and the title — the thing
+   that actually identifies the section — is never the one that gets cut.
+
+   `white-space: nowrap` and the ellipsis went with the truncation: a label on
+   its own line can only be squeezed by a bar narrower than the label itself,
+   and wrapping to a second line is the better answer there than running off the
+   edge of the bar. */
+.ir-card-context,
+.ir-card-status {
   margin-left: auto;
-  min-width: 0;
-  padding-left: 0.75rem;
   font-size: 0.72rem;
   font-weight: 500;
   letter-spacing: 0.02em;
   text-transform: none;
   color: var(--on-accent);
-  opacity: 0.85;
+  /* Never squeezed and never broken across lines: the head wraps instead (see
+     above), and a chip that reads "In progr…" in a pill would be worse than the
+     pill dropping to its own line. */
+  flex: none;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+.ir-card-context {
+  padding-left: 0.75rem;
+  opacity: 0.85;
+}
+
+/* ---- THE SECTION'S STATE (the chip on the bar) ---------------------------
+   In the same slot the descriptive labels used to occupy (Panel I's
+   "Complainant / Informant" and its four siblings — see IrCard, which still
+   draws one for a card that is not a section). Two states are drawn and the
+   third is nothing at all:
+
+     done    — the section's required fields are in and the rules flag nothing
+               for it. The only state that gets a plate, because it is the only
+               one worth seeing from across the page when reading the report
+               back, and it is derived from the same array the stepper's tick
+               faces read — the chip and the dot cannot disagree.
+     started — something has been written in the section.
+     (nothing) — untouched. See IrCard: an empty chip on a blank report would be
+               five labels saying what the blanks under them already say.
+
+   The names match the stepper's own faces ('done' / not), and the two words are
+   the ones its tile has always printed — see SECTION_STATE in Reports.jsx.
+
+   NO STATE HUE, deliberately. `--green-ok` is the palette's own "finished" ink,
+   but it was chosen against a LIGHT plate, and this bar is dark in both themes:
+   measured against the real fills it is 3.1:1 (light bar #0B2545) and 2.7:1
+   (dark bar #1E2E50) — under AA for text at this size. So completeness is
+   carried by the word and the plate, and both states keep the bar's own white:
+   measured 9.1:1 and 7.8:1 for the chip's ink on its plate, 15.4:1 for the
+   in-progress label straight on the bar.
+
+   The plate itself is 1.7:1 against the bar, and that is fine for what it is: a
+   distinction, not the signal. The signal is the word, which passes AA with
+   room to spare; a plate dark enough to clear 3:1 would read as a second, louder
+   surface than the bar it sits on. */
+.ir-card-status--started {
+  opacity: 0.85;
+}
+.ir-card-status--done {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.17);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+  opacity: 1;
 }
 
 /* ---- THE STEP FOOTER (spec: the reference's "Save Partial Draft" / "Proceed
@@ -1512,9 +1634,20 @@
 .ir-doc-nav {
   display: flex;
   align-items: center;
-  /* Save and Previous sit together at the LEADING edge, the way forward holds
-     the trailing one — not space-between, which would strand the Previous
-     button in the middle of the row with a gap either side of it. */
+  /* The way BACK holds the leading edge and the way forward holds the trailing
+     one — not space-between, which would strand Previous in the middle of the
+     row with a gap either side of it.
+
+     On the FIRST screen there is no Previous to place (see Reports.jsx: it is
+     drawn only when there is somewhere to go back to), so the row is the way
+     forward alone. That is why the forward button is pinned with
+     `margin-left: auto` below rather than by the row's own distribution: on
+     screen one there is one button on the right and nothing on the left, and on
+     any other screen one and one — and the right-hand one does not move between
+     them.
+
+     THE SAVE IS NOT IN THIS ROW. It used to lead it; it is in the case bar at
+     the top of the page now, with the rest of the report's actions. */
   justify-content: flex-start;
   gap: 0.75rem;
   flex-wrap: wrap;
@@ -1604,6 +1737,14 @@
 }
 .ir-sub .ir-span-2 {
   grid-column: 1 / -1;
+}
+/* ONE COLUMN, deliberately — Panel I (Reporting Party) only. Its fields read
+   down the card: full name, then contact number under it, then the address,
+   each at the card's whole measure instead of a half-width column. Declared
+   after `.ir-sub` on purpose (equal specificity, later wins); the ≤560px fold
+   below resolves to this same single column. */
+.ir-sub--stack {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* Panel II's first row stays the plain two equal columns of .ir-sub above, and
@@ -1812,7 +1953,7 @@
      thing in the cell, a grey uppercase whisper over the well it names. It reads
      --ir-text now — the document's own ink, the same ~15:1 in light and ~14:1 in
      dark the field VALUES carry — while the muted token stays for genuinely
-     secondary copy (hints, meta, the .ir-approx qualifier). */
+     secondary copy (hints, meta, the derived read-outs). */
   color: var(--ir-text);
   /* Label → control is the tightest gap in the form: it is a pair, they belong
      to one another, and a wide gap between them reads as two unrelated lines. */
@@ -1882,11 +2023,35 @@
 
 /* The date/time pair shares one field cell, with the approximate qualifier
    under it — the qualifier preserves "around 1:00 A.M." without inventing a
-   precise minute. */
+   precise minute.
+
+   The two pickers SIZE themselves instead of splitting the cell down the
+   middle. A native date/time control does not shrink its text when it runs out
+   of room, it CLIPS it — an equal-halves grid in a narrow field cell printed
+   the pair as "19/09" and "05:", with the rest of both values gone.
+
+   9rem is the floor, not a guess: measured in Chrome at the document's own
+   12px, the date control needs 128px for `dd/mm/yyyy` plus its picker
+   indicator and padding, and the time 106px for `hh:mm AM/PM` — so a column
+   under ~135px truncates the date first. auto-fit keeps the pair side by side
+   wherever the cell can afford two of those and folds them to ONE full-width
+   column where it cannot, which is the only outcome that always leaves both
+   readable.
+
+   `min-width: 0` on the controls is what makes the floor the thing that
+   decides: left at its intrinsic minimum, a date input would push its own
+   track past the floor on its own and hang out of the field cell. The
+   `min()` on the floor is the belt to that braces: a field cell narrower than
+   the floor itself (which the panel's own column rules do not produce, but a
+   future layout could) takes the cell's width rather than overflowing the
+   column beside it. */
 .ir-datetime {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
   gap: 0.6rem;
+}
+.ir-datetime input {
+  min-width: 0;
 }
 
 .ir-sub-label {
@@ -1899,25 +2064,9 @@
   margin-bottom: 0.25rem;
 }
 
-/* Qualified by .ir-body so it keeps the quiet ink: the wording above gives every
-   label the document's own colour, and this is a QUALIFIER on the date/time pair
-   rather than a field label, so it stays a step down from the field it rides on. */
-.ir-body .ir-approx {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0.5rem 0 0;
-  font-size: 0.76rem;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--ir-muted);
-}
-.ir-approx input[type='checkbox'] {
-  width: auto;
-  margin: 0;
-  accent-color: var(--ir-blue);
-}
+/* The `.ir-approx` qualifier that used to ride under the date/time pair — and
+   the `--ir-muted` tone it was set in — is gone with the control (see Reports.jsx
+   for why). Nothing replaces it: the pair is now the field and nothing else. */
 
 /* The narrative is the heart of the panel: room to write. */
 .ir-narrative textarea {
@@ -2178,12 +2327,13 @@
 }
 
 /* ===========================================================================
-   4. Submit bar + footer
-   =========================================================================== */
-.ir-actions {
-  margin-top: 0.85rem;
-}
-
+   4. Submit
+   ===========================================================================
+   The row that used to close the document at the foot of the page
+   (`.ir-actions` / `.ir-actions-row`) is gone: every control it held is in the
+   case bar at the top of the page now, rendered by `actionsCluster`. Its
+   spacing went with it rather than being left behind as a margin on nothing.
+   `.ir-actions-row` itself stays — Home's call-to-action row uses it. */
 .ir-submit {
   width: 100%;
   background: var(--ir-blue);
@@ -2212,6 +2362,8 @@
   flex-wrap: wrap;
   margin-top: 0.55rem;
 }
+/* The old foot-of-the-document row was `.ir-actions` (a margin-top) wrapping
+   `.ir-actions-row`. Only the inner row is left, and Home is its one user. */
 
 /* .ir-stepper-node is excluded for the same reason .ir-submit is: it is not
    a button in the document grammar, it is a dot + label that happens to be
@@ -2254,15 +2406,41 @@
    hover, which is not a state anyone designed: it is this selector meeting a
    shape it was never written for. The folder states its own surface, ink and
    hover, so it enters none of this. See the folder block in section 5c. */
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.primary):not(.danger) {
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.ir-nav-back):not(.primary):not(.danger) {
   background: var(--ir-btn);
   border: 1px solid var(--ir-border);
   color: var(--ir-btn-ink);
 }
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.primary):not(.danger):hover {
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.ir-nav-back):not(.primary):not(.danger):hover {
   border-color: var(--ir-blue);
   color: var(--ir-blue-ink);
   background: var(--ir-btn);
+}
+
+/* ---- THE WAY BACK wears the accent at REST -------------------------------
+   The row it belongs to holds the way FORWARD — a filled, full-strength blue —
+   and a second fill beside it would flatten the difference between "go back a
+   screen" and "carry on to the next section", which is the one thing a two-
+   button row has to say. So the way back takes the accent as an OUTLINE: the
+   same blue border and blue ink this screen's buttons already turn into on
+   hover, held as their resting state instead. Colour is never the only signal —
+   the arrow and the named section carry the meaning — so this reads with the
+   accent off too.
+
+   It is in the exclusion list above because it states its own border and ink;
+   without that, the generic button rule would win on specificity and paint it
+   grey again. `--ir-blue-ink`, not `--ir-blue`: anything written as `color:`
+   reads the ink token (see the token block), which is the one that stays
+   readable in dark. */
+.ir-nav-back {
+  background: var(--ir-btn);
+  border-color: var(--ir-blue);
+  color: var(--ir-blue-ink);
+}
+.ir-nav-back:hover {
+  background: var(--ir-btn);
+  border-color: var(--ir-blue-hi);
+  color: var(--ir-blue-ink-hi);
 }
 .ir-body button.danger {
   border-color: var(--red-line);
@@ -2286,15 +2464,10 @@
   color: #fff;
 }
 
-.ir-footer {
-  margin: 0.6rem 0 0;
-  text-align: center;
-  font-size: 0.76rem;
-  line-height: 1.6;
-  color: var(--ir-muted);
-  max-width: 46rem;
-  margin-inline: auto;
-}
+/* NO `.ir-footer` RULE. It carried one paragraph — the writing-assistance
+   advisory at the foot of the document — and the station asked for that line
+   off the report. Login and About System still carry it, from the same
+   constant; only this screen stopped printing it. */
 
 /* ===========================================================================
    5. The app's own sections, restyled for this screen
@@ -2408,7 +2581,7 @@
    ink here — so the labels the officer scans by were the quietest text in the
    cell. A label is there to be read, so it takes the document's own text colour;
    the muted token stays for copy that is genuinely secondary (field hints, meta,
-   and the .ir-approx qualifier, which states its own colour below). */
+   and the muted hints, which state their own colour). */
 .ir-body label {
   font-family: var(--font-body);
   color: var(--ir-text);
@@ -4721,19 +4894,35 @@
 /* ---- THE ACCENT CARD — the AI assistant's own section --------------------
    Every card on this screen is a section of the report; this one is not. It is
    the assistant, so it wears the accent instead of the section navy: a tinted
-   plate, an accent hairline and a 4px left edge that marks it out of the
-   corner of the eye without lifting it off the page (it is still a card in the
-   same grid, with the same header bar as its neighbours — see --ir-bar above, so
-   the whole form still reads as one official document).
+   plate with an accent hairline, which marks it out of the corner of the eye
+   without lifting it off the page (it is still a card in the same grid, with
+   the same header bar as its neighbours — see --ir-bar above, so the whole form
+   still reads as one official document).
+
+   THE 4PX LEFT EDGE IS GONE, by request: the assistant's card sits in the right
+   column of the workspace, so that rule drew a vertical blue line down an
+   otherwise empty gutter and read as a stray mark beside the document rather
+   than as a bracket around it. What makes the card distinct is the tint and the
+   navy header bar, both of which remain — and the card's border is now one
+   weight on all four sides, like every other card on the page.
 
    It is the WRAPPING card that changes, not the controls inside: .ai-assist
-   keeps its own smaller tint, accent rail and "AI" pill, because those group the
-   controls themselves and this card is what says "this block is different in
-   kind" before the officer is close enough to read it. */
+   keeps its own "AI" pill, because that labels the controls themselves, and this
+   card is what says "this block is different in kind" before the officer is close
+   enough to read it. The block used to carry a smaller tint and a border of its
+   own as well; BOTH are gone by request, because a box drawn inside a box reads
+   as furniture rather than as state. */
 .ir-card--accent {
   border-color: var(--cyan-bg-strong);
-  border-left: 4px solid var(--ir-blue);
   background: var(--cyan-bg);
+  /* Keep the card's sticky heading from being clipped without introducing a
+     nested vertical scroller on the compact/mobile layout. */
+  overflow: visible;
+}
+.ir-card--accent > .ir-card-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
 }
 
 /* The AI card's header wears the reference's navy band: a dark gradient bar
@@ -4799,6 +4988,14 @@
 /* The context label goes with it: on the page there is no section bar for it to
    sit on, and the sheets' own field labels already say what each block holds. */
 .ir-form--sheet .ir-card-context {
+  display: none;
+}
+/* And the state chip goes too — for a reason of its own on top of that one: the
+   page is the official document, and "In progress" is the screen telling the
+   officer about their own draft. It is not a fact about the incident, so it has
+   no business on paper — the same line the amber marker and the numeral cross.
+   The sheet's reveal control is where the report's completeness is read. */
+.ir-form--sheet .ir-card-status {
   display: none;
 }
 
@@ -4975,9 +5172,10 @@
 .ir-form--blank .ir-grid {
   display: flex;
   flex-direction: column;
-  /* `align-items: start` is restated rather than inherited: on the base grid it
-     aligns ROWS, but this container is a column, where the same property is the
-     CROSS axis — and `start` there shrink-wraps every child to its content. The
+  /* Declared here rather than left to the base grid, because the two say the
+     same word about different axes: on the base grid `align-items` aligns ROWS,
+     but this container is a column, where the property is the CROSS axis — and
+     `start` there shrink-wraps every child to its content. The
      page card would then be as wide as its widest line (the letterhead's), so
      the station's paper would carry the seal band and the writing area squeezed
      into the left of the sheet with a hand's width of blank paper beside them.
@@ -5136,11 +5334,6 @@
   margin: 0 0 0.4rem;
 }
 
-.ir-sheet-actions {
-  max-width: 8.5in;
-  margin: 0 auto;
-}
-
 /* ---- The reveal control ---- */
 /* Outside the sheet on purpose: the control that opens the rest of the report
    must not itself be printed on the page it is describing. Centred with the
@@ -5200,8 +5393,7 @@
    Vertical gaps are untouched: each block keeps the spacing it was given, and
    `margin-inline` only restates the centring its own rule already carried. */
 .ir-sheet-bar,
-.ir-sheet-ai,
-.ir-sheet-actions {
+.ir-sheet-ai {
   max-width: 8.5in;
   margin-inline: auto;
   padding-inline: var(--ir-sheet-inset);

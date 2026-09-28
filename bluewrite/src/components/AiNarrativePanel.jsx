@@ -28,6 +28,14 @@ import NarrativeReveal from './NarrativeReveal.jsx';
 // them (see `sheet` below). It is purely presentational: it computes the page's
 // facts from the report it is handed and never writes anything.
 import ReportSheetBody from './ReportSheetBody.jsx';
+// The assistant's voice orb, above the two actions in the ready state — the
+// panel's one moving part, and the reason a wait reads as the assistant working
+// rather than as the panel having stalled. It is a plain SVG badge; see
+// AiVoiceOrb.jsx for why it is drawn rather than simulated.
+import AiVoiceOrb from './AiVoiceOrb.jsx';
+// The specular rim on the panel's primary action (see the mount below). Vendored
+// from React Bits; its header records the one adaptation it needed here.
+import SpecularButton from './SpecularButton.jsx';
 // The ⓘ marker that carries this panel's explanations. It is a component rather than a
 // private function here because the account form uses the same marker for the sentences
 // under its fields — see InfoHint.jsx for the whole of its contract.
@@ -497,6 +505,27 @@ export default function AiNarrativePanel({
   const translationOff = String(translationSourceLanguage) !== 'en'
     && !translationEnabled(translationSourceLanguage);
 
+  // WHETHER TIGHTEN IS OFFERED AT ALL, which is not the same question as whether
+  // a press would be accepted. It used to be drawn in every state and greyed out
+  // in two of them — a control that announces itself and then refuses. An officer
+  // reads "Tighten my draft", works out that it is waiting on something, and gets
+  // nothing for the reading; the row also carried a dead button's width in states
+  // where the only thing to do was Generate.
+  //
+  // So it is offered exactly when a press WOULD do something, and that is the
+  // same rule the `disabled` attribute had: there is a narrative to run the
+  // economy rules over, and that narrative is English. `languageBlocked` is set
+  // for every non-English report (see aiBlockedReason in lib/reportLanguages.js —
+  // it fires on any language that is not English), because the rules rewrite
+  // prose and running them over Bisaya would rewrite it in the wrong language.
+  //
+  // What is NOT lost by hiding it: the ⓘ in this block's head explains BOTH
+  // actions (see AI_TOOLBAR_HINT), so Tighten is still documented where it is not
+  // on screen, and the guided row below covers the native-narrative path where
+  // translating is the officer's first step. What IS lost, by request: the
+  // discoverability of a button that cannot be pressed yet.
+  const tightenUsable = !languageBlocked && String(narrative || '').trim() !== '';
+
   // Phase 6 Stage 5 (Track C) — every guided transition goes through the pure
   // machine, and an event the machine REFUSES is dropped rather than applied by
   // hand. The ref mirrors the state so a handler can act on the machine's
@@ -540,6 +569,20 @@ export default function AiNarrativePanel({
     // back as an invented narrative, and an officer cannot tell that from a real
     // one.
     if (accountText.trim() === '') {
+      // THE EDITOR OWNS WHAT A BLOCKED PRESS LOOKS LIKE ON THE FORM, and this is
+      // a blocked press like any other: the field that has nothing in it goes
+      // red, the banner names it, and its link lands on it (see ReportEditor's
+      // gateAiGenerate, which flags an empty narrative for exactly this press).
+      // A sentence in the AI card is the wrong place for it — the officer is
+      // looking at the form, and the thing to do is a field, not a paragraph.
+      //
+      // So ask the gate FIRST, and only speak here where there is no gate to ask:
+      // the SHEET format, whose fields sit behind the reveal control and are not
+      // on screen to mark (see the onBeforeGenerate prop in ReportEditor).
+      if (onBeforeGenerate && !onBeforeGenerate()) {
+        if (asGuidedStep) moveGuided('cancel');
+        return;
+      }
       setMessage('Write what happened first, in “Detailed Description of Events” — there is nothing yet for the AI to work from.');
       setMode('error');
       setPanelOpen(true);
@@ -1204,13 +1247,10 @@ export default function AiNarrativePanel({
   const referenceText = String(actionTaken || '').replace(/\s+/g, ' ').trim().slice(0, 160);
   const findingsReference = String(notableFindings || '').replace(/\s+/g, ' ').trim().slice(0, 160);
 
-  // TASK 10 — the card's title bar, defined once and placed according to what the
-  // card is showing. While the LETTER is up it belongs UNDER the page: this card
-  // is opened to read the draft, so the bondpaper is the first thing in it and
-  // the panel's own chrome — the ✕, the "Not saved" promise and the
-  // unmasked-name warning beneath it — follows the page, above the review
-  // controls. With no letter (the loading state, an error, or the draft's plain
-  // boxes) it is the card's head, which is where a title bar belongs.
+  // Keep the title and dismiss action above the page so the officer can close
+  // the draft without scrolling through the document. The bar is shared by
+  // loading, errors and editable-box mode; while the LETTER is up it is not
+  // drawn at all (see the render below) — the viewer is the panel then.
   const draftHeadBar = (
     <header className="ai-inline-head">
       <h3>AI draft</h3>
@@ -1270,8 +1310,8 @@ export default function AiNarrativePanel({
           {nativeNarrative && (
             <p className="ai-assist-note">
               Your {languageLabel(narrativeLanguage)} narrative is the source — it will be
-              translated into formal English. Tighten stays off until then, because the
-              economy rules only run over English text.
+              translated into formal English. Tighten appears once the draft is in English,
+              because the economy rules only run over English text.
             </p>
           )}
           {/* D4 — a language the system cannot translate yet says so here, in
@@ -1291,31 +1331,82 @@ export default function AiNarrativePanel({
               belongs. A field that had to be filled before the assistant would
               do anything read as homework, not as help. */}
           {/* ONE row for the two things an officer can ask for: Generate
-              (which writes from the report) and Tighten (which works on
-              the narrative THEY wrote). Sits beside Generate because it is the
-              other thing an officer can ask for; disabled while that text is
-              empty, because a live button that can only refuse is a dead
-              click. The long explanation of both is on the ⓘ marker in this
-              block's head, so this row is a toolbar rather than two buttons
-              under two paragraphs. */}
+              (which writes from the report) and Tighten (which works on the
+              narrative THEY wrote). It is a row rather than two buttons under two
+              paragraphs because the long explanation of both is on the ⓘ marker
+              in this block's head.
+
+              Tighten is in the row only when a press would do something — no
+              narrative, or a narrative that is not English, and the row is
+              Generate alone (see `tightenUsable`). It used to sit here greyed
+              out in those states, which is a button that announces itself and
+              then refuses. */}
+          {/* The assistant's face, directly above the two things it can be asked
+              to do, centred in the card. Decoration with a job: it is the only
+              part of this panel that says the assistant is awake and listening,
+              and it is the one thing on the card that moves — which is what
+              makes the wait after Generate feel answered even before the words
+              arrive. The aria-hidden is inside the component, so a screen reader
+              hears the panel's own copy and not this. */}
+          <AiVoiceOrb size={200} />
+
           <div className="ai-toolbar">
-            <button
-              type="button"
+            {/* THE PRIMARY ACTION WEARS THE SPECULAR RIM (SpecularButton.jsx, a
+                vendored React Bits component). It keeps the app's own classes
+                (`ai-run primary`) rather than the component's chrome: this is the
+                form's primary button, and its fill, its 3px accent halo on
+                hover/focus and its metrics are the app's, not a marketing
+                page's. The component contributes the shader canvas along the
+                edge — and the radius its drawn curve has to follow, which is why
+                `radius` is the button's own 3px and not the component's default
+                18px: an SDF drawn on a different curve than the CSS border sits
+                visibly outside it.
+
+                `lineColor` and `baseColor` are LITERALS, and that is a
+                constraint rather than a preference: ogl parses these two itself
+                (Color.set) and cannot read a CSS `var()`, so the palette cannot
+                reach them the way it reaches the CSS. Line is the shine on the
+                fill (white, the same ink the label uses); base is the static
+                edge stroke under it, a darker navy from the same family.
+                `textColor` IS a `var()` on purpose — it never leaves the
+                stylesheet.
+
+                `thickness` and `intensity` are bolder than the component's 1/1,
+                and they are measured rather than guessed. On this button's blue
+                fill at DPR 1 the default line peaked at luminance 134 against a
+                fill of 90: the shine was there and almost invisible. */}
+            <SpecularButton
               className="ai-run primary"
+              size="md"
+              radius={3}
+              tintOpacity={0}
+              textColor="var(--on-accent)"
+              lineColor="#ffffff"
+              baseColor="#0B2A5C"
+              shineSize={10}
+              shineFade={40}
+              thickness={2}
+              intensity={1.6}
+              proximity={250}
               onClick={() => generate()}
               disabled={translationOff}
             >
               {nativeNarrative && effectiveSource === 'narrative' ? 'Translate my narrative' : 'Generate AI draft'}
-            </button>
-            <button
-              type="button"
-              className="ai-tighten"
-              onClick={() => tighten()}
-              disabled={!!languageBlocked || !String(narrative || '').trim()}
-              title="Runs the economy rules over your own narrative: repeated propositions merged, padding and closing formulas removed. Nothing is written into the report until you click."
-            >
-              Tighten my draft
-            </button>
+            </SpecularButton>
+            {/* Offered only when it can run — see `tightenUsable` above. There is
+                no `disabled` attribute on purpose: a button that is never
+                rendered unavailable has nothing to disable, and one that IS here
+                is always pressable. */}
+            {tightenUsable && (
+              <button
+                type="button"
+                className="ai-tighten"
+                onClick={() => tighten()}
+                title="Runs the economy rules over your own narrative: repeated propositions merged, padding and closing formulas removed. Nothing is written into the report until you click."
+              >
+                Tighten my draft
+              </button>
+            )}
           </div>
           {fillLine}
           {/* Phase 6 Stage 5 (Track C) — the guided flow's ONE entry point. It
@@ -1407,37 +1498,40 @@ export default function AiNarrativePanel({
           ref={sheetCardRef}
           aria-label="AI narrative draft"
         >
-          {/* TASK 9/10 — the letter, FIRST in the card, and only while a draft
-              is being typed into it (see `draftHeadBar` below for why the title
-              bar is not above it). Rendered as a sibling rather than inside the
-              body so the page holds the card's own width and the chrome that
-              follows keeps its flush edges. */}
+          {/* THE TITLE BAR IS THE PANEL'S, NOT THE DOCUMENT'S. While the letter
+              is up the viewer below IS the panel — the bar above it was one
+              more row of furniture between the officer and the page they are
+              reading, and a second title for a card that already has one (by
+              request). It is drawn only where there is no letter to read: the
+              loading wait, a refusal, or the editable boxes. Nothing depended
+              on it for the way out — the review row under the letter carries
+              Close, and Escape hides the draft from anywhere. */}
+          {!sheeted && draftHeadBar}
+
+          {/* TASK 9/10 — the document viewer: a fit-to-screen frame the page
+              scrolls inside, centered on a muted surface (see
+              `.ai-sheet-preview`). Deliberately UNWRAPPED: the frame is the
+              card's own box, so the page gets the column rather than a second
+              inset inside the first. The typewriter is followed by
+              `followTyping`, so the words are never typed out of sight. */}
           {sheeted && (
-            <div className="ai-inline-page">
-              {/* TASK 10 — the document viewer: a fit-to-screen frame the page
-                  scrolls inside, centered on a muted surface (see
-                  `.ai-sheet-preview`). The typewriter is followed by
-                  `followTyping`, so the words are never typed out of sight. */}
-              <div className="ai-sheet-preview" ref={sheetViewportRef}>
-                <div className="print-sheet">
-                  <ReportSheetBody
-                    report={sheet.report}
-                    ts={sheet.ts}
-                    stationHeader={sheet.stationHeader}
-                    recordedBy={sheet.recordedBy}
-                    pending={sheetDraft}
-                    // A new generation replays the typing from the top.
-                    revealKey={genCounter}
-                    onRevealComplete={() => setSheetTyped(true)}
-                    // Task 10 — the frame follows the words (see above).
-                    onProgress={followTyping}
-                  />
-                </div>
+            <div className="ai-sheet-preview" ref={sheetViewportRef}>
+              <div className="print-sheet">
+                <ReportSheetBody
+                  report={sheet.report}
+                  ts={sheet.ts}
+                  stationHeader={sheet.stationHeader}
+                  recordedBy={sheet.recordedBy}
+                  pending={sheetDraft}
+                  // A new generation replays the typing from the top.
+                  revealKey={genCounter}
+                  onRevealComplete={() => setSheetTyped(true)}
+                  // Task 10 — the frame follows the words (see above).
+                  onProgress={followTyping}
+                />
               </div>
             </div>
           )}
-
-          {draftHeadBar}
 
           {/* The body keeps the indentation it had inside the docked panel, so
               the diff of moving it inline is the wrapper and nothing else. */}

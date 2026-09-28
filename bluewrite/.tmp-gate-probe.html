@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>generate gate probe</title>
+    <link rel="stylesheet" href="./.tmp-gate-dist/style.css" />
+  </head>
+  <body>
+    <div id="deck"></div>
+    <div id="sheet"></div>
+    <div id="probe-out" style="position:fixed;left:-9999px">pending</div>
+    <script src="./.tmp-gate-dist/probe.js"></script>
+    <script>
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      // Every rule in the cascade that touches the field's border, in sheet then
+      // source order — the list the browser itself walked to settle the value.
+      function borderRules(el) {
+        const hits = [];
+        for (const sheet of document.styleSheets) {
+          let rules;
+          try {
+            rules = sheet.cssRules;
+          } catch (e) {
+            hits.push(`UNREADABLE ${sheet.href || 'inline'}`);
+            continue;
+          }
+          const walk = (list, media) => {
+            for (const rule of list) {
+              if (rule.cssRules && rule.conditionText !== undefined) {
+                walk(rule.cssRules, rule.conditionText);
+                continue;
+              }
+              if (!rule.selectorText) continue;
+              let m;
+              try {
+                m = el.matches(rule.selectorText);
+              } catch (e) {
+                m = false;
+              }
+              if (!m) continue;
+              const decls = [...rule.style].filter((p) => p.includes('border') || p === 'background');
+              if (!decls.length) continue;
+              hits.push(
+                `${media ? `@${media} ` : ''}${rule.selectorText} {${decls
+                  .map((p) => `${p}:${rule.style.getPropertyValue(p)}${rule.style.getPropertyPriority(p) ? ' !important' : ''}`)
+                  .join('; ')}}`,
+              );
+            }
+          };
+          walk(rules, '');
+        }
+        return hits;
+      }
+
+      const findGenerate = (root) =>
+        [...root.querySelectorAll('button')].find((b) => /Generate AI draft/i.test(b.textContent || ''));
+
+      async function check(root, label) {
+        const lines = [];
+        const say = (k, v) => lines.push(`${label}.${k}=${v}`);
+
+        const button = findGenerate(root);
+        if (!button) return [`${label}.button=MISSING`];
+        say('buttonDisabled', button.disabled);
+        button.click();
+        await sleep(900);
+
+        const alerts = [...root.querySelectorAll('.ai-inline .alert.error, .ai-inline .alert')];
+        say('aiCardAlerts', alerts.length);
+        say('aiCardAlertText', alerts.map((a) => a.textContent.trim().slice(0, 60)).join(' | ') || '(none)');
+        say('aiPanelOpenDraft', root.querySelector('.ai-inline-body') ? 'body drawn' : 'no body');
+
+        const narr = root.querySelector('#r-narr');
+        if (!narr) {
+          say('narrativeField', 'MISSING');
+        } else {
+          const cs = getComputedStyle(narr);
+          const err = root.querySelector('.ir-narrative .error');
+          say('narrativeMatchesInvalidBefore', narr.matches(".ir-body textarea[aria-invalid='true']"));
+          say('narrativeAriaInvalid', narr.getAttribute('aria-invalid'));
+          say('narrativeBorder', `${cs.borderTopWidth} ${cs.borderTopStyle} ${cs.borderTopColor}`);
+          say('narrativeWell', cs.backgroundColor);
+          say('narrativeFocusRing', cs.boxShadow);
+          say('narrativeRedToken', cs.getPropertyValue('--ir-red').trim());
+          say('narrativeBaseToken', cs.getPropertyValue('--ir-field-border').trim());
+          say('narrativeInIrBody', narr.closest('.ir-body') ? 'yes' : 'NO');
+          say('narrativeInlineError', err ? err.textContent.trim() : '(none)');
+          say('narrativeOnScreen', narr.closest('[hidden]') ? 'HIDDEN' : 'visible');
+          say('narrativeIsFocused', document.activeElement === narr);
+          say('narrativeMatchesInvalid', narr.matches(".ir-body textarea[aria-invalid='true']"));
+          say('narrativeInlineStyle', narr.getAttribute('style') || '(none)');
+          say('narrativeClasses', narr.className || '(none)');
+          // A clean textarea in the same grammar, flagged the same way: if THIS
+          // one goes red, then the rule is fine and the real field differs.
+          const synthWrap = document.createElement('div');
+          synthWrap.className = 'ir-field ir-narrative';
+          const synth = document.createElement('textarea');
+          synth.id = `${label}-synth`;
+          synth.setAttribute('aria-invalid', 'true');
+          synthWrap.appendChild(synth);
+          narr.closest('.ir-field').parentNode.appendChild(synthWrap);
+          const sy = getComputedStyle(synth);
+          say('synthBorder', `${sy.borderTopWidth} ${sy.borderTopStyle} ${sy.borderTopColor}`);
+          say('synthWell', sy.backgroundColor);
+          say('narrativeTransition', cs.transitionProperty + ' / ' + cs.transitionDuration);
+          // The officer's jump focuses the field, and focus repaints the border
+          // blue (`.ir-body textarea:focus`). Read it again with the caret out of
+          // the field to see the colour the rest of the form shows.
+          narr.blur();
+          await sleep(400); // let the 0.12s border-color transition settle
+          const cs2 = getComputedStyle(narr);
+          say('narrativeBorderBlurred', `${cs2.borderTopWidth} ${cs2.borderTopStyle} ${cs2.borderTopColor}`);
+          say('narrativeShadowBlurred', cs2.boxShadow);
+          say('narrativeRules', borderRules(narr).join(' >> ') || '(none match)');
+        }
+
+        const banner = root.querySelector('.error-summary-block');
+        if (!banner) say('banner', 'MISSING');
+        else {
+          say('bannerTitle', banner.querySelector('.error-summary-title').textContent.trim());
+          const chips = [...banner.querySelectorAll('a')];
+          say('bannerChips', chips.map((a) => `${a.textContent.trim()} @${a.getAttribute('href')}`).join(' | '));
+        }
+        return lines;
+      }
+
+      (async () => {
+        try {
+          await sleep(1800);
+          const lines = [];
+          lines.push(...(await check(document.getElementById('deck'), 'deck')));
+          lines.push(...(await check(document.getElementById('sheet'), 'sheet')));
+          document.getElementById('probe-out').innerHTML = lines
+            .map((l) => `PROBE-LINE ${String(l).replace(/[<>]/g, ' ')}`)
+            .join('\n');
+        } catch (e) {
+          document.getElementById('probe-out').innerHTML = `PROBE-LINE THREW ${e.message}`;
+        }
+      })();
+    </script>
+  </body>
+</html>

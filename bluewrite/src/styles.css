@@ -455,8 +455,8 @@ textarea { resize: vertical; min-height: 8rem; }
    AI translate?" chooser drew exactly that, the radio marooned mid-row and its
    words jammed against the right margin — and the boxed fill paints a slab
    behind a control that draws itself. So the two toggles take their intrinsic
-   size back, once, for the whole app. The local patches elsewhere (.ir-approx,
-   .st-type) are this same fix, written where the bug was found first. */
+   size back, once, for the whole app. The local patches elsewhere (.st-type) are
+   this same fix, written where the bug was found first. */
 input[type='radio'],
 input[type='checkbox'] {
   width: auto;
@@ -1415,28 +1415,25 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 /* ---- Phase 3: AI narrative — slide-in side panel ---- */
 .ai-panel { margin-bottom: 0.25rem; margin-top: 0.5rem; position: relative; }
 
-/* ---- The block the officer FILLS IN --------------------------------------
-   The assistant is not one more row of chrome under the form: it is ONE
-   highlighted block — its name, the box to write in, and the actions that use
-   what was written. The accent edge and the tint are what say "this is a place
-   to work" at a glance, in the same cyan the account receipt below it uses; the
-   border keeps it from reading as an error or a warning (both of which are
-   amber here).
+/* ---- The assistant's block ------------------------------------------------
+   NO BOX (by request). This was a bordered, rounded, tinted panel living inside
+   a card that is already bordered, rounded and tinted — a box around the
+   assistant drawn inside a box around the assistant, which is exactly the outline
+   an officer pointed at. The wrapping card (.ir-card--accent) is what says the
+   block is a different kind of thing; the second border and the second tint only
+   drew attention to the furniture.
 
-   It wraps the panel's whole ready state, so everything inside it — the source
-   choice, the guided row, the receipt — is visibly part of the same thing
-   rather than loose controls scattered on the report. In the sheet format this
-   is on the desk under the page, where the block has to be legible on its own:
-   an officer sees it with none of the report's fields around it. */
+   The padding is gone with it, so the block's own contents line up with the
+   card body's padding rather than sitting in a second, invisible inset. That is a
+   LAYOUT consequence of removing the box, not a separate decision: with no border
+   to inset from, an inset is just an unaligned edge. The card body already holds
+   the space (see .ir-card-body), so nothing sits against the card's border.
+
+   The 3px accent rail down its left edge went earlier, with the wrapping card's:
+   two blue verticals on one panel read as decoration around the panel rather than
+   as state inside it. */
 .ai-assist {
-  border: 1px solid var(--line-bright);
-  border-left: 3px solid var(--cyan);
-  border-radius: 4px;
-  /* `--cyan-bg` rather than `--panel-soft`: this has to read as highlighted in
-     both themes, and a tint of the accent does that where another shade of the
-     panel would not. */
-  background: var(--cyan-bg, var(--panel-soft));
-  padding: 0.7rem 0.8rem 0.55rem;
+  padding: 0;
 }
 
 .ai-assist-head {
@@ -1483,6 +1480,12 @@ td.num { text-align: left; letter-spacing: 0.02em; }
    every line it takes is a line of the report pushed off the screen. */
 .ai-toolbar {
   display: flex;
+  /* CENTRED, on the orb's axis. The block is one column of centred things — the
+     assistant's face sits over the middle of the card — and a pair of actions
+     starting at the left edge read as a separate row that had been left behind
+     by it. Centring also keeps the pair together when the row wraps on a narrow
+     panel, instead of leaving one button stranded at the margin. */
+  justify-content: center;
   align-items: center;
   gap: 0.45rem;
   flex-wrap: wrap;
@@ -1642,13 +1645,14 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   font-weight: 600;
   font-size: 0.82rem;
 }
-.ai-tighten:hover:not(:disabled) {
+/* No `:disabled` state, and no `:not(:disabled)` guard on the hover: Tighten is
+   rendered only when a press would actually run (see `tightenUsable` in
+   AiNarrativePanel.jsx), so a greyed-out Tighten is no longer a state this
+   stylesheet can be asked to draw. The rule that was here — half opacity and a
+   not-allowed cursor — is gone with the state it styled. */
+.ai-tighten:hover {
   border-color: var(--cyan);
   color: var(--cyan);
-}
-.ai-tighten:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 .ai-tighten-result { margin-bottom: 0.7rem; }
 .ai-tighten-result .field-hint { margin: 0 0 0.5rem; }
@@ -1747,10 +1751,21 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 .narrative-terms-note { margin-top: 0.2rem; font-size: 0.76rem; color: var(--steel); }
 
 /* Loading state while the AI drafts: spinner + pulsing dots + progress bar. */
+/* NO BOX OF ITS OWN — the same call that was made for the draft's own box in
+   `.ai-inline--sheet`: a solid border and a raised surface around the waiting
+   state was chrome spent twice on one edge, because the block it sits in
+   (`.ai-inline-body`) already owns the surface AND the inset.
+   Only the box goes: the heading, the skeleton, the rotating status line and
+   the progress bar are untouched, and `min-height` below still reserves the
+   height a short draft takes, so nothing moves when the words land.
+
+   Padding went with the border rather than staying at zero-width: there is no
+   edge left to inset from, and the body's own padding is what the waiting text
+   should line up with. */
 .ai-loading {
-  border: 1px solid var(--line);
-  background: var(--panel-raised);
-  padding: 1.2rem 1.1rem;
+  border: 0;
+  background: none;
+  padding: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3521,9 +3536,9 @@ body.profile-panel-open {
 /* ---- The AI draft, INLINE (AiNarrativePanel.jsx) -------------------------
    The draft opens in the assistant's own card, directly under the row that
    asked for it, instead of docking a column to the right edge of the
-   workspace. So nothing here is fixed, sized against the viewport, or scrolled
-   on its own: the box is one more block of the report's column, and the page's
-   single scroll carries it exactly as it carries every other field. */
+   workspace. The letter gets its own compact viewer — and while the letter is
+   up that viewer IS the panel: no title bar, no frame and no second inset
+   around it (see `.ai-inline--sheet` below). */
 .ai-inline {
   margin-top: 0.7rem;
   /* Task 9/10 — the card is scrolled to when a draft starts typing into it, so
@@ -3535,6 +3550,11 @@ body.profile-panel-open {
      surface ON it, so it takes the raised panel rather than the tint again. */
   background: var(--panel-raised, var(--panel));
 }
+/* A plain header row, NOT a second sticky bar. The card this panel lives in
+   already carries a sticky head of its own, and two bars pinning to the same
+   edge is how content ends up sliding through the gap between them; inside a
+   bounded scrolling card the arithmetic can only be guessed at anyway, so the
+   bar scrolls with the panel it names. */
 .ai-inline-head {
   display: flex;
   align-items: center;
@@ -3542,7 +3562,73 @@ body.profile-panel-open {
   gap: 0.5rem;
   padding: 0.55rem 0.8rem;
   border-bottom: 1px solid var(--line-bright);
+  background: var(--panel-raised, var(--panel));
 }
+.ai-inline-head .ai-side-close {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ir-muted, var(--steel));
+  line-height: 1;
+}
+.ai-inline-head .ai-side-close:hover {
+  border-color: var(--ir-blue, var(--cyan));
+  background: transparent;
+  color: var(--ir-blue-ink, var(--cyan));
+}
+.ai-actions > button {
+  flex: 1 1 10rem;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
+}
+.ai-feedback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.ai-feedback input { flex: 1 1 12rem; min-width: 0; }
+.ai-feedback button { flex: 0 0 auto; }
+
+/* The AI panel's compact dismiss control should not inherit the workspace's
+   generic document-button padding; it is a 36px icon target, not a text action. */
+.ai-side-close {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  line-height: 1;
+}
+.ai-side-close:hover {
+  background: var(--panel-raised, var(--panel));
+  border-color: var(--line-bright);
+  color: var(--ir-text, var(--paper));
+}
+.ai-inline-head .ai-side-close {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ir-muted, var(--steel));
+}
+.ai-inline-head .ai-side-close:hover {
+  border-color: var(--ir-blue, var(--cyan));
+  background: transparent;
+  color: var(--ir-blue-ink, var(--cyan));
+}
+
+@media (max-width: 700px) {
+  .ai-toolbar > button,
+  .ai-guided-row > button { max-width: 100%; white-space: normal; }
+}
+
 /* Same face as the docked panel's head (.ai-side-head h3) — the title did not
    change with the placement, so neither should the way it is set. */
 .ai-inline-head h3 {
@@ -3554,22 +3640,29 @@ body.profile-panel-open {
   color: var(--steel, #8fa3c8);
 }
 .ai-inline-body { padding: 0.9rem; }
-/* Task 10 — the page's own slot in the card. The letter comes FIRST, with the
-   title bar and the notes below it (see `draftHeadBar` in AiNarrativePanel), so
-   it takes the same inset the body has and nothing else. */
-.ai-inline-page { padding: 0.9rem; }
-/* Task 10 — while the letter is up, the card reads as a viewer: the body drops
-   one step away from the card's own surface so the muted frame and its white
-   page are the brightest things in it, and the banners above the page stay
-   clearly separate from it instead of sitting on the same tone.
-
-   A translucent black rather than a token, because the surfaces are inverted
-   between themes (--panel is #FFFFFF light and #161A21 dark), so a fixed token
-   would brighten the body in one of them. Darkening whatever is underneath is
-   the same move in both. */
+/* Task 10 REVISED — while the letter is up the panel is the DOCUMENT VIEWER and
+   nothing else: no title bar above the frame, no border and no surface around
+   it, and no second inset between the card and the page. The frame is the one
+   box the officer reads in, so everything that used to be drawn around it was
+   chrome spent twice on the same edge. The card's own tinted accent surface is
+   the backdrop the frame sits on, which is exactly the "paper on a desk"
+   reading the frame was given a muted grey for. */
+.ai-inline--sheet {
+  margin-top: 0.6rem;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+/* The gap between the card's head and the frame is spent ONCE, by the section
+   above — the frame carried a top margin of its own because it used to sit
+   under a bar. */
+.ai-inline--sheet .ai-sheet-preview { margin-top: 0; }
+/* With no frame around it, the review text under the letter aligns to the
+   frame's own edges instead of sitting in a box of its own. */
 .ai-inline--sheet .ai-inline-body {
-  background: rgba(0, 0, 0, 0.08);
-  border-radius: 0 0 4px 4px;
+  padding: 0.9rem 0 0;
+  background: none;
+  border-radius: 0;
 }
 
 /* The three parts of the draft, under the names the printed sheet gives the
@@ -3653,23 +3746,33 @@ body.profile-panel-open {
    that prints cannot drift.
 
    TASK 10 — it is a DOCUMENT VIEWER, not a growing block. The frame is sized
-   against the screen so the card's own chrome (the app header, the "AI draft"
-   head, the "Not saved" note and the unmasked-name warning above the page) and
-   the review gate below it all fit at once; the letter is taller than that, so
-   THE DOCUMENT is what scrolls — never the outer page. The page is centered in
+   against the screen so the page is compact while the title, dismissal and
+   review controls stay usable; the letter scrolls in its own frame instead of
+   making the whole report jump. The page is centered in
    the frame with even margins, on a muted surface, so it reads as paper lying on
    a desk rather than as a grey box in a card.
 
    The typewriter is kept in view by the component and not by this rule: the
    frame is moved as the sequence lands (ReportSheetBody's `onProgress` →
    `followTyping`), because a fixed-height viewport would otherwise show only the
-   letter's chrome while the words typed out of sight below it. */
+   letter's chrome while the words typed out of sight below it.
+
+   The frame is the panel's ONE box (there is no title bar above it — see
+   AiNarrativePanel), so its scrollbar is written out rather than left to the
+   platform: a slim, always-present thumb on a faint track, so the frame reads
+   as a scrollable pane the officer can measure the letter against, and never as
+   a page that happens to be cut off. `scrollbar-gutter: stable` is what stops
+   the page from jumping sideways the moment the bar appears. */
 .ai-sheet-preview {
   margin-top: 0.6rem;
-  /* What the panel's own chrome and the gate below need, taken off the screen;
-     whatever is left belongs to the page. `max()` keeps it usable when short. */
-  max-height: max(16rem, calc(100vh - 15rem));
+  /* A predictable viewer window leaves room for the draft actions while the
+     page itself remains vertically scrollable. */
+  height: clamp(11rem, 62dvh, 32rem);
+  max-height: calc(100dvh - 7rem);
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
   padding: 0.85rem;
   border: 1px solid var(--line-bright);
   border-radius: 4px;
@@ -3678,19 +3781,46 @@ body.profile-panel-open {
   display: flex;
   justify-content: center; /* centered like a print preview, not edge-flush */
   align-items: flex-start;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 23, 42, 0.38) transparent;
 }
-
-/* The page as it would sit on a surface: a hairline edge and a soft shadow.
-   Scoped to this frame — the print portal's own `.print-sheet` is untouched.
-
-   `zoom` is what makes the page a little smaller here. It scales the rendered
-   page AND its layout box together, so the line wrap stays exactly the page's
-   own; narrowing the sheet instead would re-wrap the prose and the preview would
-   stop being the sheet that prints — the one thing this card exists to show. */
+.ai-sheet-preview::-webkit-scrollbar { width: 10px; }
+.ai-sheet-preview::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.07); }
+.ai-sheet-preview::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.34);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+.ai-sheet-preview::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.5);
+  background-clip: padding-box;
+}
 .ai-sheet-preview .print-sheet {
+  flex: 0 0 auto;
+  width: min(100%, 8.5in);
   border: 1px solid rgba(0, 0, 0, 0.14);
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
-  zoom: 0.85;
+  zoom: 0.62;
+}
+@media (max-width: 700px) {
+  .ai-sheet-preview {
+    height: clamp(11rem, 62dvh, 24rem);
+    padding: 0.45rem;
+  }
+  .ai-sheet-preview .print-sheet { zoom: 0.5; }
+}
+@media (max-height: 540px) {
+  .ai-sheet-preview { height: min(44dvh, calc(100dvh - 8rem)); }
+  .ai-sheet-preview .print-sheet { zoom: 0.52; }
+  .ir-card--accent {
+    position: static !important;
+    max-height: none;
+    overflow: visible;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-sheet-preview { scroll-behavior: auto; }
 }
 
 /* The sequence IS one character cursor (see ReportSheetBody), so there is no

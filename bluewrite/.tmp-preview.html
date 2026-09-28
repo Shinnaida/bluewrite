@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Write Report — preview</title>
+<link rel="stylesheet" href="public/assets/index-CRCjCga_.css" />
+<style>
+  /* The preview only: pin the page to a fixed canvas so the screenshot frame is stable. */
+  html, body { margin: 0; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="ir-nav">
+    <button type="button" class="ir-brand ir-brand-home">
+      <span class="ir-brand-mark" aria-hidden="true"><img src="public/assets/bluewrite-logo-light-BQrBcveg.png" alt="" /></span>
+      <span class="ir-brand-text">
+        <span class="ir-brand-line1">Public Safety Department</span>
+        <span class="ir-brand-line2">Official Incident Reporting System</span>
+      </span>
+    </button>
+    <nav class="ir-nav-links" aria-label="Primary">
+      <a class="ir-nav-link" aria-current="page">Write Report</a>
+      <a class="ir-nav-link">Reports</a>
+    </nav>
+  </header>
+
+  <main class="main ir-body">
+    <div class="ir-page-head">
+      <h1 class="ir-title">POLICE INCIDENT REPORT</h1>
+      <div class="ir-meta">
+        <div class="ir-meta-row">
+          <span class="ir-meta-key">Case no.</span>
+          <span class="ir-meta-val">PENDING</span>
+        </div>
+        <div class="ir-meta-row">
+          <span class="ir-meta-key">Date</span>
+          <span class="ir-meta-val">25 Sep 2026</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- (3) the DRAFT flag -->
+    <div class="ir-status ir-status--flag">
+      <span class="badge draft">draft</span>
+      <span>Not saved yet — the first save assigns the report number.</span>
+    </div>
+
+    <!-- (2) the stepper, de-panelled: a header band above the form -->
+    <div class="ir-stepper">
+      <div class="ir-stepper-head">
+        <span class="ir-stepper-caption">Report completion</span>
+        <span class="ir-stepper-count">Section 2 of 5</span>
+      </div>
+      <div class="ir-stepper-rail" style="--ir-stepper-fill:25%;--ir-stepper-inset:10%;--ir-stepper-dots:5">
+        <div class="ir-stepper-track"><span class="ir-stepper-track-fill"></span></div>
+        <ol class="ir-stepper-steps">
+          <li class="ir-stepper-step">
+            <button type="button" class="ir-stepper-node">
+              <span class="ir-stepper-dot ir-stepper-dot--done">✓</span>
+              <span class="ir-stepper-label ir-stepper-label--done">Reporting Party</span>
+            </button>
+          </li>
+          <li class="ir-stepper-step">
+            <button type="button" class="ir-stepper-node ir-stepper-node--here">
+              <span class="ir-stepper-dot ir-stepper-dot--pending">2</span>
+              <span class="ir-stepper-label ir-stepper-label--pending">Incident Details</span>
+            </button>
+          </li>
+          <li class="ir-stepper-step">
+            <button type="button" class="ir-stepper-node">
+              <span class="ir-stepper-dot ir-stepper-dot--pending">3</span>
+              <span class="ir-stepper-label ir-stepper-label--pending">Narrative</span>
+            </button>
+          </li>
+          <li class="ir-stepper-step">
+            <button type="button" class="ir-stepper-node">
+              <span class="ir-stepper-dot ir-stepper-dot--pending">4</span>
+              <span class="ir-stepper-label ir-stepper-label--pending">Type-Specific</span>
+            </button>
+          </li>
+          <li class="ir-stepper-step">
+            <button type="button" class="ir-stepper-node">
+              <span class="ir-stepper-dot ir-stepper-dot--pending">5</span>
+              <span class="ir-stepper-label ir-stepper-label--pending">Action Taken</span>
+            </button>
+          </li>
+        </ol>
+      </div>
+    </div>
+
+    <form class="ir-form">
+      <div class="ir-grid">
+        <section class="ir-card" data-ir-step="0">
+          <div class="ir-card-head"><span class="ir-card-num">I.</span><span>Reporting Party Information</span></div>
+          <div class="ir-card-body">
+            <div class="ir-sub">
+              <div class="ir-field">
+                <label class="ir-label">Full Name</label>
+                <input placeholder="Last Name, First Name, M.I." value="Dela Cruz, Juan M." />
+              </div>
+              <div class="ir-field">
+                <label class="ir-label">Contact Number</label>
+                <input placeholder="(000) 000-0000" value="(032) 555-1234" />
+              </div>
+              <div class="ir-field ir-span-2">
+                <label class="ir-label">Home Address</label>
+                <input placeholder="Street, barangay, city / municipality" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="ir-card" data-ir-step="1">
+          <div class="ir-card-head"><span class="ir-card-num">II.</span><span>Incident Details</span></div>
+          <div class="ir-card-body">
+            <div class="ir-sub">
+              <div class="ir-field ir-field--narrow">
+                <label class="ir-label">Type of Incident</label>
+                <input value="Traffic Accident" />
+              </div>
+              <div class="ir-field">
+                <label class="ir-label">Date &amp; Time of Incident</label>
+                <div class="ir-datetime">
+                  <input type="date" value="2026-09-25" />
+                  <input type="time" value="13:00" />
+                </div>
+              </div>
+              <div class="ir-field ir-span-2">
+                <label class="ir-label">Location of Incident</label>
+                <input placeholder="Specific address or intersection" value="Mercado Street, Barangay Dagatan" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- (1) no terminology panel under the narrative -->
+        <section class="ir-card ir-card--wide" data-ir-step="2">
+          <div class="ir-card-head"><span class="ir-card-num">III.</span><span>Incident Narrative</span></div>
+          <div class="ir-card-body">
+            <div class="ir-field ir-narrative">
+              <label class="ir-label">Detailed Description of Events</label>
+              <textarea rows="5">Responding team proceeded to the scene after a phone call from a concerned citizen. Upon arrival, officers interviewed the parties involved and secured the area.</textarea>
+              <div class="section-hint">Written in your own words — the AI can draft it for you if you prefer.</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="ir-card-row">
+        <section class="ir-card" data-ir-step="4">
+          <div class="ir-card-head"><span>Action Taken / Status</span></div>
+          <div class="ir-card-body">
+            <p class="section-hint">How the incident was handled. Required before the report can be submitted, and used by the AI when it writes the narrative.</p>
+            <div class="field field-narrative">
+              <label>Action Taken / Status<span class="req">*</span></label>
+              <textarea rows="3">Subject turned over to the station for proper disposition.</textarea>
+              <div class="section-hint">Printed in the ACTION TAKEN / STATUS block of the report sheet.</div>
+            </div>
+          </div>
+        </section>
+        <section class="ir-card" data-ir-step="4">
+          <div class="ir-card-head"><span>Investigator-on-Case</span></div>
+          <div class="ir-card-body">
+            <p class="section-hint">Who is carrying the case. Required before the report can be submitted — the name is printed on the &ldquo;IOC:&rdquo; line.</p>
+            <div class="field">
+              <label>Investigator-on-case (IOC)<span class="req">*</span></label>
+              <input value="Sgt. M. Reyes" />
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- (4) the accent card -->
+      <section class="ir-card ir-card--wide ir-card--accent">
+        <div class="ir-card-head"><span>AI assistance</span></div>
+        <div class="ir-card-body">
+          <div class="ai-panel">
+            <section class="ai-assist" aria-label="AI writing assistance">
+              <div class="ai-assist-head">
+                <span class="ai-assist-badge" aria-hidden="true">AI</span>
+                <span class="ai-assist-title">Writing assistant</span>
+              </div>
+              <div class="ai-toolbar">
+                <button type="button" class="ai-run primary">Generate AI draft</button>
+                <button type="button" class="ai-tighten">Tighten my draft</button>
+              </div>
+              <p class="ai-assist-note">Generate writes a formal draft from the report you have filled in. Tighten runs the economy rules over the narrative you wrote.</p>
+            </section>
+          </div>
+        </div>
+      </section>
+    </form>
+  </main>
+</div>
+</body>
+</html>

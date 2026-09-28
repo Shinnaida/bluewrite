@@ -29,7 +29,6 @@ import {
   statusBucket,
   reportNumber,
 } from '../lib/reportFolder.js';
-import { AI_ADVISORY } from '../lib/appInfo.js';
 import ReportPrint from './ReportPrint.jsx';
 // The same bondpaper the print sheet draws, rendered INLINE after the officer
 // accepts an AI draft (Task 4). One implementation, shared with ReportPrint, so
@@ -315,6 +314,23 @@ const LABEL_ICONS = {
       <path d="M7 14.6h10v5H7z" />
     </>
   ),
+  /* The case bar's own four (see actionsCluster): the actions moved there from
+     the foot of the document, and a row of icon+label buttons needs the three
+     glyphs this set did not have yet. Same 24-unit box, same 1.6 stroke, drawn
+     in the same single colour as every other label icon on this screen. */
+  save: (
+    <>
+      <path d="M4.8 4.8h9.4L19.2 9.8v9.4H4.8z" />
+      <path d="M8.4 4.8v4.8h6.6V4.8M8 19.2v-5.4h8v5.4" />
+    </>
+  ),
+  archive: (
+    <>
+      <rect x="3.6" y="4.8" width="16.8" height="4.2" rx="1.1" />
+      <path d="M5.6 9v10.2h12.8V9M10 12.5h4" />
+    </>
+  ),
+  close: <path d="M6.3 6.3 17.7 17.7M17.7 6.3 6.3 17.7" />,
   stamp: (
     <>
       <path d="M12 3.6 19.4 6.4v5.9c0 4-2.9 7.2-7.4 8.6-4.5-1.4-7.4-4.6-7.4-8.6V6.4L12 3.6Z" />
@@ -385,11 +401,26 @@ function IrLabel({ htmlFor, children, icon, required }) {
 function IrCard({
   num,
   title,
-  // The light right-aligned label on the section bar (the reference's
-  // "Complainant / Informant"). Presentation only: it names what the section
-  // holds, and the title already names the section, so it is never the only
-  // thing identifying it.
+  // The light right-aligned label on the section bar, for a card that has
+  // nothing of its own to report (the reference's "Complainant / Informant" was
+  // one of these). Presentation only: it names what the block holds, and the
+  // title already names it, so it is never the only thing identifying it.
+  //
+  // THE FIVE SECTIONS NO LONGER USE IT: their right-hand label is `status`
+  // below, because what a section holds is already the title's job and what an
+  // officer needs on the bar is where the section STANDS. Only a card that is
+  // not one of the report's sections still describes itself here (today: the
+  // noting and sign-off block).
   context,
+  // Where this card's section stands: 'done' | 'started' | null, drawn in
+  // the same slot as `context` and in place of it. NOTHING IS DRAWN FOR NULL,
+  // deliberately — an untouched section has no state, and a chip reading "Not
+  // started" on every card a new report opens with would be five labels saying
+  // what the blanks under them already say. Derived from the same
+  // computeStepProgress the stepper reads (see `sectionStatus` in the editor),
+  // so the chip and the dot can never disagree. The wording comes from
+  // SECTION_STATE, so the two states are named in exactly one place.
+  status,
   children,
   wide,
   // A card that is NOT one of the report's ordinary sections: accent-edged and
@@ -438,6 +469,14 @@ function IrCard({
               margin (see the stylesheet) so it aligns whether or not the card
               also carries actions. */}
           {context && <span className="ir-card-context">{context}</span>}
+          {/* The section's state, in the same slot. Drawn as TEXT, not as a
+              title or an icon: it is a read-out, and a screen reader should get
+              the same three words the officer reads. */}
+          {status && (
+            <span className={`ir-card-status ir-card-status--${status}`}>
+              {SECTION_STATE[status]}
+            </span>
+          )}
           {/* Card-level actions (export, view toggles) sit in the header bar,
               not in a content row: they are not filters and would otherwise
               compete with them for the single filter line. */}
@@ -835,6 +874,40 @@ function computeStepProgress(draft, visited) {
   return { complete, current: firstOpen === -1 ? STEPPER_STEPS.length - 1 : firstOpen };
 }
 
+/**
+ * Has the officer written anything in this section? The signal behind the status
+ * chip on its bar — a section with nothing in it has no state to report.
+ *
+ * CONTENT ONLY, and that is the one place it deliberately differs from the
+ * engagement fallback in computeStepProgress above: there, VISITING an
+ * all-optional section is the only thing that can tell "nothing to fill" apart
+ * from "not seen yet", which is a question about the report. Here the question
+ * is about the section's own bar, and a section nobody has typed in has nothing
+ * to say yet — "In progress" over an empty card would be the chip inventing
+ * work. The section's own paths, plus the type-specific blob for the
+ * polymorphic one (a scalar like Notable findings, or a row of a group).
+ */
+function sectionHasContent(draft, i) {
+  if (anyFilled(draft, STEPPER_STEPS[i].paths)) return true;
+  if (i === STEPPER_TYPE_SPECIFIC) return typeSpecificHasContent(draft);
+  return false;
+}
+
+/**
+ * THE REPORT'S OWN WORDS for how far a section has got. One list, read by TWO
+ * surfaces: the chip on a section bar, and the small label under the stepper's
+ * tile — which has been saying "In progress" and "Completed" all along. They
+ * report the same fact about the same section, so they read it from here rather
+ * than each keeping a copy of the wording; two vocabularies for one fact is
+ * exactly how a rail and a bar start disagreeing at a glance.
+ *
+ * `idle` is the stepper's alone: its tile has to name "nothing here yet"
+ * because a dot on a rail always has a face. The bar draws NOTHING for that
+ * state — an untouched section has no state to report, and five chips saying
+ * "Not started" would be the blanks under them saying it again.
+ */
+const SECTION_STATE = { done: 'Completed', started: 'In progress', idle: 'Not started' };
+
 // The "done" tick — inline, like every other icon on this screen.
 const StepperCheck = (
   <svg
@@ -989,10 +1062,10 @@ function ReportProgressStepper({ complete, current, onJump, withReview = false, 
                           // "in progress" — the tick beside it says otherwise.
                           face === 'done'
                           ? 'Current'
-                          : 'In progress'
+                          : SECTION_STATE.started
                         : face === 'done'
-                          ? 'Completed'
-                          : 'Not started'}
+                          ? SECTION_STATE.done
+                          : SECTION_STATE.idle}
                   </span>
                 </button>
               </li>
@@ -1135,13 +1208,14 @@ function ReviewFieldEditor({ rowPath, label, edit }) {
   }
 
   if (rowPath === 'incident_datetime') {
-    // The pair and its qualifier open and close together: they are one printed
-    // line and one thing to get right, and the checkbox has to be reachable
-    // from here because this is the only place it is rendered in the review.
-    // The DATE half carries the row's id — the id scheme names
-    // `incident_datetime` as the date control (see FORM_FIELD_ALIASES) — and the
-    // checkbox carries the id its own rule path resolves to, so an error jump
-    // for either lands on the right control.
+    // The pair open and close together: they are one printed line and one thing
+    // to get right. The DATE half carries the row's id — the id scheme names
+    // `incident_datetime` as the date control (see FORM_FIELD_ALIASES) — so the
+    // jump a missing incident date offers lands on the control that fixes it.
+    //
+    // The "time is approximate" qualifier that used to ride under this pair is
+    // gone from both formats (by request — see the note in the document panel),
+    // which leaves the row as the two pickers and nothing else.
     return shell(
       <>
         <div className="ir-datetime">
@@ -1180,15 +1254,6 @@ function ReviewFieldEditor({ rowPath, label, edit }) {
             />
           </div>
         </div>
-        <label className="ir-approx" htmlFor={reviewFieldId('incident_time_approximate')}>
-          <input
-            id={reviewFieldId('incident_time_approximate')}
-            type="checkbox"
-            checked={!!draft.incident_time_approximate}
-            onChange={(e) => set('incident_time_approximate', e.target.checked)}
-          />
-          <span>Time is approximate (e.g. “around 1:00 A.M.”)</span>
-        </label>
         {errorFor('incident_datetime')}
       </>,
     );
@@ -2798,7 +2863,13 @@ export function ReportEditor({
   // every problem (red banner, per-field inline errors, jump + flash) and
   // returns false when blocked. `ignorePaths` lets the AI gate exempt the
   // narrative — writing it IS the AI's job, so requiring it first is circular.
-  function checkFullRules({ ignorePaths = [] } = {}) {
+  //
+  // `extraErrors` is for a problem the RULE ENGINE does not speak for: a plain
+  // path → message map that is flagged exactly like a rule's own (the field goes
+  // red, the banner names it, its link lands on it). It never overwrites a rule
+  // message for the same path — the rule set is the authority on anything it
+  // covers, and this is only ever a gap it does not cover.
+  function checkFullRules({ ignorePaths = [], extraErrors = null } = {}) {
     const { errors: ruleErrors, warnings: ruleWarnings } = validateReport(draft, 'finalize');
     const blocking = ruleErrors.filter((e) => !ignorePaths.includes(e.path));
     const errs = {};
@@ -2810,10 +2881,16 @@ export function ReportEditor({
         errs[e.path] = e.message;
       }
     }
+    for (const [path, message] of Object.entries(extraErrors ?? {})) {
+      if (errs[path] === undefined && gErrs[path] === undefined) errs[path] = message;
+    }
     setErrors(errs);
     setGroupErrors(gErrs);
     setRuleWarnings(ruleWarnings);
-    if (blocking.length > 0) {
+    // The count is the count of what is SHOWN, not of what the rules emitted: a
+    // press blocked by one extra problem alone must still open the banner, and a
+    // banner that says "1 problem" over an empty list is worse than none.
+    if (blocking.length > 0 || Object.keys(errs).length > 0 || Object.keys(gErrs).length > 0) {
       const all = { ...errs, ...gErrs };
       // THREE LINES, NOT ONE RUN-ON SENTENCE. A comma-separated list of
       // six error sentences is unreadable at a glance; a title that states
@@ -2845,11 +2922,14 @@ export function ReportEditor({
         </span>,
       );
       // Bring the banner into view and pulse it, then land focus on the first
-      // offending field so a blocked action never looks like a dead click.
+      // offending field so a blocked action never looks like a dead click. The
+      // first problem is read off what was SHOWN rather than off `blocking`: with
+      // the rules silent and only an extra flagged, there is nothing in
+      // `blocking` to focus and the press would land nowhere.
       setErrorPulse((n) => n + 1);
       window.requestAnimationFrame(() => {
         errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const firstKey = blocking[0]?.path;
+        const firstKey = Object.keys(all)[0];
         if (firstKey) window.setTimeout(() => jumpTo(firstKey), 350);
       });
       return false;
@@ -2868,7 +2948,26 @@ export function ReportEditor({
     // report back to English. Tighten keeps the Stage 1 refusal (see the panel
     // and the server guard), because the English economy engine must never
     // rewrite native text.
-    const ok = checkFullRules({ ignorePaths: ['narrative'] });
+    const ok = checkFullRules({
+      ignorePaths: ['narrative'],
+      // THE ONE THING THE ASSISTANT CANNOT DRAFT FROM: an EMPTY narrative.
+      //
+      // The narrative is exempt from this gate because writing it is what the AI
+      // is FOR — but exempting it outright meant a press with nothing written
+      // anywhere was answered by a sentence inside the AI card, in a panel the
+      // officer was reading instead of the form. The emptiness is flagged as a
+      // FIELD problem now, which is what it is: the field goes red with its own
+      // message, the banner names it, and its link lands on it — the same
+      // treatment every other blocked press gets.
+      //
+      // Only EMPTY is flagged, never short: a fifty-word note is a legitimate
+      // brief, and the narrative's 120-character floor stays the rule engine's
+      // business at finalize.
+      extraErrors:
+        String(draft?.narrative ?? '').trim() === ''
+          ? { narrative: 'Write what happened first — there is nothing yet for the assistant to work from.' }
+          : null,
+    });
     if (ok) setError(null); // a previous failed attempt's banner must not linger
     return ok;
   }
@@ -3037,6 +3136,18 @@ export function ReportEditor({
   // Derived, never stored: every render re-buckets the finalize rules, so the
   // dots keep pace with typing exactly like the red banner does.
   const stepProgress = computeStepProgress(draft, visitedSections);
+
+  // THE STATE ON EACH SECTION BAR, one entry per section — the same read-out the
+  // stepper's tick faces use, read a second way. Indexed by STEPPER_STEPS, so a
+  // section's bar and its dot are answering from one array and cannot disagree:
+  //   'done'    — the finalize rules flag nothing for the paths it owns.
+  //   'started' — something has been written in it.
+  //   null      — nothing yet. The card draws no chip at all; see IrCard. The
+  //               words for the two states come from SECTION_STATE, the same
+  //               list the stepper's tile reads.
+  const sectionStatus = STEPPER_STEPS.map((_, i) =>
+    stepProgress.complete[i] ? 'done' : sectionHasContent(draft, i) ? 'started' : null,
+  );
 
   // WHICH SECTIONS ARE ON SCREEN, as groups of STEPPER_STEPS indexes. The
   // document's walk opens on the three panels the report has always opened on
@@ -3246,61 +3357,73 @@ export function ReportEditor({
     types: typeOptions,
   };
 
-  // The action row — Save Draft and the rest of the secondary row — plus the
-  // advisory footer that goes with it. Extracted so the sheet format can put it
-  // BELOW the paper instead of inside it: everything within `.ir-form--sheet` is
-  // the page, and an officer who asked for a blank sheet should not find the
-  // report's commit row printed at the foot of it.
+  // ONE CLUSTER, IN ONE PLACE — the case bar at the top of the page.
   //
-  // It no longer carries SUBMIT. The one commit control moved to the case bar at
-  // the top of the page (see .ir-case-actions), where the reference puts it and
-  // where it is reachable from every slide, every step and the sheet — one
-  // Submit, in one place, on the same handler and the same permission check. Two
-  // copies of it would be two chances to commit by accident, so it was moved and
-  // not mirrored.
+  // These controls used to sit at the FOOT of the document, and only on the
+  // deck's last screen at that: Save Draft, History, Print, Archive and Close
+  // were reached by walking to the end of the report, which is a strange place
+  // to keep "keep my work". They are in the case bar now — the same bar that
+  // already carries Print Slip and Submit — so every one of them is reachable
+  // from every section, every step and the sheet, without scrolling.
   //
-  // One element, rendered in one of two places depending on the format (see
-  // below): the sheet branch and the in-form branch are mutually exclusive, so
-  // there is never a second copy of these controls on screen — the same rule the
-  // AI panel follows, and for a stronger reason: two Save buttons is a class of
-  // bug this codebase has no room for.
+  // The row's own "Print" went with the move: Print Slip, three buttons away in
+  // the same bar, is the same action on the same handler (`setPrinting`), and two
+  // labels for one portal is a choice an officer should not have to make.
+  //
+  // Each button keeps its own handler and its own guard — every one of them is a
+  // control MOVED, never a second one added. `type="button"` is stated rather
+  // than inherited: the default submit type has no form to submit from up here,
+  // outside the `<form>`, and the labels are the ones their runs already
+  // demonstrated.
   const actionsCluster = (
     <>
-      <div className="ir-actions">
-        <div className="ir-actions-row">
-          {/* `type="button"` stated rather than inherited: the sheet format
-              renders this row OUTSIDE the form, where the default submit type
-              has no form to submit — and the two formats should carry identical
-              markup in a row that is moved between them. */}
-          {canEdit && (
-            <button type="button" onClick={saveDraft}>
-              Save Draft
-            </button>
-          )}
-          {draft.id && (
-            <>
-              <button type="button" onClick={openHistory}>History</button>
-              <button type="button" onClick={() => setPrinting(true)}>Print</button>
-            </>
-          )}
-          {draft.id && canEdit && (
-            <button type="button" className="danger" onClick={askArchive}>
-              Archive
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={onClosed}
-          >
-            Close
-          </button>
-        </div>
-      </div>
+      {canEdit && (
+        <button type="button" onClick={saveDraft}>
+          <LabelIcon name="save" />
+          Save Draft
+        </button>
+      )}
+      {draft.id && (
+        <button type="button" onClick={openHistory}>
+          <LabelIcon name="clock" />
+          History
+        </button>
+      )}
+      {draft.id && canEdit && (
+        <button type="button" className="danger" onClick={askArchive}>
+          <LabelIcon name="archive" />
+          Archive
+        </button>
+      )}
+      <button type="button" onClick={onClosed}>
+        <LabelIcon name="close" />
+        Close
+      </button>
 
-      {/* Footer (spec §5): the system's real writing-assistance advisory —
-          no placeholder phone number, since the station has not supplied
-          a support line. */}
-      <p className="ir-footer">{AI_ADVISORY}</p>
+      {/* The two the bar already carried. Print Slip is hidden until the report
+          has a number — there is nothing to print before the first save — and
+          Submit carries its own permission check, so the group shrinks for a
+          role that may not finalize. */}
+      {draft.id && (
+        <button type="button" onClick={() => setPrinting(true)}>
+          <LabelIcon name="printer" />
+          Print Slip
+        </button>
+      )}
+      <button
+        type="button"
+        className="ir-submit"
+        onClick={finalize}
+        disabled={!canEdit || !canFinalize}
+        title={
+          canFinalize
+            ? 'Validate and submit this report for the record'
+            : 'Your role does not have permission to submit reports'
+        }
+      >
+        <LabelIcon name="stamp" />
+        Submit Official Record
+      </button>
     </>
   );
 
@@ -3311,29 +3434,35 @@ export function ReportEditor({
           screen contributes only its document content. The print sheet and
           the dialogs below render outside the form so the document stylesheet
           can never repaint an official sheet. */}
-      {/* THE CASE PANEL — the report's head as ONE field. The case bar, the
-          record strip and the progress read-out used to be three separate
-          cards with a gap between each, so the top of the screen read as three
-          unrelated boxes; they are one card now, divided by hairlines (see
-          .ir-case-panel in the stylesheet). Nothing moved: same nodes, same
-          order, same data, same behaviour. */}
+      {/* THE REPORT'S HEAD — the case bar, the record strip and the progress
+          read-out, in that order, one after another on the page. They used to be
+          one bordered CARD with hairlines between the three; the card is gone
+          (see .ir-case-panel) because a title and two identifiers are the top of
+          a DOCUMENT, not a field to fill in. Nothing about the contents moved:
+          same nodes, same order, same data, same behaviour. */}
       <div className="ir-case-panel">
         <div className="ir-page-head">
-          {/* LEFT: what the document IS — its title and status flag, the two
-              identifiers that name it, and the save line. RIGHT: the two things
-              an officer does to it from the top of the page. */}
-          <div className="ir-head-main">
-            <div className="ir-case-title">
-              <h1 className="ir-title">POLICE INCIDENT REPORT</h1>
-              {/* The reference's status flag, inline beside the case title and
-                  read from the SAME `draft.status` the record strip below uses —
-                  so the flag and the strip can never disagree about what state
-                  the report is in. It states the state; it changes nothing. */}
-              <span className="ir-draft-flag">
-                {draft.status === 'finalized' ? 'Finalized' : 'Draft stage'}
-              </span>
-            </div>
+          {/* THE TITLE IS ITS OWN CENTRED LINE, above everything else in the
+              head — the way the station's letterhead centres its own on the
+              sheet (see .ir-sheet-head-lines). It is OUT of `.ir-head-main`
+              because centring it inside a column that also holds the
+              identifiers would centre it in whatever width those happened to
+              leave, which is not the middle of anything. */}
+          <div className="ir-case-title">
+            <h1 className="ir-title">POLICE INCIDENT REPORT</h1>
+            {/* The reference's status flag, beside the case title and read from
+                the SAME `draft.status` the record strip below uses — so the flag
+                and the strip can never disagree about what state the report is
+                in. It states the state; it changes nothing. */}
+            <span className="ir-draft-flag">
+              {draft.status === 'finalized' ? 'Finalized' : 'Draft stage'}
+            </span>
+          </div>
 
+          {/* LEFT: what the document IS — the two identifiers that name it and
+              the save line. RIGHT: every action an officer takes on it, from the
+              top of the page. */}
+          <div className="ir-head-main">
             {/* The identifiers, as one line of labelled pairs: the key says what
                 the value IS, the value carries the weight, and a bullet rules
                 the two pairs apart. */}
@@ -3365,40 +3494,19 @@ export function ReportEditor({
             )}
           </div>
 
-          {/* The two things an officer does to the report from the top of the
-              page. Both are controls the editor ALREADY owns, moved here and not
-              copied: Print Slip is the same print portal the foot used to reach,
-              and Submit is the same finalize on the same permission check — it
-              now opens the page, which is why it is no longer repeated at the
-              foot of the document (see actionsCluster).
+          {/* EVERY ACTION ON THIS REPORT, at the top of the page: Save Draft,
+              History, Archive, Close, then Print Slip and the one commit control.
+              All of them come from `actionsCluster` (see above), so the bar and
+              the document can never draw two of the same button — and every one
+              is reachable from every screen, which is what moved them here from
+              the foot of the walk.
 
               The reference's third button, "Export Blotter PDF", is not drawn:
               there is no per-report export anywhere in the API — the only export
               route is the register's CSV, on My Reports — so the control would
               have nothing to call. An unreachable button is worse than an absent
               one. */}
-          <div className="ir-case-actions">
-            {draft.id && (
-              <button type="button" onClick={() => setPrinting(true)}>
-                <LabelIcon name="printer" />
-                Print Slip
-              </button>
-            )}
-            <button
-              type="button"
-              className="ir-submit"
-              onClick={finalize}
-              disabled={!canEdit || !canFinalize}
-              title={
-                canFinalize
-                  ? 'Validate and submit this report for the record'
-                  : 'Your role does not have permission to submit reports'
-              }
-            >
-              <LabelIcon name="stamp" />
-              Submit Official Record
-            </button>
-          </div>
+          <div className="ir-case-actions">{actionsCluster}</div>
         </div>
 
         {/* The record strip — a NOTICE, and it only draws when it has a notice to
@@ -3526,14 +3634,18 @@ export function ReportEditor({
           <IrCard
             num={STEPPER_STEPS[0].numeral}
             title="Reporting Party Information"
-            context="Complainant / Informant"
+            status={sectionStatus[0]}
             step={0}
             current={currentSection === 0}
             hidden={panelHidden(0)}
             onFocus={() => markVisited(0)}
             onBlur={() => markVisited(0)}
           >
-            <div className="ir-sub">
+            {/* ONE FIELD PER ROW (`--stack`): the reporting party's name and
+                contact number read DOWN the card, not across it, so each gets
+                the card's whole measure. The address below keeps `ir-span-2`,
+                which means "full width" at any column count. */}
+            <div className="ir-sub ir-sub--stack">
               <div className="ir-field">
                 <IrLabel htmlFor="r-reporter-name" icon="person" required>Full Name</IrLabel>
                 <input
@@ -3580,7 +3692,7 @@ export function ReportEditor({
           <IrCard
             num={STEPPER_STEPS[1].numeral}
             title="Incident Details"
-            context="Classification & Locus Criminis"
+            status={sectionStatus[1]}
             step={1}
             current={currentSection === 1}
             hidden={panelHidden(1)}
@@ -3610,7 +3722,15 @@ export function ReportEditor({
                 />
                 {errors.incident_type && <div className="error">{errors.incident_type}</div>}
               </div>
-              <div className="ir-field">
+              {/* SPANS the panel's two columns, and that is what lets the pair sit
+                  on ONE row at the same size. Half a column is ~235px here; a
+                  native date control needs ~128px of that and a time ~106px at
+                  the document's 12px type, so two of them in a row need ~280px
+                  and do not fit in half a panel — the pair would fold back into
+                  the stack this replaced. Full width gives each picker ~230px:
+                  equal to the other, and enough for the whole value with the
+                  picker's own indicator beside it. */}
+              <div className="ir-field ir-span-2">
                 <IrLabel icon="calendar">Date &amp; Time of Occurrence</IrLabel>
                 {/* Two fields, not one datetime-local: the incident date and
                     time are recorded separately, and the time carries an
@@ -3672,16 +3792,15 @@ export function ReportEditor({
                     />
                   </div>
                 </div>
-                <label className="ir-approx" htmlFor="r-time-approx">
-                  <input
-                    id="r-time-approx"
-                    type="checkbox"
-                    checked={!!draft.incident_time_approximate}
-                    onChange={(e) => set('incident_time_approximate', e.target.checked)}
-                    disabled={!canEdit}
-                  />
-                  <span>Time is approximate (e.g. “around 1:00 A.M.”)</span>
-                </label>
+                {/* The "Time is approximate (e.g. “around 1:00 A.M.”)" row that
+                    used to sit under this pair is GONE (by request): it cost a
+                    line of the panel's shortest field to say something about one
+                    value, and the pair reads as what it is without it — two
+                    pickers, one row. The record still carries
+                    `incident_time_approximate` and the printed sheet still
+                    prints "(approximate)" when it is set (the AI's own fill can
+                    set it — see classifyFill), so nothing downstream changed;
+                    there is simply no longer a control for it here. */}
                 {errors.incident_datetime && <div className="error">{errors.incident_datetime}</div>}
               </div>
               <div className="ir-field ir-span-2">
@@ -3702,7 +3821,7 @@ export function ReportEditor({
           <IrCard
             num={STEPPER_STEPS[2].numeral}
             title="Incident Narrative"
-            context="Facts of the Case"
+            status={sectionStatus[2]}
             wide
             step={2}
             current={currentSection === 2}
@@ -3887,7 +4006,7 @@ export function ReportEditor({
         <IrCard
           num={STEPPER_STEPS[3].numeral}
           title="Parties Involved"
-          context="Complainants · Respondents · Witnesses"
+          status={sectionStatus[3]}
           wide
           step={3}
           current={currentSection === STEPPER_TYPE_SPECIFIC}
@@ -4028,7 +4147,7 @@ export function ReportEditor({
           <IrCard
             num={STEPPER_STEPS[4].numeral}
             title="Action Taken / Status"
-            context="Disposition"
+            status={sectionStatus[4]}
             step={4}
             current={currentSection === 4}
             hidden={panelHidden(4)}
@@ -4199,19 +4318,28 @@ export function ReportEditor({
               : STEPPER_STEPS[activeStep + 1].label;
           return (
             <div className="ir-step-nav">
-              {canEdit && (
-                <button type="button" onClick={saveDraft}>
-                  Save Partial Draft
+              {/* NO SAVE HERE ANY MORE. "Save Partial Draft" used to lead this
+                  row, which meant the one control an officer needs while
+                  writing was drawn — and only drawn — at the bottom of every
+                  step. It is in the case bar at the top of the page now, with
+                  the rest of the report's actions: one save, always in view. */}
+              {/* Rendered only when there IS a previous step — the same rule the
+                  way forward below already follows. On the first step
+                  (I. Reporting party) nothing precedes it, and a greyed-out "←
+                  Previous" was a control that announced itself and then refused.
+                  The label is therefore always the NAMED one: the old fallback
+                  (bare "← Previous", titled "This is the first step") existed
+                  only to describe the state this no longer draws. */}
+              {prevLabel && (
+                <button
+                  type="button"
+                  className="ir-nav-back"
+                  onClick={() => goToStep(activeStep - 1)}
+                  title={`Back to ${prevLabel}`}
+                >
+                  ← Previous: {prevLabel}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => goToStep(activeStep - 1)}
-                disabled={activeStep === 0}
-                title={prevLabel ? `Back to ${prevLabel}` : 'This is the first step'}
-              >
-                {prevLabel ? `← Previous: ${prevLabel}` : '← Previous'}
-              </button>
               <span className="ir-step-nav-where">
                 Step {activeStep + 1} of {STEP_COUNT}
               </span>
@@ -4258,19 +4386,24 @@ export function ReportEditor({
             step to walk: Review. */}
         {formFormat === 'document' && (
           <div className="ir-doc-nav">
-            {canEdit && (
-              <button type="button" onClick={saveDraft}>
-                Save Partial Draft
+            {/* Save is in the case bar (see above), not here: this row is the
+                document's NAVIGATION — where you are going — and it now carries
+                only that. */}
+            {/* Same rule as the stepped format's row: drawn only when there is
+                somewhere to go back to. On the first screen (I. Reporting party)
+                this used to be a disabled "← Previous" — see the note there. The
+                guard is `prevSlide`, which is what the click walks and what
+                `prevSection` is derived from. */}
+            {prevSlide && (
+              <button
+                type="button"
+                className="ir-nav-back"
+                onClick={() => goToStep(prevSlide[0])}
+                title={`Back to ${prevSection.label}`}
+              >
+                ← Previous: {prevSection.label}
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => prevSlide && goToStep(prevSlide[0])}
-              disabled={!prevSlide}
-              title={prevSection ? `Back to ${prevSection.label}` : 'This is the first screen'}
-            >
-              {prevSection ? `← Previous: ${prevSection.label}` : '← Previous'}
-            </button>
             {/* Rendered only when there IS a next section. On the last one the
                 row ends and the commit cluster under it takes over: a second
                 primary control beside Submit is the one thing this row must
@@ -4288,28 +4421,6 @@ export function ReportEditor({
           </div>
         )}
 
-        {/* The actions at the end of the document, in the order the officer
-            should reach for them: Save Draft (and the rest of the secondary
-            row) FIRST, then the one full-width primary action that commits
-            the report. Save Draft used to sit under Submit, which put the
-            "keep my work" control after the irreversible one.
-
-            Submit keeps the same completeness gate as before, so a report
-            cannot be submitted with required fields missing.
-
-            In BOTH deck formats this whole cluster — Save/History/Print/
-            Archive/Close, Submit, and the advisory footer — belongs to the LAST
-            slide and to no other: every earlier section is its own panel, and
-            committing the report is the end of the flow, not something offered
-            while the officer is still on the first form — nor, in Steps, before
-            they have read the report back in one piece.
-
-            NOT in the sheet format, where it goes below the paper instead — see
-            the block after </form>. That is why the `!sheet` sits beside the
-            slide condition rather than inside it: the two answers are "this
-            format's position" and "the sheet's position", and only one of them
-            can apply. */}
-        {(!deck || activeSlide === slides.length - 1) && !sheet && actionsCluster}
       </form>
 
       {/* ---- The desk BELOW the paper ----------------------------------------
@@ -4349,8 +4460,8 @@ export function ReportEditor({
           report cannot itself be printed on the page it is describing.
 
           What it reveals is the whole report — every panel and every group. The
-          action row is NOT behind it: Save Draft and Submit are rendered below
-          the paper in both of the sheet's states (see below), so filing the
+          action row is NOT behind it: Save Draft and Submit are in the CASE BAR
+          at the top of the page, in both of the sheet's states, so filing the
           report never depends on these fields being open. Submitting is a
           deliberate act on the whole document, and the page you submit is the
           one this control opens. */}
@@ -4373,7 +4484,6 @@ export function ReportEditor({
           format: Save Draft and Submit are rendered, on screen, under the paper
           they commit — which is the guarantee the reveal control used to have to
           make. */}
-      {sheet && <div className="ir-sheet-actions">{actionsCluster}</div>}
 
       {printing && (
         <ReportPrint

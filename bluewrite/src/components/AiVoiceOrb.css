@@ -1,0 +1,126 @@
+/* ---- The assistant's voice orb (AiVoiceOrb.jsx) -------------------------
+   One row, centred, above the two actions in the AI panel. The row exists so
+   the panel never has to know the orb's width: the orb is a fixed square, and
+   centring it is the row's whole job. */
+
+.ai-voice-row {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 0.7rem;
+}
+
+.ai-voice-orb {
+  display: block;
+  flex: none;
+  /* A phone cannot show a 200px orb in a panel narrower than one, so the host
+     gives way to the column. Everything inside is drawn from the viewBox, so it
+     scales without a single number changing. */
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  /* Decoration, and it must stay that way: the buttons under it keep the card's
+     own hover and focus behaviour, and a drag across the orb is a drag across
+     the panel. */
+  pointer-events: none;
+}
+
+/* The orbit's fixed outer bound. A hairline, and deliberately the faintest thing
+   here — it frames the dashed circle rather than competing with it. */
+.ai-voice-hairline {
+  fill: none;
+  stroke: rgba(31, 95, 208, 0.16);
+  stroke-width: 1;
+}
+
+/* The dashed of orbit around the sphere. It is the one element that turns, and
+   it turns SLOWLY: a full circuit in three quarters of a minute reads as drift
+   rather than as a spinner, and on a card an officer may sit in front of for
+   minutes, drift is the only kind of motion that does not become annoying. */
+.ai-voice-ring {
+  fill: none;
+  stroke: #8FC7EE;
+  stroke-width: 1.4;
+  stroke-dasharray: 3.2 5.2;
+  stroke-linecap: round;
+  transform-box: view-box;
+  transform-origin: 100px 100px;
+  animation: ai-voice-spin 46s linear infinite;
+}
+
+/* The waveform. Every bar is centred on the orb's axis, so one scale about each
+   bar's own middle lengthens it up and down at once.
+
+   `transform-box: fill-box` is load-bearing: an SVG element's transform origin
+   defaults to the whole viewBox, so without it every bar would swing around the
+   orb's centre instead of growing where it stands.
+
+   The durations and delays are all different on purpose. Seven bars on one timer
+   is a pulsing block, not a voice; seven bars that never line up read as speech,
+   and the mismatch is the whole effect. The 0.42 floor keeps a resting bar
+   visible — a bar that vanishes reads as a glitch, not as a quiet moment. */
+.ai-voice-bars rect {
+  fill: #FFFFFF;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: ai-voice-bar 1.05s ease-in-out infinite alternate;
+}
+
+.ai-voice-bars rect:nth-child(1) { animation-duration: 0.92s; animation-delay: -0.15s; }
+.ai-voice-bars rect:nth-child(2) { animation-duration: 1.24s; animation-delay: -0.62s; }
+.ai-voice-bars rect:nth-child(3) { animation-duration: 1.02s; animation-delay: -0.34s; }
+.ai-voice-bars rect:nth-child(4) { animation-duration: 1.38s; animation-delay: -0.05s; }
+.ai-voice-bars rect:nth-child(5) { animation-duration: 0.96s; animation-delay: -0.48s; }
+.ai-voice-bars rect:nth-child(6) { animation-duration: 1.16s; animation-delay: -0.27s; }
+.ai-voice-bars rect:nth-child(7) { animation-duration: 0.88s; animation-delay: -0.7s; }
+
+/* The line the waveform is read against. It runs past the bars on both sides and
+   stops inside the sphere, which is what makes the bars look like they are
+   standing on it rather than floating in the ball. */
+.ai-voice-axis {
+  stroke: #FFFFFF;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  opacity: 0.95;
+}
+
+.ai-voice-spark {
+  fill: #7FC4EC;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: ai-voice-twinkle 2.8s ease-in-out infinite alternate;
+}
+
+/* The second sparkle and the fleck share a phase, so the two corners of the
+   composition breathe together and the eye reads one idea rather than three
+   blinking dots. */
+.ai-voice-spark--late {
+  animation-delay: -1.4s;
+  animation-duration: 3.4s;
+}
+
+@keyframes ai-voice-bar {
+  from { transform: scaleY(0.42); }
+  to { transform: scaleY(1); }
+}
+
+@keyframes ai-voice-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ai-voice-twinkle {
+  from { opacity: 0.35; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1.05); }
+}
+
+/* Everything stops, and the orb stays exactly as it is drawn. The waveform's
+   bars are at full height and the sparkles fully lit, because the still frame of
+   this component should be the composed one, not a paused-in-the-middle one. */
+@media (prefers-reduced-motion: reduce) {
+  .ai-voice-bars rect,
+  .ai-voice-ring,
+  .ai-voice-spark {
+    animation: none;
+  }
+  .ai-voice-spark {
+    opacity: 1;
+  }
+}

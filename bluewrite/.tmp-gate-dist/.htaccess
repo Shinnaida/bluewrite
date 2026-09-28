@@ -1,0 +1,13 @@
+# BlueWrite — Apache rules for the LAN deployment document root.
+# Serves the built React bundle; routes /api/* to the PHP front controller
+# (public/api.php -> ../api/index.php).
+# NOTE: this file lives in public-assets/ and is copied into public/ on build.
+
+RewriteEngine On
+
+# API calls go to the PHP front controller.
+RewriteRule ^api/ api.php [QSA,L]
+
+# Static assets: never rewrite, let Apache serve them.
+RewriteCond %{REQUEST_URI} ^/assets/
+RewriteRule ^ - [L]
