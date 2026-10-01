@@ -3796,23 +3796,58 @@ body.profile-panel-open {
   background: rgba(15, 23, 42, 0.5);
   background-clip: padding-box;
 }
+/* SHORT BOND, WITH A FLOOR AND NO CEILING. The page is never smaller than one
+   leaf — 8.5 × 11in, the size the station prints on, which the sheet states
+   itself as `min-height` — and it is never CLIPPED to one either. This rule used
+   to pin `height`/`max-height` at 11in and hide the overflow, and a letter that
+   ran a few lines past its leaf lost the end of the signature block: the
+   Recorded by and IOC lines still read on the page, then the bottom border, and
+   the NOTED BY name was gone rather than a scroll away. Whatever paper the sheet
+   needs, the sheet gets; the frame's own scrollbar reaches it.
+
+   SCOPED TO THE PANEL, deliberately — the print portal and the inline reveal
+   keep the sheet's own behaviour, which is the very thing this now matches. */
+/* THE PAGE IS AS BIG AS THE FIELD IS WIDE, AND THE FIELD SCROLLS TO THE REST.
+
+   The leaf is drawn at its own size — 8.5 × 11in, the station's paper — and
+   scaled by a factor the component MEASURES: the ratio of this frame's content
+   box to the page's own width, which CSS cannot express (one length may not be
+   divided by another). See the `--ai-sheet-zoom` effect in
+   AiNarrativePanel.jsx; the fallback here is the factor the panel's default
+   width lands on, so the first paint before the measurement is never an
+   unstyled full-size page in a small box.
+
+   `width: 8.5in`, not `min(100%, 8.5in)`: a percentage and the zoom would each
+   take a bite of the same scaling, and the page would come out at a fraction of
+   the field it is supposed to fill.
+
+   Fitting the HEIGHT as well — drawing the whole leaf at once, print-preview
+   style, so the NOTED BY block sits on screen — is the other answer, and it was
+   in place before this: it makes the letter about 0.38 of the page's own size,
+   a page glanced at rather than read. The measure here is the width, and the
+   frame below keeps its own scrollbar, so the foot of the page — the Recorded by
+   and IOC lines and the NOTED BY block — is reached the way any long page is.
+   `overflow-x` is hidden on the frame: a page that fills the width exactly must
+   never draw a horizontal bar for a rounding error. */
 .ai-sheet-preview .print-sheet {
   flex: 0 0 auto;
-  width: min(100%, 8.5in);
+  width: 8.5in;
+  /* The leaf's floor, not a cap: the sheet grows when the letter needs more
+     paper, so its own scrollbar (the frame's) always has the tail to reach. */
+  min-height: 11in;
   border: 1px solid rgba(0, 0, 0, 0.14);
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
-  zoom: 0.62;
+  zoom: var(--ai-sheet-zoom, 0.62);
 }
 @media (max-width: 700px) {
   .ai-sheet-preview {
     height: clamp(11rem, 62dvh, 24rem);
     padding: 0.45rem;
   }
-  .ai-sheet-preview .print-sheet { zoom: 0.5; }
 }
 @media (max-height: 540px) {
   .ai-sheet-preview { height: min(44dvh, calc(100dvh - 8rem)); }
-  .ai-sheet-preview .print-sheet { zoom: 0.52; }
+
   .ir-card--accent {
     position: static !important;
     max-height: none;

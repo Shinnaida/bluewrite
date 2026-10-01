@@ -3,3 +3,11 @@
 declare(strict_types=1);
 
 require __DIR__ . '/BaseApiTestCase.php';
+
+// A core class a test reaches IN-PROCESS through a provider — the API server has
+// its own require list in api/index.php, PHPUnit has none. Loaded here rather
+// than inside the one file that needs it so the suite is order-independent:
+// SystemInstructionTest calls GeminiNarrativeProvider::buildRequestBody() and
+// used to fail with 'Class "App\Core\LanguageRegistry" not found' whenever it
+// happened to run before LanguageRegistryTest.php loaded the file itself.
+require_once __DIR__ . '/../app/core/LanguageRegistry.php';

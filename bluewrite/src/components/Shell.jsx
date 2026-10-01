@@ -546,6 +546,12 @@ export default function Shell({
             onMyReports={() => navigate('table')}
             reports={recentReports ?? []}
             loading={recentReports === null}
+            // Home offers the register's own record actions on its draft rows
+            // (Open / History / Print / Archive), so it needs the shell's toast
+            // for their outcome, and its list-bump to re-read this very list
+            // after one of them lands.
+            notify={notify}
+            onChanged={bumpList}
           />
         )}
         {(view.kind === 'report' || view.kind === 'new') && (

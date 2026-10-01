@@ -165,8 +165,20 @@ session, because the write needs the session to authorise it.
 
 ### 6.2 The top bar (`AppTopBar.jsx`)
 
-- Left: the department lockup (`Public Safety Department` / `Official Incident
-  Reporting System`) over the knockout logo; clicking it goes to the role home.
+- Left: the agency's letterhead — the PNP seal at the head of the three lines
+  (`Republic of the Philippines` / `Public Safety Department` / `Official
+  Incident Reporting System`); clicking it goes to the role home. There is **no
+  app mark in the bar**: the knockout shield that used to stand to the left of
+  the words was removed by request, and the artwork still appears at the
+  sign-in gate, as the app icon, and on Home's band.
+- The bar is **closed along its bottom edge by a blue rule** (`2px`, the
+  `--ir-bar-rule` token in `incident-report.css`). It is the bar's own
+  `border-bottom` rather than a rule on the page below it, so it runs the width
+  of the window — the page's content is inset by the gutters and the bar is not —
+  and it stays put while the page scrolls under it. Home's band bleeds up through
+  those gutters to meet the bar, so without the line the band's navy would butt
+  straight onto the bar's. Dark restates its own navy but not this token: the
+  line is a fixed value on a fixed surface, like `--ir-bar-accent`.
 - Centre/right: role nav links with `aria-current="page"` (that attribute *is*
   the active underline).
 - `activeFor(current, isAdmin)` maps an open report to Write Report for an
@@ -182,7 +194,15 @@ session, because the write needs the session to authorise it.
 The only **centred** screen. It renders `.ir-home` (the scope that owns the
 centring rules), the `HomeGrid` backdrop, the `BLUEWRITE` wordmark + kicker, the
 one primary action ("Start a New Report") with a one-line "stays a draft" note
-under it, and a headless Recent Reports card (drafts first, capped at 5).
+under it, and a headless Recent Reports card (drafts first, capped at 5). The
+station's own advice stands beside the work in the REMEMBER card: a navy head
+band carrying a gold tile and closed by a gold rule, the three sentences as
+accent-edged panels under it (the emergency one stated in red, because it is the
+only one on the card that is a warning rather than a note), and the office's line
+under the flag's three fields at the card's foot. The card is drawn against the
+same shortfall the rest of the page is (see `--ir-home-short`): on a short panel
+its gaps, its panels' padding and its own gutter give way, so the five sentences
+stay whole and the card does not put a scrollbar through the station's own line.
 
 It deliberately has **no page title and no officer meta line**: the top bar
 carries the department lockup and the profile menu carries identity. The

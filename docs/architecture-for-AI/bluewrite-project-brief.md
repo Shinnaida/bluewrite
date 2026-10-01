@@ -393,12 +393,15 @@ action, which always carries white) — dark needs a blue that lifts off
   shield carrying a light crest** — dark ink, so it only reads on a light
   surface. `src/assets/bluewrite-logo-light.png` is the derived **knockout**:
   the ink re-rendered white and the light crest made transparent, so the shield
-  reads on navy with **no backing plate**, and the bar shows through the crest.
-  The two dark surfaces — `.ir-brand-mark` in the navy bar, and
-  `.la-brand-mark` / `.la-doc-icon` on the login — use the **light** variant;
-  `src/favicon.png` (64px) uses the navy one, because a browser tab is light.
-  Never give a mark a white chip again, and never put the navy artwork on a
-  navy bar. If the artwork is ever replaced, re-derive the knockout by luminance
+  reads on navy with **no backing plate**, and the surface shows through the
+  crest. The dark surfaces — `.la-brand-mark` / `.la-doc-icon` on the login, and
+  Home's band, which wears the office's shield (`.ir-home-hero-mark`) — use the
+  **light** variant; `src/favicon.png` (64px) uses the navy one, because a
+  browser tab is light. The top bar no longer carries a mark at all: it is the
+  agency's letterhead, so its head is the PNP seal and the three lines, and the
+  `.ir-brand-mark` slot went with it — if a mark ever returns there, the light
+  variant is the one it takes. Never give a mark a white chip again, and never
+  put the navy artwork on a navy bar. If the artwork is ever replaced, re-derive the knockout by luminance
   rather than recolouring by hand. This replaced the old hand-drawn `Logo.jsx`
   SVG, which is deleted — along with the last copies of that old artwork
   (`src/logo.svg`, `src/logo-lockup.svg`, both unreferenced).

@@ -292,7 +292,9 @@ final class SystemInstructionTest extends TestCase
      */
     public function testBlankDispositionIsReportedAsAGap(): void
     {
-        $instruction = GeminiNarrativeProvider::buildSystemInstruction('Theft');
+        // Flattened: the prompt is wrapped prose, so a sentence that spans a
+        // line break is still one sentence and must still be found.
+        $instruction = $this->flatten(GeminiNarrativeProvider::buildSystemInstruction('Theft'));
         $this->assertStringContainsString('a blank disposition is always', $instruction);
         $this->assertStringContainsString('listed in possibleGaps as a "warning"', $instruction);
         $this->assertStringContainsString('which blocks closing the report', $instruction);
@@ -300,12 +302,12 @@ final class SystemInstructionTest extends TestCase
 
     /**
      * The disposition line is requested explicitly: the sheet's ACTION TAKEN /
-     * STATUS field is enhanced from the SAME recorded text the narrative
-     * closes on, and an empty answer is valid (nothing was recorded).
+     * STATUS block is filled from the officer's recorded text alone, and an
+     * empty answer is valid (nothing was recorded).
      */
     public function testBaseInstructionCarriesActionTakenOutputRule(): void
     {
-        $instruction = GeminiNarrativeProvider::buildSystemInstruction('Theft');
+        $instruction = $this->flatten(GeminiNarrativeProvider::buildSystemInstruction('Theft'));
         $this->assertStringContainsString('actionTaken', $instruction);
         $this->assertStringContainsString('block of the sheet', $instruction);
         $this->assertStringContainsString('EMPTY string when the', $instruction);
@@ -420,9 +422,11 @@ final class SystemInstructionTest extends TestCase
         // 3 — the merge rule, including the officer-typed-twice case.
         $this->assertStringContainsString('NO TWO FINDINGS MAY ASSERT THE SAME THING', $instruction);
         $this->assertStringContainsString('even when the officer typed it twice', $instruction);
-        // 4 — two statements of the disposition, two shapes.
-        $this->assertStringContainsString('THE DISPOSITION IS STATED TWICE BY DESIGN', $instruction);
-        $this->assertStringContainsString('never share a sentence shape or a distinctive phrase', $instruction);
+        // 4 — the disposition has exactly ONE home: the ACTION TAKEN / STATUS
+        // line. A disposition sentence in the narrative is the same fact
+        // printed twice, because the sheet prints that block beneath it.
+        $this->assertStringContainsString('THE DISPOSITION HAS EXACTLY ONE HOME', $instruction);
+        $this->assertStringContainsString('is NOT written into the narrative', $instruction);
         // 5 — the banned-padding list, and the test that replaces it.
         $this->assertStringContainsString('NO FACT-FREE PADDING', $instruction);
         $this->assertStringContainsString('regarding the matter', $instruction);
@@ -486,9 +490,14 @@ final class SystemInstructionTest extends TestCase
         $this->assertStringContainsString('attaches to a previously named NOUN, never to an event', $instruction);
         $this->assertStringContainsString('"said incident"', $instruction);
         $this->assertStringContainsString('are blotter errors', $instruction);
-        // 24-hour time and the money/quantity forms.
-        $this->assertStringContainsString('24-hour form with the H suffix', $instruction);
-        $this->assertStringContainsString('1400H', $instruction);
+        // Time of day and the money/quantity forms. Two writings are allowed —
+        // the exact time in the sheet's own words, or the part of the day — and
+        // what is banned is the record's notation. Guarded end to end by
+        // testTheTimeOfDayIsTheSheetTimeFormAndNeverTheRecordsNotation.
+        $this->assertStringContainsString('Time of day is written one of two ways', $instruction);
+        $this->assertStringContainsString('in the afternoon of', $instruction);
+        $this->assertStringContainsString('"at 2:44 A.M."', $instruction);
+        $this->assertStringContainsString("the record's OWN notation", $instruction);
         $this->assertStringContainsString('in the amount of ₱[X]', $instruction);
         // Complainant vs victim is a record distinction, not a synonym choice.
         $this->assertStringContainsString('the person the offense was committed against', $instruction);
@@ -510,8 +519,13 @@ final class SystemInstructionTest extends TestCase
         $this->assertStringContainsString('A hedge in the officer', $instruction);
         $this->assertStringContainsString('Never upgrade a possibility the officer stated into a fact', $instruction);
         $this->assertStringContainsString('An approximate time stays approximate', $instruction);
-        $this->assertStringContainsString('at approximately 1400H', $instruction);
-        $this->assertStringContainsString('NEVER a precise "at 1400H"', $instruction);
+        // The hedge travels with the time: an approximate hour may be written
+        // approximately ("at about 2:00 o'clock in the afternoon") or as the
+        // part of the day, but never as a bare exact reading.
+        $this->assertStringContainsString('is written NO MORE EXACTLY than', $instruction);
+        $this->assertStringContainsString('hedge it the way the record does ("at about 2:00', $instruction);
+        $this->assertStringContainsString('NEVER a bare exact reading for a time', $instruction);
+        $this->assertStringContainsString('narrowed to a minute the record does not hold', $instruction);
         // Widening a category is the quiet version of the same error.
         $this->assertStringContainsString('Never widen a category', $instruction);
         $this->assertStringContainsString('is not "a bladed weapon"', $instruction);
@@ -524,6 +538,81 @@ final class SystemInstructionTest extends TestCase
         $this->assertStringContainsString('"managed to escape"', $instruction);
         $this->assertStringContainsString('treat the whole family as one error', $instruction);
         $this->assertStringContainsString('NEVER "the perpetrator"', $instruction);
+    }
+
+    /**
+     * THE TIME OF DAY IS WRITTEN THE WAY THE SHEET WRITES A TIME — NEVER THE
+     * RECORD'S OWN NOTATION.
+     *
+     * The instruction has carried three rules here, and the two earlier ones
+     * were each wrong in a different direction. It first prescribed the raw
+     * timestamp TWICE ("09:00 hours", then the H-suffix form "1400H") — the
+     * notation the record itself uses, echoed back at the officer. It then
+     * banned the clock outright, which is narrower than the station writes:
+     * the sheet's own prose states a time either as the exact time in words
+     * ("at 2:00 o'clock in the afternoon") or as the part of the day ("in the
+     * afternoon of"). What is never written is the record's notation —
+     * "02:00 hours", the H-suffix form, a bare "2pm", the yyyy-mm-dd date, the
+     * bracketed "(approximately …)" note. FACTS OF THE CASE is the sentence the
+     * officer reads first, so the example has to show both accepted writings.
+     */
+    public function testTheTimeOfDayIsTheSheetTimeFormAndNeverTheRecordsNotation(): void
+    {
+        $instruction = $this->flatten(GeminiNarrativeProvider::buildSystemInstruction('Theft'));
+
+        // Both accepted writings, as the opening rule's own examples.
+        $this->assertStringContainsString('On the afternoon of September 30, 2026, [VICTIM_1]', $instruction);
+        $this->assertStringContainsString(
+            "At about 2:00 o'clock in the afternoon of September 30, 2026, [VICTIM_1]",
+            $instruction,
+        );
+        $this->assertStringContainsString('Write it the way the sheet writes a time, which is ONE OF TWO WAYS', $instruction);
+        $this->assertStringContainsString('the EXACT TIME in words', $instruction);
+        $this->assertStringContainsString('or the PART OF DAY', $instruction);
+        $this->assertStringContainsString("Never carry the record's own notation across", $instruction);
+        // The mapping is stated, so an hour lands in a named part of the day
+        // rather than in whatever the model guesses.
+        $this->assertStringContainsString('00:00–04:59 → "the early morning of"', $instruction);
+        $this->assertStringContainsString('05:00–11:59 → "the morning of"', $instruction);
+        $this->assertStringContainsString('12:00–17:59 → "the afternoon of"', $instruction);
+        $this->assertStringContainsString('18:00–23:59 → "the evening of"', $instruction);
+        // ...and the date follows the way the sheet writes dates.
+        $this->assertStringContainsString('the way the sheet itself writes dates', $instruction);
+
+        // The H-suffix form survives in exactly ONE place — the rule that
+        // forbids it, which names what it bans the way the padding list does.
+        // The opening rule bans it too, but without a second worked example:
+        // a form quoted twice in two different sections is the way the two
+        // sections start disagreeing about it.
+        $this->assertSame(1, substr_count($instruction, '1400H'));
+        $this->assertStringContainsString('never "02:00 hours", never the H-suffix form', $instruction);
+        // ...and the opening rule's ban is the unquoted one.
+        $this->assertStringContainsString("no \"02:00 hours\", no H-suffix form, no bare \"2pm\"", $instruction);
+        // Nothing prescribes a clock reading any more, in either of the two
+        // forms the prompt used to carry.
+        $this->assertStringNotContainsString('is written in 24-hour form with the H suffix', $instruction);
+        $this->assertStringNotContainsString('followed by the word "hours"', $instruction);
+        $this->assertStringNotContainsString('at approximately 1400H', $instruction);
+        $this->assertStringNotContainsString('"14:00 hours"', $instruction);
+
+        // The closing reference line is the system's to add, not the model's:
+        // the sheet prints one "Investigated by:" line, never two.
+        $this->assertStringContainsString('is added by the system AFTER your text', $instruction);
+
+        // ...and the few-shot examples open the way the rule asks, so the shape
+        // being imitated is the shape being described.
+        $shots = (string) file_get_contents(__DIR__ . '/../resources/ai/narrative_few_shots.md');
+        $this->assertStringContainsString('On [WHEN],', $shots);
+        $this->assertStringNotContainsString('On or about', $shots);
+        $this->assertStringContainsString('the part of the day the', $shots);
+        // Both writings are shown as one record/opening pair each, so the shape
+        // being imitated is the shape being described — and the file's own
+        // [WHEN] note says which of the two the body examples use.
+        $this->assertStringContainsString('"On the early morning of September 30, 2026, …"', $shots);
+        $this->assertStringContainsString("At about 2:00 o'clock in the afternoon of September 30,", $shots);
+        $this->assertStringContainsString('the exact-time', $shots);
+        $this->assertStringContainsString("What is never written is the record's OWN notation", $shots);
+        $this->assertStringContainsString('H-suffix form', $shots);
     }
 
     /**

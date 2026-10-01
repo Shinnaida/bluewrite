@@ -259,6 +259,13 @@
      and still reads as navy rather than as grey. */
   --ir-navy: #1E2E50;
   --ir-navy-hi: #22355C;
+  /* …and the middle field of Home's advice card flag, which is the one light
+     field in that card. Light draws it as the hairline grey (a white field on a
+     white card is not a field); here the hairline grey is 1.4:1 against the card
+     and would read as a gap between the blue and the red instead of as the white
+     between them, so it takes the palette's white — the same value the flag's own
+     middle field is on paper. */
+  --ir-flag-mid: var(--on-accent);
   /* …and the two values light measures against a WHITE well. Inherited as they
      are they would both fail here: #8E93A0 is 1.7:1 on this #12161D input and
      #6E7787 about 2.4:1, so the field would lose its edge and its placeholder
@@ -282,7 +289,18 @@
 /* The bar is delimited by its own colour in light (navy against a light-grey
    page). Against a near-black page that step is much smaller, so dark adds the
    hairline the bar does not otherwise need. */
-:root[data-theme='dark'] .ir-nav,
+/* THE APP'S OWN BAR IS NOT IN THIS RULE, and leaving it out is the point: it
+   wears a blue rule along its bottom edge now (--ir-bar-rule,
+   incident-report.css), and this hairline was SILENTLY REPLACING it. Both are
+   bottom borders on the same element, and this sheet is later in the bundle and
+   this selector is the more specific of the two, so dark won outright — the
+   blue line showed on a light screen and vanished on a dark one.
+
+   The bar still has to be delimited here, and the line does it better than this
+   hairline did: #2F63A3 is 2.2:1 against the lifted navy and brighter still
+   against the near-black page under it, where the hairline was 1px of
+   --line-bright. The gate's bar is a different element that has no such line of
+   its own, and keeps its hairline. */
 :root[data-theme='dark'] .la-topbar {
   border-bottom: 1px solid var(--line-bright);
 }

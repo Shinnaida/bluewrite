@@ -92,6 +92,16 @@ const AI_GUIDED_HINT =
 const READ_ATTEMPTS = 2;
 const READ_RETRY_WAIT_MS = 5000;
 
+// THE LEAF, IN CSS PIXELS. A sheet of short bond is 8.5 × 11in, and the page's
+// own rule states exactly that (`.print-sheet` — "US Letter, the station's
+// paper" — with border-box sizing, so the leaf is the paper). At 96 CSS px to
+// the inch these are the same two numbers, and they are written here only
+// because the size below is a RATIO of the frame's box to this page, and CSS
+// cannot divide one length by another. The WIDTH is the one the frame is sized
+// against; the height is the leaf's, and the frame scrolls over it. If the
+// station's paper ever changes, both move with that rule.
+const SHEET_PX = { width: 8.5 * 96, height: 11 * 96 };
+
 // THE THREE PARTS OF A DRAFT, in the order the printed sheet prints them, plus
 // where the arrival sequence ends. The reveal walks this list: each part types
 // itself in (NarrativeReveal) and then hands over to the next, so what the
@@ -314,14 +324,25 @@ export default function AiNarrativePanel({
   // chrome, not a window: hiding it keeps the draft (which lives in this tab,
   // keyed by report id) and "A draft is ready" is the way back in.
   const [panelOpen, setPanelOpen] = useState(false);
-  // TASK 9 — the draft that is being typed into the bondpaper in this card, and
-  // whether it has finished. `sheetDraft` is the same three-part shape the gate
-  // reviews ({ narrative, findingsText?, statusText?, scope }); it is what
-  // replaces the panel's plain boxes while the letter is being written, so the
-  // officer reads the page itself rather than a copy of it. Scope is 'generate'
-  // (the fact values type too) or 'tighten' (the narrative alone — that pass
-  // rewrites the officer's prose, not their fields). Never sent to the API.
-  const [sheetDraft, setSheetDraft] = useState(null);
+  // TASK 9 — the draft being typed into the bondpaper in this card. Its values
+  // are read from the LIVE draft rather than kept beside it (see `sheetPending`
+  // below), so a correction the officer makes in the boxes under the page is what
+  // the page above shows a moment later: one source, and the two can never
+  // disagree about what is being reviewed. Nothing here is sent to the API.
+  //
+  // A DRAFT UNDER REVIEW IS A PAGE. The letter is drawn whenever this card holds
+  // a draft — freshly generated, restored in this tab after a reload, or being
+  // corrected in its boxes — rather than for as long as one particular request
+  // is remembered, which is how the officer's own draft could leave the AI
+  // assistance field while they were still reading it. `sheet` is the host's own
+  // payload (the report, the letterhead, the recording officer): without it
+  // there is no page to draw at all.
+  const sheeted = !!draft && !!sheet;
+  // Whether the officer has asked for the draft's own editable boxes ALONGSIDE
+  // the letter. "Edit the draft" used to put the page away and show the boxes
+  // instead; the page is the draft's, so the boxes are added UNDER it. Reset
+  // when a new draft arrives: the next page is read before it is corrected.
+  const [boxesOpen, setBoxesOpen] = useState(false);
   // False while the sheet is still typing. The gate stays closed until it is
   // true, so Accept can only be pressed on text the officer has watched land.
   const [sheetTyped, setSheetTyped] = useState(true);
@@ -410,6 +431,11 @@ export default function AiNarrativePanel({
     if (stored) {
       setDraft(stored);
       setResidual(stored.residualRisk ?? []);
+      // The page comes back with it, because the page IS the draft (see
+      // `sheeted`) — a reload is not the thing that takes the officer's letter
+      // out of the assistance field. It arrives whole rather than typing itself
+      // out a second time: `sheetTyped` stays true and `revealPending` keeps the
+      // sheet from replaying the sequence (see the render below).
       setMode('done');
       setPanelOpen(true);
     }
@@ -463,15 +489,62 @@ export default function AiNarrativePanel({
   // looking at it (the case for every press of Generate in this card, which is
   // the whole point of typing the letter here instead of in the narrative panel
   // the officer would have to scroll up to).
+  // HOW BIG THE LETTER IS IN THE FIELD, AND WHY THE FIELD SCROLLS.
+  //
+  // The page is drawn as large as the frame is wide — a page filling the column
+  // it was asked for — and the frame scrolls to the rest of it, which is how any
+  // 8.5 × 11in leaf is read on a screen. `object-fit` cannot do this for a live
+  // element, and the ratio of two lengths (this box, that page) is not
+  // expressible in CSS, so the number is measured here and handed to the
+  // stylesheet as one custom property — the rule that reads it is the
+  // `.ai-sheet-preview .print-sheet` block in styles.css.
+  //
+  // Fitting the HEIGHT as well — the whole leaf on screen at once, print-preview
+  // style — was what the foot of the page used to wait for, and it made the letter
+  // about 0.38 of the page's own size: a page glanced at rather than read. The
+  // Noted by block it was protecting is reached the way the rest of a tall page
+  // is, by scrolling. The WIDTH is therefore the whole rule — and it only works
+  // because the page is allowed to take the paper the letter needs: the stylesheet
+  // gives it the leaf's 11in as a FLOOR, never a cap, or the signature block at
+  // the foot would be clipped away instead of scrolled to.
+  //
+  // Measured whenever the frame is resized, and from the moment the page is up
+  // rather than only after the typing lands: the size is the same in both states,
+  // so there is no jump at the end of the reveal, and `followTyping` above scrolls
+  // a page that is already the size the officer will read it at.
+  useEffect(() => {
+    const el = sheetViewportRef.current;
+    if (!el || !sheeted || typeof ResizeObserver !== 'function') return;
+    const sizeLeaf = () => {
+      const cs = window.getComputedStyle(el);
+      const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const availW = el.clientWidth - padX;
+      if (!(availW > 0)) return;
+      const scale = availW / SHEET_PX.width;
+      // The floor guards a degenerate box (a frame collapsed to a few pixels must
+      // not divide to nothing), and the cap keeps a very wide frame from
+      // MAGNIFYING the page past its own size — a preview enlarges nothing.
+      const next = Math.max(0.3, Math.min(1, scale)).toFixed(4);
+      if (el.style.getPropertyValue('--ai-sheet-zoom') !== next) {
+        el.style.setProperty('--ai-sheet-zoom', next);
+      }
+    };
+    sizeLeaf();
+    const ro = new ResizeObserver(sizeLeaf);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [sheeted, panelOpen, genCounter]);
+
   useEffect(() => {
     const el = sheetCardRef.current;
-    if (!sheetDraft || !el || typeof el.scrollIntoView !== 'function') return;
+    if (!sheeted || !el || typeof el.scrollIntoView !== 'function') return;
     const r = el.getBoundingClientRect();
     const vh = window.innerHeight || document.documentElement.clientHeight;
     // Already in front of them — the press came from this card. Do nothing.
     if (r.top >= 0 && r.top < vh * 0.6) return;
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [sheetDraft]);
+    // A new draft is what brings the card into view; an edit is not.
+  }, [sheeted, genCounter]);
 
   // Escape hides the draft body — the same thing the ✕ does, and the same key
   // that dismissed the docked panel before the draft moved inline. Kept because
@@ -751,8 +824,8 @@ export default function AiNarrativePanel({
           // done. Nothing is committed here — Accept is still the only writer.
           setRevealStage('done');
           setRevealOn(false);
-          setSheetDraft({ narrative: out.narrative, findingsText, statusText, scope: 'generate' });
           setSheetTyped(false);
+          setBoxesOpen(false); // the new page is read before it is corrected
         } else {
           setRevealStage('facts'); // suggestions/gaps wait for the draft to arrive
           setRevealOn(true); // play the NarrativeReveal for THIS generation
@@ -860,8 +933,8 @@ export default function AiNarrativePanel({
         // values stay the report's own (scope 'tighten' — see ReportSheetBody).
         setRevealStage('done');
         setRevealOn(false);
-        setSheetDraft({ narrative: out.narrative, scope: 'tighten' });
         setSheetTyped(false);
+        setBoxesOpen(false); // the new page is read before it is corrected
       } else {
         // Replay the typing reveal only when the prose actually changed — an
         // untouched copy animating itself would claim work it did not do. No
@@ -1016,6 +1089,23 @@ export default function AiNarrativePanel({
   const draftStatusText = draft && typeof draft.statusText === 'string'
     ? draft.statusText
     : draftedStatusLines.join('\n');
+  // THE PROPOSAL THE PAGE DRAWS, read from the live draft (see `sheeted`). The
+  // shape is ReportSheetBody's own: `scope: 'generate'` overlays all three parts
+  // of a draft, `scope: 'tighten'` overlays the narrative alone and leaves the
+  // report's two formalised fields standing — a tighten pass rewrites the
+  // officer's prose, not their record. Reading it from the draft rather than
+  // storing the request's own values beside it is what keeps the page and the
+  // boxes under it in step: an edit made in a box is on the page by the next
+  // render, and a restored draft draws its page from the same three fields the
+  // boxes hold.
+  const sheetPending = draft
+    ? {
+        narrative: draft.narrative,
+        findingsText: tightenDraft ? undefined : draftFindingsText,
+        statusText: tightenDraft ? undefined : draftStatusText,
+        scope: tightenDraft ? 'tighten' : 'generate',
+      }
+    : null;
   // THE DRAFT IS WRITTEN IN FRONT OF THE OFFICER, ONE PART AT A TIME. All three
   // parts type themselves in (NarrativeReveal) in the sheet's own order — the
   // facts, then the findings, then the action taken — each handing over to the
@@ -1061,8 +1151,11 @@ export default function AiNarrativePanel({
   // panel's plain boxes are suppressed (see `sheeted` below), the letter takes
   // their place, and the gate stays closed until the sheet reports that the last
   // value has landed.
-  const revealing = (revealOn && revealStage !== 'done') || (!!sheetDraft && !sheetTyped);
-  const sheeted = !!sheetDraft;
+  const revealing = (revealOn && revealStage !== 'done') || (sheeted && !sheetTyped);
+  // The boxes are what the officer ADDS under the page, never what takes it away
+  // (see `boxesOpen`). With no sheet host the boxes are the whole view, exactly
+  // as they were.
+  const boxesShown = !sheeted || boxesOpen;
   // Each block fades up as its own turn arrives; the sequence itself is the
   // stage machine above, so there are no animation delays to keep in step.
   const arriveClass = (base) => (revealOn ? `${base} ai-draft-arrive` : base);
@@ -1139,17 +1232,17 @@ export default function AiNarrativePanel({
   // the boxes it was typed from (the narrative, the formalised findings and the
   // disposition), and Regenerate brings the letter back to type the result again.
   const openDraftBoxes = () => {
-    setSheetDraft(null);
+    setBoxesOpen(true);
     setSheetTyped(true);
   };
 
   const closePanel = () => {
     setRevealOn(false); // unmounts NarrativeReveal — cancels its timer
     setRevealStage('done'); // reopened, the draft draws whole (see `revealing`)
-    // TASK 9 — a closed gate puts the letter away again: the uncommitted
-    // proposal is dropped (the panel's own boxes come back holding the draft,
-    // which is still here and still unwritten). Nothing reached the report.
-    setSheetDraft(null);
+    // TASK 9 (revised) — the letter is no longer dropped here. Closing the card
+    // hides it; the DRAFT is still sitting in this panel, unwritten, and "A draft
+    // is ready" is the way back to it — so the way back has to lead to the page
+    // the officer was reading. Nothing reaches the report on either route.
     setSheetTyped(true);
     setPanelOpen(false);
   };
@@ -1515,14 +1608,23 @@ export default function AiNarrativePanel({
               inset inside the first. The typewriter is followed by
               `followTyping`, so the words are never typed out of sight. */}
           {sheeted && (
-            <div className="ai-sheet-preview" ref={sheetViewportRef}>
+            <div
+              // SIZED TO THE FRAME'S WIDTH by the effect above; the frame keeps
+              // its own scrollbar for the rest of the page (see the CSS rule).
+              className="ai-sheet-preview"
+              ref={sheetViewportRef}
+            >
               <div className="print-sheet">
                 <ReportSheetBody
                   report={sheet.report}
                   ts={sheet.ts}
                   stationHeader={sheet.stationHeader}
                   recordedBy={sheet.recordedBy}
-                  pending={sheetDraft}
+                  pending={sheetPending}
+                  // A draft restored in this tab arrives WHOLE: the officer has
+                  // already watched it land once, and a replay would have the
+                  // panel acting out work it is only remembering.
+                  revealPending={!sheetTyped}
                   // A new generation replays the typing from the top.
                   revealKey={genCounter}
                   onRevealComplete={() => setSheetTyped(true)}
@@ -1738,13 +1840,14 @@ export default function AiNarrativePanel({
                         every bold field LABEL — is on screen from the first
                         frame, and only the AI's own values are revealed, one
                         character cursor walked across them top to bottom. These
-                        plain boxes are therefore the fallback, shown only with
-                        no letter to read: while a draft is being typed into the
-                        sheet (and after, until `openDraftBoxes` asks for them)
-                        they stay out of the way. Nothing on the page is in the
-                        report yet, and the gate below stays shut until the last
-                        value lands. */}
-                    {!sheeted && (<>
+                        plain boxes are the SAME draft in its own fields, and
+                        they are what "Edit the draft" adds UNDER the letter
+                        (see `boxesOpen`): the page is not put away to correct
+                        it, so the officer keeps sight of what an edit does to
+                        the document. With no sheet host they are the whole view.
+                        Nothing on the page is in the report yet, and the gate
+                        below stays shut until the last value lands. */}
+                    {boxesShown && (<>
                     <h4 className="ai-draft-label">Facts of the case</h4>
                     <div className="ai-draft">
                       {typing('facts') ? (
@@ -1924,11 +2027,11 @@ export default function AiNarrativePanel({
                               written into the report until Accept. Offered in
                               both non-guided results: a generated draft and a
                               tightened one are equally the officer's to change. */}
-                          {sheeted && (
+                          {sheeted && !boxesOpen && (
                             <button
                               type="button"
                               onClick={openDraftBoxes}
-                              title="Shows this draft as its three editable boxes — the same text, so it can be corrected before accepting."
+                              title="Shows this draft as its three editable boxes under the page — the same text, so it can be corrected before accepting."
                             >
                               Edit the draft
                             </button>

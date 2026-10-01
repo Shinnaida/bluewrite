@@ -36,7 +36,7 @@ access, exactly like the Phase 1–2 demos.
 
 ## Beyond the checklist (implemented, not in the roadmap bullets)
 
-- Reference wrapper: "Blotter Entry No. BW-xxxx" opening + "Investigated by:
+- Reference wrapper: "Investigated by:
   rank name, City of Naga Police Station" closing (`NarrativeService::withReferences`,
   regression-tested). The station name is the one the printed sheet carries
   (`ReportPrint.jsx` — "City of Naga, Cebu"); the prompt and the closing line

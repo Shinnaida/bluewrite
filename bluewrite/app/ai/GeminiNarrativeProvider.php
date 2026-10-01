@@ -1051,11 +1051,13 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             $lines[] = json_encode($masked['scalars'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         }
         // The officer's recorded disposition. It is the ONLY source for the
-        // narrative's closing action: the model reflects it and may not
-        // invent, add, or upgrade any action of its own.
+        // ACTION TAKEN / STATUS line: the model reflects it and may not
+        // invent, add, or upgrade any action of its own. It is returned as
+        // the actionTaken output line and is NEVER written into the narrative
+        // — the sheet prints this block directly beneath FACTS OF THE CASE.
         if (!empty($masked['action_taken'])) {
             $lines[] = '';
-            $lines[] = 'ACTION TAKEN / STATUS (recorded by the officer — authoritative; the ONLY disposition you may state; RESTATE its substance in formal prose, never copy it word-for-word, and add NO fact it does not state):';
+            $lines[] = 'ACTION TAKEN / STATUS (recorded by the officer — authoritative; the ONLY disposition you may state; return its substance as the actionTaken line in formal prose, never copy it word-for-word, never write it into the narrative, and add NO fact it does not state):';
             $lines[] = (string) $masked['action_taken'];
         }
         // The officer's own observations (evidence insight, behavior, tools…).

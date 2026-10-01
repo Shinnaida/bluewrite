@@ -11,6 +11,11 @@ bluewrite_extracted.txt
 # Machine-local tool state
 .freebuff/
 
+# Scratch artifacts from UI probing (dumped pages, screenshots, probe scripts),
+# written at the repo root and under bluewrite/ while a surface is being measured.
+# They are working files, not source: never commit them.
+.tmp-*
+
 # OS junk
 Thumbs.db
 .DS_Store

@@ -98,6 +98,10 @@ function prefersReducedMotion() {
  *   where scope is 'generate' (type the facts too) or 'tighten' (type only the
  *   narrative). Absent → the ordinary, fully-rendered sheet.
  * @param {number} [props.revealKey]          replays the reveal when it changes
+ * @param {boolean} [props.revealPending]     whether a pending proposal should
+ *   TYPE itself in (default true). A host drawing a draft it has already shown
+ *   the officer once — one restored from the tab's store after a reload — passes
+ *   false, and the proposal is drawn whole rather than replaying the sequence.
  * @param {Function} [props.onRevealComplete] fires once the whole sequence lands
  * @param {Function} [props.onProgress] Task 10 — how much of the sequence has
  *   been typed, as a fraction (0..1), reported once per tick while it runs. A
@@ -116,6 +120,7 @@ export default function ReportSheetBody({
   recordedBy = null,
   pending = null,
   revealKey = 0,
+  revealPending = true,
   onRevealComplete,
   onProgress,
 }) {
@@ -180,7 +185,11 @@ export default function ReportSheetBody({
   // The cursor is state, so the slice is computed DURING body construction from
   // the current render's `cursor` — no ordering problem, and a cursor change
   // simply rebuilds the body with more text revealed.
-  const [cursor, setCursor] = useState(() => (pendingOn ? 0 : Number.MAX_SAFE_INTEGER));
+  // A proposal that must not be replayed (see `revealPending`) — or one with no
+  // values to type — draws whole from the first frame, exactly as the committed
+  // sheet does.
+  const animate = revealPending && pendingOn;
+  const [cursor, setCursor] = useState(() => (animate ? 0 : Number.MAX_SAFE_INTEGER));
   const slots = [];
   let slotAcc = 0;
   const val = (text) => {
@@ -386,7 +395,7 @@ export default function ReportSheetBody({
 
   // `slotAcc` is now the whole sequence's length.
   const totalChars = slotAcc;
-  const typing = pendingOn && totalChars > 0;
+  const typing = animate && totalChars > 0;
 
   // TASK 10 — the progress handler is held in a ref so the interval below is
   // still created once per reveal, while always calling the host's LATEST

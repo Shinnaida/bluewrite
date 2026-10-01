@@ -43,12 +43,14 @@ Two invariants outrank everything below, and neither is a style preference:
 
 - Open with the **Date, Time and Place of Incident (DTPI)** before any action.
 - Then strictly chronological: orientation (who / when / where), triggering
-  event, the responding team's response and evaluation, outcome, and a closing
-  line on the recorded disposition.
-- The closing line comes from the officer's recorded **ACTION TAKEN / STATUS**
-  — never from the model's assumption. A blank field means the narrative states
-  no disposition at all, and the blank is reported to the officer as a warning
-  (the report cannot be closed without one).
+  event, the responding team's response and evaluation, then outcome. Stop on
+  the last recorded fact — the narrative carries **no disposition sentence**.
+- The recorded **ACTION TAKEN / STATUS** is still the report's only
+  disposition. It is returned as the `actionTaken` line, which the sheet prints
+  in its own block under FACTS OF THE CASE; writing it into the narrative as
+  well would print one fact twice. A blank field means no disposition is stated
+  at all, and the blank is reported to the officer as a warning (the report
+  cannot be closed without one).
 - Default to passive voice and longer coordinated sentences. The genre is
   clause-heavy; short choppy sentences read as non-native to it.
 - One to three paragraphs, plain text: no headings, no bullets, no markdown.
@@ -126,8 +128,14 @@ Rules for applying the table:
   vehicle", "said suspect", "said firearm" are correct; "said incident", "said
   report", "said date" are blotter errors — write "the incident", "the report",
   "the date".
-- **Time of day is 24-hour with the H suffix**: "1400H", "2230H". Never
-  "2 o'clock in the afternoon", never a bare "2pm".
+- **Time of day is written one of two ways, and both are the sheet's own**:
+  the part of the day — "in the early morning of", "in the morning of", "in
+  the afternoon of", "in the evening of" — or the exact time in words ("at
+  2:00 o'clock in the afternoon", "at 2:44 A.M."). What is never written is
+  the record's own notation: never "02:00 hours", never the H-suffix form
+  ("1400H", "2230H"), never a bare "2pm". **The DTPI opening states the when
+  and the date** — "On the afternoon of September 30, 2026, …" — and never
+  the record's hour-and-date machine form.
 - **Money** as "in the amount of ₱[X]"; **quantities** as "one (1) unit", "two
   (2) pieces".
 - **Complainant** is the person who reported; **victim** is the person the
@@ -176,9 +184,13 @@ situated two stalls away").
     be", "around", "unsure", "allegedly" stays hedged in the narrative *and* in
     the findings lines. Never upgrade a stated possibility into an asserted
     fact.
-  - An approximate time stays approximate: "around 2:00 o'clock in the
-    afternoon" → "at approximately 1400H", never a precise "at 1400H". An
-    estimated value is never rounded, raised, or re-estimated.
+  - An approximate time stays approximate: a hedged hour is written no more
+    exactly than the record holds — "around 2:00 o'clock in the afternoon" →
+    "at about 2:00 o'clock in the afternoon" (the record's hedge kept) or "in
+    the afternoon of" (already as loose as the record). Never a bare exact
+    reading for a hedged time, and never sharpened into a minute the record
+    does not hold. An estimated value is never rounded, raised, or
+    re-estimated.
   - Never widen a category: "a knife" is not "a bladed weapon"; "a man" is not
     "a suspect"; one (1) item is not "items"; "the door was open" is not "the
     door was forced open".
@@ -213,9 +225,10 @@ prompt):
    keeping the substance of both. Note this modifies the earlier "preserve the
    substance of every line the officer typed" rule: preservation is the default,
    merging duplicates is the one exception.
-4. **The disposition is stated twice by design — make the two different.** The
-   narrative closes on it and actionTaken is the sheet's own field; both are
-   required. They must not share a sentence shape or a distinctive phrase.
+4. **The disposition has exactly one home — the `actionTaken` line.** It is
+   never written into the narrative: the sheet prints FACTS OF THE CASE and
+   the ACTION TAKEN / STATUS block one beneath the other, so a disposition
+   sentence in the prose states the same fact twice.
 5. **No fact-free padding.** Banned: "regarding the matter", "in connection
    therewith", "the entry is on file with this station", "the incident was duly
    entered in this station's records", "this report is respectfully submitted",
@@ -224,8 +237,8 @@ prompt):
 6. **Pro-forms apply to every party, placeholders included.**
 7. **Negatives once, together** — one sentence, in the place they belong
    chronologically.
-8. **End when the facts end.** No summary sentence, no closing formula. The
-   final sentence is the disposition or the last recorded fact.
+8. **End when the facts end.** No summary sentence, no closing formula, no
+   disposition sentence (rule 4). The final sentence is the last recorded fact.
 
 The findings block has its own answers to "what is a finding?" (added
 2026-09-24, guarded by `testBaseInstructionCarriesNotableFindingsRules`):
@@ -296,7 +309,7 @@ for the analyser, `tests/rules/printActions.test.mjs` for the print block.
 
 | Glossary | Executable text | Guard |
 |---|---|---|
-| §1 structure / DTPI / closing disposition | prompt: STRUCTURE; ACTION TAKEN / STATUS | `testBaseInstructionCarriesDispositionRules`, `testBlankDispositionIsReportedAsAGap` |
+| §1 structure / DTPI / one-home disposition | prompt: STRUCTURE; ACTION TAKEN / STATUS | `testBaseInstructionCarriesDispositionRules`, `testBlankDispositionIsReportedAsAGap` |
 | §2 "alleged" rule | prompt: THE "ALLEGED" RULE | `testBaseInstructionLoadsAndStripsComments` |
 | §3 style rules | prompt: STYLE RULES | `testBaseInstructionCarriesNoNewInformationConstraint` |
 | §4 substitutions | prompt: POLICE TERMINOLOGY SUBSTITUTIONS | `testBaseInstructionCarriesTerminologySubstitutionRules`, `testDispositionRuleBindsTheNoNewInformationConstraint` |

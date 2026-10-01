@@ -832,28 +832,6 @@ final class NarrativeService
     }
 
     /**
-     * Addendum §3 — record-grounded reference wrapper (deterministic data
-     * belongs in deterministic code, NOT in model output):
-     *
-     *   closing line: "Investigated by: [rank] [name], City of Naga Police
-     *                 Station" from the logged-in officer's account (the
-     *                 same station name the printed sheet carries).
-     *
-     * The wrapper used to ALSO prepend a "Blotter Entry No. BW-0001." opening
-     * line. That line duplicated the certification sentence on the printed
-     * sheet — "This is to certify that, according to the police blotter entry
-     * # BW-0001, dated …" sits directly above FACTS OF THE CASE — so the same
-     * reference appeared twice on one page. The blotter number belongs to the
-     * certification line alone; the narrative opens on the substantive facts
-     * (Task 6). See stripLeadingBlotterRestatement() for the second line of
-     * defence against a model that restates it anyway.
-     *
-     * Evidence-tag and CCTV-request tracking numbers are deliberately NOT
-     * wired (addendum §5, open question): those modules do not exist in the
-     * current codebase, and an invented reference number in a legal
-     * document is worse than none. If/when they land, inject them here.
-     */
-    /**
      * Phase 6 Stage 3 (Invariant 6) — the leaked-token gate across EVERY text
      * field of the response, not just the narrative. The narrative and both
      * glosses are hard-gated: a mangled placeholder in any of them is the same
@@ -890,6 +868,28 @@ final class NarrativeService
         return MaskingGateway::unmaskLines([$raw], $map)[0] ?? '';
     }
 
+    /**
+     * Addendum §3 — record-grounded reference wrapper (deterministic data
+     * belongs in deterministic code, NOT in model output):
+     *
+     *   closing line: "Investigated by: [rank] [name], City of Naga Police
+     *                 Station" from the logged-in officer's account (the
+     *                 same station name the printed sheet carries).
+     *
+     * The wrapper used to ALSO prepend a "Blotter Entry No. BW-0001." opening
+     * line. That line duplicated the certification sentence on the printed
+     * sheet — "This is to certify that, according to the police blotter entry
+     * # BW-0001, dated …" sits directly above FACTS OF THE CASE — so the same
+     * reference appeared twice on one page. The blotter number belongs to the
+     * certification line alone; the narrative opens on the substantive facts
+     * (Task 6). See stripLeadingBlotterRestatement() for the second line of
+     * defence against a model that restates it anyway.
+     *
+     * Evidence-tag and CCTV-request tracking numbers are deliberately NOT
+     * wired (addendum §5, open question): those modules do not exist in the
+     * current codebase, and an invented reference number in a legal
+     * document is worse than none. If/when they land, inject them here.
+     */
     public static function withReferences(string $narrative, array $report): string
     {
         $body = trim($narrative);

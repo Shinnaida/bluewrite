@@ -18,6 +18,14 @@ export const DEPARTMENT = 'Public Safety Department';
 export const SYSTEM_TITLE = 'Official Incident Reporting System';
 
 /**
+ * The office the system serves — the station the seals belong to, and the name
+ * Home's signature line signs with. Not the department above: the department is
+ * the agency the gate and the sheet name, this is the station the officer is
+ * posted to, and the two are different facts about different things.
+ */
+export const STATION = 'City of Naga Police Station';
+
+/**
  * The writing-assistance advisory (spec §5). Not a disclaimer bolted on: it
  * states where responsibility sits, which is the whole point of an AI drafting
  * aid in a police record — the model proposes, the officer signs.

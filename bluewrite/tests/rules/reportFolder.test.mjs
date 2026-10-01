@@ -360,9 +360,15 @@ test('editing a draft is a deliberate act: it confirms, then opens the writer', 
   // to the red button archiving uses, which would dress an ordinary edit up as a
   // deletion.
   assert.match(reports, /tone: 'primary'/);
-  assert.match(reports, /confirm\.tone \?\? \(confirm\.confirmLabel === 'Finalize Report'/);
-  // The confirm is not a mutation: it opens the writer and re-reads nothing.
-  assert.match(reports, /if \(c\.kind === 'edit'\) \{\s*\n\s*c\.action\(\);\s*\n\s*return;/);
+  // THE CONFIRM BOX ITSELF IS THE SHARED MODULE'S (ReportActions.jsx), because
+  // Home puts up the same box for the same reasons — the tone fallback, and the
+  // early return that keeps an EDIT from being treated as a mutation. What stays
+  // this file's is the ASK: which confirm a draft's Edit puts up.
+  const actions = readFileSync(new URL('../../src/components/ReportActions.jsx', import.meta.url), 'utf8');
+  assert.match(actions, /confirm\.tone \?\? \(confirm\.confirmLabel === 'Finalize Report'/);
+  assert.match(actions, /if \(c\.kind === 'edit'\) \{\s*\n\s*c\.action\(\);\s*\n\s*return;/);
+  // ...and the register hands its ask to it rather than setting state itself.
+  assert.match(reports, /actions\.ask\(\{\s*\n\s*title: `Edit draft report/);
   // The row only offers Edit where the rule says so.
   assert.match(reports, /onEdit=\{askEdit\}/);
 });

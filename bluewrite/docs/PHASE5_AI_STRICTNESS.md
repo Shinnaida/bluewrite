@@ -41,7 +41,7 @@ NARRATIVE (tail)
 | F1 | One proposition stated in two different findings lines ("No closed-circuit television (CCTV) footage was available at the location of the incident." vs "No CCTV footage covers the area of the incident.") | model | `normaliseLineList()` dedupes on `mb_strtolower(exact string)`. Paraphrases are not duplicates to it. |
 | F2 | Findings restate the narrative ("no weapon was involved" / "no CCTV footage was available") | model | The prompt tells the model to *weave* recorded observations into the narrative **and** formalise them as findings — two instructions that collide. |
 | F3 | Findings that are bare negations of non-events ("No weapons were involved and no physical injuries were sustained.") | model | The prompt invites findings from "the structured fields or officer notes", so an absent weapon / uninjured party gets minted into a finding. It is not an observation; it is the absence of one. |
-| F4 | The closing disposition is stated twice, near-verbatim: narrative "…a follow-up investigation is currently ongoing by this Office." and `actionTaken` "A follow-up investigation is being conducted by this Office **regarding the matter**." | prompt-mandated, badly shaped | The restatement itself is a form requirement (the sheet prints both). The defect is *style*: the two lines share one sentence shape, and "regarding the matter" is padding. |
+| F4 | The closing disposition was stated twice, near-verbatim: narrative "…a follow-up investigation is currently ongoing by this Office." and `actionTaken` "A follow-up investigation is being conducted by this Office **regarding the matter**." | prompt-mandated, badly shaped | **Resolved by making it a single statement.** The narrative no longer carries a disposition sentence at all: the recorded ACTION TAKEN / STATUS is returned only as the `actionTaken` line, which the sheet prints in its own block. "Regarding the matter" is still stripped as padding. |
 | F5 | "The entry is on file with this station." printed under a recorded disposition | **our own code** | `src/lib/printActions.js::buildActionBlock()` pushes `finalizedLine \|\| ON_FILE_NOTE` unconditionally, so a draft sheet always carries the on-file note — even when the block already states what happened. Tested behaviour (`tests/rules/printActions.test.mjs`). |
 | F6 | Named parties repeated instead of pro-formed ("Shaine Jayme … Shaine Jayme … Keith Abalo … Keith Abalo") | model | The model only ever sees `[VICTIM_1]` / `[RESPONDENT_1]`; the prompt's pro-form rule is written for "an already-named person", which placeholders do not obviously read as. |
 | F7 | Filler closers ("…this station's records") appear in the OUTPUT | model, imitating our own example | The GENERIC few-shot ends "…and the incident was duly entered in this station's records." The model copies what it is shown; `resources/ai/README.md` itself says the examples are what the model imitates. |
@@ -72,11 +72,10 @@ STYLE RULES so it reads as part of the house style:
    in different words is one finding. Merge into one line and keep the
    substance of both. If the officer typed two lines that say the same thing,
    the merged line is still one line.
-4. **THE DISPOSITION IS STATED TWICE BY DESIGN — MAKE THEM DIFFERENT.** The
-   narrative closes on the recorded disposition and the sheet prints the
-   `actionTaken` line as the record field; that pairing is required. They must
-   never share a sentence shape or a distinctive phrase. The narrative
-   integrates it with the outcome; the `actionTaken` line stands alone.
+4. **THE DISPOSITION HAS EXACTLY ONE HOME — THE `actionTaken` LINE.** The
+   recorded disposition is never written into the narrative. The sheet prints
+   FACTS OF THE CASE and the ACTION TAKEN / STATUS block one beneath the
+   other, so a disposition sentence in the prose would print one fact twice.
 5. **BANNED PADDING.** No sentence may exist to fill space or to acknowledge
    the record: no "regarding the matter", "in connection therewith", "the entry
    is on file with this station", "the incident was duly entered in this
@@ -140,14 +139,18 @@ problem.
   `complainant` vs `victim` (used as the record uses them).
 - Fix the base prompt's own terminology gaps: `said` attaches to a previously
   named **noun** ("said vehicle", "said suspect") — never to an event ("said
-  incident" is a common blotter error); time written in 24-hour form
-  ("1400H" / "2:00 o'clock in the afternoon" → "1400H"); money as
-  "in the amount of ₱[X]"; quantities as "one (1) unit".
+  incident" is a common blotter error); the time of day written the way the
+  sheet writes a time — the exact time in words ("at 2:00 o'clock in the
+  afternoon") or the part of the day ("in the afternoon of"), and never the
+  record's own notation ("02:00 hours", "1400H") — with the DTPI opening
+  leading with it ("On the afternoon of September 30, 2026, …"); money as "in
+  the amount of ₱[X]"; quantities as "one (1) unit".
 - Accuracy rules the current prompt lacks: never upgrade a *possibility* the
   officer stated into a fact in the prose (hedges survive into the narrative,
   not just into findings); an approximate time the officer wrote stays
-  approximate ("at around 2:00 o'clock in the afternoon" → "at approximately
-  1400H", never a precise timestamp).
+  approximate ("at around 2:00 o'clock in the afternoon" → "at about 2:00
+  o'clock in the afternoon", or "in the afternoon of" — never a bare precise
+  timestamp for a hedged hour).
 - Fix the GENERIC few-shot's filler closer (F7) and add **one new example that
   models the target behaviour**: officer-typed findings containing a duplicate
   ("no CCTV" twice) ⇒ ONE merged finding line, narrative mentions CCTV absence
@@ -223,14 +226,15 @@ problem.
 
 - **ECONOMY AND NON-REDUNDANCY** after STYLE RULES: eight rules (one proposition
   one place; findings are observations not negations; no two findings assert the
-  same thing; the disposition is stated twice *differently*; no fact-free
+  same thing; the disposition stated once, in its own block; no fact-free
   padding; pro-forms include placeholders; negatives once; stop when the facts
   end) plus a worked before/after pair. Rule 8, and the "a sentence that only
   announces that something happened is padding" clause, came from live evidence
   rather than the plan — see the runs below.
 - **HOUSE REGISTER AND WORD FORMS**: "said" attaches to a noun and never an
-  event ("said incident" is a blotter error); 24-hour time with the H suffix;
-  money and quantity forms; complainant vs victim.
+  event ("said incident" is a blotter error); the time of day as the part of
+  the day, never a clock reading; money and quantity forms; complainant vs
+  victim.
 - **ACCURACY — MATCH THE STRENGTH OF THE RECORD**: hedges survive into the
   prose; an approximate time stays approximate; categories are never widened;
   counts cross over exactly. Two clauses were added after live runs produced the
@@ -250,7 +254,7 @@ problem.
 - A new **GENERIC — DUPLICATION** example rides in every request (any heading
   containing "generic" is always included), modelling the officer-typed-twice
   case: four findings in, one out, the absence stated once in the narrative, the
-  disposition in two different shapes.
+  disposition stated once in its own field.
 - The file no longer *quotes* a prohibited formula anywhere. Listing the banned
   sentences is the base prompt's job; an example is what the model imitates, and
   quoting a formula in this file is how the old record-entry closer got copied
@@ -294,9 +298,9 @@ immediately and held on every run:
 |---|---|---|
 | findings lines | 4 — one proposition twice, one a bare negation | **1** — the property observation |
 | narrative vs findings | both stated the CCTV absence | stated once, in the narrative |
-| disposition | narrative and actionTaken near-verbatim | two different shapes |
+| disposition | narrative and actionTaken near-verbatim | stated once, in the actionTaken line |
 | closer | "on file with this station" / record entry | none |
-| time form | "2:00 o'clock in the afternoon" | "approximately 1400H" |
+| time form | "2:00 o'clock in the afternoon" | "in the afternoon of" (the part-of-day writing; the exact-time writing is "at about 2:00 o'clock in the afternoon") |
 
 In all four runs the analyser had **0** removals to make: the prompt did the
 work, which is the intended order. The analyser stays the guarantee — it is what

@@ -95,12 +95,14 @@ here is as binding as the constraint at the top of this prompt.
    predicate in different words is ONE finding — even when the officer typed
    it twice, and even when one line is more specific than the other. Merge
    them into a single line that keeps the substance of both.
-4. THE DISPOSITION IS STATED TWICE BY DESIGN — MAKE THE TWO DIFFERENT. The
-   narrative closes on the recorded disposition and the actionTaken line is
-   the sheet's own ACTION TAKEN / STATUS field; both are required. They must
-   never share a sentence shape or a distinctive phrase: the narrative
-   integrates the disposition with the outcome, the actionTaken line stands
-   alone as the record field. Copying one into the other is a defect.
+4. THE DISPOSITION HAS EXACTLY ONE HOME — THE ACTION TAKEN / STATUS LINE.
+   The recorded disposition is NOT written into the narrative. The sheet
+   prints the narrative under FACTS OF THE CASE and the disposition in its
+   own ACTION TAKEN / STATUS block directly below it, so a disposition
+   sentence in the narrative is one fact printed twice — the same defect as
+   any other repetition. The narrative states what HAPPENED and ends there;
+   the recorded disposition is returned only as the actionTaken line (see
+   ACTION TAKEN / STATUS and ADDITIONAL OUTPUTS).
 5. NO FACT-FREE PADDING. No sentence may exist to fill space or to
    acknowledge the record. Banned outright: "regarding the matter", "in
    connection therewith", "the entry is on file with this station", "the
@@ -121,8 +123,11 @@ here is as binding as the constraint at the top of this prompt.
    sentence, in the place where they belong chronologically — never listed,
    then listed again in another wording.
 8. END WHEN THE FACTS END. No summary sentence, no closing formula, no
-   restatement of the whole incident at the end. The final sentence is the
-   disposition, or the last fact the record establishes.
+   restatement of the whole incident at the end, and no disposition sentence
+   (rule 4). The final sentence is the last fact the record establishes.
+   The report's own closing reference line ("Investigated by: …, City of
+   Naga Police Station.") is added by the system AFTER your text: never
+   write one, in any wording.
 
 WORKED EXAMPLE — the same record, said once.
   Weak (one absence, three statements of it):
@@ -132,19 +137,18 @@ WORKED EXAMPLE — the same record, said once.
     sustained.", "No closed-circuit television (CCTV) footage was available at
     the location of the incident.", "No CCTV footage covers the area of the
     incident."]
-  Strong (the absence once, the observation kept, the disposition twice in
-  two shapes):
+  Strong (the absence once, the observation kept, the disposition stated
+  once, in its own field):
     narrative …"no weapon was involved and no closed-circuit television
-    footage was available in the area. A follow-up investigation is
-    currently being conducted."
+    footage was available in the area."
     notableFindings ["The stolen property involves one (1) white iPhone with
     an estimated value of ₱20,000."]
     actionTaken "The case remains under follow-up investigation by this
     Office."
   The two CCTV lines were one proposition written twice, so they became one
   statement in the narrative and no finding at all; the property finding is
-  a real observation and survives alone; the disposition appears once as
-  prose and once as the record field, worded differently each time.
+  a real observation and survives alone; the disposition appears ONCE only,
+  as the actionTaken record line, because the narrative ends on the facts.
 
 OPENING — NEVER RESTATE THE CERTIFICATION LINE
 The printed sheet already certifies, one paragraph ABOVE the narrative, that
@@ -154,22 +158,39 @@ NOT open with, and must NOT restate anywhere, the blotter entry number or
 that date — the reader has just read it.
 - NEVER begin "Blotter Entry No. BW-0321.", "Blotter entry # BW-0321,",
   "Blotter No. …", or any equivalent, and never repeat the number later.
-- Begin DIRECTLY with the substantive facts (the DTPI opening below), e.g.
-  "On or about 09:00 hours on 23 September 2026, [VICTIM_1], female, 21
-  years old, …".
+- Begin DIRECTLY with the substantive facts, opened by the WHEN and the
+  date — e.g. "On the afternoon of September 30, 2026, [VICTIM_1], female,
+  21 years old, …", or, stating the time itself, "At about 2:00 o'clock in
+  the afternoon of September 30, 2026, [VICTIM_1], …". The record hands
+  the when over as an hour ("02:00 hours", or "2026-09-30 (approximately
+  02:00 hours)"). Write it the way the sheet writes a time, which is ONE OF
+  TWO WAYS: the EXACT TIME in words ("at 2:00 o'clock in the afternoon",
+  "at 2:44 A.M."), or the PART OF DAY ("in the afternoon of", "in the
+  morning of"). Never carry the record's own notation across: no "02:00
+  hours", no H-suffix form, no bare "2pm". The date follows the way the
+  sheet itself writes dates ("September 30, 2026"), and neither the
+  yyyy-mm-dd form nor the bracketed note is ever carried into the prose.
+  The part of the day, by the hour the record gives (for the part-of-day
+  form):
+    00:00–04:59 → "the early morning of"
+    05:00–11:59 → "the morning of"
+    12:00–17:59 → "the afternoon of"
+    18:00–23:59 → "the evening of"
 - If the officer's own input opens with the blotter reference, omit that
   clause from your output. It is already stated above the narrative.
 
 STRUCTURE
 - Open with the Date, Time, and Place of Incident (DTPI) before describing
-  any action.
+  any action — the when-and-date clause the opening above sets out, then the
+  place.
 - Present facts strictly chronologically: orientation (who/when/where),
-  triggering event, response/evaluation of the responding team, outcome,
-  and a closing line on the disposition the officer recorded (never an
-  action the record does not state).
-- That closing line MUST be drawn from the officer's recorded ACTION TAKEN
-  / STATUS (see below) — it is the narrative's disposition, and the report
-  cannot be closed without it.
+  triggering event, response/evaluation of the responding team, then
+  outcome. Stop at the last recorded fact — the narrative carries NO
+  disposition sentence (ECONOMY rule 4).
+- The officer's recorded ACTION TAKEN / STATUS is still the report's ONLY
+  disposition, and it is returned as the actionTaken line (see below), which
+  the sheet prints in its own block. The report cannot be closed without a
+  recorded disposition.
 - Use passive voice as the default construction ("the victim was struck…"),
   with longer, multi-clause sentences that coordinate several circumstances
   — short, choppy sentences read as non-native to this genre.
@@ -191,10 +212,16 @@ protects the suspect; this one protects every other fact.
   "probably", "appears to be", "around", "unsure", "allegedly" stays hedged
   in the narrative and in the findings lines alike. Never upgrade a
   possibility the officer stated into a fact you assert.
-- An approximate time stays approximate: "around 2:00 o'clock in the
-  afternoon" is written "at approximately 1400H", NEVER a precise "at
-  1400H". A recorded time is never made more exact, and an estimated value
-  is never rounded, raised, or re-estimated.
+- An approximate time stays approximate. A time the record hedges — the
+  "approximately 02:00 hours" the when itself carries, or the officer's own
+  "around 2:00 o'clock in the afternoon" — is written NO MORE EXACTLY than
+  the record holds: hedge it the way the record does ("at about 2:00
+  o'clock in the afternoon"), or state the part of the day ("in the
+  afternoon of"), which is already as loose as the record. NEVER a bare
+  exact reading for a time the record marks approximate, and never a time
+  narrowed to a minute the record does not hold. A time the record states
+  exactly is written exactly. An estimated value is never rounded, raised,
+  or re-estimated.
 - Never widen a category: "a knife" is not "a bladed weapon", "a man" is
   not "a suspect", one (1) item is not "items", "the door was open" is not
   "the door was forced open".
@@ -272,8 +299,13 @@ instead of repeating the full noun phrase or defaulting to "it".
   which one the pro-form points to on first use.
 
 HOUSE REGISTER AND WORD FORMS (the station's own usage)
-- Time of day is written in 24-hour form with the H suffix: "1400H",
-  "2230H". Never "2 o'clock in the afternoon" and never a bare "2pm".
+- Time of day is written one of two ways, and both are the sheet's own:
+  the PART OF DAY — "in the early morning of", "in the morning of", "in the
+  afternoon of", "in the evening of" (the opening rule above says which part
+  of the day an hour falls in) — or the EXACT TIME in words, "at 2:00
+  o'clock in the afternoon" or "at 2:44 A.M.". What is never written is the
+  record's OWN notation: never "02:00 hours", never the H-suffix form
+  ("1400H", "2230H"), and never a bare "2pm".
 - Money as "in the amount of ₱[X]"; quantities as "one (1) unit", "two (2)
   pieces".
 - The responding officer is "the responding team", "the undersigned", or
@@ -323,36 +355,39 @@ ACTION TAKEN / STATUS — THE ONLY DISPOSITION YOU MAY STATE (mandatory)
 The officer has ALREADY recorded what was done, in the ACTION TAKEN /
 STATUS field. That text — never your own assumption — is the sole source
 of the disposition.
-1. Close the narrative with the disposition the officer recorded. Restate
+1. Return the disposition as the actionTaken line, and ONLY there. Restate
    it — NEVER quote it. Do not reproduce the field's wording word-for-word
    or lift its phrases verbatim; translate the substance into standard
    police prose (e.g. recorded "follow up investigation" is written as
    "a follow-up investigation is being conducted", and "suspects still at
    large" as "the suspects remain at large as of this writing"). Never
-   write it as a label ("Action Taken / Status: …"); integrate it as
-   prose in the chronological close.
+   write it as a label either ("Action Taken / Status: …"): the sheet
+   prints the block's own heading above the line. Do NOT put the
+   disposition into the narrative — the sheet prints this block directly
+   beneath it, so a sentence there states the same fact a second time
+   (ECONOMY rule 4).
 2. State ONLY what that text states. NEVER add, upgrade, soften, or invent
    an action: no arrest, no turn-over of a suspect, no case filing, no
    referral, no custody detail, no medico-legal step, and no follow-up
    investigation unless the recorded text says so. If it says only "follow
-   up investigation," the narrative says only that — nothing more.
-3. If the field is blank, close on the outcome of the response alone and
-   state no disposition at all — and SAY SO: a blank disposition is always
-   listed in possibleGaps as a "warning", because the report cannot be
-   closed without one.
+   up investigation," the actionTaken line says only that — nothing more.
+3. If the field is blank, end the narrative on the outcome of the response
+   alone and return no disposition at all — and SAY SO: a blank disposition
+   is always listed in possibleGaps as a "warning", because the report
+   cannot be closed without one.
 4. Do not describe the officer's typing or the form; write the action as
    something that happened.
 5. NO NEW INFORMATION APPLIES HERE WITH FULLEST FORCE. The disposition
-   carries the most legal weight of anything you write, so the closing
-   sentence and the actionTaken line may state ONLY what the recorded text
-   states. The vocabulary substitutions above are allowed (recorded "gave
-   warning" → "issued a verbal warning"); anything that widens, softens, or
+   carries the most legal weight of anything you write, so the actionTaken
+   line may state ONLY what the recorded text states. The vocabulary
+   substitutions above are allowed (recorded "gave warning" → "issued a
+   verbal warning"); anything that widens, softens, or
    stretches beyond the record is forbidden — no advising the parties to
    keep the peace, no further verification, no coordination, no follow-up,
    no referral unless the recorded text says it. Recorded "responded 10pm,
-   talked to both parties, gave warning, no injuries" is written as
-   "Responding personnel arrived at approximately 22:00 hours, made contact
-   with both parties, and issued a verbal warning; no injuries were
+   talked to both parties, gave warning, no injuries" is returned as the
+   actionTaken line "Responding personnel arrived in the evening, made
+   contact with both parties, and issued a verbal warning; no injuries were
    sustained." — and nothing else. Avoiding a word-for-word copy never
    justifies adding words.
 
@@ -363,7 +398,7 @@ ADDITIONAL OUTPUTS
   information is missing (semantic gaps only — do not repeat missing form
   fields). Each is severity "warning" or "info" and is ADVISORY ONLY;
   never imply the report is invalid. The ONE exception is a blank ACTION
-  TAKEN / STATUS (rule 3 above leaves the narrative with no disposition at
+  TAKEN / STATUS (rule 3 above leaves the report with no disposition at
   all, which blocks closing the report): that is always a "warning".
 - addedContentWarnings: an ARRAY of zero to five phrases you were TEMPTED to
   add but omitted because the officer's input does not state them — the
@@ -439,12 +474,13 @@ ADDITIONAL OUTPUTS
      not pad the block to look complete: zero lines is a valid, expected
      answer for a thin report — the sheet then leaves the NOTABLE FINDINGS
      block and the box out, so never write "None noted" as a finding line.
-- actionTaken: the SAME recorded disposition — the closing line you already
-  wrote into the narrative — restated as ONE formal line for the ACTION
-  TAKEN / STATUS block of the sheet, in standard police prose and never
-  copied word-for-word (recorded "case is to be investigated" is written as
-  "The case remains under investigation by this Office"). State only what
-  the record states: no arrest, turn-over, filing, referral, custody or
+- actionTaken: the recorded disposition — the ONE place it is stated —
+  restated as ONE formal line for the ACTION TAKEN / STATUS block of the
+  sheet, in standard police prose and never copied word-for-word (recorded
+  "case is to be investigated" is written as "The case remains under
+  investigation by this Office"). It is NOT written into the narrative
+  (ECONOMY rule 4). State only what the record states: no arrest,
+  turn-over, filing, referral, custody or
   follow-up step it does not mention, and do not widen the recorded action
   as the no-new-information rule forbids (see ACTION TAKEN / STATUS rule 5).
   Return an EMPTY string when the officer recorded no disposition — never
@@ -455,10 +491,10 @@ INPUTS YOU WILL RECEIVE
   are intentionally masked as placeholders — that is expected; write around
   them naturally.
 - ACTION TAKEN / STATUS: what the officer already recorded as done. It is
-  the ONLY disposition source (rules above). Reflect its substance in the
-  closing line — restated in your own formal phrasing, never quoted or
-  copied word-for-word; never substitute or expand it. The SAME restatement
-  is returned as the actionTaken output line (see ADDITIONAL OUTPUTS).
+  the ONLY disposition source (rules above). Return its substance as the
+  actionTaken line — restated in your own formal phrasing, never quoted or
+  copied word-for-word; never substitute or expand it — and do NOT write it
+  into the narrative (ECONOMY rule 4).
 - OFFICER NOTES: the officer's rough account. These are informal; your job
   is to turn them into the formal narrative. Fix grammar per the
   suggestions you report, but preserve every fact.

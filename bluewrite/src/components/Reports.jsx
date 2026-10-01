@@ -11,6 +11,10 @@ import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/a
 // The row menu lives in its own file now: the dashboard chart offers the same
 // right-click menu on a day of "Reports over time".
 import RowMenu from './RowMenu.jsx';
+// The report row's actions (Open / History / Print / Archive) and the dialogs
+// that ask for them. Shared with Home, which offers the same actions on the same
+// records — see the module for what is shared and what is the caller's.
+import { SnapshotDiff, useReportRowActions } from './ReportActions.jsx';
 // The register is a SHELF OF FOLDERS now: one glass folder per incident type
 // per status shelf, and opening a folder lists the reports inside it.
 import GlassFolder from './GlassFolder.jsx';
@@ -40,6 +44,18 @@ import ReportSheetBody from './ReportSheetBody.jsx';
 // ReportPrint's own header for the print side.
 import pnpSeal from '../assets/pnp-logo.png';
 import citySeal from '../assets/city-of-naga-seal.png';
+// The office's own mark: the shield whose left arc is the band's gold and whose
+// right is the brand blue, with the pen laid across it. A FILE rather than a
+// drawing for the same reason the two seals are files — an icon set can copy a
+// shape, but it cannot be the station's own logo — and its navy background has
+// been keyed out, so the shield's interior is whatever it is sitting on (see
+// .ir-home-hero-mark).
+import brandMark from '../assets/bluewrite-mark.png';
+// The office and the build Home's signature line signs with. Both are stated
+// once, in lib/appInfo, because the gate and About state the version too — a
+// second typed-out copy is how a footer ends up advertising a version the
+// system no longer is.
+import { APP_VERSION, STATION } from '../lib/appInfo.js';
 import ConnectionNotice from './ConnectionNotice.jsx';
 import {
   INCIDENT_TYPES,
@@ -62,6 +78,10 @@ import {
   rowFieldVisible,
 } from '../lib/reportRules.js';
 import { optionLabel } from '../lib/dropdownOptions.js';
+// Home's live wall clock: the working time on Philippine Standard Time. The
+// formatter (which zone, which shape) lives in the module so the readout here
+// and its test read one definition.
+import { readPhilippineClock } from '../lib/philippineClock.js';
 // Phase 7 — the account read's merge rules (POST /ai/classify → the form).
 // Pure and separately tested: it owns the ONE rule the silent fill depends on,
 // which is that it fills blanks and touches nothing the officer has written.
@@ -107,9 +127,11 @@ import ReportVerificationPanel from './ReportVerificationPanel.jsx';
 // disclaimer, which reads like a fault on a form that otherwise works. The
 // component is untouched and returns with the glossary — see `termsPanel` below
 // for the two places to re-add it.
-// Home's backdrop only — the animated grid behind the wordmark and the register
-// tail. Nothing else in the app renders it (see HomeGrid.jsx).
-import HomeGrid from './HomeGrid.jsx';
+// HomeGrid is deliberately NOT imported any more. Home's animated backdrop was
+// the only thing that rendered it, and Home now opens on a navy band instead
+// (see the note on `.ir-home-hero`); a texture behind a hero and two white cards
+// was one texture too many. The component and its stylesheet are still in the
+// tree, unmodified, so putting it back is one import and one tag.
 // The official-document stylesheet: the navy top bar, page head, card panels,
 // field labels and signature blocks. Shared by every screen now that the whole
 // application uses this look (the tokens themselves live in styles.css).
@@ -212,41 +234,6 @@ function emptyShelfNote(shelf, { archived, awaiting }) {
   return shelf.key === 'draft'
     ? 'No drafts here — a new report starts on this shelf.'
     : 'Nothing submitted here yet.';
-}
-
-// Collapsible raw snapshot from a report_history row (Item 1).
-// The API stores a full JSON snapshot per change; a field-level diff view
-// would need paired snapshots to be trustworthy, so we show the raw JSON
-// collapsed by default instead of a fragile hand-rolled diff.
-function SnapshotDiff({ snapshot }) {
-  const [open, setOpen] = useState(false);
-  let pretty = snapshot;
-  try {
-    pretty = JSON.stringify(JSON.parse(snapshot), null, 2);
-  } catch {
-    // snapshot wasn't valid JSON — show it as-is
-  }
-  return (
-    <div style={{ marginTop: '0.25rem' }}>
-      <button type="button" onClick={() => setOpen((v) => !v)}>
-        {open ? 'Hide snapshot' : 'Show snapshot'}
-      </button>
-      {open && (
-        <pre
-          style={{
-            maxHeight: '14rem',
-            overflow: 'auto',
-            fontSize: '0.75rem',
-            background: 'var(--panel-raised)',
-            padding: '0.5rem',
-            marginTop: '0.35rem',
-          }}
-        >
-          {pretty}
-        </pre>
-      )}
-    </div>
-  );
 }
 
 // Labels for the fields validation can flag — used by the error summary so
@@ -463,7 +450,11 @@ function IrCard({
               station's own stationery. The numeral and title already name the
               section, so it is decorative and carries no text. */}
           <span className="ir-card-dot" aria-hidden="true" />
-          {num && <span className="ir-card-num">{num}.</span>}
+          {/* The numeral is a PLATE, not a phrase: it is centred in a fixed box
+              on the bar (see .ir-card-num), so the ordinal's period has nowhere
+              to sit — the box is the separator. The sheet puts the period back,
+              because a page numbers its sections with a bare ordinal. */}
+          {num && <span className="ir-card-num">{num}</span>}
           {title && <span>{title}</span>}
           {/* The right-aligned context label, pushed to the far edge by its own
               margin (see the stylesheet) so it aligns whether or not the card
@@ -997,33 +988,15 @@ function ReportProgressStepper({ complete, current, onJump, withReview = false, 
     '--ir-stepper-inset': `${50 / count}%`,
     '--ir-stepper-dots': count,
   };
-  // The progress the reference's pill shows ("SECTION 1 OF 5 • 20%"). Derived
-  // from the same `complete` array the tick faces use, so the number and the
-  // tiles can never disagree.
-  const doneCount = complete.filter(Boolean).length;
-  const pct = Math.round((doneCount / STEPPER_STEPS.length) * 100);
+  // NO HEAD ROW. A caption ("Report completion") and a count pill ("SECTION 1 OF
+  // 5 • 20%") used to open this panel, divided off from the tiles by a hairline.
+  // Both of them restated what the rail already draws a few pixels below: the
+  // officer's POSITION is the emphasised tile, and COMPLETENESS is the five faces
+  // above the labels. Two summary lines over two channels they summarise can only
+  // be read by looking away from the thing being summarised, so they are gone by
+  // request and the panel opens on the tiles.
   return (
     <div className="ir-stepper">
-      <div className="ir-stepper-head">
-        {/* The document's own display face and ink, like .ir-title: this is
-            part of the report, not browser chrome. */}
-        <span className="ir-stepper-caption">Report completion</span>
-        {/* The count follows the emphasis, always: sections in the document
-            format (the first one still open), steps in the stepped format (the
-            panel on screen, review included). A head that disagreed with the
-            dot it sits above is exactly the bug this replaced. */}
-        <span className="ir-stepper-count">
-          {/* The word follows the WALK: "Step" where there is a Review step to
-              walk to, "Section" where the five sections are the whole flow. */}
-          {here === null
-            ? `Section ${current + 1} of ${STEPPER_STEPS.length}`
-            : withReview
-              ? `Step ${here + 1} of ${count}`
-              : `Section ${here + 1} of ${STEPPER_STEPS.length}`}
-          {' • '}
-          {pct}%
-        </span>
-      </div>
       {/* The steps are TILES now (spec: the reference's five progress tiles),
           so the connecting track the rail used to draw has no job and is gone.
           The custom properties still ride on the LIST, which is the grid that
@@ -1640,134 +1613,559 @@ function ReportReview({ draft, user, complete, onGoToSection, edit }) {
   );
 }
 
+/** The tick's period: one second, because the readout shows seconds. */
+const PHILIPPINE_TICK_MS = 1000;
+
+/** Is this character one of the clock's figures?
+ *
+ * It decides which characters of the reading get a slot of their own (see
+ * HomeClock), and it is deliberately a comparison rather than a `/\d/`: the
+ * reading is ASCII by construction and this runs over it every second. */
+const isClockDigit = (ch) => ch >= '0' && ch <= '9';
+
+// ---------------------------------------------------------------------------
+// Home's own marks, inlined.
+//
+// WHY A MAP RATHER THAN TEN INLINE SVGS. The band and the cards below it carry
+// ten marks between them — the clock, the document on the banner and on every
+// draft row, the calendar and the officer on a row's meta, the arrow on both "go"
+// controls, the kebab, the shield on REMEMBER's heading and the three beneath it.
+// Written out at each use site (which is the house style elsewhere in
+// this file) that is ten SVG literals interleaved with the page's markup, and
+// the page stops being readable at the one screen an officer reads before they
+// have written anything. The geometry is identical either way.
+//
+// The paths are an open icon set's own 24×24 drawings (lucide.dev, ISC licence)
+// and they are INLINED rather than fetched: the station's LAN has no internet,
+// and an icon font or a CDN copy would be a page that loses its marks the moment
+// the link is down. Everything here is decoration — each call site is marked
+// `aria-hidden`, and a control with no visible label carries its own.
+// ---------------------------------------------------------------------------
+const SHIELD_PATH =
+  'M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z';
+const HOME_MARK_PATHS = {
+  // A shield, on its own: REMEMBER's heading wears it (see the aside) — and
+  // `shieldCheck` below is the same outline with a tick in it. The hero's own
+  // lockup does NOT use this: it wears the office's logo, which is a file.
+  shield: [SHIELD_PATH],
+  clock: ['M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0', 'M12 6.4V12l4 2.4'],
+  // A document with a folded corner and two lines: a report that EXISTS. Home's
+  // own action uses `filePen` below instead, because a page is something you
+  // read and this control is how one comes to exist.
+  file: [
+    'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z',
+    'M14 2v6h6',
+    'M9 13h6',
+    'M9 17h6',
+  ],
+  filePen: [
+    'M12.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v9.34',
+    'M14 2v5a1 1 0 0 0 1 1h5m-9.622 4.622a1 1 0 0 1 3 3.003L8.36 20.637a2 2 0 0 1-.854.506l-2.867.837a.5.5 0 0 1-.62-.62l.836-2.869a2 2 0 0 1 .506-.853z',
+  ],
+  calendar: [
+    'M8 2v4',
+    'M16 2v4',
+    'M3 10h18',
+    'M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+  ],
+  person: [
+    'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2',
+    'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  ],
+  arrow: ['M5 12h14', 'm12 5 7 7-7 7'],
+  // Three dots, each a zero-length stroke with a round cap — the icon set's own
+  // way of drawing them, so they stay centred at any size.
+  more: ['M12 5h.01', 'M12 12h.01', 'M12 19h.01'],
+  lock: [
+    'M5 11a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z',
+    'M8 9V7a4 4 0 0 1 8 0v2',
+  ],
+  shieldCheck: [SHIELD_PATH, 'm9 12 2 2 4-4'],
+};
+
+/** One inlined mark. Size and stroke are the call site's, because the same
+ *  drawing is a 32px readout on the band and a 13px cue inside a row. */
+function HomeMark({ name, size = 18, stroke = 1.7, className }) {
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={stroke}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {HOME_MARK_PATHS[name].map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  );
+}
+
+/**
+ * The station photograph on Home's band, IF one has been supplied.
+ *
+ * `import.meta.glob` rather than a plain import, and that is the whole reason
+ * this is a lookup: a plain `import hero from '../assets/home-hero.jpg'` is a
+ * BUILD ERROR when the file is not there, and the photograph is optional — the
+ * band is designed to stand on its own navy. With a glob, no match is an empty
+ * object and the answer is null, so the band simply draws without a photo.
+ *
+ * HOW TO SUPPLY ONE: drop the file in `src/assets/` named `home-hero`, with any
+ * of .jpg / .jpeg / .png / .webp. It is hashed into the bundle like every other
+ * asset (the station has no internet, so it must not be a remote URL) and no
+ * code change is needed. A wide picture works best — the band draws the WHOLE
+ * frame, at its own height and behind a navy scrim — so it wants a landscape
+ * photograph rather than a square one. If the file's proportions change, the one
+ * number to follow it is the `aspect-ratio` on .ir-home-hero-photo.
+ */
+const HOME_HERO_PHOTO =
+  Object.values(
+    import.meta.glob('../assets/home-hero.*', { eager: true, query: '?url', import: 'default' })
+  )[0] ?? null;
+
+// ===========================================================================
+// HomeClock — the station's working time, ticking, on the officer's Home.
+//
+// WHAT IT IS FOR. An officer writing a report reads the incident time off the
+// clock in the room; the app records times on Philippine Standard Time, and the
+// two have to agree, so the page that starts the work shows the same clock the
+// record does — with the zone spelled out under it rather than assumed.
+//
+// IT OWNS ITS OWN TICK. `now` is state HERE rather than in ReportWelcome, so the
+// second hand re-renders one line instead of the whole page (the register tail
+// below it is a list of reports and has no reason to redraw every second). Same
+// shape as the gate's own PHT clock in Login.jsx, whose interval is likewise
+// scoped to the component that renders the readout.
+//
+// The interval is cleared on unmount, because Home is a VIEW: navigating to My
+// Reports or a report unmounts this, and a timer left behind would keep writing
+// to a component that is gone.
+//
+// No `aria-live`: a readout that announced itself every second would make the
+// page unusable with a screen reader. It is read when the officer reads it.
+function HomeClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), PHILIPPINE_TICK_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const clock = readPhilippineClock(now);
+  // An unreadable date renders nothing at all: a clock is a readout, and a
+  // readout that says "--:--:--" beside a real report list is worse than absent.
+  if (!clock.time) return null;
+
+  return (
+    <p className="ir-hero-clock" title={`${clock.date} · ${clock.label}`}>
+      {/* The mark comes FIRST and the reading follows it, because on the band
+          the clock is one of two blocks and has to be found by shape as well as
+          by size. It is the mark's own gold, which on navy is the only accent
+          Home spends outside the action button. */}
+      <span className="ir-hero-clock-mark" aria-hidden="true">
+        <HomeMark name="clock" size={32} stroke={1.8} />
+      </span>
+      <span className="ir-hero-clock-readout">
+        {/* EVERY FIGURE IN A SLOT OF ITS OWN, and it is the fix for a measured
+            defect rather than a flourish: the band's clock is anchored to the
+            right end of a `space-between` row, so anything that changes the
+            width of this line slides the hour, the minute and the date with
+            it. The stylesheet asks for tabular figures, but the shipped face
+            (League Spartan, self-hosted — there is no internet here to fetch
+            another) has proportional ones and no `tnum` feature to ask for, so
+            one second's reading measured 58px wider than another's and the
+            whole clock jittered sideways every tick. A digit in a slot of the
+            widest figure's width cannot do that on ANY face: the seconds
+            change inside their boxes and the line stays exactly as long. The
+            colons, the space and the AM/PM ride along as ordinary text, which
+            is what they are — they never change. */}
+        <span className="ir-hero-clock-time">
+          {[...clock.time].map((ch, i) => (
+            <span className={isClockDigit(ch) ? 'ir-hero-clock-digit' : undefined} key={i}>
+              {ch}
+            </span>
+          ))}
+        </span>
+        {/* The date and the ZONE are two lines, not one joined by a dot: the
+            band is wide and the zone is the half an officer checks when a
+            record's time looks wrong, so it gets its own line rather than
+            riding along after the date. */}
+        <span className="ir-hero-clock-date">{clock.date}</span>
+        <span className="ir-hero-clock-zone">{clock.label}</span>
+      </span>
+    </p>
+  );
+}
+
 // ===========================================================================
 // ReportWelcome — the nothing-selected state of the main panel.
 // ===========================================================================
-export function ReportWelcome({ user, onNew, onOpenReport, onMyReports, reports, loading }) {
-  // Recent list: unfinished drafts lead so they are one click to resume;
-  // the rest follow in incident-date order (Shell already sorts desc).
+export function ReportWelcome({
+  user,
+  onNew,
+  onOpenReport,
+  onMyReports,
+  reports,
+  loading,
+  // The shell's toast and its list-bump. Home performs the SAME record actions
+  // the register does (through the shared useReportRowActions), so archiving a
+  // draft from here has to announce itself the same way and tell the shell to
+  // re-read — which is what `onChanged` is. It is Shell's `bumpList`, the same
+  // one a save in the writer pulls.
+  notify,
+  onChanged,
+}) {
+  // The section is DRAFTS, so it lists drafts — not "the five most recent
+  // records". The head says Recent drafts, and a submitted report under that
+  // head would be the section lying about itself. Shell has already read the
+  // list sorted by incident date, newest first.
   const all = reports ?? [];
-  const recent = [
-    ...all.filter((r) => r.status === 'draft'),
-    ...all.filter((r) => r.status !== 'draft'),
-  ].slice(0, 5);
-  // Home is the masthead, one action, and the register tail — all centred. It
-  // deliberately has no page title or officer meta line: the top bar already
-  // carries the department lockup, the identity sits in the profile menu, and
-  // every other officer screen (My Reports, Write Report) still uses the full
-  // left-aligned `ir-page-head` + `ir-status` grammar.
+  const recent = all.filter((r) => r.status === 'draft').slice(0, 5);
+
+  // The kebab on a row, at the button's own bottom-left corner (see below).
+  const [menu, setMenu] = useState(null);
+  // The row that just moved. The shared actions set it and clear it 900ms
+  // later, the same green flash the register uses, so a row that has just been
+  // archived from here is findable again — on Home it means the row is about to
+  // leave the list entirely, so the flash is the least it owes the officer.
+  const [flashId, setFlashId] = useState(null);
+
+  // The same actions the register offers on the same records: Open, History,
+  // Print, Archive. Only `onOpen` differs — the register opens a report in its
+  // side panel, Home navigates the shell to it (see ReportActions.jsx).
+  // `showArchived` is false here by construction: Home lists drafts.
+  const actions = useReportRowActions({
+    user,
+    notify,
+    showArchived: false,
+    onOpen: onOpenReport,
+    onChanged,
+    onError: notify,
+    setFlashId,
+  });
+
+  /**
+   * Open a row's menu from its kebab.
+   *
+   * The menu is RowMenu — the register's own, and the same one the users
+   * directory and the dashboard chart use — which is positioned at the POINTER.
+   * Home has no pointer to give it: a kebab is a control, so the menu hangs from
+   * the button's own corner instead, which is where a menu opened by a button is
+   * expected to be. RowMenu nudges it back inside the viewport itself.
+   */
+  function openRowMenu(r, event) {
+    const box = event.currentTarget.getBoundingClientRect();
+    setMenu({ report: r, at: { x: box.left, y: box.bottom + 4 } });
+  }
+
+  // THE PAGE, top to bottom: the station's band, the work, the office's line.
   //
-  // The Report Intake card was removed by request, so the primary action now
-  // stands on its own under the masthead — built as an object in its own right
-  // (see the note on it below) with one line of its own copy beneath — and the
-  // register tail closes the page. Its "View All My Reports" button went with
-  // it: the top bar already has that destination, so the card was the second
-  // route to a screen one click away.
+  // Home is the one screen that is NOT a document: every other officer screen
+  // is a form or a register and uses the full left-aligned `ir-page-head` +
+  // `ir-status` grammar. This one is a landing page, so it is allowed a hero
+  // band — the only navy field in the product besides the top bar it hangs
+  // under, and the only place the wordmark and the working clock are stated at
+  // full size.
   //
-  // The tail is `headless` by request as well: its "I. Recent Reports" bar was
-  // a second label for rows that already say what they are (number, type, date,
-  // status), so the card now opens straight onto the records.
-  //
-  // `.ir-home` is the ONLY thing that centres: it gives the centring rules a
-  // scope that stops at this screen, so the document grammar elsewhere is
-  // untouched.
+  // THE GRID BACKDROP IS GONE by request. It was Home's texture (see HomeGrid);
+  // the band replaces it as the page's field, and a drifting grid behind a navy
+  // hero and two white cards was one texture too many. HomeGrid.jsx and its
+  // stylesheet are still in the tree — the component is not deleted, only no
+  // longer mounted here.
   return (
     <div className="ir-home">
-      {/* Home's backdrop: the React Bits ShapeGrid, behind everything and
-          marking nothing (see HomeGrid.jsx for the tokens it reads, why it now
-          renders unconditionally, and the numbers). FIRST child, so it is the
-          bottom layer; it is absolutely positioned, so it costs the layout
-          nothing. */}
-      <HomeGrid />
+      {/* ---- The band -------------------------------------------------------
+          The station's own letterhead at full size: the wordmark, what the
+          workspace is for, and the working clock, on the one navy field in the
+          product outside the top bar.
 
-      {/* The BlueWrite wordmark back on the page — the old hero, now on the
-          light document surface above the working cards. Plain type: BLUE in
-          navy, WRITE in the brand blue. */}
-      <section className="ir-hero">
-        <p className="ir-hero-wordmark">
-          BLUE<em>WRITE</em>
-        </p>
-        <p className="ir-hero-kicker">Incident documentation workspace</p>
-      </section>
+          THE PHOTOGRAPH IS A LAYER, not a CSS background. Three reasons, and
+          the third is why: a background-image cannot be told to stand down when
+          the file is absent, so a station that has not supplied one would get a
+          band with a hole in it; the scrim has to sit between the picture and
+          the words, which is a second child rather than a second background;
+          and an <img> can carry `onError`, which is how this one knows.
 
-      {/* The page's one action, and it is built as an object rather than as a
-          form button: a plate carrying the page glyph the app already uses for
-          a report (the review stepper's), the label, and the same arrow the
-          gate's primary action wears — so the two loudest buttons in the
-          product step the same way.
-
-          The mono line under it is the reassurance a FIRST-TIME officer wants
-          before the press, not after: the form is long, and knowing it is kept
-          as a draft (rather than submitted by being opened) is the difference
-          between starting it and putting it off. */}
-      <div className="ir-actions-row ir-home-actions">
-        <button type="button" className="ir-submit ir-home-cta" onClick={onNew}>
-          <span className="ir-home-cta-glyph" aria-hidden="true">
-            <svg
-              width="19"
-              height="19"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.7"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M6.5 3.5h7.5l4.5 4.5v12.5h-12z" />
-              <path d="M14 3.5V8h4.5" />
-              <path d="M12 11.5v5M9.5 14h5" />
-            </svg>
-          </span>
-          <span className="ir-home-cta-text">Start a New Report</span>
-          <svg
-            className="ir-home-cta-arrow"
-            width="17"
-            height="17"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          It is `alt=""` and `aria-hidden`, deliberately: it says nothing the
+          words beside it do not, and a screen reader announcing "police
+          station" before the page's own name would be describing decoration. */}
+      <section className="ir-home-hero">
+        {HOME_HERO_PHOTO && (
+          <img
+            className="ir-home-hero-photo"
+            src={HOME_HERO_PHOTO}
+            alt=""
             aria-hidden="true"
-          >
-            <path d="M5 12h14M12 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
-      <p className="ir-home-cta-note">
-        Opens a blank incident form. It stays a draft until you submit it.
-      </p>
+          />
+        )}
+        <span className="ir-home-hero-scrim" aria-hidden="true" />
 
-      <section className="ir-recent">
-        <IrCard headless>
-          {loading && <p className="ir-home-lead">Loading your reports…</p>}
-          {!loading && recent.length === 0 && (
-            <p className="ir-home-lead">
-              No reports recorded yet. Your first report will appear here.
+        <div className="ir-home-hero-inner">
+          <div className="ir-home-hero-brand">
+            <p className="ir-home-hero-kicker">Welcome to</p>
+            {/* The lockup: the shield, the pen laid in it, and the wordmark.
+                BLUE in the band's own white, WRITE in the mark's gold — the
+                two inks the sheet's head already pairs. */}
+            <p className="ir-home-hero-lockup">
+              {/* The office's own mark, on the band: the shield is GOLD down one
+                  side and BLUE down the other, and the pen — the nib the app
+                  writes with — is laid across it. Decorative here, and stated
+                  as such: the wordmark beside it already says the name. */}
+              <img className="ir-home-hero-mark" src={brandMark} alt="" />
+              <span className="ir-home-hero-wordmark">
+                BLUE<em>WRITE</em>
+              </span>
             </p>
-          )}
-          {!loading && recent.length > 0 && (
-            <ul className="ir-home-list">
-              {recent.map((r) => (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    className="ir-home-item"
-                    onClick={() => onOpenReport(r)}
-                    title={`${r.incident_type} — ${r.location || 'no location recorded'}`}
-                  >
-                    <span className="ir-home-no">BW-{String(r.id).padStart(4, '0')}</span>
-                    <span className="ir-home-type">{r.incident_type}</span>
-                    <span className="ir-home-when">{fmtIncident(r.incident_datetime)}</span>
-                    <span className={`badge ${r.status}`}>{r.status}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </IrCard>
+            <p className="ir-home-hero-sub">AI-Assisted Police Incident Reporting</p>
+            {/* The station's own sentence about the system, in the register the
+                band can carry: a bold promise, then what it means in one line. */}
+            <p className="ir-home-hero-lead">
+              <strong>Smarter. Faster. More Reliable.</strong>
+              <span>Create and manage police incident reports with AI-assisted tools for faster, more accurate documentation.</span>
+            </p>
+          </div>
+
+          {/* The working time, live, on the band's other end. */}
+          <HomeClock />
+        </div>
       </section>
+
+      {/* ---- The page body --------------------------------------------------
+          Two columns: the work (the action and the drafts) on the left, the
+          reminder on the right. The aside is the SHORTER column and is allowed
+          to be — it is advice, not a queue. */}
+      <div className="ir-home-body">
+        <div className="ir-home-main">
+
+          {/* The page's one action, as a BANNER rather than a bare button: a
+              navy card that states the action three times over — what kind of
+              reporting this is, what the action is called, and what the officer
+              has to bring to it — with the control itself on the right. It is
+              the biggest object on Home because starting a report is the only
+              thing an officer comes to this screen to do.
+
+              THE GLYPH IS A REPORT THAT EXISTS (a page with lines), not the
+              pen the button wears: the plate is the BANNER's mark and says what
+              the block is about, and the button beside it already says WRITE.
+              Two pens on one card would be the same mark twice. */}
+          <section className="ir-home-banner">
+            <span className="ir-home-banner-icon" aria-hidden="true">
+              <HomeMark name="file" size={26} stroke={1.7} />
+            </span>
+            <div className="ir-home-banner-copy">
+              <p className="ir-home-banner-kicker">AI-Assisted Reporting</p>
+              <p className="ir-home-banner-title">Create a Report with AI Assist</p>
+              {/* What the officer has to do, and what the machine does with it:
+                  the form is long, and knowing that the AI structures the
+                  narrative from their own account is the difference between
+                  starting it and putting it off. */}
+              <p className="ir-home-banner-note">
+                Describe the incident. AI helps structure it.
+              </p>
+            </div>
+            <button type="button" className="ir-home-cta" onClick={onNew}>
+              {/* The "file-pen" mark — a report with a pen laid on it, which is
+                  what pressing this does. */}
+              <span className="ir-home-cta-glyph" aria-hidden="true">
+                <HomeMark name="filePen" size={19} stroke={1.7} />
+              </span>
+              <span className="ir-home-cta-text">Start with AI</span>
+              <HomeMark name="arrow" size={17} stroke={2} className="ir-home-cta-arrow" />
+            </button>
+          </section>
+
+          <section className="ir-home-drafts">
+            <div className="ir-home-drafts-head">
+              <h2 className="ir-home-drafts-title">Recent drafts</h2>
+              {/* A rule between the head and the way out of it, drawn as its own
+                  element rather than as a border on either: it is the second
+                  column of a three-part head, so it must be able to shrink to
+                  nothing without taking a border with it. */}
+              <span className="ir-home-drafts-rule" aria-hidden="true" />
+              {/* The way to the FULL register. Home is a window on the officer's
+                  drafts, not the register itself — this is the one thing on the
+                  page that says so. */}
+              <button type="button" className="ir-home-drafts-all" onClick={onMyReports}>
+                View all
+                <HomeMark name="arrow" size={15} stroke={2} />
+              </button>
+            </div>
+
+            {loading && <p className="ir-home-lead">Loading your reports…</p>}
+            {!loading && recent.length === 0 && (
+              <p className="ir-home-lead">
+                No drafts right now. A report is kept here from the moment you
+                start it until you submit it.
+              </p>
+            )}
+
+            {!loading && recent.length > 0 && (
+              <ul className="ir-home-list">
+                {recent.map((r) => (
+                  <li
+                    key={r.id}
+                    /* The just-moved row, the same green flash the register
+                       uses so the eye can find it again. */
+                    className={`ir-draft-row${flashId === r.id ? ' is-flash' : ''}`}
+                  >
+                    <span className="ir-draft-plate" aria-hidden="true">
+                      <HomeMark name="file" size={20} stroke={1.7} />
+                    </span>
+
+                    <span className="ir-draft-main">
+                      <span className={`badge ${r.status}`}>{r.status}</span>
+                      <span className="ir-draft-no">BW-{String(r.id).padStart(4, '0')}</span>
+                      <span className="ir-draft-type">{r.incident_type}</span>
+                    </span>
+
+                    {/* WHAT the record is about, as facts: when it happened and
+                        who recorded it. Two lines with their own marks, because
+                        they are two different questions and a reader scans down
+                        each column. The officer's name is the join the list
+                        already carries (`created_by_name`); a record whose
+                        account has gone renders no second line rather than an
+                        empty label. */}
+                    <span className="ir-draft-meta">
+                      <span className="ir-draft-meta-line">
+                        <HomeMark name="calendar" size={14} stroke={1.8} />
+                        {fmtIncident(r.incident_datetime)}
+                      </span>
+                      {r.created_by_name && (
+                        <span className="ir-draft-meta-line">
+                          <HomeMark name="person" size={14} stroke={1.8} />
+                          {r.created_by_name}
+                        </span>
+                      )}
+                    </span>
+
+                    {/* The row's own way in. It says CONTINUE on the draft it
+                        continues and OPEN on anything else — Home lists drafts,
+                        but a report can change status while the page is open,
+                        and a button that says "Continue" over a submitted
+                        report would be promising an edit it cannot make. */}
+                    <button
+                      type="button"
+                      className="ir-draft-go"
+                      onClick={() => onOpenReport(r)}
+                    >
+                      {r.status === 'draft' ? 'Continue' : 'Open'}
+                      <HomeMark name="arrow" size={15} stroke={2} />
+                    </button>
+
+                    {/* The row's kebab: the register's OWN menu, on the same
+                        record. The whole row used to be the target; it cannot
+                        be any more, because a button cannot hold buttons. */}
+                    <button
+                      type="button"
+                      className="ir-draft-more"
+                      onClick={(event) => openRowMenu(r, event)}
+                      aria-label={`Actions for report BW-${String(r.id).padStart(4, '0')}`}
+                    >
+                      <HomeMark name="more" size={18} stroke={2} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        {/* ---- REMEMBER ----------------------------------------------------
+            The advice column. It is the only thing on Home that is not the
+            officer's own work, and it is deliberately the smallest voice on the
+            page: three sentences the station wants said at the moment someone
+            sits down to write a record, then the office's own line. The card
+            itself is a navy head band carrying a gold tile, three edged panels
+            and the flag over the closing line (see the stylesheet) — the design
+            lives there, this is the copy. */}
+        <aside className="ir-remember">
+          <h2 className="ir-remember-title">
+            {/* The gold tile, with the navy as its ink: the action plate's own
+                pair, one column over, so the page's two headings wear one
+                RECIPE (a plate on navy) while the blue stays with the action.
+                It is SQUARE and the three below are CIRCLES, so the heading is
+                not a fourth item in the list. */}
+            <span className="ir-remember-title-mark" aria-hidden="true">
+              <HomeMark name="shield" size={17} stroke={1.9} />
+            </span>
+            Remember
+          </h2>
+          <ul className="ir-remember-list">
+            <li>
+              <span className="ir-remember-mark" aria-hidden="true">
+                <HomeMark name="lock" size={18} stroke={1.7} />
+              </span>
+              Keep your information <strong>accurate and complete</strong>.
+            </li>
+            <li>
+              <span className="ir-remember-mark" aria-hidden="true">
+                <HomeMark name="shieldCheck" size={18} stroke={1.7} />
+              </span>
+              Your report helps ensure a <strong>faster and safer response</strong>.
+            </li>
+            {/* The one sentence that is a warning: the stylesheet paints this
+                row and its mark in the palette's red (li:nth-child(3)). The
+                emphasis is the phrase the sentence turns on — see the note on
+                li strong in the stylesheet. */}
+            <li>
+              <span className="ir-remember-mark" aria-hidden="true">
+                <HomeMark name="person" size={18} stroke={1.7} />
+              </span>
+              For emergencies, please contact your{' '}
+              <strong>local police station</strong> immediately.
+            </li>
+          </ul>
+          <p className="ir-remember-quote">
+            Sa Bagong Pilipinas, Mas Ligtas ang Bawat Isa.
+          </p>
+        </aside>
+      </div>
+
+      {/* The page's signature line: the office and the build, set between the
+          two seals the printed sheet carries at its head — so the screen the
+          officer works on is marked by the same pair as the paper they sign.
+
+          IT IS A BAND NOW, and that is a reversal the band above it forced. It
+          used to be drawn on Home's own surface with no bar, no plate and no
+          rule, on the argument that a second navy strip across a page whose one
+          loud thing is its action would compete with the action. The page has a
+          navy band at the TOP now, and an unmarked signature line at the foot
+          of it read as the page having been cut off rather than as restraint:
+          the two strips answer each other, which is what a letterhead and a
+          signature do on the paper this app prints. */}
+      <footer className="ir-home-footer">
+        <div className="ir-home-footer-inner">
+          <img className="ir-home-footer-seal" src={pnpSeal} alt="PNP seal" />
+          <p className="ir-home-footer-line">
+            {STATION} · BlueWrite v{APP_VERSION}
+          </p>
+          <img
+            className="ir-home-footer-seal"
+            src={citySeal}
+            alt="City of Naga Police Station seal"
+          />
+        </div>
+      </footer>
+
+      {/* The row's menu, at the kebab that opened it. RowMenu portals itself to
+          <body>, so it is drawn here only to keep it in this page's tree. */}
+      {menu && (
+        <RowMenu
+          at={menu.at}
+          items={actions.items(menu.report)}
+          label={`Actions for report BW-${String(menu.report.id).padStart(4, '0')}`}
+          onClose={() => setMenu(null)}
+        />
+      )}
+
+      {/* The confirm, the history dialog and the print sheet — the register's
+          own, from the shared module, so both screens act on a record the same
+          way and say the same things about it. */}
+      {actions.dialogs}
     </div>
   );
 }
@@ -1980,6 +2378,32 @@ export function ReportEditor({
     setActiveStep(computeStepProgress(draft, visitedSections).current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deck, draft]);
+
+  // ---- WHICH SECTION THE OFFICER IS WORKING IN -----------------------------
+  // The deck shows a whole SLIDE at a time, and a Document-walk slide holds
+  // several sections (the opening one carries Panels I and II and the narrative —
+  // see DOCUMENT_SLIDES). `activeStep` is the slide's own entry section, which is
+  // the right answer to "what do we put on screen" and the wrong one to "where is
+  // the work": an officer typing into Panel II was told "Section 1 of 5", with the
+  // light still on the panel they had finished with.
+  //
+  // FOCUS is the honest signal, and it needs no new plumbing: every section card
+  // already carries its own step as `data-ir-step` (see IrCard), React's focus
+  // event BUBBLES, so ONE listener on the form keeps the light, the stepper's tile
+  // and the count above it on the section the officer's cursor is in. A card that
+  // is not a section — the assistant's — carries no step and moves nothing. A card
+  // in another slide cannot be focused at all (it is `hidden`), so this can never
+  // ask the deck to show anything other than what is already on screen — which is
+  // also why the DIRECTION of the last walk is deliberately left alone here:
+  // `goToStep` owns that, and restating it would replay the slide's travel every
+  // time the officer clicked into a field.
+  function enterSection(e) {
+    const card = e.target?.closest?.('[data-ir-step]');
+    const raw = card ? card.dataset.irStep : undefined;
+    const step = Number(raw);
+    if (!raw || !Number.isInteger(step) || step === activeStep) return;
+    setActiveStep(step);
+  }
 
   // ---- Editing from the review step --------------------------------------
   // Which read-back row of the review has its editor open (null = none). It
@@ -3564,10 +3988,10 @@ export function ReportEditor({
             // The review node exists only where it can be reached: the stepped
             // format. It is the one dot whose face is never filled.
             withReview={stepped}
-            // Where the officer is standing — the section on screen — which is
-            // what the emphasis and the count above it both follow. The SHEET
-            // format is the only one with no position to report, and there the
-            // stepper is not rendered at all.
+            // Where the officer is standing — the section on screen, which is
+            // what the emphasis follows. The SHEET format is the only one with
+            // no position to report, and there the stepper is not rendered at
+            // all.
             here={deck ? activeStep : null}
           />
         )}
@@ -3615,6 +4039,9 @@ export function ReportEditor({
           between an officer and the page they came here to write. */}
       <form
         onSubmit={(e) => e.preventDefault()}
+        // ONE listener for the whole walk: focus bubbles out of any field in any
+        // card, and the card names its own section (see enterSection).
+        onFocus={enterSection}
         className={`ir-form${stepped ? ' ir-form--stepped' : ''}${sheet ? ' ir-form--sheet' : ''}${
           deck ? ` ir-form--deck ir-form--deck-${deckDir}` : ''
         }${sheetBlank ? ' ir-form--blank' : ''}`}
@@ -4692,12 +5119,7 @@ export function ReportsTable({
   const [reports, setReports] = useState(null);
   const [error, setError] = useState(null);
   const [conn, setConn] = useState(null);
-  const [confirm, setConfirm] = useState(null);
-  const [historyFor, setHistoryFor] = useState(null);
-  const [history, setHistory] = useState(null);
-  const [historyError, setHistoryError] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
-  const [printingId, setPrintingId] = useState(null);
   // The open row menu: { report, at:{x,y}, rowEl, viaKeyboard }. One at a time,
   // and never for a row with nothing to offer.
   const [menu, setMenu] = useState(null);
@@ -4882,67 +5304,23 @@ export function ReportsTable({
     return () => window.clearTimeout(timer);
   }, [search, query.q]);
 
-  async function runConfirm() {
-    const c = confirm;
-    setConfirm(null);
-    // An EDIT confirm is not a mutation: it opens the report in the writer, so
-    // there is nothing to announce and nothing to re-read — the writer loads the
-    // record itself.
-    if (c.kind === 'edit') {
-      c.action();
-      return;
-    }
-    try {
-      await c.action();
-      notify(c.doneMessage);
-      await refresh();
-      onMutated?.();
-      setFlashId(c.flashId ?? null);
-      if (c.flashId) {
-        window.setTimeout(() => setFlashId((cur) => (cur === c.flashId ? null : cur)), 900);
-      }
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  async function askDelete(r) {
-    setConfirm({
-      title: 'Remove report from the working list?',
-      message:
-        'The report will be archived (soft-deleted), not permanently deleted. It stays in the database for audit purposes and can be restored by an administrator.',
-      confirmLabel: 'Archive Report',
-      doneMessage: 'Report archived.',
-      flashId: r.id,
-      action: () => api(`/reports/${r.id}`, { method: 'DELETE' }),
-    });
-  }
-
-  function askRestore(r) {
-    setConfirm({
-      title: `Restore report #BW-${String(r.id).padStart(4, '0')}?`,
-      message:
-        'The report will be moved back to the active working list. The restore is recorded in the report history and the audit log.',
-      confirmLabel: 'Restore Report',
-      doneMessage: 'Report restored.',
-      flashId: r.id,
-      action: () => api(`/reports/${r.id}/restore`, { method: 'PATCH' }),
-    });
-  }
-
-  async function openHistory(r) {
-    setHistoryFor(r);
-    setHistory(null);
-    setHistoryError(null);
-    try {
-      const data = await api(`/reports/${r.id}/history`);
-      setHistory(data.history);
-    } catch (err) {
-      setHistoryError(err.message);
-    }
-  }
-
   // ---- The row menu --------------------------------------------------------
+  // The ACTIONS themselves (which items a row offers, the confirm each one puts
+  // up, and the API calls behind them) are the shared module's, because Home
+  // offers the same actions on the same records. Only the way this list OPENS a
+  // report is this file's: the register opens it in the side panel, where Home
+  // navigates the shell to it.
+  const actions = useReportRowActions({
+    user,
+    notify,
+    showArchived,
+    onOpen: (r) => setOpenId(r.id),
+    onRefresh: refresh,
+    onChanged: onMutated,
+    onError: setError,
+    setFlashId,
+  });
+
   // Whether THIS list opens a report, which is one answer used by all three ways
   // in (menu, double-click, Enter) so they can never disagree: the archive is
   // restore-only — an archived report was never opened from here — and a
@@ -4956,29 +5334,6 @@ export function ReportsTable({
    * still edit one, so for them the row keeps its normal weight.
    */
   const rowLocked = (r) => r.status === 'finalized' && user.role !== 'Admin';
-
-  /** The actions this row offers, in menu order. */
-  function rowItems(r) {
-    if (showArchived) {
-      // Restore is the only action this list has ever offered on an archived
-      // report, and it is an administrator's (the Archived toggle is theirs too).
-      return user.role === 'Admin'
-        ? [{ label: 'Restore', onSelect: () => askRestore(r) }]
-        : [];
-    }
-    return [
-      rowCanOpen(r)
-        ? { label: 'Open', onSelect: () => setOpenId(r.id) }
-        : {
-            label: 'Open (locked)',
-            disabled: true,
-            hint: 'A finalized report can only be edited by an administrator.',
-          },
-      { label: 'History', onSelect: () => openHistory(r) },
-      { label: 'Print', onSelect: () => setPrintingId(r.id) },
-      { label: 'Archive', danger: true, onSelect: () => askDelete(r) },
-    ];
-  }
 
   /**
    * Everything a register ROW needs to know about itself, in one call.
@@ -5019,7 +5374,7 @@ export function ReportsTable({
    * in place rather than starting a new one.
    */
   function askEdit(r) {
-    setConfirm({
+    actions.ask({
       title: `Edit draft report ${reportNumber(r.id)}?`,
       message:
         'This draft will open in Write Report with everything already recorded in it. Nothing changes until you save it there.',
@@ -5057,7 +5412,7 @@ export function ReportsTable({
    * right-click that would lead nowhere.
    */
   function openRowMenu(r, at, rowEl, viaKeyboard) {
-    const items = rowItems(r);
+    const items = actions.items(r);
     if (items.length === 0) return false;
     setMenu({ report: r, at, rowEl, viaKeyboard });
     return true;
@@ -5446,87 +5801,16 @@ export function ReportsTable({
       {menu && (
         <RowMenu
           at={menu.at}
-          items={rowItems(menu.report)}
+          items={actions.items(menu.report)}
           label={`Actions for report BW-${String(menu.report.id).padStart(4, '0')}`}
           onClose={closeRowMenu}
         />
       )}
 
-      {printingId && (
-        <ReportPrint
-          reportId={printingId}
-          onClose={() => setPrintingId(null)}
-          recordedBy={{ name: user.full_name, badge: user.badge_number }}
-        />
-      )}
-
-      {historyFor && (
-        <div className="dialog-overlay" onClick={() => setHistoryFor(null)}>
-          <div
-            className="dialog"
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2>
-              History — Report #BW-{String(historyFor.id).padStart(4, '0')}
-            </h2>
-            {historyError && (
-              <div className="alert error" role="alert">
-                {historyError}
-              </div>
-            )}
-            {history === null && !historyError && <p>Loading history…</p>}
-            {history && history.length === 0 && (
-              <p>No recorded changes for this report yet.</p>
-            )}
-            {history && history.length > 0 && (
-              <ol style={{ paddingLeft: '1.2rem', margin: '0.5rem 0' }}>
-                {history.map((h) => (
-                  <li key={h.id} style={{ marginBottom: '0.6rem' }}>
-                    <div>
-                      <strong>{h.change_note}</strong>{' '}
-                      <span style={{ color: 'var(--steel)' }}>
-                        — {h.changed_by}, {String(h.created_at).replace('T', ' ')}
-                      </span>
-                    </div>
-                    {h.snapshot && <SnapshotDiff snapshot={h.snapshot} />}
-                  </li>
-                ))}
-              </ol>
-            )}
-            <div className="actions">
-              <button onClick={() => setHistoryFor(null)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {confirm && (
-        <div className="dialog-overlay" onClick={() => setConfirm(null)}>
-          <div
-            className="dialog"
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2>{confirm.title}</h2>
-            <p>{confirm.message}</p>
-            <div className="actions">
-              <button onClick={() => setConfirm(null)}>Cancel</button>
-              {/* The confirm's own tone wins where it has one: a destructive
-                  default is right for archiving and wrong for EDITING a draft,
-                  which is an ordinary action wearing a red button. */}
-              <button
-                className={confirm.tone ?? (confirm.confirmLabel === 'Finalize Report' ? 'primary' : 'danger')}
-                onClick={runConfirm}
-              >
-                {confirm.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* The print sheet, the history dialog and the confirm box — all three
+          are the SHARED module's, because Home offers the same actions on the
+          same records. Nothing about them is this list's any more. */}
+      {actions.dialogs}
     </>
   );
 }
