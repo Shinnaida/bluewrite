@@ -178,6 +178,57 @@ sc qc MySQL84
 # START_TYPE : 2  AUTO_START     ← will hijack 3306 on every reboot
 ```
 
+### `mysqld: Cannot load component from specified URN: 'file://component_reference_cache'.`
+
+The Laragon MySQL install was missing its whole `lib\` folder (plugin DLLs and
+the ICU data). A **newly initialised** MySQL 8.4 data directory registers the
+`component_reference_cache` component, and the server loads it from
+`<basedir>\lib\plugin\` on every start — so with `lib\` gone, any *fresh* data
+directory refuses to start:
+
+```text
+mysqld: Can't open shared library 'C:\laragon\bin\mysql\mysql-8.4.3-winx64\lib\plugin\component_reference_cache.dll' (errno: 126 The specified module could not be found.)
+mysqld: Cannot load component from specified URN: 'file://component_reference_cache'.
+```
+
+Both lines go to the server's **console**, not to `Shinxx.err` — the error log
+looks clean, which is what makes this one hard to place. The same missing folder
+also produces the `Missing data directory for ICU regular expressions` warning.
+
+**Why the BlueWrite database was never affected:** `C:\laragon\data\mysql` was
+created before that component existed, registers no components at all
+(`select * from mysql.component` is empty there), and starts fine. That is also
+why the error only shows up when MySQL is pointed at a data directory it has to
+create — the old `my.ini` said `datadir=C:/laragon/data/mysql-8.4`, which did not
+exist, so a fresh directory would be initialised and then fail to start.
+
+**Fixed on 2026-10-03:** `lib\` was restored from the matching archive, and
+`my.ini` was repointed at the real data directory (`datadir=C:/laragon/data/mysql`,
+the old file kept as `my.ini.orig-backup`).
+
+```bash
+# The archive must match the server version exactly: mysqld.exe 8.4.3 loads
+# these DLLs, and a later 8.4.x pairing is not guaranteed to be compatible.
+curl -L -o mysql-8.4.3-winx64.zip \
+  https://cdn.mysql.com/archives/mysql-8.4/mysql-8.4.3-winx64.zip
+unzip -q mysql-8.4.3-winx64.zip          # 248 MB download, ~700 MB unpacked
+cp -r mysql-8.4.3-winx64/lib "C:/laragon/bin/mysql/mysql-8.4.3-winx64/"
+```
+
+Only `lib\` is needed; `bin\`, `share\` and `include\` were intact. Expect
+`lib\libmysql.dll`, `lib\plugin\` (33 DLLs, `component_reference_cache.dll`
+among them) and `lib\private\icudt73l\` afterwards, ~342 MB in total. Copy it
+only while `lib\` is still absent — `cp -r` nests the folder as `lib\lib` if it
+already exists.
+
+**One more trap, found while fixing this:** initialising a data directory on a
+path that contains a space fails in InnoDB —
+`Can't create UNDO tablespace innodb_undo_001 since '.\undo_001' already exists`,
+which aborts the server. The same initialise-then-start on a space-free path
+(`C:\laragon\tmp\...`) came up clean, so keep scratch data directories off
+`C:\Users\Shaine Jayme\`. The real server is unaffected: `C:\laragon\data\mysql`
+has no space in its path.
+
 ### Login says "Security token missing or expired"
 Normal for direct curl tests — the login route is reachable; the request just
 lacks CSRF/session context that the real UI supplies. Use the browser UI.

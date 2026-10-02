@@ -527,7 +527,15 @@ export default function Shell({
               Signing out in <strong>{formatCountdown(idleLeft)}</strong> if this screen
               stays idle. An open draft is saved first.
             </p>
-            <button type="button" onClick={() => setLastActivity(Date.now())}>
+            {/* The one control on this strip, and it carries a class for the
+                same reason the connection banner's retry does (see
+                ConnectionNotice): it is an amber phrase-beside-a-countdown
+                rather than a button of the app's ordinary kind, and
+                `.ir-body`'s `button:not(…)` treatment paints every control it
+                is not told to leave alone. Unnamed, this came back as a white
+                plate with a hairline — see the exclusion list in
+                incident-report.css. */}
+            <button type="button" className="idle-warning-stay" onClick={() => setLastActivity(Date.now())}>
               Stay signed in
             </button>
           </div>

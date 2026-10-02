@@ -2701,14 +2701,37 @@
    controls on a draft row and the "view all" link-button enter none of this;
    each states its own fill, border, ink and hover where it is defined.
 
+   .conn-banner-retry IS THE ONE THAT HID BEST, and that is because the control
+   it skins is a PHRASE: the retry on Shell's
+   connection banner is bare amber text with an underline, and Shell renders it
+   inside `.ir-body` like everything else. So this selector painted it as a white
+   plate with a hairline, and then BLUE under the pointer, because the ordinary
+   face's own hover is the accent — the one control an officer is meant to press
+   when the server has gone was the one control on the screen wearing the app's
+   ordinary button. It carries a class for no other reason than to be nameable
+   here: the banner's dot and its sentence are not controls, and this list names
+   controls.
+
+   THE LAST TWO WERE NOT FOUND BY LOOKING. They came out of asking the built
+   sheet the question this list exists to answer — which rules paint a button
+   that already states its own surface? — and both are inside `.ir-body`. The
+   idle warning's "Stay signed in" is the amber control beside the countdown, the
+   one thing an officer presses to keep a session alive, and it was coming back
+   as a white plate with a hairline. The dashboard's scope and range chips are a
+   SEGMENTED strip: one plate, a hairline between the segments, the active one
+   lifted; under this selector every chip grew its own fill and its own border on
+   all four sides, so a joined control read as four loose buttons. The two
+   dashboard groups share one class (`dash-chip`) so this list can name them
+   once.
+
    The two CHAINS must agree: excluding only the base rule would leave its
    `:hover` repainting the border blue under the pointer. */
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-go):not(.ir-draft-more):not(.ir-home-drafts-all):not(.primary):not(.danger) {
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-go):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger) {
   background: var(--ir-btn);
   border: 1px solid var(--ir-border);
   color: var(--ir-btn-ink);
 }
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-go):not(.ir-draft-more):not(.ir-home-drafts-all):not(.primary):not(.danger):hover {
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-go):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger):hover {
   border-color: var(--ir-blue);
   color: var(--ir-blue-ink);
   background: var(--ir-btn);
@@ -3550,15 +3573,32 @@
   pointer-events: none;
 }
 
-/* The banner's mark: an accent disc, so it reads as an object rather than as a
-   letter of the kicker beside it.
+/* The banner's mark: the office's own folder artwork (src/assets/folder.png)
+   standing ON the accent disc the block has always worn, so the block reads as
+   an object rather than as a letter of the kicker beside it.
 
-   IT IS THE BRAND BLUE, not the card's own ink at low alpha. The reference keeps
-   one filled blue disc as the page's mark for "this block is about a record" —
-   the banner wears it here and the REMEMBER heading wears the same one on the
-   page's other column — and a disc of translucent white on navy is not that
-   object: it comes out a dull slate that reads as a pressed button rather than
-   as a mark. White on this blue is 5.9:1. */
+   THE DISC IS THE OBJECT AND THE FOLDER IS THE ART ON IT, by request. The mark
+   went the other way round for a while — the artwork bare on the navy card — and
+   the disc is what the marking wants: a record is a disc, the office's folder is
+   what sits in it, and the block then belongs to the same family as the reminder
+   heading's plate a column over instead of floating as a silhouette on the card.
+   The folder also replaced the inlined page glyph the disc used to hold, and it
+   is the right mark for that slot for the reason the band's shield and the two
+   seals at the foot of the page are files: it is the office's own artwork, and
+   an icon set can copy a shape but cannot be the station's own art.
+
+   NOTHING OF THE DISC'S OLD TYPE IS LEFT, and that is deliberate: the glyph it
+   held was drawn in `currentColor`, and artwork brings its own inks, so no
+   `color` is named here any more. The blue and the hairline ring are the disc's
+   and stay — a disc of translucent white on navy comes out a dull slate that
+   reads as a pressed button rather than as a mark, and white on this blue is
+   5.9:1, which is why the ring is white at low alpha rather than a second blue.
+
+   THE BOX IS THE ONE THE DISC HAS ALWAYS OCCUPIED, to the digit. The mark is the
+   banner's first flex child, so its width and height are part of what sets the
+   card's row and the gap the copy starts after: restoring the disc around the
+   artwork rather than growing the slot around the disc is what keeps the banner's
+   layout exactly where it was. */
 .ir-home-banner-icon {
   position: relative;
   flex: none;
@@ -3569,7 +3609,26 @@
   border-radius: 50%;
   background: var(--ir-blue);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
-  color: #fff;
+}
+/* INSET rather than filling the disc, which is the one thing the artwork must not
+   do here: the folder is drawn wider than it is tall with its tab at the top, so
+   stretched to the rim it would read as a blue shape with an amber corner rather
+   than as a folder on a disc. 70% is the largest square that fits inside a circle
+   (it is a shade under 71% of the diameter), which leaves the blue showing as a
+   rim all the way round the folder while keeping the artwork's own corners off
+   the curve.
+
+   `contain`, because the artwork is 512x512 with roughly 24px of transparent
+   padding at the head and foot: it is drawn wider than it is tall, and filling
+   its box would stretch the folder. It is a shade under that box's height as a
+   result, which is the shape it was drawn in. Named on the image rather than on
+   the slot's `img`, the way the band's shield and the footer's two seals are, so
+   the artwork can be found from the markup without knowing its parent. */
+.ir-home-banner-mark {
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
+  display: block;
 }
 
 /* The copy takes the room the button does not, which is what puts the button at
@@ -3761,17 +3820,39 @@
 .ir-home-drafts-title {
   margin: 0;
   flex: none;
-  font-size: 0.82rem;
+  font-size: 0.86rem;
   font-weight: 800;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--ir-text);
+  /* The ACCENT, not the page's ink: the block is a list of the officer's own
+     records, and the blue is what ties its name to the way out at the end of
+     the same row. It is the ink token rather than the fill token — small
+     tracked type is text, and the two blues are split for exactly this case
+     (see the --ir-blue-ink note in :root). */
+  color: var(--ir-blue-ink);
 }
 
+/* THE RULE IS TWO RULES, and the gold is the head of them: a short gold dash
+   where the name stops, then the hairline running to the way out — the pairing
+   the sheet's own head band uses (a mark, then the office's rule). One element
+   with a pseudo-element rather than two children, because it is ONE line with an
+   accent on its head: split in two, the gold half would need a width of its own
+   against a rule that is taking the slack. */
 .ir-home-drafts-rule {
+  position: relative;
   flex: 1 1 auto;
   height: 1px;
   background: var(--ir-border);
+}
+.ir-home-drafts-rule::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -1px;
+  width: 2rem;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ir-gold);
 }
 
 /* The way to the FULL register. It is a link wearing a button's clothes: the
@@ -3785,13 +3866,15 @@
   padding: 0.2rem 0.1rem;
   border: 0;
   background: none;
-  color: var(--ir-blue);
-  font-size: 0.78rem;
+  /* Also the ink token: it is a link, and the blue that reads as a fill on this
+     page is darker than the blue that reads as small text on it. */
+  color: var(--ir-blue-ink);
+  font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
 }
-.ir-home-drafts-all:hover { color: var(--ir-blue-hi); }
+.ir-home-drafts-all:hover { color: var(--ir-blue-ink-hi); }
 .ir-home-drafts-all:hover svg { transform: translateX(2px); }
 .ir-home-drafts-all svg { transition: transform 140ms ease; }
 
@@ -3805,80 +3888,135 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.6rem;
+  gap: 0.75rem;
   flex: 1 1 auto;
   /* ONE ROW IS THE FLOOR. A `0` here would let a short panel squeeze the list out
      of existence, and a page whose drafts have silently gone is worse than a page
      that scrolls: below one row the panel takes the overflow back, which is the
      only case in which Home is allowed to scroll at all. */
-  min-height: 5.9rem;
+  min-height: 10.5rem;
   overflow-y: auto;
   align-content: start;
 }
 
-/* plate · identity · meta · go · menu. The columns are a grid rather than a
-   flex row with a gap, so the marks, the metadata and the two controls line up
-   down the list instead of drifting with the width of whatever is in front of
-   them; the identity column takes the slack. */
-.ir-draft-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
-  align-items: center;
-  gap: clamp(0.7rem, 1.6vw, 1.1rem);
-  padding: 0.8rem clamp(0.75rem, 1.6vw, 1.1rem);
-  /* A row keeps its shape — the plate, the three identity lines, the two meta
-     lines and the two controls set its height — but not its air: on a short
-     panel the rows come up tighter rather than the row dropping below the fold.
-     The floor is what keeps a row a row. */
-  padding-block: max(0.5rem, calc(0.8rem - var(--ir-home-short) * 0.014));
+/* THE CARD. A draft is a record with a state, a number of sections written and
+   two ways into it, so it is an OBJECT rather than a line of the list: the gold
+   stripe down its left edge is the card's own (see ::before), and the strip
+   under the rule is the record's progress. */
+.ir-draft-card {
+  position: relative;
+  /* Both for the stripe: it is the card's own edge, and the corner on that side
+     comes from the card's curve rather than from a radius of the stripe's own. */
+  overflow: hidden;
+  padding: 1.05rem clamp(0.9rem, 1.8vw, 1.35rem) 1rem clamp(1.1rem, 2vw, 1.5rem);
+  /* A card keeps its shape — the plate, the three identity lines, the meta pair,
+     the two controls and the progress strip set its height — but not its air: on
+     a short panel the cards come up tighter rather than the last one dropping
+     below the fold. The floor is what keeps a card a card. */
+  padding-block: max(0.7rem, calc(1.05rem - var(--ir-home-short) * 0.02));
   background: var(--ir-card, #fff);
   border: 1px solid var(--ir-border);
-  border-radius: 8px;
+  border-radius: 14px;
   box-shadow: var(--shadow-xs);
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
-.ir-draft-row:hover {
+/* The gold stripe: the lane down the left edge that says a record is inside.
+   Painted by the card rather than laid in as a child element, so it runs the
+   full height whatever the card's content does and needs no row of the body. */
+.ir-draft-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  background: var(--ir-gold);
+}
+.ir-draft-card:hover {
   border-color: var(--line-bright);
   box-shadow: var(--shadow-sm);
 }
-/* The row that just moved, the same green flash the register uses so the eye can
-   find it again — here it is the last the officer sees of the row, because an
+/* The card that just moved, the same green flash the register uses so the eye can
+   find it again — here it is the last the officer sees of the card, because an
    archived draft leaves this list. */
-.ir-draft-row.is-flash {
+.ir-draft-card.is-flash {
   box-shadow: inset 0 0 0 2px var(--green-line);
 }
 
-/* The record's mark, on its own tinted plate: the row is a document, and the
-   plate is what makes it findable at a glance down the list. */
+/* plate · identity · aside. The right-hand column carries the facts and then the
+   two controls, flush to the card's end; the identity takes the slack between
+   them, which is what lines the numbers and the pills up down the list. */
+.ir-draft-body {
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(0.7rem, 1.8vw, 1.1rem);
+}
+
+/* The record's mark, on a plate of the station's own navy: the card is a
+   document, and the plate is what makes it findable at a glance down the list.
+   NAVY rather than a wash of the accent, deliberately: this is the largest
+   object on the card, and a tint that size reads as a second page behind the
+   glyph. White on this navy is 13:1, so the mark needs no help from its size. */
 .ir-draft-plate {
   flex: none;
   display: grid;
   place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 8px;
-  background: var(--ir-blue-tint);
-  color: var(--ir-blue);
+  width: 3.75rem;
+  height: 3.75rem;
+  border-radius: 1rem;
+  background: var(--ir-navy);
+  color: #fff;
 }
 
-/* The identity, stacked: the state pill, then the record's number, then what the
+/* The identity, stacked: the pills, then the record's number, then what the
    report is about. Three lines rather than one row of three fields, because on
    this screen the officer is scanning for ONE draft among a few and the number
    is the handle they remember. */
-.ir-draft-main {
+.ir-draft-identity {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.15rem;
+  gap: 0.3rem;
   min-width: 0;
 }
 
-/* Tabular figures and tracked, so the numbers hold their columns down the list
-   the way they do everywhere else in the app. */
-.ir-draft-no {
-  font-size: 0.82rem;
+/* The pills, on one line, wrapping rather than squeezing on a narrow card: they
+   answer two different questions — what STATE the record is in, and what KIND of
+   account it holds — so they are two pills and not one. */
+.ir-draft-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* SENSITIVE, in the palette's red pair — the same wash and ink the advice card's
+   one warning sentence wears (--ir-red-tint on --red-text) — wearing the shared
+   status pill's own geometry rather than a second chip idiom, so the two read as
+   a row of pills. It is the record's own fact rather than a state of it: filing
+   the report does not clear it, which is why it is not a second `.badge`. */
+.ir-draft-sensitive {
+  display: inline-block;
+  padding: 0.14rem 0.5rem;
+  border: 1px solid var(--red-line);
+  border-radius: 2px;
+  background: var(--ir-red-tint);
+  color: var(--red-text);
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Tabular figures and tracked, so the numbers hold their columns down the list
+   the way they do everywhere else in the app. It is the largest word on the card
+   after the pills: on this screen the number is the handle the officer came for. */
+.ir-draft-no {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums;
   color: var(--ir-text);
   white-space: nowrap;
@@ -3888,8 +4026,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: var(--ir-muted);
+}
+
+/* The right-hand column: the facts about the record, then its two controls. */
+.ir-draft-aside {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: clamp(0.6rem, 2vw, 1.1rem);
 }
 
 /* When it happened, and who recorded it. Two lines with their own marks,
@@ -3898,66 +4045,132 @@
 .ir-draft-meta {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.25rem;
   min-width: 0;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
   color: var(--ir-muted);
 }
 .ir-draft-meta-line {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
   white-space: nowrap;
 }
 .ir-draft-meta-line svg { flex: none; opacity: 0.75; }
 
-/* The row's own way in, and the kebab beside it. The button is OUTLINED rather
-   than filled: the gold plate above is the page's one filled control, and a
-   second one on every row would be five loudest things on a page whose whole
-   point is the one at the top. */
+/* The two controls, side by side at the card's end. */
+.ir-draft-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* The card's own way in, and it is FILLED — a reversal of the outlined plate
+   this control used to wear, by request. What makes the reversal safe is the
+   COLOUR: the fill is the station's navy, not the accent blue, so the page's one
+   loud thing is still the action at the top (gold on navy) and the blue stays
+   with the section's name above these cards. White on this navy is 13:1, well
+   past the label it has to carry. */
 .ir-draft-go {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.5rem 0.95rem;
-  border: 1px solid var(--ir-blue);
-  border-radius: 6px;
-  background: none;
-  color: var(--ir-blue);
-  font-size: 0.8rem;
+  gap: 0.45rem;
+  padding: 0.6rem 1.05rem;
+  border: 1px solid var(--ir-navy);
+  border-radius: 8px;
+  background: var(--ir-navy);
+  color: #fff;
+  font-size: 0.85rem;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease;
+  transition: background 140ms ease, border-color 140ms ease;
 }
 .ir-draft-go:hover {
-  background: var(--ir-blue);
-  color: #fff;
+  background: var(--ir-navy-hi);
+  border-color: var(--ir-navy-hi);
 }
 .ir-draft-go:hover svg { transform: translateX(2px); }
 .ir-draft-go svg { transition: transform 140ms ease; }
 
-/* The kebab, in the product's existing chevron ink — a mark whose meaning is
-   "there is more here", not a third button competing with Continue. */
+/* The kebab, in a round of the accent's own wash — a mark whose meaning is
+   "there is more here", not a third button competing with Continue. Round
+   rather than square because the pill above it is already the card's square
+   object, and the hover is the app's own row wash, the same step every other
+   quiet control takes. */
 .ir-draft-more {
   flex: none;
   display: grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   padding: 0;
   border: 0;
-  border-radius: 6px;
-  background: none;
-  color: var(--ir-muted);
+  border-radius: 50%;
+  background: var(--ir-blue-tint);
+  color: var(--ir-blue-ink);
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease;
 }
 .ir-draft-more:hover {
   background: var(--ir-row-hover);
+  color: var(--ir-blue-ink-hi);
+}
+
+/* THE PROGRESS STRIP. A band ACROSS the card rather than a column in it: the
+   rule is what separates the record from its own state, and the bar under it
+   then runs the card's full width — the writer's stepper read-out, in the one
+   line a list can afford.
+
+   THE TRACK IS DECORATION and the numbers above it are the fact, which is why
+   the numbers are text and the track is `aria-hidden`: a screen reader reads
+   "3 of 5 sections" once, from the pair that says it, instead of a role
+   announcing the same number twice. */
+.ir-draft-progress {
+  margin-top: 0.85rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--ir-border);
+}
+.ir-draft-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.5rem;
+}
+.ir-draft-progress-label {
+  font-size: 0.8rem;
+  color: var(--ir-muted);
+}
+/* The count is the fact the strip exists for, so it is the bold end of the pair:
+   the label says what is being read, this says how far. */
+.ir-draft-progress-count {
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--ir-text);
+  white-space: nowrap;
+}
+/* The track is the accent's wash and the fill is the accent's surface — the same
+   pair the writer's own rail uses (.ir-stepper-track-fill) — so "how far along"
+   is one colour fact on both screens. The width is the caller's, by custom
+   property, exactly as the stepper's fill is. */
+.ir-draft-progress-track {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ir-blue-tint);
+  overflow: hidden;
+}
+.ir-draft-progress-fill {
+  display: block;
+  height: 100%;
+  width: var(--ir-draft-fill, 0%);
+  border-radius: 999px;
+  background: var(--ir-blue);
+  transition: width 300ms ease;
 }
 
 /* ===========================================================================
@@ -4534,14 +4747,19 @@
   color: #fff;
 }
 
-/* The heading's mark sits on a GOLD TILE with the navy as its ink — the action
-   plate's own pair (--ir-gold / --ir-on-gold), one column over. That is a
-   deliberate change of mind, and worth stating: it used to be the banner's
-   accent disc, on the argument that the page's two headings should wear ONE
-   mark. The two blocks now wear one RECIPE instead — a rounded plate on navy
-   with the station's ink in it — which says the same thing (these two are the
+/* The heading's mark sits on a GOLD TILE — the action plate's own pair
+   (--ir-gold), one column over. That is a deliberate change of mind, and worth
+   stating: it used to be the banner's accent disc, on the argument that the
+   page's two headings should wear ONE mark. The two blocks now wear one RECIPE
+   instead — a plate on navy — which says the same thing (these two are the
    page's headings) while leaving the blue to the job blue actually has, which is
    the action itself.
+
+   NO INK IS NAMED HERE any more. The tile used to hold a glyph drawn in
+   --ir-on-gold; it holds ARTWORK now, which brings its own colour (see
+   .ir-remember-title-mark-art below), so a `color` on this box would be a
+   declaration with nothing to paint. The tile states its GROUND and nothing
+   else, which is the same reason the banner's disc names no colour either.
 
    It is a SQUARE while the three panels' marks below are CIRCLES, and that is
    the whole of the difference: the heading is a heading, the three under it are
@@ -4555,7 +4773,26 @@
   height: 2rem;
   border-radius: 8px;
   background: var(--ir-gold);
-  color: var(--ir-on-gold);
+}
+
+/* The mark ON the tile: the OFFICE'S OWN SHIELD — the station's gold line art,
+   a FILE rather than one of the page's drawn glyphs, exactly as the banner's
+   mark is (see .ir-home-banner-icon). The station's crest is artwork, and an
+   icon set cannot be it; its own background has been keyed out, so it brings no
+   matte of its own to the tile it stands on.
+
+   INSET TO 70% of the tile, so the gold shows as a rim all the way round and the
+   mark does not press on the tile's corners, and drawn to that box rather than
+   stretched into it (object-fit: contain) so its proportions are the artwork's
+   own. The one thing this rule cannot do is give the mark contrast: the artwork
+   is the same gold family as the tile, on purpose, so it reads as a TONE on its
+   plate rather than as a shape cut out of it. --ir-gold is one value in both
+   themes (see the token), so no theme restatement moves either one. */
+.ir-remember-title-mark-art {
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
+  display: block;
 }
 
 .ir-remember-list {

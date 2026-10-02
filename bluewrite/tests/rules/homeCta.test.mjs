@@ -12,16 +12,19 @@
 //      and now the plate on each draft row): a page is something you read, and
 //      this control is how one comes to exist. Inlined, because the station's LAN
 //      has no internet and a fetched icon is a button that loses its mark with
-//      the link. The BANNER's own mark is the plain page, on purpose: the block
-//      is about reports, the button is about writing one.
+//      the link. The BANNER's own mark is the office's folder artwork on the
+//      station's blue disc on purpose: the block is about the reports themselves,
+//      the button is about writing one — and two pens on one card would be the
+//      same mark twice.
 //   2. THE FILL. Gold (`--ir-gold`), on the banner's navy, with the NAVY as the
 //      ink — white on this gold is 2.0:1 and would be the one unreadable label in
 //      the product. Gold here is not decoration: it is the only filled control in
 //      the workspace besides the brand blue's commit bars, and the blue would
 //      have made this read as one more form button on a page that has no form.
-//      (The BLUE belongs to the two blocks' MARKS — the banner's and the REMEMBER
-//      heading's, on the same accent disc — which is a different job from filling
-//      a control, and the last test in this file holds both of them there.)
+//      (The banner's own mark is still the accent disc — that is what the block
+//      has always worn — but the page glyph on it has been replaced by the office's
+//      folder artwork, so the disc and the reminder heading's gold tile are two
+//      different objects and the second test in this file holds them apart.)
 //   3. THE GENERIC BUTTON TREATMENT. `.ir-body button:not(…)` paints every
 //      ordinary control a white plate with a hairline. It out-specifies anything
 //      Home states in a lower chain, which is how the register's rows once came
@@ -78,43 +81,102 @@ test('the plate carries the inlined pen-and-report mark, and the banner the plai
   // would leave the page blank on a LAN with no internet.
   assert.doesNotMatch(paths, /https?:\/\//, 'a mark is fetched from somewhere');
 
-  // The banner's OWN mark — the disc at its left — is the plain report page: a
-  // different meaning, so a different drawing. Two pens on one card would be the
-  // same mark twice. Read from the disc itself, because the button is inside the
-  // banner and carries the pen.
+  // The banner's OWN mark — the folder at its left — is the OFFICE'S ARTWORK: a
+  // file, not a drawing, like the band's shield and the two seals at the foot of
+  // the page. It replaced the plain page glyph that used to be inlined INTO the
+  // accent disc, so there is no HomeMark in there any more — and it is still not
+  // the button's pen: the plate is about writing a report, this mark is about the
+  // reports.
+  // Read from the mark itself, because the button is inside the banner.
   const bar = banner();
   const discAt = bar.indexOf('ir-home-banner-icon');
   assert.notEqual(discAt, -1, 'the banner lost its mark');
   const disc = bar.slice(discAt, bar.indexOf('</span>', discAt));
-  assert.match(disc, /<HomeMark name="file" /, 'the banner lost its report mark');
+  assert.match(
+    disc,
+    /<img className="ir-home-banner-mark" src=\{folderMark\} alt="" \/>/,
+    'the banner mark is not the folder artwork',
+  );
   assert.doesNotMatch(disc, /name="filePen"/, 'the banner wears the button’s pen');
+  assert.doesNotMatch(disc, /<HomeMark/, 'the banner mark went back to an inlined glyph');
+  // …and the artwork is BUNDLED, not fetched: the station's LAN has no internet,
+  // so a mark behind a URL is a mark that disappears with the link.
+  assert.match(
+    SRC,
+    /import folderMark from '\.\.\/assets\/folder\.png';/,
+    'the folder mark is not imported from the app’s own assets',
+  );
 });
 
-test('the page’s two headings each wear a plate on navy, and neither is a fourth item', () => {
-  // ONE RECIPE, TWO PLACES. The action banner's mark is the station's blue disc
-  // with a white glyph on it; the REMEMBER heading's is a gold tile with the
-  // navy as its ink (the action PLATE's own pair, one column over). It used to
-  // be the accent disc on both, on the argument that the page's two headings
-  // should wear one MARK — they now wear one GRAMMAR, a rounded plate on navy
-  // with the station's ink in it, which leaves the blue to the job blue actually
-  // has on this page: the action itself.
-  const bannerDisc = SHEET.match(/\.ir-home-banner-icon\s*\{[^}]*\}/);
-  assert.ok(bannerDisc, '.ir-home-banner-icon is gone from the stylesheet');
-  assert.match(bannerDisc[0], /background:\s*var\(--ir-blue\)/, 'the banner mark is not the accent disc');
-  assert.match(bannerDisc[0], /color:\s*#fff/, 'the banner mark’s glyph is not white');
+test('the banner’s mark is the office’s folder ON the disc, and the reminder’s heading the office’s shield ON its tile', () => {
+  // THE DISC AND THE TILE ARE TWO OBJECTS, and that is the thing that can silently
+  // rot here. The banner's mark is the station's blue disc with the office's folder
+  // artwork standing on it, and the REMEMBER heading's is a gold tile with the navy
+  // as its ink. Each keeps its own pair, and each is stated on its own box.
+  //
+  // The blue is the disc's own, not the card's ink at low alpha: a disc of
+  // translucent white on navy comes out a dull slate that reads as a pressed
+  // button rather than as a mark (white on this blue is 5.9:1, which is also why
+  // the ring at its edge is white at low alpha). No INK is named any more, though:
+  // the disc used to hold a glyph drawn in `currentColor` and it now holds
+  // artwork, so a `color` here would be a declaration with nothing to paint.
+  const bannerMark = SHEET.match(/\.ir-home-banner-icon\s*\{[^}]*\}/);
+  assert.ok(bannerMark, '.ir-home-banner-icon is gone from the stylesheet');
+  assert.match(bannerMark[0], /background:\s*var\(--ir-blue\)/, "the banner mark is not the station's blue disc");
+  assert.match(bannerMark[0], /border-radius:\s*50%/, 'the banner mark is no longer a disc');
+  assert.doesNotMatch(bannerMark[0], /^\s*color\s*:/m, 'the disc names an ink for artwork that brings its own');
+  // …and the artwork is drawn to its box rather than stretched to it, and INSET
+  // into the disc: stretched to the rim the folder would read as a blue shape with
+  // an amber corner, and 70% of the disc is the largest square whose corners still
+  // fall inside the circle (a shade under 71% of the diameter), so the blue shows
+  // as a rim all the way round without the artwork being clipped by the curve.
+  const bannerImg = SHEET.match(/\.ir-home-banner-mark\s*\{[^}]*\}/);
+  assert.ok(bannerImg, 'the banner mark’s artwork has no rule of its own');
+  assert.match(bannerImg[0], /object-fit:\s*contain/, 'the folder is stretched into the mark’s box');
+  const share = bannerImg[0].match(/width:\s*([0-9.]+)%/);
+  assert.ok(share, 'the folder no longer states its size as a share of the disc');
+  assert.ok(Number(share[1]) < 100, 'the folder fills the disc, so the blue behind it is gone');
+  assert.ok(Number(share[1]) <= 70.8, 'the folder is drawn past the disc’s curve');
 
   const titleTile = SHEET.match(/\.ir-remember-title-mark\s*\{[^}]*\}/);
   assert.ok(titleTile, '.ir-remember-title-mark is gone from the stylesheet');
   assert.match(titleTile[0], /background:\s*var\(--ir-gold\)/, 'the reminder heading lost the gold tile');
-  assert.match(
-    titleTile[0],
-    /color:\s*var\(--ir-on-gold\)/,
-    'the tile’s glyph is not the navy measured against this gold (white on it is 2.0:1)',
-  );
-  // White on the banner's blue is 5.9:1; the navy on this gold is 8.2:1. And the
-  // tile is SQUARE while the banner's disc is round — as are the three marks under
-  // it (a circle on each panel) — so the heading must not read as a fourth item.
+  // NO INK on the tile: it used to hold a glyph drawn in --ir-on-gold and it holds
+  // ARTWORK now, which brings its own colour, so a `color` here would be a
+  // declaration with nothing to paint. Exactly the disc's own rule above — the
+  // reasoning is stated there and this is the same pair of boxes.
+  assert.doesNotMatch(titleTile[0], /^\s*color\s*:/m, 'the tile names an ink for artwork that brings its own');
+  // And the tile is SQUARE — as are the three marks under it (a circle on each
+  // panel, and the three of them are the list) — so the heading must not read as a
+  // fourth item.
   assert.doesNotMatch(titleTile[0], /border-radius:\s*50%/, 'the heading reads as a fourth item');
+
+  // THE MARK ON IT is the office's own shield artwork, the second file on this
+  // page after the folder. It is read from the heading itself, so putting a drawn
+  // glyph back in there fails here even if the import survives.
+  const headingAt = SRC.indexOf('<h2 className="ir-remember-title">');
+  assert.notEqual(headingAt, -1, 'the reminder’s heading is gone');
+  const heading = SRC.slice(headingAt, SRC.indexOf('</h2>', headingAt));
+  assert.match(
+    heading,
+    /<img className="ir-remember-title-mark-art" src=\{shieldMark\} alt="" \/>/,
+    'the reminder’s mark is not the shield artwork',
+  );
+  assert.doesNotMatch(heading, /<HomeMark/, 'the reminder’s heading went back to an inlined glyph');
+  // …and, like the folder, the artwork is BUNDLED rather than fetched: the
+  // station's LAN has no internet, so a mark behind a URL disappears with the link.
+  assert.match(
+    SRC,
+    /import shieldMark from '\.\.\/assets\/shield\.png';/,
+    'the shield mark is not imported from the app’s own assets',
+  );
+  const art = SHEET.match(/\.ir-remember-title-mark-art\s*\{[^}]*\}/);
+  assert.ok(art, 'the shield artwork has no rule of its own');
+  assert.match(art[0], /object-fit:\s*contain/, 'the shield is stretched into the tile');
+  const artShare = art[0].match(/width:\s*([0-9.]+)%/);
+  assert.ok(artShare, 'the shield no longer states its size as a share of the tile');
+  assert.ok(Number(artShare[1]) < 100, 'the shield fills the tile, so the gold behind it is gone');
+  assert.ok(Number(artShare[1]) <= 70.8, 'the shield is drawn past the tile’s corners');
 });
 
 test("the plate is the station's gold, and the label reads in navy on it", () => {

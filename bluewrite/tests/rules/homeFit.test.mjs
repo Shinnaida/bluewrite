@@ -155,7 +155,7 @@ test('the page compresses with the window — the AIR gives way, never the type'
     '.ir-home-body',
     '.ir-home-drafts',
     '.ir-home-footer',
-    '.ir-draft-row',
+    '.ir-draft-card',
     // …and the ADVICE CARD, which is the one block here that is not a row of
     // the page but a card with an inside: its gutter, the band's margins, the
     // gaps between the panels and the panels' own padding all give way, because

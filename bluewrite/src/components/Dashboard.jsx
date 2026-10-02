@@ -418,7 +418,13 @@ export default function Dashboard({ user, notify, onConnError, onOpenReports }) 
               <button
                 key={d}
                 type="button"
-                className={preset === d ? 'is-active' : ''}
+                // `dash-chip` on both groups, because the two strips are ONE
+                // control: `.dash-scope button`/`.dash-presets button` draw the
+                // segments, and the class is what tells `.ir-body`'s
+                // `button:not(…)` treatment to leave them alone — without it
+                // every chip grew its own fill and its own border on all four
+                // sides, and the joined strip read as four loose buttons.
+                className={`dash-chip ${preset === d ? 'is-active' : ''}`}
                 onClick={() => applyPreset(d)}
               >
                 {d}d

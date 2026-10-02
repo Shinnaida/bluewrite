@@ -51,6 +51,21 @@ import citySeal from '../assets/city-of-naga-seal.png';
 // been keyed out, so the shield's interior is whatever it is sitting on (see
 // .ir-home-hero-mark).
 import brandMark from '../assets/bluewrite-mark.png';
+// The banner's mark: the open folder with the page standing up out of it — the
+// register the officer is about to write into — ON the accent disc that block
+// has always worn. A FILE for the reason the shield above and the two seals
+// below are files, and flat art rather than one of the inlined marks by request.
+// Its own background has been keyed out, so the folder brings no white matte of
+// its own to the disc it sits on (see .ir-home-banner-icon).
+import folderMark from '../assets/folder.png';
+// REMEMBER's heading mark: the office's own shield, the gold line art from the
+// same set as the folder above. A FILE for the reason the folder and the two
+// seals at the foot of the page are files, and it replaces the inlined shield
+// glyph this heading used to draw: the heading is the one mark on Home that is
+// the station's crest rather than one of the page's own drawings. It stands ON
+// the gold tile (see .ir-remember-title-mark), so its strokes are read as a tone
+// against the tile rather than as a shape cut out of it.
+import shieldMark from '../assets/shield.png';
 // The office and the build Home's signature line signs with. Both are stated
 // once, in lib/appInfo, because the gate and About state the version too — a
 // second typed-out copy is how a footer ends up advertising a version the
@@ -1626,10 +1641,11 @@ const isClockDigit = (ch) => ch >= '0' && ch <= '9';
 // ---------------------------------------------------------------------------
 // Home's own marks, inlined.
 //
-// WHY A MAP RATHER THAN TEN INLINE SVGS. The band and the cards below it carry
-// ten marks between them — the clock, the document on the banner and on every
-// draft row, the calendar and the officer on a row's meta, the arrow on both "go"
-// controls, the kebab, the shield on REMEMBER's heading and the three beneath it.
+// WHY A MAP RATHER THAN NINE INLINE SVGS. The band and the cards below it carry
+// nine drawn marks between them — the clock, the document on every draft row, the
+// calendar and the officer on a row's meta, the arrow on both "go" controls, the
+// kebab, and the four under REMEMBER's heading (the heading's own mark is the
+// office's artwork, not one of these).
 // Written out at each use site (which is the house style elsewhere in
 // this file) that is ten SVG literals interleaved with the page's markup, and
 // the page stops being readable at the one screen an officer reads before they
@@ -1644,10 +1660,11 @@ const isClockDigit = (ch) => ch >= '0' && ch <= '9';
 const SHIELD_PATH =
   'M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z';
 const HOME_MARK_PATHS = {
-  // A shield, on its own: REMEMBER's heading wears it (see the aside) — and
-  // `shieldCheck` below is the same outline with a tick in it. The hero's own
-  // lockup does NOT use this: it wears the office's logo, which is a file.
-  shield: [SHIELD_PATH],
+  // The shield outline (SHIELD_PATH above) is drawn once, as `shieldCheck` below
+  // — the same shape with a tick in it. It used to carry a second entry here, the
+  // plain shield REMEMBER's heading wore; that heading wears the OFFICE'S SHIELD
+  // ARTWORK now, a file rather than one of these drawings, for the reason the
+  // hero's own lockup is a file.
   clock: ['M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0', 'M12 6.4V12l4 2.4'],
   // A document with a folded corner and two lines: a report that EXISTS. Home's
   // own action uses `filePen` below instead, because a page is something you
@@ -1948,13 +1965,17 @@ export function ReportWelcome({
               the biggest object on Home because starting a report is the only
               thing an officer comes to this screen to do.
 
-              THE GLYPH IS A REPORT THAT EXISTS (a page with lines), not the
-              pen the button wears: the plate is the BANNER's mark and says what
-              the block is about, and the button beside it already says WRITE.
-              Two pens on one card would be the same mark twice. */}
+              THE MARK IS THE OFFICE'S OWN ARTWORK, not one of the page's drawn
+              glyphs — an open folder with a page standing out of it, which is
+              what the block is about and what the register inside it holds — ON
+              the blue disc, so the folder reads as the app's own art on the
+              page's mark rather than as a silhouette on the card. It is
+              deliberately NOT the pen the button wears: that plate is about
+              WRITING a report, this mark is about the reports themselves, and
+              two pens on one card would be the same mark twice. */}
           <section className="ir-home-banner">
             <span className="ir-home-banner-icon" aria-hidden="true">
-              <HomeMark name="file" size={26} stroke={1.7} />
+              <img className="ir-home-banner-mark" src={folderMark} alt="" />
             </span>
             <div className="ir-home-banner-copy">
               <p className="ir-home-banner-kicker">AI-Assisted Reporting</p>
@@ -2005,70 +2026,131 @@ export function ReportWelcome({
 
             {!loading && recent.length > 0 && (
               <ul className="ir-home-list">
-                {recent.map((r) => (
+                {recent.map((r) => {
+                  const number = `BW-${String(r.id).padStart(4, '0')}`;
+                  // HOW FAR ALONG IT IS, as the API derived it (see
+                  // app/core/DraftProgress.php): the five sections the writer
+                  // walks through, and how many of them hold something. A row
+                  // from a build that predates the tally draws no strip at all
+                  // rather than a bar with no number behind it.
+                  const progress = r.progress ?? null;
+                  const percent =
+                    progress && progress.total > 0
+                      ? Math.min(100, Math.round((progress.done / progress.total) * 100))
+                      : 0;
+                  return (
                   <li
                     key={r.id}
-                    /* The just-moved row, the same green flash the register
+                    /* The just-moved card, the same green flash the register
                        uses so the eye can find it again. */
-                    className={`ir-draft-row${flashId === r.id ? ' is-flash' : ''}`}
+                    className={`ir-draft-card${flashId === r.id ? ' is-flash' : ''}`}
                   >
-                    <span className="ir-draft-plate" aria-hidden="true">
-                      <HomeMark name="file" size={20} stroke={1.7} />
-                    </span>
-
-                    <span className="ir-draft-main">
-                      <span className={`badge ${r.status}`}>{r.status}</span>
-                      <span className="ir-draft-no">BW-{String(r.id).padStart(4, '0')}</span>
-                      <span className="ir-draft-type">{r.incident_type}</span>
-                    </span>
-
-                    {/* WHAT the record is about, as facts: when it happened and
-                        who recorded it. Two lines with their own marks, because
-                        they are two different questions and a reader scans down
-                        each column. The officer's name is the join the list
-                        already carries (`created_by_name`); a record whose
-                        account has gone renders no second line rather than an
-                        empty label. */}
-                    <span className="ir-draft-meta">
-                      <span className="ir-draft-meta-line">
-                        <HomeMark name="calendar" size={14} stroke={1.8} />
-                        {fmtIncident(r.incident_datetime)}
+                    {/* The card's own row: the record's mark, the identity, and
+                        the two things a reader wants at the END of the line —
+                        when it happened and its two controls. The gold stripe
+                        down the left edge is painted by the card itself (see
+                        .ir-draft-card::before), so nothing here draws it. */}
+                    <div className="ir-draft-body">
+                      <span className="ir-draft-plate" aria-hidden="true">
+                        <HomeMark name="file" size={26} stroke={1.6} />
                       </span>
-                      {r.created_by_name && (
-                        <span className="ir-draft-meta-line">
-                          <HomeMark name="person" size={14} stroke={1.8} />
-                          {r.created_by_name}
+
+                      <span className="ir-draft-identity">
+                        <span className="ir-draft-pills">
+                          <span className={`badge ${r.status}`}>{r.status}</span>
+                          {/* A sensitive type's account is written under the
+                              clinical-language rule (see SENSITIVE_TYPES), and
+                              the card says so rather than leaving it to be
+                              inferred from the type's name. It is the record's
+                              own fact, not a state of the record: filing it does
+                              not clear it, which is also why it is not one of
+                              the two status pills. */}
+                          {SENSITIVE_TYPES.includes(r.incident_type) && (
+                            <span className="ir-draft-sensitive">Sensitive</span>
+                          )}
                         </span>
-                      )}
-                    </span>
+                        <span className="ir-draft-no">{number}</span>
+                        <span className="ir-draft-type">{r.incident_type}</span>
+                      </span>
 
-                    {/* The row's own way in. It says CONTINUE on the draft it
-                        continues and OPEN on anything else — Home lists drafts,
-                        but a report can change status while the page is open,
-                        and a button that says "Continue" over a submitted
-                        report would be promising an edit it cannot make. */}
-                    <button
-                      type="button"
-                      className="ir-draft-go"
-                      onClick={() => onOpenReport(r)}
-                    >
-                      {r.status === 'draft' ? 'Continue' : 'Open'}
-                      <HomeMark name="arrow" size={15} stroke={2} />
-                    </button>
+                      <span className="ir-draft-aside">
+                        {/* WHAT the record is about, as facts: when it happened
+                            and who recorded it. Two lines with their own marks,
+                            because they are two different questions and a reader
+                            scans down each column. The officer's name is the join
+                            the list already carries (`created_by_name`); a record
+                            whose account has gone renders no second line rather
+                            than an empty label. */}
+                        <span className="ir-draft-meta">
+                          <span className="ir-draft-meta-line">
+                            <HomeMark name="calendar" size={15} stroke={1.8} />
+                            {fmtIncident(r.incident_datetime)}
+                          </span>
+                          {r.created_by_name && (
+                            <span className="ir-draft-meta-line">
+                              <HomeMark name="person" size={15} stroke={1.8} />
+                              {r.created_by_name}
+                            </span>
+                          )}
+                        </span>
 
-                    {/* The row's kebab: the register's OWN menu, on the same
-                        record. The whole row used to be the target; it cannot
-                        be any more, because a button cannot hold buttons. */}
-                    <button
-                      type="button"
-                      className="ir-draft-more"
-                      onClick={(event) => openRowMenu(r, event)}
-                      aria-label={`Actions for report BW-${String(r.id).padStart(4, '0')}`}
-                    >
-                      <HomeMark name="more" size={18} stroke={2} />
-                    </button>
+                        <span className="ir-draft-actions">
+                          {/* The card's own way in. It says CONTINUE on the draft
+                              it continues and OPEN on anything else — Home lists
+                              drafts, but a report can change status while the
+                              page is open, and a button that says "Continue"
+                              over a submitted report would be promising an edit
+                              it cannot make. */}
+                          <button
+                            type="button"
+                            className="ir-draft-go"
+                            onClick={() => onOpenReport(r)}
+                          >
+                            {r.status === 'draft' ? 'Continue' : 'Open'}
+                            <HomeMark name="arrow" size={16} stroke={2} />
+                          </button>
+
+                          {/* The card's kebab: the register's OWN menu, on the
+                              same record. The whole row used to be the target;
+                              it cannot be any more, because a button cannot hold
+                              buttons. */}
+                          <button
+                            type="button"
+                            className="ir-draft-more"
+                            onClick={(event) => openRowMenu(r, event)}
+                            aria-label={`Actions for report ${number}`}
+                          >
+                            <HomeMark name="more" size={18} stroke={2} />
+                          </button>
+                        </span>
+                      </span>
+                    </div>
+
+                    {/* The strip under the rule: what the number is FOR — the
+                        reader can see a half-written draft is half-written
+                        before opening it. The track is decoration and is marked
+                        as such; the two numbers beside it are the fact, so a
+                        screen reader reads "3 of 5 sections" once, as text. */}
+                    {progress && (
+                      <div className="ir-draft-progress">
+                        <p className="ir-draft-progress-head">
+                          <span className="ir-draft-progress-label">Draft progress</span>
+                          <span className="ir-draft-progress-count">
+                            {progress.done} of {progress.total} sections
+                          </span>
+                        </p>
+                        <span
+                          className="ir-draft-progress-track"
+                          aria-hidden="true"
+                          style={{ '--ir-draft-fill': `${percent}%` }}
+                        >
+                          <span className="ir-draft-progress-fill" />
+                        </span>
+                      </div>
+                    )}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </section>
@@ -2084,13 +2166,14 @@ export function ReportWelcome({
             lives there, this is the copy. */}
         <aside className="ir-remember">
           <h2 className="ir-remember-title">
-            {/* The gold tile, with the navy as its ink: the action plate's own
-                pair, one column over, so the page's two headings wear one
-                RECIPE (a plate on navy) while the blue stays with the action.
+            {/* The gold tile — the action plate's own pair, one column over, so
+                the page's two headings wear one RECIPE (a plate on navy) while
+                the blue stays with the action — and ON it the office's own
+                shield artwork, where an inlined shield glyph used to stand.
                 It is SQUARE and the three below are CIRCLES, so the heading is
                 not a fourth item in the list. */}
             <span className="ir-remember-title-mark" aria-hidden="true">
-              <HomeMark name="shield" size={17} stroke={1.9} />
+              <img className="ir-remember-title-mark-art" src={shieldMark} alt="" />
             </span>
             Remember
           </h2>

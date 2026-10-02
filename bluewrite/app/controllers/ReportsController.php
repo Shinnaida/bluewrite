@@ -6,6 +6,7 @@ namespace App\Controllers;
 use App\Core\Audit;
 use App\Core\Auth;
 use App\Core\Database;
+use App\Core\DraftProgress;
 use App\Core\LanguageRegistry;
 use App\Core\ReportVerification;
 use App\Core\Response;
@@ -252,12 +253,18 @@ final class ReportsController
         $countStmt->execute($params);
         $total = (int) $countStmt->fetchColumn();
 
+        // The reporting party's three fields, the disposition's two, the per-type
+        // blob and the narrative are read for the DRAFT PROGRESS read-out and are
+        // stripped again below, with the narrative the list has always dropped:
+        // what leaves this endpoint is a count, not the officer's own words.
         $sql = "SELECT r.id, r.incident_type, r.report_date, r.blotter_no, r.blotter_date,
                     r.incident_datetime, r.incident_date, r.incident_time,
                     r.incident_time_approximate, r.location, r.status,
                     r.narrative_language, r.narrative_source_language,
                     r.created_by, u.full_name AS created_by_name, r.deleted_at,
-                    r.narrative, r.narrative_source_text
+                    r.narrative, r.narrative_source_text,
+                    r.reporter_name, r.reporter_contact, r.reporter_address,
+                    r.action_taken, r.ioc_name, r.type_specific
              FROM reports r JOIN users u ON u.id = r.created_by
              WHERE {$whereSql}
              ORDER BY {$orderBy}, r.id DESC
@@ -272,7 +279,24 @@ final class ReportsController
         // rule the list has always followed).
         $rows = $this->attachVerificationStatus($pdo, $stmt->fetchAll());
         foreach ($rows as &$row) {
-            unset($row['narrative'], $row['narrative_source_text']);
+            // HOW FAR ALONG THE DRAFT IS, for the read-out on Home's cards. It is
+            // derived from this row (never stored), so it is right for a draft any
+            // client wrote, and it is attached BEFORE the columns it reads are
+            // dropped below — the count leaves the endpoint, the fields do not.
+            // Every row gets one, drafts and filed reports alike: nobody files a
+            // half-written report, so the number is only ever interesting on a
+            // draft, and the card divides by `total` either way.
+            $row['progress'] = DraftProgress::forRow($row);
+            unset(
+                $row['narrative'],
+                $row['narrative_source_text'],
+                $row['reporter_name'],
+                $row['reporter_contact'],
+                $row['reporter_address'],
+                $row['action_taken'],
+                $row['ioc_name'],
+                $row['type_specific']
+            );
         }
         unset($row);
 

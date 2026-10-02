@@ -11,9 +11,10 @@
 //
 // THE REPORTS ARE THE STATION'S OWN SHAPE, not a hand-typed pair of fields: they
 // are what `GET /reports` returns for the Home list, including `created_by_name`,
-// which is the JOIN the row's second meta line reads. A fixture that omitted it
-// would test the drawing against a payload the endpoint never sends — and the
-// officer's name is exactly the part a client gets wrong.
+// which is the JOIN the card's second meta line reads, and `progress`, the
+// section tally the API derives for every row (see app/core/DraftProgress.php).
+// A fixture that omitted either would test the drawing against a payload the
+// endpoint never sends — and those two are exactly the parts a client gets wrong.
 
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -27,7 +28,9 @@ export const USER = {
   role: 'Officer',
 };
 
-/** Two drafts, newest first — the register's own order. */
+/** Two drafts, newest first — the register's own order. The first is a SENSITIVE
+ *  type (see SENSITIVE_TYPES in src/lib/incidentTypes.js), so the cards between
+ *  them cover both the two-pill and the one-pill drawing. */
 export const DRAFTS = [
   {
     id: 324,
@@ -36,6 +39,7 @@ export const DRAFTS = [
     incident_datetime: '2026-09-30 02:44:00',
     created_by_name: 'Shaine',
     location: 'Barangay Poblacion',
+    progress: { done: 3, total: 5 },
   },
   {
     id: 323,
@@ -44,6 +48,7 @@ export const DRAFTS = [
     incident_datetime: '2026-09-29 16:15:00',
     created_by_name: 'Shaine',
     location: 'National Highway',
+    progress: { done: 1, total: 5 },
   },
 ];
 
@@ -56,6 +61,7 @@ export const MIXED = [
     status: 'submitted',
     incident_datetime: '2026-09-28 09:05:00',
     created_by_name: 'Maria Santos',
+    progress: { done: 5, total: 5 },
   },
   {
     id: 321,
@@ -63,6 +69,7 @@ export const MIXED = [
     status: 'finalized',
     incident_datetime: '2026-09-27 20:40:00',
     created_by_name: 'Shaine',
+    progress: { done: 5, total: 5 },
   },
 ];
 

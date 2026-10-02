@@ -51,6 +51,12 @@ require __DIR__ . '/../app/core/AvatarPhoto.php';
 require __DIR__ . '/../app/core/LegacyNormalizer.php';
 require __DIR__ . '/../app/core/Station.php';
 require __DIR__ . '/../app/core/ReportVerification.php';
+// How far along each draft is: the tally Home's draft cards wear, derived from
+// the row itself so it is right for a draft any client saved (see the class).
+// Reached by ReportsController::index, and required here for this project's
+// usual reason — without an autoloader, a class named on a request path but not
+// listed here is a fatal error at the point of use rather than at boot.
+require __DIR__ . '/../app/core/DraftProgress.php';
 // Phase 6 Stage 5 (Track A) — the language registry reader. Required here
 // because this project has no autoloader: every class the request path can
 // reach is required explicitly (see the rest of this list).

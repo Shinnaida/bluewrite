@@ -111,19 +111,33 @@ test('the action is one gold plate, and it is Home’s own control', async () =>
   // The mark is the pen-and-report file-pen, inlined — and it is not the plain
   // page the app draws for a report that already exists.
   assert.match(html, /M12\.659 22H18a2 2 0 0 0 2-2V8/, 'the action lost its file-pen mark');
-  // EVERY MARK ON THIS PAGE IS DRAWN, with three exceptions, and they are the
-  // station's own artwork files: the two seals in the signature band, and the
-  // office's mark beside the wordmark. Nothing here is fetched from anywhere, and
-  // nothing else may become an image unnoticed.
+  // EVERY MARK ON THIS PAGE IS DRAWN, with five exceptions, and all five are the
+  // station's own artwork files: the two seals in the signature band, the office's
+  // mark beside the wordmark, the folder on the action banner, and the shield on
+  // the reminder's heading. Nothing here is fetched from anywhere, and nothing else
+  // may become an image unnoticed.
   const imgs = html.match(/<img[^>]*>/g) ?? [];
-  assert.equal(imgs.length, 3, 'Home draws a different number of images');
+  assert.equal(imgs.length, 5, 'Home draws a different number of images');
   for (const img of imgs) {
     assert.match(
       img,
-      /ir-home-footer-seal|ir-home-hero-mark/,
+      /ir-home-footer-seal|ir-home-hero-mark|ir-home-banner-mark|ir-remember-title-mark-art/,
       'Home draws an image that is not the station’s own artwork',
     );
   }
+  // The banner's mark is the folder the block is about, and it is DECORATIVE for
+  // the same reason the band's is: the copy beside it already says what the block
+  // is, so the artwork takes an empty alt rather than being announced first.
+  const folder = imgs.filter((img) => img.includes('ir-home-banner-mark'));
+  assert.equal(folder.length, 1, 'the action banner lost the office’s folder mark');
+  assert.match(folder[0], /alt=""/, 'the banner’s mark is not stated as decorative');
+  assert.doesNotMatch(folder[0], /<svg/, 'the banner’s mark is drawn rather than the office’s own file');
+  // The reminder's heading wears the office's shield, decorative on the same
+  // argument: the heading's own word already names the card, so the artwork takes
+  // an empty alt rather than being announced before it.
+  const shield = imgs.filter((img) => img.includes('ir-remember-title-mark-art'));
+  assert.equal(shield.length, 1, 'the reminder’s heading lost the office’s shield');
+  assert.match(shield[0], /alt=""/, 'the shield is not stated as decorative');
   // The lockup's mark is the office's own logo, and it is DECORATIVE: it sits
   // beside the wordmark, which already says the name, so it takes an empty alt
   // rather than repeating it to a screen reader.
@@ -142,38 +156,70 @@ test('the drafts section lists DRAFTS, as cards with a way in and a menu', async
   assert.match(html, /View all/, 'the way out lost its label');
 
   // One card per draft, in the order the shell sent them.
-  assert.equal(html.split('class="ir-draft-row').length - 1, DRAFTS.length, 'a draft is missing a row');
+  assert.equal(html.split('class="ir-draft-card').length - 1, DRAFTS.length, 'a draft is missing a card');
   const first = html.indexOf('BW-0324');
   const second = html.indexOf('BW-0323');
   assert.ok(first !== -1 && second !== -1, 'the record numbers are gone');
   assert.ok(first < second, 'the newest draft must lead');
 
-  // Each row carries: the mark, the state pill, the number, the type, when it
-  // happened, who recorded it, a way in and a menu.
+  // Each card carries: the mark, the identity and its pills, when it happened,
+  // who recorded it, its two controls and its progress strip.
   for (const part of [
     'ir-draft-plate',
-    'ir-draft-main',
+    'ir-draft-identity',
+    'ir-draft-pills',
     'ir-draft-no',
     'ir-draft-type',
+    'ir-draft-aside',
     'ir-draft-meta',
+    'ir-draft-actions',
     'ir-draft-go',
     'ir-draft-more',
+    'ir-draft-progress',
   ]) {
-    assert.ok(html.includes(part), `${part} is missing from the draft row`);
+    assert.ok(html.includes(part), `${part} is missing from the draft card`);
   }
-  assert.equal(html.split('class="ir-draft-go"').length - 1, DRAFTS.length, 'a row lost its way in');
-  assert.equal(html.split('class="ir-draft-more"').length - 1, DRAFTS.length, 'a row lost its menu');
-  assert.match(html, /class="badge draft">draft</, 'the row lost the shared status pill');
-  assert.match(html, /Rape \/ Sexual Assault/, 'the row lost the incident type');
-  assert.match(html, /Sep 30, 2026/, 'the row lost the date');
-  assert.match(html, /Shaine/, 'the row lost the officer who recorded it');
+  assert.equal(html.split('class="ir-draft-go"').length - 1, DRAFTS.length, 'a card lost its way in');
+  assert.equal(html.split('class="ir-draft-more"').length - 1, DRAFTS.length, 'a card lost its menu');
+  assert.match(html, /class="badge draft">draft</, 'the card lost the shared status pill');
+  assert.match(html, /Rape \/ Sexual Assault/, 'the card lost the incident type');
+  assert.match(html, /Sep 30, 2026/, 'the card lost the date');
+  assert.match(html, /Shaine/, 'the card lost the officer who recorded it');
+
+  // THE SENSITIVE PILL, on the card that has one: the sensitive types are the
+  // station's own list (SENSITIVE_TYPES), and the second fixture draft is not one
+  // — so exactly one pill is drawn, which is what keeps it a fact about the
+  // record rather than a decoration on every card.
+  assert.equal(html.split('ir-draft-sensitive').length - 1, 1, 'the sensitive card lost its pill');
+  // …and on the RIGHT card: the first card's own slice holds it, and the second
+  // card's does not. Asserted on the markup rather than on the count alone,
+  // because one pill on the wrong record is the failure a count cannot see.
+  const firstCardAt = html.indexOf('class="ir-draft-card');
+  const secondCardAt = html.indexOf('class="ir-draft-card', firstCardAt + 1);
+  const firstCard = html.slice(firstCardAt, secondCardAt);
+  const secondCard = html.slice(secondCardAt);
+  assert.ok(firstCard.includes('ir-draft-sensitive'), 'the sensitive pill is not on the sensitive record');
+  assert.ok(firstCard.includes('BW-0324'), 'the cards are no longer in the order the shell sent them');
+  assert.ok(!secondCard.includes('ir-draft-sensitive'), 'the pill is on a record whose type is not sensitive');
+
+  // THE PROGRESS STRIP, in the API's words: the label, the count, and a bar
+  // whose width IS the fraction of the count. Read from the fixtures' own tallies
+  // (3 of 5 and 1 of 5), so a bar that stops following its number fails here.
+  assert.match(html, />Draft progress</, 'the strip lost its label');
+  assert.match(html, />3 of 5 sections</, 'the strip lost the tally the API derived');
+  assert.match(html, /--ir-draft-fill:60%/, 'the bar is not the fraction of the tally');
+  assert.match(html, /--ir-draft-fill:20%/, 'the second card’s bar is not its own tally');
+  // The bar is decoration; the numbers are the fact (the strip's own comment in
+  // the stylesheet says so). A `progressbar` role here would announce the same
+  // number a second time.
+  assert.equal(html.split('ir-draft-progress-track" aria-hidden="true"').length - 1, DRAFTS.length, 'the track is announced to a screen reader');
 
   // The kebab is the only unlabelled control on the page, so it carries its own
   // name — and it is a menu, not a link.
   assert.match(
     html,
     /class="ir-draft-more"[^>]*aria-label="Actions for report BW-0324"/,
-    'the row menu has no accessible name',
+    'the card menu has no accessible name',
   );
 
   // A DRAFT says Continue; anything else says Open. A button promising to
@@ -181,7 +227,7 @@ test('the drafts section lists DRAFTS, as cards with a way in and a menu', async
   assert.match(html, /class="ir-draft-go">Continue/, 'a draft does not offer Continue');
   const mixed = renderHome({ reports: MIXED });
   assert.equal(
-    mixed.split('class="ir-draft-row').length - 1,
+    mixed.split('class="ir-draft-card').length - 1,
     2,
     'the drafts section drew a report that is not a draft',
   );
@@ -271,18 +317,24 @@ test('the page closes on the signature band, and the grid backdrop is gone', asy
 });
 
 test('a quiet week and a slow read both state themselves', async () => {
-  const { renderHome } = await load();
+  const { renderHome, DRAFTS } = await load();
 
   // No drafts: the section says what it is, rather than "no reports" on a page
   // whose head is "Recent drafts".
   const empty = renderHome({ reports: [] });
   assert.match(empty, /No drafts right now/, 'the empty state does not name the section');
-  assert.equal(empty.split('class="ir-draft-row').length - 1, 0, 'an empty list drew rows');
+  assert.equal(empty.split('class="ir-draft-card').length - 1, 0, 'an empty list drew cards');
   assert.ok(!empty.includes('ir-draft-go'), 'an empty list drew a Continue button');
 
   // Loading: the list is not drawn at all, so nothing claims there are no drafts
   // while the answer is still in flight.
   const loading = renderHome({ loading: true, reports: [] });
   assert.match(loading, /Loading your reports/, 'the loading state says nothing');
-  assert.equal(loading.split('class="ir-draft-row').length - 1, 0, 'the loading state drew rows');
+  assert.equal(loading.split('class="ir-draft-card').length - 1, 0, 'the loading state drew cards');
+
+  // A row with NO tally draws no strip, rather than a bar with no number behind
+  // it — the shape a payload from a build that predates the read-out arrives in.
+  const untallied = renderHome({ reports: [{ ...DRAFTS[0], progress: undefined }] });
+  assert.ok(!untallied.includes('ir-draft-progress'), 'a card with no tally still drew a bar');
+  assert.ok(untallied.includes('ir-draft-go'), 'the rest of the card was dropped with the strip');
 });

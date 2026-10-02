@@ -38,6 +38,14 @@ export default function ConnectionNotice({ message, detail, onRetry, compact = f
 // view loses the server mid-session (autosave failure, list refresh, etc.).
 // Always offers a retry: the server or database may be back at any moment,
 // and the banner must never trap the user in a stale state.
+//
+// THE RETRY CARRIES A CLASS FOR ONE REASON: it is a bare amber PHRASE — no fill,
+// no edge, an underline — and this component is rendered INSIDE `.ir-body` (see
+// Shell), where `button:not(…)` paints the app's ordinary button face on every
+// control it is not told to leave alone. Without a name in that list the phrase
+// comes back as a white plate with a hairline, and blue under the pointer,
+// because the ordinary face's own hover is the accent — which is what it looked
+// like until someone said so. See the exclusion list in incident-report.css.
 export function ConnectionBanner({ state, onRetry }) {
   if (state === 'ok') return null;
   return (
@@ -46,7 +54,7 @@ export function ConnectionBanner({ state, onRetry }) {
       {state === 'database'
         ? 'The records database is not responding. Reports can’t be loaded or saved right now —'
         : 'Connection to the BlueWrite server was lost. Reports can’t be loaded or saved until it’s back —'}{' '}
-      <button type="button" onClick={onRetry}>retry now</button>
+      <button type="button" className="conn-banner-retry" onClick={onRetry}>retry now</button>
     </div>
   );
 }
