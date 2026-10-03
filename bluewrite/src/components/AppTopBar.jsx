@@ -223,7 +223,12 @@ export default function AppTopBar({
   }, [menuOpen]);
 
   return (
-    <header className="ir-nav">
+    // The bar's bottom seam follows the screen: on the write-report editor the
+    // masthead band bleeds up to meet this bar, and there the seam is the GOLD
+    // the band's own flag and submit plate wear (see .ir-nav--report). The
+    // editor is on screen under TWO kinds — a fresh unsaved draft ('new') and
+    // an opened one ('report') — so both turn the seam.
+    <header className={`ir-nav${current === 'report' || current === 'new' ? ' ir-nav--report' : ''}`}>
       <button
         type="button"
         className="ir-brand ir-brand-home"

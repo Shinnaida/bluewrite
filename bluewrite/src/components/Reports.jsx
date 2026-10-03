@@ -66,6 +66,15 @@ import folderMark from '../assets/folder.png';
 // the gold tile (see .ir-remember-title-mark), so its strokes are read as a tone
 // against the tile rather than as a shape cut out of it.
 import shieldMark from '../assets/shield.png';
+// The report masthead's backdrop: the station's own banner artwork, laid behind
+// the band's title, identifiers and actions (see .ir-case-panel > .ir-page-head
+// in incident-report.css — the band's gradient is its fallback ground while the
+// file loads, and no scrim sits over the artwork: it shows as it is).
+import reportBanner from '../assets/Navy Police Incident Report Banner.png';
+// The report masthead's backdrop: the station's own banner artwork, laid behind
+// the band's title, identifiers and actions (see .ir-case-panel > .ir-page-head
+// in incident-report.css — the band's gradient is its fallback when the file is
+// absent, and the scrim keeps the white ink at its measured contrast on top).
 // The office and the build Home's signature line signs with. Both are stated
 // once, in lib/appInfo, because the gate and About state the version too — a
 // second typed-out copy is how a footer ends up advertising a version the
@@ -130,6 +139,14 @@ import RepeatableGroup from './RepeatableGroup.jsx';
 // and the reporting party's capacity) and each per-type dropdown. Drawn rather
 // than native, because a native menu cannot be painted — see the component.
 import Dropdown from './Dropdown.jsx';
+// The AI assistance card's animated frame (React Bits, JS-CSS variant) — one
+// wrapper at each of the panel's three mounts, so the assistant reads as the
+// one live instrument on the form in every format.
+// The AI assistance card's animated frame (adapted from a 21st.dev card, JSX +
+// CSS): a blurred gradient blob — the capstone's navy/blue/gold — walking behind
+// a glassy plate that carries the panel. One wrapper at each of the panel's
+// three mounts, so the assistant reads as the one live instrument on the form.
+import GradientBlobCard from './GradientBlobCard.jsx';
 import AiNarrativePanel from './AiNarrativePanel.jsx';
 // Phase 6 Stage 4 — the translation review surface: the original beside the
 // English, the derived status, and (when the server allows it) the verify /
@@ -400,6 +417,66 @@ function IrLabel({ htmlFor, children, icon, required }) {
  * It hides — it never unmounts — because the error jumps resolve by element id
  * and a field outside the DOM cannot be focused (see ReportEditor.jumpTo).
  */
+// THE CARD-HEAD GLYPHS. One drawing per kind of panel, drawn rather than filed:
+// every icon in this app is an inline <svg> with stroke="currentColor" (see
+// ReportTypeIcon.jsx for the convention), so the glyph inherits the tile's ink
+// and weight. The tile itself is the amber marker the bar always opened with —
+// a MARK, not a state — grown into a plate that can hold a drawing.
+const CARD_GLYPHS = {
+  // The reporting party: a person.
+  person: [
+    'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2',
+    'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z',
+  ],
+  // Incident details: a folder — the record's own container.
+  folder: [
+    'M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z',
+  ],
+  // The narrative: a page with a folded corner and ruled lines — the same
+  // register mark the top bar wears, because both name a written account.
+  doc: [
+    'M14 3.2H7.4a2 2 0 0 0-2 2v13.6a2 2 0 0 0 2 2h9.2a2 2 0 0 0 2-2V8z',
+    'M14 3.2V8h5',
+    'M9.2 12.8h5.6M9.2 16.4h5.6',
+  ],
+  // Parties Involved: stacked layers — one kind of record per sheet.
+  layers: ['M12 2 2 7l10 5 10-5z', 'm2 12 10 5 10-5', 'm2 17 10 5 10-5'],
+  // Action Taken / the signature block: a pen.
+  pen: [
+    'M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z',
+  ],
+  // Investigator-on-Case: a shield — the officer who carries the case.
+  shield: ['M12 3 5 6v5.2c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6z', 'm9.6 12.2 1.7 1.7 3.3-3.5'],
+  // The AI assistant: a brain — the model at work (see the orb it sits above).
+  brain: [
+    'M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44A2.5 2.5 0 0 1 4.5 17.5v-11A2.5 2.5 0 0 1 7.04 2.5 2.5 2.5 0 0 1 9.5 2z',
+    'M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.54-2.44v-11A2.5 2.5 0 0 0 16.96 2.5 2.5 2.5 0 0 0 14.5 2z',
+  ],
+};
+
+/** One card-head drawing. Decorative — the title names the section — so it is
+ *  hidden from a screen reader like every other mark in the app. */
+function CardGlyph({ name }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {(CARD_GLYPHS[name] ?? []).map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  );
+}
+
 function IrCard({
   num,
   title,
@@ -428,6 +505,12 @@ function IrCard({
   // A card that is NOT one of the report's ordinary sections: accent-edged and
   // tinted so it reads as a different kind of block (today, the AI assistant).
   accent,
+  // The bar's own drawing, centred in the amber plate the bar always opened
+  // with (see CARD_GLYPHS). A card with no glyph keeps the bare dot.
+  icon,
+  // A small pill at the bar's far edge for a capability label (the assistant's
+  // "Beta"). Never a state — statuses have the status chip's own slot below.
+  badge,
   flush,
   actions,
   headless,
@@ -456,21 +539,26 @@ function IrCard({
       onFocus={onFocus}
       onBlur={onBlur}
       hidden={hidden}
-    >
-      {!headless && (
+    >        {!headless && (
         <div className="ir-card-head">
           {/* The seal-amber marker that opens every section bar (Tasks 11/12).
               It is the one accent in the document that is a MARK rather than a
               STATE — nothing is "amber duty" — so a run of panels reads as the
               station's own stationery. The numeral and title already name the
-              section, so it is decorative and carries no text. */}
-          <span className="ir-card-dot" aria-hidden="true" />
+              section, so it is decorative and carries no text. Cards that name
+              a glyph grow the marker into a plate that holds the drawing. */}
+          <span className={icon ? 'ir-card-glyph' : 'ir-card-dot'} aria-hidden="true">
+            {icon ? <CardGlyph name={icon} /> : null}
+          </span>
           {/* The numeral is a PLATE, not a phrase: it is centred in a fixed box
               on the bar (see .ir-card-num), so the ordinal's period has nowhere
               to sit — the box is the separator. The sheet puts the period back,
               because a page numbers its sections with a bare ordinal. */}
           {num && <span className="ir-card-num">{num}</span>}
           {title && <span>{title}</span>}
+          {/* The capability pill ("Beta"), beside the title rather than at the
+              far edge — it qualifies the TITLE, not the section's state. */}
+          {badge && <span className="ir-card-badge">{badge}</span>}
           {/* The right-aligned context label, pushed to the far edge by its own
               margin (see the stylesheet) so it aligns whether or not the card
               also carries actions. */}
@@ -752,20 +840,61 @@ function TypeSpecificFields({ incidentType, values, onChange, disabled, errors, 
 // `numeral` is the section number the card and every control that points at the
 // section are named by, so one list holds the number AND the name.
 const STEPPER_STEPS = [
-  { numeral: 'I', label: 'Reporting party', paths: ['reporter_name', 'reporter_contact', 'reporter_address'] },
-  { numeral: 'II', label: 'Incident details', paths: ['incident_type', 'incident_datetime', 'location'] },
+  {
+    numeral: 'I',
+    label: 'Reporting party',
+    paths: ['reporter_name', 'reporter_contact', 'reporter_address'],
+    // The step tile's own drawing (drawn, like every icon here — see
+    // CARD_GLYPHS): a person, for the section about one.
+    glyph: ['M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z'],
+  },
+  {
+    numeral: 'II',
+    label: 'Incident details',
+    paths: ['incident_type', 'incident_datetime', 'location'],
+    // A map pin — where and when it happened.
+    glyph: [
+      'M20 10c0 4.99-5.54 10.19-7.4 11.8a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0z',
+      'M12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+    ],
+  },
   // NO NUMERAL, deliberately. The numerals count the FORMS the officer fills in
   // and files; the narrative is the written account of the facts that sits
   // between them. That is why the way forward from the narrative reads "Proceed
   // to III. Parties Involved", and why the numbers still run I, II, III, IV down
   // the page in the order the officer meets them.
-  { numeral: null, label: 'Narrative', paths: ['narrative'] },
+  {
+    numeral: null,
+    label: 'Narrative',
+    paths: ['narrative'],
+    // A ruled page — the written account.
+    glyph: [
+      'M14 3.2H7.4a2 2 0 0 0-2 2v13.6a2 2 0 0 0 2 2h9.2a2 2 0 0 0 2-2V8z',
+      'M14 3.2V8h5',
+      'M9.2 12.8h5.6M9.2 16.4h5.6',
+    ],
+  },
   // The polymorphic section: the repeatable groups (a bare key like `vehicles`
   // or a per-item path like `vehicles[2].plate_number`) plus any per-type
   // scalar path. Checked against the type chosen NOW, so a group that does not
   // exist for this type can never count against it.
-  { numeral: 'III', label: 'Parties Involved', paths: [], typeSpecific: true },
-  { numeral: 'IV', label: 'Action taken', paths: ['action_taken', 'ioc_name'] },
+  {
+    numeral: 'III',
+    label: 'Parties Involved',
+    paths: [],
+    typeSpecific: true,
+    // Stacked layers — one kind of record per sheet.
+    glyph: ['M12 2 2 7l10 5 10-5z', 'm2 12 10 5 10-5', 'm2 17 10 5 10-5'],
+  },
+  {
+    numeral: 'IV',
+    label: 'Action taken',
+    paths: ['action_taken', 'ioc_name'],
+    // A pen — the disposition and the signatures that close the report.
+    glyph: [
+      'M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z',
+    ],
+  },
 ];
 
 /** The wording a way forward is named by — "Proceed to III. Parties Involved". */
@@ -1036,6 +1165,28 @@ function ReportProgressStepper({ complete, current, onJump, withReview = false, 
                     {face === 'done' ? StepperCheck : step.review ? StepperReview : i + 1}
                   </span>
                   <span className={`ir-stepper-label ir-stepper-label--${face}`}>
+                    {/* The step's own drawing, ahead of its name — the tile reads
+                        [number] [picture + name / state], the way the mockup's
+                        five chevrons do. Decorative: the label is the name. */}
+                    {step.glyph && (
+                      <svg
+                        className="ir-stepper-glyph"
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        {step.glyph.map((d) => (
+                          <path key={d} d={d} />
+                        ))}
+                      </svg>
+                    )}
                     {step.label}
                   </span>
                   {/* The tile's second line: what this step's state IS, in
@@ -2052,7 +2203,7 @@ export function ReportWelcome({
                         .ir-draft-card::before), so nothing here draws it. */}
                     <div className="ir-draft-body">
                       <span className="ir-draft-plate" aria-hidden="true">
-                        <HomeMark name="file" size={26} stroke={1.6} />
+                        <HomeMark name="file" size={21} stroke={1.6} />
                       </span>
 
                       <span className="ir-draft-identity">
@@ -2166,12 +2317,11 @@ export function ReportWelcome({
             lives there, this is the copy. */}
         <aside className="ir-remember">
           <h2 className="ir-remember-title">
-            {/* The gold tile — the action plate's own pair, one column over, so
-                the page's two headings wear one RECIPE (a plate on navy) while
-                the blue stays with the action — and ON it the office's own
-                shield artwork, where an inlined shield glyph used to stand.
-                It is SQUARE and the three below are CIRCLES, so the heading is
-                not a fourth item in the list. */}
+            {/* The office's own shield artwork, where an inlined shield glyph
+                used to stand — directly on the band's navy, no plate behind it
+                (the gold tile it sat on is gone by request). It is SQUARE and
+                the three below are CIRCLES, so the heading is not a fourth item
+                in the list. */}
             <span className="ir-remember-title-mark" aria-hidden="true">
               <img className="ir-remember-title-mark-art" src={shieldMark} alt="" />
             </span>
@@ -3890,33 +4040,51 @@ export function ReportEditor({
           Save Draft
         </button>
       )}
-      {draft.id && (
-        <button type="button" onClick={openHistory}>
-          <LabelIcon name="clock" />
-          History
-        </button>
-      )}
-      {draft.id && canEdit && (
-        <button type="button" className="danger" onClick={askArchive}>
-          <LabelIcon name="archive" />
-          Archive
-        </button>
-      )}
+      {/* THE FULL BAR, ALWAYS DRAWN (by request): History, Archive and Print
+          Slip keep their places even on a report that has never been saved —
+          a fresh draft draws the same bar as a filed one, so the head never
+          re-flows at the first save. The guards are kept, not dropped: each
+          control is DISABLED until its condition exists (a report with no
+          number has no history to read, nothing to archive and nothing to
+          print), with the reason on its title. Save Draft and Close never
+          disable: saving is how a fresh draft gains its number, and Close is
+          the way out. */}
+      <button
+        type="button"
+        onClick={openHistory}
+        disabled={!draft.id}
+        title={draft.id ? undefined : 'The report has no history until it is saved'}
+      >
+        <LabelIcon name="clock" />
+        History
+      </button>
+      <button
+        type="button"
+        className="danger"
+        onClick={askArchive}
+        disabled={!draft.id || !canEdit}
+        title={
+          !draft.id
+            ? 'Nothing to archive until the report is saved'
+            : undefined
+        }
+      >
+        <LabelIcon name="archive" />
+        Archive
+      </button>
       <button type="button" onClick={onClosed}>
         <LabelIcon name="close" />
         Close
       </button>
-
-      {/* The two the bar already carried. Print Slip is hidden until the report
-          has a number — there is nothing to print before the first save — and
-          Submit carries its own permission check, so the group shrinks for a
-          role that may not finalize. */}
-      {draft.id && (
-        <button type="button" onClick={() => setPrinting(true)}>
-          <LabelIcon name="printer" />
-          Print Slip
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => setPrinting(true)}
+        disabled={!draft.id}
+        title={draft.id ? undefined : 'There is nothing to print until the report is saved'}
+      >
+        <LabelIcon name="printer" />
+        Print Slip
+      </button>
       <button
         type="button"
         className="ir-submit"
@@ -3941,50 +4109,67 @@ export function ReportEditor({
           screen contributes only its document content. The print sheet and
           the dialogs below render outside the form so the document stylesheet
           can never repaint an official sheet. */}
-      {/* THE REPORT'S HEAD — the case bar, the record strip and the progress
-          read-out, in that order, one after another on the page. They used to be
-          one bordered CARD with hairlines between the three; the card is gone
-          (see .ir-case-panel) because a title and two identifiers are the top of
-          a DOCUMENT, not a field to fill in. Nothing about the contents moved:
-          same nodes, same order, same data, same behaviour. */}
+      {/* THE REPORT'S HEAD — the navy masthead band, the record strip and the
+          progress read-out, in that order, one after another on the page. The
+          masthead is a BAND (the reference's navy header): the app's mark and
+          the document's name on the left, the state flag, the report's three
+          identifiers and the officer's actions on the right. Nothing about the
+          contents moved: same nodes, same order, same data, same behaviour. */}
       <div className="ir-case-panel">
         <div className="ir-page-head">
-          {/* THE TITLE IS ITS OWN CENTRED LINE, above everything else in the
-              head — the way the station's letterhead centres its own on the
-              sheet (see .ir-sheet-head-lines). It is OUT of `.ir-head-main`
-              because centring it inside a column that also holds the
-              identifiers would centre it in whatever width those happened to
-              leave, which is not the middle of anything. */}
-          <div className="ir-case-title">
-            <h1 className="ir-title">POLICE INCIDENT REPORT</h1>
-            {/* The reference's status flag, beside the case title and read from
-                the SAME `draft.status` the record strip below uses — so the flag
-                and the strip can never disagree about what state the report is
-                in. It states the state; it changes nothing. */}
-            <span className="ir-draft-flag">
-              {draft.status === 'finalized' ? 'Finalized' : 'Draft stage'}
-            </span>
+          {/* The masthead's backdrop image: INSIDE the band, as its own ground
+              (see .ir-head-backdrop), bundled like every other piece of artwork
+              the app carries rather than fetched by a CSS url. It sits between
+              the band's navy fill and the band's words — the fill behind it is
+              only the fallback while the file loads — and shows with no wash
+              over it, by request. */}
+          <img className="ir-head-backdrop" src={reportBanner} alt="" aria-hidden="true" />
+          {/* THE BRAND: the document's name and its one-line promise. The mark
+              plate that used to lead the block is gone by request — the band is
+              the letterhead, and the words carry it. */}
+          <div className="ir-head-brand">
+            <div className="ir-head-titles">
+              {/* The title and its state flag, one line; the tagline under it
+                  states what the document is FOR — the reference's own words. */}
+              <div className="ir-case-title">
+                <h1 className="ir-title">POLICE INCIDENT REPORT</h1>
+                {/* The reference's status flag, beside the case title and read
+                    from the SAME `draft.status` the record strip below uses — so
+                    the flag and the strip can never disagree about what state
+                    the report is in. It states the state; it changes nothing. */}
+                <span className="ir-draft-flag">
+                  {draft.status === 'finalized' ? 'Finalized' : 'Draft stage'}
+                </span>
+              </div>
+              <p className="ir-head-tagline">Accurate reports. Safer communities.</p>
+            </div>
           </div>
 
-          {/* LEFT: what the document IS — the two identifiers that name it and
-              the save line. RIGHT: every action an officer takes on it, from the
-              top of the page. */}
+          {/* RIGHT: what the document IS — the three identifiers on one white
+              chip — and under it every action an officer takes on the report,
+              from the top of the page. */}
           <div className="ir-head-main">
-            {/* The identifiers, as one line of labelled pairs: the key says what
-                the value IS, the value carries the weight, and a bullet rules
-                the two pairs apart. */}
+            {/* The identifiers, as labelled pairs on ONE chip: the key says what
+                the value IS, the value carries the weight. The third pair — the
+                draft's own BW number — is the same token the record strip
+                prints, read from the same `draft.id`, so the two can never
+                disagree. An unsaved report has no number yet and says so with a
+                dash rather than inventing one. */}
             <div className="ir-case-meta">
-              <span className="ir-meta-row">
-                <span className="ir-meta-key">Assigned case no.</span>
+              <span className="ir-meta-fact">
+                <span className="ir-meta-key">Case No.</span>
                 <span className="ir-meta-val ir-meta-val--code">{caseNumber(draft)}</span>
               </span>
-              <span className="ir-meta-sep" aria-hidden="true">
-                •
-              </span>
-              <span className="ir-meta-row">
-                <span className="ir-meta-key">Record date</span>
+              <span className="ir-meta-fact">
+                <span className="ir-meta-key">Date</span>
                 <span className="ir-meta-val">
                   {specDate(reportDateValue(draft, new Date().toISOString().slice(0, 10)))}
+                </span>
+              </span>
+              <span className="ir-meta-fact">
+                <span className="ir-meta-key">Draft No.</span>
+                <span className="ir-meta-val ir-meta-val--code">
+                  {draft.id ? `BW-${String(draft.id).padStart(4, '0')}` : '—'}
                 </span>
               </span>
             </div>
@@ -4014,27 +4199,18 @@ export function ReportEditor({
               have nothing to call. An unreachable button is worse than an absent
               one. */}
           <div className="ir-case-actions">{actionsCluster}</div>
-        </div>
 
-        {/* The record strip — a NOTICE, and it only draws when it has a notice to
-            give: the report's own reference once it has a number, the server's
-            translation status once there is one, or the lock warning when this
-            officer may not edit.
-
-            It no longer carries the report's status chip or a placeholder
-            sentence for an unsaved report: the case bar directly above already
-            carries both (the title's "Draft stage" flag and the pending case
-            number), so a fresh draft used to draw an empty amber band that said
-            nothing new. Nothing else about the strip changed — the same element,
-            the same amber rule, the same three notices when they apply. */}
-        {(draft.id || (verificationStatus && verificationStatus !== 'english_original') || !canEdit) && (
+          {/* THE RECORD STRIP, INSIDE THE BAND: the report's reference line
+              ("Report BW-xxxx · Recorded by … · Badge …"), the translation
+              status, or the lock warning — as one rectangular plate set into
+              the letterhead field, under the head row, reading from the LEFT.
+              It is ALWAYS DRAWN (by request): a fresh draft shows the plate
+              with its standing line, and the reference fills it at the first
+              save (the empty-plate sentence is the stylesheet's ::before). */}
           <div className="ir-status ir-status--flag">
             {draft.id && (
               <span>{`Report BW-${String(draft.id).padStart(4, '0')} · Recorded by ${user.full_name} · Badge ${user.badge_number}`}</span>
             )}
-            {/* Phase 6 Stage 4 (D5/D8) — the translation status, wherever the
-                report is. Shown only once the server has reported one, so a
-                report with no source (and a report not yet read) is silent. */}
             {verificationStatus && verificationStatus !== 'english_original' && (
               <span className={`rv-badge ${statusClass(verificationStatus)}`}>
                 {statusLabel(verificationStatus)}
@@ -4044,9 +4220,12 @@ export function ReportEditor({
               <span>This report is locked. Only an administrator can make further changes.</span>
             )}
           </div>
-        )}
+        </div>
 
-        {/* The progress stepper, under the record strip it belongs with: the
+        {/* (The record strip lives INSIDE the band now — see the block above,
+            after .ir-case-actions. The stepper follows the band directly.) */}
+
+        {/* The progress stepper, under the band it belongs with: the
             officer's position in the document, read out of the same rules the
             error banner uses. It only navigates (never locks or edits), so it is
             safe on a locked report too.
@@ -4144,6 +4323,7 @@ export function ReportEditor({
           <IrCard
             num={STEPPER_STEPS[0].numeral}
             title="Reporting Party Information"
+            icon="person"
             status={sectionStatus[0]}
             step={0}
             current={currentSection === 0}
@@ -4202,6 +4382,7 @@ export function ReportEditor({
           <IrCard
             num={STEPPER_STEPS[1].numeral}
             title="Incident Details"
+            icon="folder"
             status={sectionStatus[1]}
             step={1}
             current={currentSection === 1}
@@ -4331,6 +4512,7 @@ export function ReportEditor({
           <IrCard
             num={STEPPER_STEPS[2].numeral}
             title="Incident Narrative"
+            icon="doc"
             status={sectionStatus[2]}
             wide
             step={2}
@@ -4516,6 +4698,7 @@ export function ReportEditor({
         <IrCard
           num={STEPPER_STEPS[3].numeral}
           title="Parties Involved"
+          icon="layers"
           status={sectionStatus[3]}
           wide
           step={3}
@@ -4570,6 +4753,7 @@ export function ReportEditor({
           <IrCard
             wide
             title={BLOCK_HEADINGS[draft.incident_type] ?? 'Incident Details'}
+            icon="layers"
             step={3}
             current={currentSection === STEPPER_TYPE_SPECIFIC}
             hidden={panelHidden(3)}
@@ -4657,6 +4841,7 @@ export function ReportEditor({
           <IrCard
             num={STEPPER_STEPS[4].numeral}
             title="Action Taken / Status"
+            icon="pen"
             status={sectionStatus[4]}
             step={4}
             current={currentSection === 4}
@@ -4702,6 +4887,7 @@ export function ReportEditor({
               panel beside it) — it is not repeated here. */}
           <IrCard
             title="Investigator-on-Case"
+            icon="shield"
             context="Noting & Sign-off"
             step={4}
             current={currentSection === 4}
@@ -4747,9 +4933,16 @@ export function ReportEditor({
             one live copy on screen at a time, which is what the panel's own
             side panel and body class require. */}
         {!stepped && !sheet && canEdit && (
-          <IrCard wide accent title="AI assistance">
-            {aiPanel}
-          </IrCard>
+          /* The electric frame is OUTSIDE the card, by request: it wraps the
+             whole instrument — navy head, tinted body and all — instead of
+             framing the panel inside it. The sidebar's placement and ONE-SIZE
+             bound moved onto the frame with it (see the workspace rules in
+             incident-report.css). */
+          <GradientBlobCard className="ir-ai-frame">
+            <IrCard wide accent icon="brain" badge="Beta" title="AI assistance">
+              {aiPanel}
+            </IrCard>
+          </GradientBlobCard>
         )}
 
         {/* The final step: the five sections read back as ONE document, with one
@@ -4788,9 +4981,11 @@ export function ReportEditor({
             panel already sits under the narrative field, where the writing
             happens. */}
         {stepped && activeStep === REVIEW_STEP && canEdit && (
-          <IrCard wide accent title="AI assistance">
-            {aiPanel}
-          </IrCard>
+          <GradientBlobCard className="ir-ai-frame">
+            <IrCard wide accent icon="brain" badge="Beta" title="AI assistance">
+              {aiPanel}
+            </IrCard>
+          </GradientBlobCard>
         )}
 
         {/* Stepped format: the way forward sits at the END of the panel, where
@@ -4988,7 +5183,13 @@ export function ReportEditor({
         </div>
       )}
 
-      {sheet && canEdit && <div className="ir-sheet-ai">{aiPanel}</div>}
+      {sheet && canEdit && (
+        <div className="ir-sheet-ai">
+          <GradientBlobCard className="ir-ai-frame">
+            {aiPanel}
+          </GradientBlobCard>
+        </div>
+      )}
 
       {/* ...and the action row, under it. Filing is never behind anything in this
           format: Save Draft and Submit are rendered, on screen, under the paper

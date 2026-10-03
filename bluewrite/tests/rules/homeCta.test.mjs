@@ -140,13 +140,15 @@ test('the banner’s mark is the office’s folder ON the disc, and the reminder
 
   const titleTile = SHEET.match(/\.ir-remember-title-mark\s*\{[^}]*\}/);
   assert.ok(titleTile, '.ir-remember-title-mark is gone from the stylesheet');
-  assert.match(titleTile[0], /background:\s*var\(--ir-gold\)/, 'the reminder heading lost the gold tile');
-  // NO INK on the tile: it used to hold a glyph drawn in --ir-on-gold and it holds
-  // ARTWORK now, which brings its own colour, so a `color` here would be a
-  // declaration with nothing to paint. Exactly the disc's own rule above — the
-  // reasoning is stated there and this is the same pair of boxes.
-  assert.doesNotMatch(titleTile[0], /^\s*color\s*:/m, 'the tile names an ink for artwork that brings its own');
-  // And the tile is SQUARE — as are the three marks under it (a circle on each
+  // NO PLATE: the gold tile the shield used to stand on is gone by request — a
+  // solid gold square ahead of the heading read as a block of colour, not as a
+  // mark. The artwork sits straight on the band's navy, which is the ground its
+  // own gold line art is measured against.
+  assert.doesNotMatch(titleTile[0], /background/, 'the heading mark still wears a plate');
+  // NO INK either: the box holds ARTWORK, which brings its own colour, so a
+  // `color` here would be a declaration with nothing to paint.
+  assert.doesNotMatch(titleTile[0], /^\s*color\s*:/m, 'the mark names an ink for artwork that brings its own');
+  // And the box is SQUARE — as are the three marks under it (a circle on each
   // panel, and the three of them are the list) — so the heading must not read as a
   // fourth item.
   assert.doesNotMatch(titleTile[0], /border-radius:\s*50%/, 'the heading reads as a fourth item');
@@ -174,9 +176,10 @@ test('the banner’s mark is the office’s folder ON the disc, and the reminder
   assert.ok(art, 'the shield artwork has no rule of its own');
   assert.match(art[0], /object-fit:\s*contain/, 'the shield is stretched into the tile');
   const artShare = art[0].match(/width:\s*([0-9.]+)%/);
-  assert.ok(artShare, 'the shield no longer states its size as a share of the tile');
-  assert.ok(Number(artShare[1]) < 100, 'the shield fills the tile, so the gold behind it is gone');
-  assert.ok(Number(artShare[1]) <= 70.8, 'the shield is drawn past the tile’s corners');
+  assert.ok(artShare, 'the shield no longer states its size as a share of its box');
+  // The shield fills its box (by request it is drawn bigger) — the box is the
+  // margin, the contain is the proportions.
+  assert.ok(Number(artShare[1]) <= 100, 'the shield is drawn past its box');
 });
 
 test("the plate is the station's gold, and the label reads in navy on it", () => {

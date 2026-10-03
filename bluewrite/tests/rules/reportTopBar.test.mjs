@@ -58,12 +58,14 @@ test('the cluster is rendered once, in the case bar, and nowhere else', () => {
 test('every action kept its own guard, and its own icon', () => {
   const jsx = cluster();
 
-  // The guards, verbatim: a control that stops drawing when it has nothing to
-  // act on must not become a disabled button in the bar.
+  // THE BAR IS ALWAYS DRAWN (by request): a fresh draft shows the same six
+  // controls as a filed one. The guards became DISABLED conditions, kept
+  // verbatim — a control that stops drawing when it has nothing to act on
+  // would re-flow the head at the first save.
   assert.match(jsx, /\{canEdit && \([\s\S]*?Save Draft/, 'Save Draft lost its canEdit guard');
-  assert.match(jsx, /\{draft\.id && \([\s\S]*?History/, 'History lost its saved-report guard');
-  assert.match(jsx, /\{draft\.id && canEdit && \([\s\S]*?Archive/, 'Archive lost a guard');
-  assert.match(jsx, /\{draft\.id && \([\s\S]*?Print Slip/, 'Print Slip lost its saved-report guard');
+  assert.match(jsx, /disabled=\{!draft\.id\}[\s\S]*?History/, 'History lost its saved-report guard');
+  assert.match(jsx, /disabled=\{!draft\.id || !canEdit\}[\s\S]*?Archive/, 'Archive lost a guard');
+  assert.match(jsx, /disabled=\{!draft\.id\}[\s\S]*?Print Slip/, 'Print Slip lost its saved-report guard');
   assert.match(jsx, /className="ir-submit"/, 'the commit control is no longer the submit button');
 
   // An icon on each of the six: the row is icon+label in the case bar, and a
@@ -115,13 +117,13 @@ test('the way back wears the accent, and is exempt from the neutral button rule'
   }
 });
 
-test('the head is not a card, and the title line is centred in it', () => {
+test('the head is the navy masthead band, and the title reads from the left', () => {
   const css = code(CSS);
 
-  // THE BOX AROUND THE HEAD IS THE THING THE STATION ASKED OFF. Read as a whole
-  // declaration block, because "no border" written as `border: 0` and "no
-  // border" left out entirely look the same to a running page and different to
-  // the next reader — and the second is what a card grows back from.
+  // THE PANEL IS STILL NOT A BOX: the band, the notice strip and the stepper
+  // are separate blocks on the page. Read as a whole declaration block, because
+  // "no border" written as `border: 0` and "no border" left out entirely look
+  // the same to a running page and different to the next reader.
   const panelAt = css.search(/(^|\})\s*\.ir-case-panel\s*\{/m);
   assert.notEqual(panelAt, -1, 'the .ir-case-panel rule is gone');
   const open = css.indexOf('{', panelAt);
@@ -131,15 +133,30 @@ test('the head is not a card, and the title line is centred in it', () => {
   }
   assert.match(panel, /margin-bottom/, 'the head lost the spacing the card also carried');
 
-  // THE TITLE LINE: centred, and given the full measure to centre in. Without
-  // `flex: 1 1 100%` its box is only as wide as the words and `justify-content`
-  // has nothing to distribute — the rule would read as centring and do nothing.
+  // THE BAND ITSELF is the artwork (see .ir-head-backdrop): the head paints no
+  // fill of its own — an opaque gradient would sit over the backdrop <img>
+  // inside it — and the backdrop is the band's navy ground instead. Flush to
+  // the page's edges: no radius, no border.
+  const headAt = css.search(/(^|\})\s*\.ir-case-panel\s*>\s*\.ir-page-head\s*\{/m);
+  assert.notEqual(headAt, -1, 'the masthead band rule is gone');
+  const headOpen = css.indexOf('{', headAt);
+  const head = css.slice(headOpen, css.indexOf('}', headOpen));
+  assert.match(head, /background:\s*none/, 'the band paints its own ground over the artwork');
+  const backdrop = css.match(/\.ir-head-backdrop\s*\{[^}]*\}/);
+  assert.ok(backdrop, 'the backdrop artwork rule is gone');
+  assert.match(backdrop[0], /object-fit:\s*cover/, 'the backdrop does not fill the band');
+  assert.match(head, /border:\s*0/, 'the band grew a border back');
+  assert.match(head, /border-radius:\s*0/, 'the band grew rounded corners back');
+
+  // THE TITLE LINE: a masthead reads from the left edge, beside the mark —
+  // the centred title line was the white field's grammar, and the band does
+  // not inherit it.
   const titleAt = css.search(/(^|\})\s*\.ir-case-title\s*\{/m);
   assert.notEqual(titleAt, -1, 'the .ir-case-title rule is gone');
   const titleOpen = css.indexOf('{', titleAt);
   const titleBlock = css.slice(titleOpen, css.indexOf('}', titleOpen));
-  assert.match(titleBlock, /justify-content:\s*center/, 'the title is not centred');
-  assert.match(titleBlock, /flex:\s*1 1 100%/, 'the title has no full-width line to centre in');
+  assert.doesNotMatch(titleBlock, /justify-content:\s*center/, 'the title is still being centred');
+  assert.match(titleBlock, /align-items:\s*center/, 'the flag no longer rides the title line');
 });
 
 test('the title is a child of the head, not of the column beside it', () => {

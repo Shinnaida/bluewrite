@@ -67,7 +67,11 @@ function value(body, property) {
 }
 
 const HEAD_BAND = '.ir-case-panel > .ir-page-head';
-const ACCENT_CARD = '.ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-card--accent';
+// The gradient-blob frame (GradientBlobCard) wraps the whole assistant card,
+// so the FRAME is the workspace's grid item and carries the ONE-SIZE bound; the
+// card fills it and keeps the inner scroll.
+const ACCENT_FRAME = '.ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame';
+const ACCENT_CARD = `${ACCENT_FRAME} .ir-card--accent`;
 const ACCENT_BODY = `${ACCENT_CARD} > .ir-card-body`;
 const ACCENT_PANEL = `${ACCENT_CARD} .ai-panel`;
 const ACCENT_SHEET = `${ACCENT_CARD} .ai-inline--sheet`;
@@ -119,14 +123,17 @@ test('the head is flush: it cancels the page gutter on the top, left and right',
   assert.ok(headPadding, 'the head lost its own padding — its contents would sit on the page edge');
   assert.doesNotMatch(headPadding, /^0(\s|$)/, `the head's padding starts at zero: ${headPadding}`);
 
-  // …and it is the document's own paper surface, so the band reads as one white
-  // field against the page. The token, not a literal: the palette has to be able
-  // to answer in the dark theme too.
+  // …and the band's GROUND is the artwork now (see .ir-head-backdrop): the head
+  // paints no fill of its own, because an opaque gradient here would sit over
+  // the backdrop <img> inside it and hide the station's banner for good. The
+  // navy lives on the artwork itself.
   assert.equal(
     value(body, 'background'),
-    'var(--ir-card)',
-    'the head lost the white field it opens the screen with',
+    'none',
+    'the head paints its own ground over the backdrop artwork',
   );
+  const backdrop = rule(CSS, '.ir-head-backdrop');
+  assert.match(value(backdrop, 'object-fit') || '', /cover/, 'the backdrop does not fill the band');
 
   // THE SURFACE, NOT THE BOX. What the station asked off this head was the CARD
   // around it — so the three declarations that made it one must stay off. A
@@ -141,11 +148,11 @@ test('the assistant card states its height, not only its maximum', () => {
   // states drift apart again: one of them wins by source order and nobody meant
   // either to.
   assert.equal(
-    rulesWith(CSS, ACCENT_CARD).length,
+    rulesWith(CSS, ACCENT_FRAME).length,
     1,
-    'the accent card draws its box in more than one rule',
+    'the assistant frame draws its box in more than one rule',
   );
-  const body = rule(CSS, ACCENT_CARD);
+  const body = rule(CSS, ACCENT_FRAME);
 
   const height = value(body, 'height');
   const max = value(body, 'max-height');
@@ -168,7 +175,9 @@ test('the assistant card states its height, not only its maximum', () => {
 
   // Taller content still scrolls rather than spilling: the empty state's box is
   // now taller than its contents, and a long draft's is taller than the box.
-  assert.match(value(body, 'overflow-y') || '', /auto/, 'a taller panel would spill instead of scrolling');
+  // The scroll lives on the CARD inside the frame (the frame's glass plate must
+  // stay open for the blob's travel), so it is read there.
+  assert.match(value(rule(CSS, ACCENT_CARD), 'overflow-y') || '', /auto/, 'a taller panel would spill instead of scrolling');
 });
 
 test('both states fill the card, and the viewer gives up its own window', () => {

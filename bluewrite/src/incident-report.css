@@ -235,6 +235,17 @@
   padding: 0.7rem clamp(1rem, 3vw, 2rem);
 }
 
+/* THE SEAM TURNS GOLD ON THE WRITE-REPORT SCREEN. The report's masthead band
+   bleeds up through the page's gutter to meet this bar, and there the blue
+   seam read as one more blue rule on a navy page. On that screen alone the
+   seam wears the gold the band's own flag and submit plate wear, so the line
+   between the chrome and the document is the accent the document itself uses.
+   The class is set by the bar (AppTopBar) from the screen it is standing over,
+   so no other screen's seam moves. */
+.ir-nav--report {
+  border-bottom-color: var(--ir-gold);
+}
+
 .ir-brand {
   display: flex;
   align-items: center;
@@ -473,21 +484,82 @@
 .ir-case-panel {
   margin-bottom: 1rem;
 }
+/* The masthead's BACKDROP: the station's banner artwork (src/assets), laid
+   INSIDE the band as its own ground. One <img> in the markup (Reports.jsx), not
+   a CSS url, so it is bundled and checksummed like every other piece of artwork
+   the app carries. It fills the band exactly — object-fit: cover, so the
+   artwork's proportions survive any width — and the band's words paint on top
+   of it. NO SCRIM, by request: the artwork shows as it is. */
+.ir-head-backdrop {
+  position: absolute;
+  inset: 0;
+  /* TO THE BACK: an absolutely positioned element paints above the band's
+     static children by default, which put the artwork OVER the words. Pinned
+     to z-index 0, with every one of the band's real children lifted above it
+     (see the rule that follows), the artwork is the ground and stays there. */
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  pointer-events: none;
+}
+/* The band's real content rides ABOVE its backdrop image. Positioned (so the
+   z-index means something) but unpainted — no background, no border — so the
+   artwork shows straight through under the words and the controls. */
+.ir-page-head > *:not(.ir-head-backdrop) {
+  position: relative;
+  z-index: 1;
+}
+/* The blue VEIL over the top of the artwork — the home page's hero scrim (a
+   navy wash set INTO the photo rather than pasted over it), at a much lower
+   opacity by request. It falls from the band's top edge and is gone by two
+   thirds down, so the artwork reads plainly below it while the top — where the
+   eye enters the band — carries the same blue family as the bar above it.
+
+   It is a pseudo-element ON the band rather than a second child: ::after paints
+   after the backdrop <img> (so it lands over the photo) and below the lifted
+   content (z-index 1), which is exactly the one slot a veil has. */
+.ir-page-head::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(19, 62, 135, 0.38) 0%,
+    rgba(19, 62, 135, 0.2) 38%,
+    rgba(19, 62, 135, 0) 72%
+  );
+  pointer-events: none;
+}
 .ir-case-panel > .ir-page-head {
   margin-bottom: 0;
-  /* ---- THE WHITE FIELD (by request) ----------------------------------------
-     The band wears the document's own paper surface, so the title, the case line
-     and the officer's actions read as ONE white field opening the screen under
-     the navy bar — instead of loose text on the page's grey. It is the SURFACE
-     that comes back, not the box: no border, no radius and no shadow (the three
-     declarations below), because what the station asked off this head was the
-     CARD around it, and a band flush to three edges is not a card. On the light
-     page the field separates itself (#fff on #EEF0F4), and in the dark theme the
-     token answers with the raised panel, so the band stays a surface in both. */
-  background: var(--ir-card);
+  position: relative;
+  /* ---- THE NAVY MASTHEAD (the reference's header band) ---------------------
+     The head is a BAND, not a field of paper: the app's mark and the document's
+     name sit on the same navy the top bar paints, so the screen opens with one
+     dark instrument and the report's panels begin below it. The radius stays 0
+     because the band is flush to the page's edges (the gutter is cancelled
+     below), and a flush band is not a card.
+
+     The fill is GONE, not restated: the backdrop <img> IS the band's ground now
+     (see .ir-head-backdrop), and an opaque gradient here would paint over the
+     artwork it sits behind. The band's ink was measured against the navy, which
+     is what the artwork itself is — if the file is ever missing the <img>
+     renders nothing and the page's own background shows through, so the
+     fallback lives on the image's alt-free box, not on a second coat of paint
+     that would hide the artwork for good. */
+  background: none;
   border: 0;
   border-radius: 0;
   box-shadow: none;
+  color: var(--on-accent);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--on-accent);
   /* ---- FLUSH BAND (by request): 0 top, 0 left, 0 right ---------------------
      The head reaches the page's own edges instead of sitting inside the document
      gutter: the gutter above it and on both sides is CANCELLED here, so the band
@@ -510,13 +582,46 @@
   margin-left: calc(-1 * var(--ir-gutter-x));
   margin-right: calc(-1 * var(--ir-gutter-x));
 }
-/* The record strip keeps its amber tint AND its left rule — that rule is what
-   says "notice" — and loses the box that was drawn around it. */
+/* The record strip, IN THE MASTHEAD BAND: it used to be an amber-tinted notice
+   strip on the page under the head; it is a RECTANGULAR PLATE inside the navy
+   band now — the report's reference line, set into the letterhead field it
+   belongs to. It keeps the amber rule down its left edge (that rule is what
+   says "notice") and gains a hairline ring so the plate reads as one object on
+   the artwork behind it. */
 .ir-case-panel > .ir-status.ir-status--flag {
-  margin: 0;
-  border-width: 1px 0 1px 4px;
+  margin: 0.7rem 0 0;
+  padding: 0.45rem 0.85rem;
+  background: rgba(11, 37, 69, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-left: 4px solid var(--amber);
   border-radius: 0;
-  border-left-color: var(--amber);
+  /* YELLOW INK (by request), on a translucent white ground: the strip reads as
+     the band's annotation line in the gold the flag and the submit plate wear,
+     over a low-opacity white fill that lifts it off the artwork behind it. */
+  color: var(--ir-gold);
+  background: rgba(255, 255, 255, 0.08);
+  /* ON THE LEFT (by request): the strip is the first thing under the head row,
+     reading from the band's own left edge — a letterhead's annotation line,
+     not a plate floating across the width. Full width is still available for
+     the three notices it can carry; it just starts from the left now. */
+  margin-right: auto;
+  /* VISIBLE, ALWAYS: the plate draws even on a fresh draft (see Reports.jsx,
+     where the condition around it was removed) — with nothing to say it
+     carries the report's standing line, and once the report has a number the
+     reference fills it. */
+}
+/* A fresh draft has no reference yet; the strip still shows, so it carries its
+   standing line instead of an empty plate. */
+.ir-case-panel > .ir-status.ir-status--flag::before {
+  content: 'Report in progress';
+}
+.ir-case-panel > .ir-status.ir-status--flag > span + ::before {
+  content: none;
+}
+/* The strip's own sentence reads in the gold; the badges it can carry keep
+   their own colour pairs — only the plain text changes ground. */
+.ir-case-panel > .ir-status.ir-status--flag span:not([class]) {
+  color: var(--ir-gold);
 }
 /* The stepper: no plate of its own, just the hairline that closes the head, so
    the head reads as one field rather than a card inside a card. */
@@ -532,16 +637,15 @@
 .ir-title {
   /* The page titles used a Georgia serif for the "official document" read.
      The project's one typeface (League Spartan, see src/fonts/fonts.css)
-     replaces it; the serif is gone, not falling back. The reference's case
-     title is a heavy, tight, near-black navy — reached by WEIGHT and colour,
-     not by a second family, so the drop-the-serif decision still holds. The
-     ink stays --ir-text (theme-aware), never the literal --ir-navy, which the
-     dark theme does not repaint and which would vanish on a near-black page. */
+     replaces it; the serif is gone, not falling back. On the masthead band the
+     title is the band's own ink — white, the trade a filled band asks for —
+     and it comes from --on-accent rather than a literal so both themes answer
+     for it (the band is navy in both). */
   font-family: var(--font-family);
   font-size: clamp(1.3rem, 1.05rem + 1.2vw, 1.75rem);
   font-weight: 800;
   letter-spacing: -0.005em;
-  color: var(--ir-text);
+  color: var(--on-accent);
   margin: 0;
 }
 
@@ -593,15 +697,18 @@
   padding: 0.08rem 0.45rem;
 }
 
-.ir-meta-sep {
-  color: var(--ir-muted);
-  font-size: 0.8rem;
-}
-
 /* The save line: when this draft last reached the server, on the station's
    clock. It is the quietest line in the head — it is reassurance, not an
    identifier — so it stays small and muted, with the tick carrying the only
-   colour. Drawn only after a write that succeeded (see lastSavedAt). */
+   colour. Drawn only after a write that succeeded (see lastSavedAt). On the
+   band the ink is the band's own (soft white), and the tick lightens one step
+   to stay green ON NAVY rather than disappearing into it. */
+.ir-head-main .ir-save-note {
+  color: rgba(255, 255, 255, 0.78);
+}
+.ir-head-main .ir-save-note svg {
+  color: #4ade80;
+}
 .ir-save-note {
   display: flex;
   align-items: center;
@@ -615,14 +722,33 @@
   color: var(--green-ok);
 }
 
-/* The left column of the case bar: title and flag, the identifier line, the save
-   line — stacked in reading order. `min-width: 0` so a long case number cannot
-   push the actions group off the row. */
+/* The right column of the masthead: the identifiers chip, the save line under
+   it, and (below both, see .ir-case-actions) every action on the report.
+   `min-width: 0` so a long case number cannot push the actions group off the
+   row. */
 .ir-head-main {
   display: flex;
   flex-direction: column;
-  gap: 0.32rem;
+  gap: 0.4rem;
   min-width: 0;
+}
+
+/* The brand block: the document's title (with its state flag) and the
+   one-line promise under it. The mark plate that used to lead the block is
+   gone by request. */
+.ir-head-brand {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.ir-head-tagline {
+  margin: 0.1rem 0 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  /* 72% white on the band's navy measures ~7:1 — a quiet line, not a faint
+     one. */
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .ir-meta {
@@ -675,39 +801,37 @@
 
 /* ---- The case-title bar's own parts (spec §2) -----------------------------
    The title and its status flag on the left, the reference block and the case
-   action on the right. */
-/* The title and its status flag, CENTRED on their own line across the whole
-   head. `flex: 1 1 100%` is what gives them the full measure to centre in —
-   without it the box is only as wide as the words and `justify-content` has
-   nothing to distribute. The identifiers and the actions take the line below,
-   left and right respectively (see .ir-page-head). */
+   action on the right. *//* The title and its state flag, ONE left-aligned row inside the brand block —
+   a masthead reads from the left edge, like the letterhead it sits beside. */
 .ir-case-title {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 0.75rem;
   flex-wrap: wrap;
-  flex: 1 1 100%;
   min-width: 0;
 }
 
 /* The reference's pulsing status flag beside the case title. It is read from
    the report's own status, and the pulse is pure decoration — stopped for
    anyone who has asked the OS for less motion (see the reduced-motion block). */
+/* The state flag is the reference's GOLD pill on the band: solid, not tinted —
+   on navy a translucent amber reads as dirt, while the solid gold is the same
+   plate Home's action wears. The ink is the gold's own (navy), measured like
+   every fill in this file. */
 .ir-draft-flag {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   flex: none;
   padding: 0.18rem 0.6rem;
-  background: var(--amber-bg);
-  border: 1px solid var(--amber-line);
+  background: var(--ir-gold);
+  border: 1px solid var(--ir-gold);
   border-radius: 999px;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ir-text);
+  color: var(--ir-on-gold);
 }
 .ir-draft-flag::before {
   content: '';
@@ -715,7 +839,7 @@
   width: 0.45rem;
   height: 0.45rem;
   border-radius: 50%;
-  background: var(--amber);
+  background: var(--ir-on-gold);
   animation: ir-flag-pulse 1.8s ease-in-out infinite;
 }
 @keyframes ir-flag-pulse {
@@ -735,11 +859,50 @@
   }
 }
 
+/* The identifiers, on ONE white chip at the band's right: three labelled
+   pairs, each read top-down (the key above the value), so the chip reads as a
+   small specimen card rather than as a run of inline text. */
+/* The identifiers chip, ON THE BAND (by request, not white): a translucent
+   navy plate with a hairline ring — the same treatment the record strip below
+   wears, so the two read as one family of plates set into the letterhead. The
+   pairs are ruled apart by hairline separators instead of by the chip's gaps
+   alone. */
 .ir-case-meta {
   display: flex;
-  align-items: center;
-  gap: 0.35rem 0.55rem;
+  align-items: stretch;
+  gap: 1.1rem;
   flex-wrap: wrap;
+  padding: 0.45rem 0.9rem;
+  background: rgba(11, 37, 69, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 10px;
+  box-shadow: none;
+}
+.ir-case-meta > .ir-meta-fact + .ir-meta-fact {
+  border-left: 1px solid rgba(255, 255, 255, 0.22);
+  padding-left: 1.1rem;
+}
+.ir-meta-fact {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.05rem;
+  min-width: 0;
+}
+.ir-head-main .ir-meta-key {
+  font-size: 0.62rem;
+  /* The key reads on the navy plate now: soft white, not the page's steel. */
+  color: rgba(255, 255, 255, 0.72);
+}
+.ir-head-main .ir-meta-val {
+  color: #ffffff;
+}
+/* The chip IS the plate, so the code value's own boxed plate is redundant
+   here — the number reads as a token from the mono alone. */
+.ir-case-meta .ir-meta-val--code {
+  background: none;
+  border: 0;
+  padding: 0;
 }
 
 /* The case bar's action group. Only controls that already exist on this screen
@@ -756,6 +919,11 @@
   /* Pinned right, however short the left column is. */
   margin-left: auto;
 }
+/* The actions sit ON the navy band now, so they carry their own ink instead of
+   borrowing the page's: a ghost plate (hairline white ring, soft white label)
+   that fills one step on hover. The generic `.ir-body button` rule is a grey
+   plate for a white page — out-specificified here, the same way the stepper's
+   node and the way-back button already are. */
 .ir-case-actions button {
   display: inline-flex;
   align-items: center;
@@ -765,16 +933,50 @@
   letter-spacing: 0.04em;
   padding: 0.5rem 0.85rem;
   border-radius: 6px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  color: rgba(255, 255, 255, 0.92);
+  box-shadow: none;
+}
+.ir-case-actions button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.6);
+  color: #ffffff;
+}
+.ir-case-actions button:disabled {
+  opacity: 0.45;
+  /* The ghost plate keeps its shape when disabled (by request the whole bar
+     is always drawn): a disabled control is still visible, just quiet — the
+     cursor and the title say why it cannot be pressed. */
+  cursor: not-allowed;
+}
+/* Archive keeps its danger read on the band: the same ghost, with the red
+   carried by the label rather than by a fill that would shout on navy. */
+.ir-case-actions button.danger {
+  color: #ffb1a6;
+}
+.ir-case-actions button.danger:hover {
+  border-color: rgba(255, 177, 166, 0.65);
+  color: #ffc9c2;
 }
 /* Submit, at the width of its own label. The base rule makes this button a
    full-width plate, because it used to close the document at the foot of the
-   page; in the case bar it sits beside Print Slip. Scoped to the group rather
-   than changed on .ir-submit, which Home's call-to-action also wears. */
+   page; in the case bar it sits beside Print Slip. On the band it is the GOLD
+   plate — the one filled control in the group, the same accent Home's action
+   wears — so the commit control reads as the commit control at every width. */
 .ir-case-actions .ir-submit {
   width: auto;
   font-size: 0.72rem;
   letter-spacing: 0.1em;
   padding: 0.52rem 0.95rem;
+  background: var(--ir-gold);
+  border-color: var(--ir-gold);
+  color: var(--ir-on-gold);
+}
+.ir-case-actions .ir-submit:hover {
+  background: var(--ir-gold-hi);
+  border-color: var(--ir-gold-hi);
+  color: var(--ir-on-gold);
 }
 
 .ir-body .req {
@@ -992,14 +1194,17 @@
 .ir-stepper-dot {
   width: 1.5rem;
   height: 1.5rem;
-  border: 0;
-  background: var(--panel-raised);
-  color: var(--steel);
+  /* A RINGED CIRCLE, not a filled grey disc (by request): white inside, a
+     hairline ring round it, and the number in the document's own ink — the
+     reference's circled figures. The completed face below still fills. */
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ir-text);
   font-size: 0.7rem;
 }
 .ir-stepper-dot--pending {
-  background: var(--panel-raised);
-  color: var(--steel);
+  background: #fff;
+  color: var(--ir-text);
 }
 /* The filled face keeps --step-bar, the palette token that already follows the
    theme (navy in light, a bright blue in dark) — the reference's navy disc,
@@ -1042,9 +1247,11 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   line-height: 1.3;
-  text-align: center;
+  text-align: left;
   text-transform: uppercase;
-  color: var(--steel);
+  /* THE DOCUMENT'S OWN INK (by request): near-black like the mockup's step
+     names, not the page's grey — the name is the row's loudest text. */
+  color: var(--ir-text);
 }
 .ir-stepper-label--done {
   color: var(--paper);
@@ -1057,6 +1264,133 @@
 /* Hover is the whole affordance: these dots navigate, they do not submit. */
 .ir-stepper-node:hover .ir-stepper-label {
   color: var(--step-bar);
+}
+
+/* ---- THE STEPPER AS CHEVRONS (the masthead's five arrow tiles) ------------
+   The tiles become the reference's five ARROW segments: a pointed plate per
+   step, carrying its number, its own drawing and name, and the one-line state
+   under the name. Nothing about the behaviour changed — a chevron is still one
+   button that jumps to its step, the tick face still means completeness, and
+   the fill still means position. This block is stated AFTER the tiles' rules
+   so it supersedes them on source order, and everything it does not restate
+   (the dot faces, the here ring, the reduced-motion floors) still stands.
+
+   THE SHAPE IS A PSEUDO-ELEMENT, not a clip-path on the button: a clip-path
+   on the node itself would clip the keyboard-focus outline to the arrow too,
+   and a focus ring that follows the arrow's notch is a ring an officer can
+   lose. The surface is drawn on ::before (clipped); the ring is drawn on the
+   button (not clipped). Both themes answer through the tokens. */
+.ir-stepper-node {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 0.55rem;
+  row-gap: 0.05rem;
+  text-align: left;
+  padding: 0.45rem 1.6rem 0.45rem 1.2rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.ir-stepper-node::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  /* WHITE, not the card grey (by request): the resting arrows read as the
+     document's own paper with the outline drawing the shape, and only the
+     step you are standing on is filled. */
+  background: #fff;
+  /* In from both ends: the right edge comes to a point, the left edge is
+     notched by the previous step's point. The FIRST segment keeps a flat
+     left edge — the row starts square, like the band above it. */
+  clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 50%, calc(100% - 13px) 100%, 0 100%, 13px 50%);
+}
+/* THE OUTLINE ON EVERY ARROW (by request): a clipped element cannot carry a
+   CSS border (it would be clipped away along with everything outside the
+   shape), so the outline is a SECOND pseudo-element drawn UNDER the fill —
+   the same clip-path, inflated by 1px on every side via inset -1px, painted
+   in the hairline colour. The fill above it covers the middle and leaves a
+   1px edge showing all the way round the arrow, notch and point included. */
+.ir-stepper-node::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: 0;
+  background: var(--ir-border);
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%, 14px 50%);
+}
+.ir-stepper-step:first-child .ir-stepper-node::after {
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%);
+}
+/* The fill is promoted one layer above the outline (both are z-index 0 inside
+   the node, so source order decides — the outline rule is written first and
+   the fill rule after it, which is why this works without touching z-index). */
+.ir-stepper-step:first-child .ir-stepper-node::before {
+  clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 50%, calc(100% - 13px) 100%, 0 100%);
+}
+.ir-stepper-node > * {
+  position: relative;
+  z-index: 1;
+}
+/* The number sits ACROSS both rows — one circle beside a two-line label — and
+   gives up its own tile border: the chevron IS the plate now. */
+.ir-stepper-dot {
+  grid-row: 1 / span 2;
+}
+.ir-stepper-label {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-align: left;
+}
+.ir-stepper-glyph {
+  flex: none;
+}
+/* The step the officer is ON: the navy plate, the label's white ink, and the
+   number circle flipped to the gold the masthead's flag wears — the one warm
+   accent on the row, exactly where the eye is meant to land. */
+.ir-stepper-node--here::before {
+  background: var(--ir-bar);
+}
+.ir-stepper-node--here .ir-stepper-dot {
+  background: var(--ir-gold);
+  border-color: var(--ir-gold);
+  color: var(--ir-on-gold);
+}
+.ir-stepper-node--here .ir-stepper-label,
+.ir-stepper-node--here:hover .ir-stepper-label {
+  color: var(--on-accent);
+}
+.ir-stepper-node--here .ir-stepper-sub {
+  color: rgba(255, 255, 255, 0.75);
+}
+.ir-stepper-node:hover::before {
+  background: var(--ir-blue-tint);
+}
+.ir-stepper-node:focus-visible {
+  outline: 2px solid var(--ir-blue);
+  outline-offset: 2px;
+}
+.ir-stepper-node:focus-visible::before {
+  background: var(--ir-blue-tint);
+}
+/* A finished step you are standing on keeps its filled face; the gold circle
+   and the white plate already say "here", so the old halo is redundant. */
+.ir-stepper-node--here .ir-stepper-dot--done {
+  outline: 0;
+  background: var(--ir-gold);
+  border-color: var(--ir-gold);
+  color: var(--ir-on-gold);
+}
+/* On the masthead the chevron row hangs directly under the band — no hairline
+   closing the head above it, no plate of its own: the arrows ARE the row. */
+.ir-case-panel > .ir-stepper {
+  border-top: 0;
+  padding: 0.7rem 0 0.35rem;
 }
 
 /* ---- Step navigation (stepped form format only) --------------------------
@@ -1435,7 +1769,12 @@
      NOTE: those extra rows are not free — each one costs a row gap, which is
      why the grid above states a column gap and leaves the row rhythm to the
      blocks' own margins. */
-  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-card--accent {
+  /* THE FRAME, NOT THE CARD: the gradient-blob wrapper (GradientBlobCard) wraps
+     the whole instrument (see Reports.jsx), so the frame is the workspace's
+     grid item and carries the placement and the ONE-SIZE bound below; the card
+     fills it and keeps its own inner scroll, so a taller panel scrolls INSIDE
+     the frame exactly as it always did. */
+  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame {
     grid-column: 2;
     grid-row: 1 / span 50;
     margin-top: 0;
@@ -1468,16 +1807,32 @@
     flex-direction: column;
     height: calc(80dvh - 1.6rem);
     max-height: calc(80dvh - 1.6rem);
+  }
+  /* The card fills the frame, and it is the INNER SCROLLER: content taller
+     than the box scrolls inside the card, behind the frame's electric edge. */
+  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame > .gradient-blob-card__glass {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame .ir-card--accent {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: auto;
+    max-height: none;
     overflow-y: auto;
     overscroll-behavior-y: contain;
     scrollbar-gutter: stable;
   }
   /* The card's own head is furniture, not slack: it keeps its height and the
      body below it absorbs the remainder of the fixed box. */
-  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-card--accent > .ir-card-head {
+  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame .ir-card--accent > .ir-card-head {
     flex: none;
   }
-  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-card--accent > .ir-card-body {
+  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame .ir-card--accent > .ir-card-body {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
@@ -1486,13 +1841,13 @@
   /* The panel fills the body, so the two states it draws are the SAME box: the
      ready state sits at the top of it, and the letter's viewer takes whatever
      the review text under it does not need (the next rule). */
-  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-card--accent .ai-panel {
+  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame .ir-card--accent .ai-panel {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     min-height: 0;
   }
-  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-card--accent .ai-inline--sheet {
+  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame .ir-card--accent .ai-inline--sheet {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
@@ -1506,12 +1861,31 @@
      so a taller window simply shows more of the same one page. `min-height` is
      the floor that keeps a tall review body — a gloss, a warning, the action
      row — from squeezing the viewer to nothing. */
-  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-card--accent .ai-inline--sheet > .ai-sheet-preview {
+  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame .ir-card--accent .ai-inline--sheet > .ai-sheet-preview {
     flex: 1 1 auto;
     height: auto;
     max-height: none;
     min-height: 8rem;
   }
+}
+
+/* ---- The assistant's gradient frame ---------------------------------------
+   The blob wrapper (GradientBlobCard) owns its own paint — no canvas, no clip
+   window to restate here. What the layout still owes the frame is the spacing:
+   the card's own `--wide` margin would open a gap between the glassy plate and
+   the card it carries. The frame takes the margin instead where the form is a
+   plain block (the stepped format's review step); the sidebar states its own
+   zero on the frame above. */
+.ir-ai-frame .ir-card--wide {
+  margin-top: 0;
+}
+.ir-form--stepped > .ir-ai-frame {
+  margin-top: clamp(0.85rem, 1.6vw, 1.25rem);
+}
+/* The sheet format's desk copy: the wrapper takes the panel's measure there,
+   exactly as the bare panel did. */
+.ir-sheet-ai .ir-ai-frame .ir-card--wide {
+  margin-top: 0;
 }
 
 .ir-grid {
@@ -1737,6 +2111,15 @@
   border-bottom-color: var(--ir-navy-hi);
 }
 
+/* The assistant's card is the one TINTED body on the form: the bar is the
+   navy instrument (like every bar), and the body under it is the reference's
+   pale blue, so the card reads as a different KIND of block — a tool, not a
+   section of the record. The token is the same cyan tint the app uses for
+   focus and for the assistant's other surfaces, so the theme answers for it. */
+.ir-card--accent > .ir-card-body {
+  background: var(--ir-blue-tint);
+}
+
 /* ---- THE NUMBERED PLATE (the section marker, given a box) ----------------
    EVERY SECTION IS A NUMBERED SECTION, and until now the number was bare text:
    "I." set at the title's own size, so its width was whatever the numeral
@@ -1804,6 +2187,43 @@
   height: 0.5rem;
   border-radius: 50%;
   background: var(--ir-bar-accent);
+}
+
+/* The marker, GROWN INTO A PLATE for the bars that name a drawing: the same
+   gold square, carrying the section's glyph (see CARD_GLYPHS in Reports.jsx).
+   Same mark, same job — it says "the station's own form" — it just has room
+   for the picture now. A page does not print icons, so the sheet format goes
+   back to the bare ordinal (see the sheet's own head rules). */
+.ir-card-glyph {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 6px;
+  background: var(--ir-gold);
+  color: var(--ir-on-gold);
+}
+.ir-form--sheet .ir-card-glyph {
+  display: none;
+}
+
+/* The capability pill ("Beta"), beside the title it qualifies. It is chrome,
+   not document: like the glyph, it does not print. */
+.ir-card-badge {
+  flex: none;
+  padding: 0.06rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.38);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--on-accent);
+}
+.ir-form--sheet .ir-card-badge {
+  display: none;
 }
 
 /* The section bar's right-hand context label (the reference's "Complainant /
@@ -3538,19 +3958,22 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: clamp(0.85rem, 2vw, 1.4rem);
+  gap: clamp(0.7rem, 1.6vw, 1.1rem);
   /* 8px — one step rounder than the document grammar's 4px, and deliberately:
      the grammar's corner is for CONTROLS, and this is a card, the same kind of
      object as the register card below it. */
   border-radius: 8px;
   background: var(--ir-navy);
   color: #fff;
-  padding: clamp(1rem, 2.2vw, 1.5rem) clamp(1.1rem, 2.4vw, 1.75rem);
+  padding: clamp(0.7rem, 1.6vw, 1rem) clamp(0.95rem, 2vw, 1.4rem);
   /* The action is a card, so it can lose a little air without losing anything an
-     officer reads; the type inside it stays the size it is. */
+     officer reads; the type inside it stays the size it is. The card is drawn
+     SMALLER than it used to be (by request): every pixel it gives back is a
+     pixel the draft list under it gets, and the list is what was overlapping
+     the signature band on short screens. */
   padding-block: max(
-    0.6rem,
-    calc(clamp(1rem, 2.2vw, 1.5rem) - var(--ir-home-short) * 0.045)
+    0.45rem,
+    calc(clamp(0.7rem, 1.6vw, 1rem) - var(--ir-home-short) * 0.045)
   );
   box-shadow: var(--shadow-sm);
 }
@@ -3604,8 +4027,8 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: clamp(46px, 5vw, 56px);
-  height: clamp(46px, 5vw, 56px);
+  width: clamp(38px, 4.2vw, 46px);
+  height: clamp(38px, 4.2vw, 46px);
   border-radius: 50%;
   background: var(--ir-blue);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
@@ -3649,8 +4072,8 @@
 }
 
 .ir-home-banner-title {
-  margin: 0.2rem 0 0;
-  font-size: clamp(1.15rem, 1.1rem + 0.9vw, 1.6rem);
+  margin: 0.15rem 0 0;
+  font-size: clamp(1.02rem, 0.95rem + 0.7vw, 1.3rem);
   font-weight: 800;
   letter-spacing: -0.01em;
   line-height: 1.15;
@@ -3661,9 +4084,9 @@
    form is long, and knowing it is kept as a draft (rather than submitted by
    being opened) is the difference between starting it and putting it off. */
 .ir-home-banner-note {
-  margin: 0.3rem 0 0;
-  font-size: 0.8rem;
-  line-height: 1.5;
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
   color: rgba(255, 255, 255, 0.78);
 }
 
@@ -3690,7 +4113,7 @@
   flex: 0 0 auto;
   width: auto;
   min-width: min(15rem, 100%);
-  padding: 0.72rem 1.15rem;
+  padding: 0.55rem 0.95rem;
   border: 1px solid var(--ir-gold);
   border-radius: 6px;
   background: var(--ir-gold);
@@ -3703,18 +4126,15 @@
     transform 120ms ease;
 }
 
-/* The glyph sits in a plate of its own so it reads as a mark rather than as
-   another letter in front of the label. The plate is the LABEL's ink at low
-   alpha — a tinted-glass square, not a second colour. */
+/* The glyph sits directly on the gold plate — the tinted-glass square it used
+   to be drawn in read as a grey box around the mark, and is gone by request.
+   The span stays as the glyph's own layout box, with nothing painted in it. */
 .ir-home-cta-glyph {
   flex: none;
   display: grid;
   place-items: center;
   width: 1.85rem;
   height: 1.85rem;
-  border-radius: 4px;
-  background: rgba(11, 37, 69, 0.13);
-  transition: background 160ms ease;
 }
 
 .ir-home-cta-text {
@@ -3730,9 +4150,6 @@
   border-color: var(--ir-gold-hi);
   color: var(--ir-on-gold);
   box-shadow: var(--shadow-md);
-}
-.ir-home-cta:hover:not(:disabled) .ir-home-cta-glyph {
-  background: rgba(11, 37, 69, 0.2);
 }
 .ir-home-cta:active:not(:disabled) {
   box-shadow: var(--shadow-xs);
@@ -3799,8 +4216,8 @@
    rather than the page: a flex item's floor is its content by default, and that
    floor is what a long list pushes through. */
 .ir-home-drafts {
-  margin-top: clamp(1.25rem, 3vw, 2rem);
-  margin-top: max(0.75rem, calc(clamp(1.25rem, 3vw, 2rem) - var(--ir-home-short) * 0.035));
+  margin-top: clamp(0.9rem, 2vw, 1.4rem);
+  margin-top: max(0.6rem, calc(clamp(0.9rem, 2vw, 1.4rem) - var(--ir-home-short) * 0.035));
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -3888,13 +4305,15 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.75rem;
+  gap: 0.6rem;
   flex: 1 1 auto;
   /* ONE ROW IS THE FLOOR. A `0` here would let a short panel squeeze the list out
      of existence, and a page whose drafts have silently gone is worse than a page
      that scrolls: below one row the panel takes the overflow back, which is the
-     only case in which Home is allowed to scroll at all. */
-  min-height: 10.5rem;
+     only case in which Home is allowed to scroll at all. The floor is sized to
+     the COMPRESSED card (see .ir-draft-card), so one card fits a short laptop's
+     panel instead of spilling over the signature band under it. */
+  min-height: 8.5rem;
   overflow-y: auto;
   align-content: start;
 }
@@ -3908,12 +4327,12 @@
   /* Both for the stripe: it is the card's own edge, and the corner on that side
      comes from the card's curve rather than from a radius of the stripe's own. */
   overflow: hidden;
-  padding: 1.05rem clamp(0.9rem, 1.8vw, 1.35rem) 1rem clamp(1.1rem, 2vw, 1.5rem);
+  padding: 0.75rem clamp(0.85rem, 1.6vw, 1.2rem) 0.7rem clamp(1rem, 1.8vw, 1.3rem);
   /* A card keeps its shape — the plate, the three identity lines, the meta pair,
      the two controls and the progress strip set its height — but not its air: on
      a short panel the cards come up tighter rather than the last one dropping
      below the fold. The floor is what keeps a card a card. */
-  padding-block: max(0.7rem, calc(1.05rem - var(--ir-home-short) * 0.02));
+  padding-block: max(0.5rem, calc(0.75rem - var(--ir-home-short) * 0.02));
   background: var(--ir-card, #fff);
   border: 1px solid var(--ir-border);
   border-radius: 14px;
@@ -3961,9 +4380,9 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: 3.75rem;
-  height: 3.75rem;
-  border-radius: 1rem;
+  width: 2.9rem;
+  height: 2.9rem;
+  border-radius: 0.8rem;
   background: var(--ir-navy);
   color: #fff;
 }
@@ -3977,7 +4396,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.3rem;
+  gap: 0.2rem;
   min-width: 0;
 }
 
@@ -4014,7 +4433,7 @@
    the way they do everywhere else in the app. It is the largest word on the card
    after the pills: on this screen the number is the handle the officer came for. */
 .ir-draft-no {
-  font-size: 1.2rem;
+  font-size: 1.02rem;
   font-weight: 800;
   letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums;
@@ -4026,7 +4445,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   color: var(--ir-muted);
 }
 
@@ -4036,7 +4455,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: clamp(0.6rem, 2vw, 1.1rem);
+  gap: clamp(0.4rem, 1.4vw, 0.7rem);
 }
 
 /* When it happened, and who recorded it. Two lines with their own marks,
@@ -4045,9 +4464,9 @@
 .ir-draft-meta {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.18rem;
   min-width: 0;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
   color: var(--ir-muted);
 }
@@ -4076,13 +4495,13 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.6rem 1.05rem;
+  gap: 0.4rem;
+  padding: 0.42rem 0.85rem;
   border: 1px solid var(--ir-navy);
   border-radius: 8px;
   background: var(--ir-navy);
   color: #fff;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
@@ -4104,8 +4523,8 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.05rem;
+  height: 2.05rem;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -4129,8 +4548,8 @@
    "3 of 5 sections" once, from the pair that says it, instead of a role
    announcing the same number twice. */
 .ir-draft-progress {
-  margin-top: 0.85rem;
-  padding-top: 0.7rem;
+  margin-top: 0.5rem;
+  padding-top: 0.45rem;
   border-top: 1px solid var(--ir-border);
 }
 .ir-draft-progress-head {
@@ -4138,16 +4557,16 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem;
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.32rem;
 }
 .ir-draft-progress-label {
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   color: var(--ir-muted);
 }
 /* The count is the fact the strip exists for, so it is the bold end of the pair:
    the label says what is being read, this says how far. */
 .ir-draft-progress-count {
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--ir-text);
@@ -4159,7 +4578,7 @@
    property, exactly as the stepper's fill is. */
 .ir-draft-progress-track {
   display: block;
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
   background: var(--ir-blue-tint);
   overflow: hidden;
@@ -4747,50 +5166,43 @@
   color: #fff;
 }
 
-/* The heading's mark sits on a GOLD TILE — the action plate's own pair
-   (--ir-gold), one column over. That is a deliberate change of mind, and worth
-   stating: it used to be the banner's accent disc, on the argument that the
-   page's two headings should wear ONE mark. The two blocks now wear one RECIPE
-   instead — a plate on navy — which says the same thing (these two are the
-   page's headings) while leaving the blue to the job blue actually has, which is
-   the action itself.
+/* The heading's mark is the shield artwork DIRECTLY ON the band's navy — the
+   gold tile it used to stand on is gone by request: a solid gold square ahead
+   of the heading read as a block of colour, not as a mark. The artwork is the
+   station's gold line art with its own background keyed out, so it reads
+   straight off the navy (the same ground the sheet's gold line art is measured
+   against), and the heading needs no plate to be the station's own.
 
-   NO INK IS NAMED HERE any more. The tile used to hold a glyph drawn in
-   --ir-on-gold; it holds ARTWORK now, which brings its own colour (see
-   .ir-remember-title-mark-art below), so a `color` on this box would be a
-   declaration with nothing to paint. The tile states its GROUND and nothing
-   else, which is the same reason the banner's disc names no colour either.
-
-   It is a SQUARE while the three panels' marks below are CIRCLES, and that is
-   the whole of the difference: the heading is a heading, the three under it are
-   items, and the four must not read as a column of five. The radius is the
-   card's own 8px, so the tile is the card in miniature. */
+   The span stays as the artwork's layout box, and it is a SQUARE while the
+   three panels' marks below are CIRCLES — the heading is a heading, the three
+   under it are items, and the four must not read as a column of five. */
 .ir-remember-title-mark {
   flex: none;
   display: grid;
   place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 8px;
-  background: var(--ir-gold);
+  /* BIGGER (by request): the shield is the heading's only mark and the band is
+     its own ground, so it takes the band's own line-height as its box — about
+     two and a half times the text size instead of the 2rem it wore. */
+  width: 3.25rem;
+  height: 3.25rem;
+  margin: calc(-1 * max(0.3rem, calc(0.6rem - var(--ir-home-short) * 0.03))) 0;
+  margin-left: calc(-1 * var(--ir-remember-pad));
 }
 
-/* The mark ON the tile: the OFFICE'S OWN SHIELD — the station's gold line art,
-   a FILE rather than one of the page's drawn glyphs, exactly as the banner's
-   mark is (see .ir-home-banner-icon). The station's crest is artwork, and an
-   icon set cannot be it; its own background has been keyed out, so it brings no
-   matte of its own to the tile it stands on.
+/* The mark: the OFFICE'S OWN SHIELD — the station's gold line art, a FILE
+   rather than one of the page's drawn glyphs, exactly as the banner's mark is
+   (see .ir-home-banner-icon). The station's crest is artwork, and an icon set
+   cannot be it; its own background has been keyed out, so it sits on the band's
+   navy with no matte of its own.
 
-   INSET TO 70% of the tile, so the gold shows as a rim all the way round and the
-   mark does not press on the tile's corners, and drawn to that box rather than
-   stretched into it (object-fit: contain) so its proportions are the artwork's
-   own. The one thing this rule cannot do is give the mark contrast: the artwork
-   is the same gold family as the tile, on purpose, so it reads as a TONE on its
-   plate rather than as a shape cut out of it. --ir-gold is one value in both
-   themes (see the token), so no theme restatement moves either one. */
+   Drawn to its box rather than stretched into it (object-fit: contain) so its
+   proportions are the artwork's own. The one thing this rule cannot do is give
+   the mark contrast: the artwork is gold on navy, the sheet's own pairing, and
+   --ir-gold is one value in both themes (see the token), so no theme
+   restatement moves either one. */
 .ir-remember-title-mark-art {
-  width: 70%;
-  height: 70%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   display: block;
 }
