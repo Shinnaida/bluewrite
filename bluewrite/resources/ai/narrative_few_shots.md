@@ -179,7 +179,7 @@ OFFICER NOTES:
 two men entered store, one held guard, other took cash box. cctv captured faces
 ```
 NARRATIVE:
-On [WHEN], a robbery incident transpired at [LOCATION]. [RESPONDENT_1] and [RESPONDENT_2], acting in concert, entered the establishment; while [RESPONDENT_1] restrained the establishment's security guard, [RESPONDENT_2] took the cash box containing an undetermined amount of money. [VICTIM_1], the store owner, was present during the incident and was unharmed. [WITNESS_1], a bystander, witnessed the entire course of the event. Both suspects fled on board a waiting motorcycle toward an unknown direction. Responding personnel secured the premises and recovered closed-circuit television footage showing the faces of the perpetrators.
+On [WHEN], a robbery incident transpired at [LOCATION]. [RESPONDENT_1] and [RESPONDENT_2], acting in concert, entered the establishment; while [RESPONDENT_1] restrained the establishment's security guard, [RESPONDENT_2] took the cash box containing an undetermined amount of money. [VICTIM_1], the store owner, was present during the incident and was unharmed. [WITNESS_1], a bystander, witnessed the entire course of the event. Both suspects fled on board a waiting motorcycle toward an unknown direction. Responding personnel secured the premises and recovered closed-circuit television footage showing the faces of the suspects.
 
 ACTION TAKEN / STATUS LINE (the actionTaken output — the recorded disposition, and NOT part of the narrative above):
-A hot-pursuit operation was launched against the fleeing perpetrators, whose whereabouts remain undetermined as of this reporting, and the case is now the subject of a continuing inquiry by this Office.
+A hot-pursuit operation was launched against the fleeing suspects, whose whereabouts remain undetermined as of this reporting, and the case is now the subject of a continuing inquiry by this Office.

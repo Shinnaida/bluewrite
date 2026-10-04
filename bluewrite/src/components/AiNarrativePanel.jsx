@@ -355,6 +355,10 @@ export default function AiNarrativePanel({
   // fit-to-screen height so only the DOCUMENT scrolls, which means the values
   // below its fold can no longer type themselves into view by themselves.
   const sheetViewportRef = useRef(null);
+  // The zoom in force on the page. The stylesheet's own fallback
+  // (`.print-sheet`'s `var(--ai-sheet-zoom, 0.62)`) is its initial value, so
+  // the natural height can be read back through it on the first measurement.
+  const leafZoom = useRef(0.62);
 
   // TASK 10 — keep the typing in view. ReportSheetBody reports how much of the
   // sequence has landed and the frame is moved to match, so the page is written
@@ -448,7 +452,7 @@ export default function AiNarrativePanel({
   useEffect(() => {
     if (!regenSignal || regenSignal === regenSeen.current) return;
     regenSeen.current = regenSignal;
-    generate(lastPress?.feedback ?? '');
+    generate(lastPress?.feedback ?? '', false, true);
     // Intentionally keyed on the signal alone: `generate` and `lastPress` are
     // read from the render that observed the bump.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -489,42 +493,59 @@ export default function AiNarrativePanel({
   // looking at it (the case for every press of Generate in this card, which is
   // the whole point of typing the letter here instead of in the narrative panel
   // the officer would have to scroll up to).
-  // HOW BIG THE LETTER IS IN THE FIELD, AND WHY THE FIELD SCROLLS.
+  // HOW BIG THE LETTER IS IN THE CARD, AND WHY THE WHOLE LEAF SHOWS.
   //
-  // The page is drawn as large as the frame is wide — a page filling the column
-  // it was asked for — and the frame scrolls to the rest of it, which is how any
-  // 8.5 × 11in leaf is read on a screen. `object-fit` cannot do this for a live
-  // element, and the ratio of two lengths (this box, that page) is not
-  // expressible in CSS, so the number is measured here and handed to the
+  // The page is drawn at 100% of its own size and scaled by ONE measured
+  // factor, which fits the WHOLE 8.5 × 11in leaf inside the card: the smaller
+  // of "the card is this wide" and "the card is this tall". `object-fit`
+  // cannot do that for a live element, and one length may not be divided by
+  // another in CSS, so the factor is measured here and handed to the
   // stylesheet as one custom property — the rule that reads it is the
   // `.ai-sheet-preview .print-sheet` block in styles.css.
   //
-  // Fitting the HEIGHT as well — the whole leaf on screen at once, print-preview
-  // style — was what the foot of the page used to wait for, and it made the letter
-  // about 0.38 of the page's own size: a page glanced at rather than read. The
-  // Noted by block it was protecting is reached the way the rest of a tall page
-  // is, by scrolling. The WIDTH is therefore the whole rule — and it only works
-  // because the page is allowed to take the paper the letter needs: the stylesheet
-  // gives it the leaf's 11in as a FLOOR, never a cap, or the signature block at
-  // the foot would be clipped away instead of scrolled to.
+  // The sheet is one page of paper, and it is read as the page it is: top to
+  // bottom, in the assistant's own card, with no second box around it and no
+  // scrollbar inside one. Fitting BOTH axes is what makes that true at any
+  // card size — a wide-but-short card and a narrow-but-tall one land on the
+  // same promise. A letter that runs past its leaf still gets its tail: the
+  // frame keeps `overflow-y: auto` for that one case (the page grows with the
+  // letter because the stylesheet gives it 11in as a FLOOR, never a cap), and
+  // the factor never drops below its own floor for a degenerate box.
   //
-  // Measured whenever the frame is resized, and from the moment the page is up
-  // rather than only after the typing lands: the size is the same in both states,
-  // so there is no jump at the end of the reveal, and `followTyping` above scrolls
-  // a page that is already the size the officer will read it at.
+  // The page's own height is not a constant — the letter grows on it — so it is
+  // read back through the zoom in force (`zoom` scales the rect the DOM
+  // reports). Measured whenever the CARD is resized AND whenever the PAGE
+  // changes size, from the moment it is up rather than only after the typing
+  // lands: a line of typing that pushes the letter onto more paper shrinks the
+  // factor in the same frame, so the whole page stays on screen as it is
+  // written, and `followTyping` above is a no-op for a page that already fits.
   useEffect(() => {
     const el = sheetViewportRef.current;
     if (!el || !sheeted || typeof ResizeObserver !== 'function') return;
     const sizeLeaf = () => {
       const cs = window.getComputedStyle(el);
       const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
       const availW = el.clientWidth - padX;
-      if (!(availW > 0)) return;
-      const scale = availW / SHEET_PX.width;
-      // The floor guards a degenerate box (a frame collapsed to a few pixels must
-      // not divide to nothing), and the cap keeps a very wide frame from
+      const availH = el.clientHeight - padY;
+      if (!(availW > 0) || !(availH > 0)) return;
+      // The page's natural height: whatever paper the letter needs, read back
+      // through the zoom in force (see `leafZoom`). The leaf's own 11in is the
+      // floor the stylesheet draws it at, stated once and read here too.
+      const page = el.firstElementChild;
+      // Rounded to the CSS pixel: the observer re-enters on every box change,
+      // and a subpixel drift in this figure would let two adjacent factors
+      // trade places forever.
+      const naturalH = page
+        ? Math.max(SHEET_PX.height, Math.round(page.getBoundingClientRect().height / leafZoom.current))
+        : SHEET_PX.height;
+      const byWidth = availW / SHEET_PX.width;
+      const byHeight = availH / naturalH;
+      // The floor guards a degenerate box (a card collapsed to a few pixels
+      // must not divide to nothing), and the cap keeps a very wide card from
       // MAGNIFYING the page past its own size — a preview enlarges nothing.
-      const next = Math.max(0.3, Math.min(1, scale)).toFixed(4);
+      const next = Math.max(0.3, Math.min(1, byWidth, byHeight)).toFixed(4);
+      leafZoom.current = Number(next);
       if (el.style.getPropertyValue('--ai-sheet-zoom') !== next) {
         el.style.setProperty('--ai-sheet-zoom', next);
       }
@@ -532,6 +553,9 @@ export default function AiNarrativePanel({
     sizeLeaf();
     const ro = new ResizeObserver(sizeLeaf);
     ro.observe(el);
+    // The PAGE is observed too: the reveal (and a draft restored from the tab's
+    // store) grows it without touching the card's own box.
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
     return () => ro.disconnect();
   }, [sheeted, panelOpen, genCounter]);
 
@@ -625,7 +649,7 @@ export default function AiNarrativePanel({
     return id ?? null;
   };
 
-  const generate = async (feedbackText = '', asGuidedStep = false) => {
+  const generate = async (feedbackText = '', asGuidedStep = false, regenerate = false) => {
     if (!asGuidedStep) setLastPress({ kind: 'generate', feedback: feedbackText });
     // THE ACCOUNT — the officer's own words, read ONCE and used for both the
     // read below and the generation request further down. There is exactly one
@@ -764,6 +788,9 @@ export default function AiNarrativePanel({
       // On the Translate-narrative path the narrative IS the text to translate.
       narrative: effectiveSource === 'narrative' ? String(narrative || '') : undefined,
       feedback: feedbackText || undefined,
+      // Explicit Regenerate: the server skips its short-TTL draft cache, so
+      // the press can never be answered with the identical cached draft.
+      regenerate: regenerate || undefined,
       action_taken: String(actionTaken || ''),
       notable_findings: String(notableFindings || ''),
     };
@@ -1103,6 +1130,13 @@ export default function AiNarrativePanel({
         narrative: draft.narrative,
         findingsText: tightenDraft ? undefined : draftFindingsText,
         statusText: tightenDraft ? undefined : draftStatusText,
+        // The model's own Suspect sentence for each respondent row it wrote a
+        // description for (the response's `suspectLines`). The sheet's facts
+        // block draws it in place of the raw recorded values the report still
+        // holds — the draft the officer is reviewing, not the record. A tighten
+        // result carries none, and nothing here is ever written into the form:
+        // Accept applies the narrative and the two formalised blocks only.
+        suspectLines: tightenDraft ? undefined : draft.suspectLines,
         scope: tightenDraft ? 'tighten' : 'generate',
       }
     : null;
@@ -1326,7 +1360,7 @@ export default function AiNarrativePanel({
         <button
           type="button"
           className="ai-retry"
-          onClick={() => (lastPress.kind === 'tighten' ? tighten() : generate(lastPress.feedback))}
+          onClick={() => (lastPress.kind === 'tighten' ? tighten() : generate(lastPress.feedback, false, true))}
         >
           Try again
         </button>
@@ -1340,25 +1374,12 @@ export default function AiNarrativePanel({
   const referenceText = String(actionTaken || '').replace(/\s+/g, ' ').trim().slice(0, 160);
   const findingsReference = String(notableFindings || '').replace(/\s+/g, ' ').trim().slice(0, 160);
 
-  // Keep the title and dismiss action above the page so the officer can close
-  // the draft without scrolling through the document. The bar is shared by
-  // loading, errors and editable-box mode; while the LETTER is up it is not
-  // drawn at all (see the render below) — the viewer is the panel then.
-  const draftHeadBar = (
-    <header className="ai-inline-head">
-      <h3>AI draft</h3>
-      <button
-        type="button"
-        className="ai-side-close"
-        onClick={closePanel}
-        aria-label="Hide the AI draft"
-        title="Hide (Esc) — the draft is kept"
-      >
-        ✕
-      </button>
-    </header>
-  );
-
+  // THE TITLE BAR IS GONE WITH THE BOX (owner request, 2026-10-04). There is
+  // no separate "AI draft" to name: the draft is drawn in the AI ASSISTANCE
+  // card, which already carries that name on its own head, and the page is the
+  // thing the officer reads. The bar's ✕ went with it — the review row under
+  // the page carries Close, an error carries Dismiss, the wait carries Hide,
+  // and Escape still hides the body from anywhere.
 
   return (
     <div className="ai-panel">
@@ -1591,26 +1612,17 @@ export default function AiNarrativePanel({
           ref={sheetCardRef}
           aria-label="AI narrative draft"
         >
-          {/* THE TITLE BAR IS THE PANEL'S, NOT THE DOCUMENT'S. While the letter
-              is up the viewer below IS the panel — the bar above it was one
-              more row of furniture between the officer and the page they are
-              reading, and a second title for a card that already has one (by
-              request). It is drawn only where there is no letter to read: the
-              loading wait, a refusal, or the editable boxes. Nothing depended
-              on it for the way out — the review row under the letter carries
-              Close, and Escape hides the draft from anywhere. */}
-          {!sheeted && draftHeadBar}
 
-          {/* TASK 9/10 — the document viewer: a fit-to-screen frame the page
-              scrolls inside, centered on a muted surface (see
-              `.ai-sheet-preview`). Deliberately UNWRAPPED: the frame is the
-              card's own box, so the page gets the column rather than a second
-              inset inside the first. The typewriter is followed by
-              `followTyping`, so the words are never typed out of sight. */}
+          {/* TASK 9/10 — the page IN THE CARD: no viewer box, no title bar, no
+              surface of its own (owner request, 2026-10-04 — the card is the
+              one box). This div is the card's own area, and the effect above
+              hands it the one scale that fits the WHOLE leaf inside it; the
+              typewriter is followed by `followTyping`, which is a no-op for a
+              page that already fits. */}
           {sheeted && (
             <div
-              // SIZED TO THE FRAME'S WIDTH by the effect above; the frame keeps
-              // its own scrollbar for the rest of the page (see the CSS rule).
+              // MEASURED, NOT DRESSED: it draws nothing, and exists so the
+              // page has somewhere to be fitted (see the CSS rule).
               className="ai-sheet-preview"
               ref={sheetViewportRef}
             >
@@ -1723,6 +1735,12 @@ export default function AiNarrativePanel({
                     <div className="ai-loading-bar" aria-hidden="true">
                       <div className="ai-loading-bar-fill" />
                     </div>
+                    {/* The ✕ that used to sit in the title bar went with the box;
+                        the wait keeps its way out, in plain words in the same
+                        content. Escape hides the body too. */}
+                    <button type="button" className="ai-hide-draft" onClick={closePanel}>
+                      Hide
+                    </button>
                   </div>
                 )}
 
@@ -1830,8 +1848,8 @@ export default function AiNarrativePanel({
                         beside it (which is why the edit writes it back into the
                         draft and every apply path reads it unchanged). */}
                     {/* TASK 9 — THE AI'S WORDS TYPE THEMSELVES INTO THE BONDPAPER,
-                        which is drawn at the TOP of this card (see
-                        `draftHeadBar`): the very component the print portal
+                        which is drawn at the TOP of this card: the very
+                        component the print portal
                         draws, on the page it will print on, so the officer reads
                         the letter rather than a plain copy of it. Its static
                         chrome — the seals, the org block, the office code and
@@ -2071,7 +2089,7 @@ export default function AiNarrativePanel({
                             // Track C — regenerating inside the guided review is
                             // still step 1, so it lands back in the review state.
                             if (guidedIsReviewing(guided)) moveGuided('regenerate');
-                            generate(feedback, guidedIsReviewing(guided) || guided === 'translating');
+                            generate(feedback, guidedIsReviewing(guided) || guided === 'translating', true);
                           }}
                         >
                           Regenerate

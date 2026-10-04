@@ -121,6 +121,11 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             self::normaliseGloss($parsed['gloss'] ?? ''),
             self::normaliseGloss($parsed['sourceGloss'] ?? ''),
             self::normaliseWarnings($parsed['ambiguities'] ?? []),
+            // The model's own descriptive phrases for unidentified suspects:
+            // the service restores the phrase in place of the bare role
+            // phrase, so the description is the model's prose (see
+            // NarrativeService::applySuspectPhrases).
+            self::normaliseSuspectPhrases($parsed['suspectPhrases'] ?? []),
         );
     }
 
@@ -1002,6 +1007,27 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
                     'type' => 'array',
                     'items' => ['type' => 'string'],
                 ],
+                // Descriptions the model wrote for UNIDENTIFIED suspects,
+                // keyed by their placeholder. Required but allowed to be
+                // EMPTY (no unidentified suspect carries a description). A
+                // phrase carrying a bracket token of its own is dropped
+                // server-side; the bare role phrase remains the fallback.
+                // `line` is the same description as the sheet's own Suspect
+                // line (the prompt's worked pair), drawn in the draft's sheet
+                // preview: an entry whose line fails its screen keeps its
+                // phrase and simply falls back to the record's own line.
+                'suspectPhrases' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'ref' => ['type' => 'string'],
+                            'phrase' => ['type' => 'string'],
+                            'line' => ['type' => 'string'],
+                        ],
+                        'required' => ['ref', 'phrase', 'line'],
+                    ],
+                ],
                 // Phase 6 Stage 3 — the "understood as" gloss pair. `gloss`
                 // restates in plain English what the model read the officer to
                 // have said; `sourceGloss` says the same in the officer's own
@@ -1017,8 +1043,57 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
                     'items' => ['type' => 'string'],
                 ],
             ],
-            'required' => ['narrative', 'suggestions', 'possibleGaps', 'notableFindings', 'actionTaken', 'addedContentWarnings', 'gloss', 'sourceGloss', 'ambiguities'],
+            'required' => ['narrative', 'suggestions', 'possibleGaps', 'notableFindings', 'actionTaken', 'addedContentWarnings', 'suspectPhrases', 'gloss', 'sourceGloss', 'ambiguities'],
         ];
+    }
+
+    /**
+     * The model's descriptive phrases for unidentified suspects
+     * (suspectPhrases), keyed by the party's placeholder. Every entry is
+     * screened here: the ref must look like one of ours, the phrase must be
+     * non-empty, single-spaced and free of any bracket token, and both are
+     * capped so a runaway answer cannot bloat the restored text. A dropped
+     * entry leaves the bare role phrase as that placeholder's fallback.
+     *
+     * `line` is the sheet-shaped sentence (the prompt's worked pair), used
+     * only by the draft's sheet preview. It is screened by the SAME rules as
+     * the phrase, but it fails ALONE: an entry with an unusable line keeps
+     * its phrase and the row falls back to the record's own composed line.
+     *
+     * @return array<int, array{ref:string,phrase:string,line?:string}>
+     */
+    private static function normaliseSuspectPhrases(mixed $raw): array
+    {
+        if (!is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        foreach ($raw as $entry) {
+            if (!is_array($entry) || count($out) >= 5) {
+                continue;
+            }
+            $ref = trim((string) ($entry['ref'] ?? ''));
+            $phrase = trim((string) preg_replace('/\s+/u', ' ', (string) ($entry['phrase'] ?? '')));
+            if (!preg_match('/^\[[A-Z_]+[A-Z_0-9]*\]$/', $ref)) {
+                continue;
+            }
+            if ($phrase === '' || mb_strlen($phrase) > 400) {
+                continue;
+            }
+            if (preg_match('/\[[A-Z_]+[A-Z_0-9]*\]/', $phrase)) {
+                continue;
+            }
+            if (isset($out[$ref])) {
+                continue; // first entry wins
+            }
+            $normalised = ['ref' => $ref, 'phrase' => $phrase];
+            $line = trim((string) preg_replace('/\s+/u', ' ', (string) ($entry['line'] ?? '')));
+            if ($line !== '' && mb_strlen($line) <= 400 && !preg_match('/\[[A-Z_]+[A-Z_0-9]*\]/', $line)) {
+                $normalised['line'] = $line;
+            }
+            $out[$ref] = $normalised;
+        }
+        return array_values($out);
     }
 
     /**

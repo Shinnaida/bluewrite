@@ -584,10 +584,12 @@
 }
 /* The record strip, IN THE MASTHEAD BAND: it used to be an amber-tinted notice
    strip on the page under the head; it is a RECTANGULAR PLATE inside the navy
-   band now — the report's reference line, set into the letterhead field it
+   band now — the report's notice line, set into the letterhead field it
    belongs to. It keeps the amber rule down its left edge (that rule is what
    says "notice") and gains a hairline ring so the plate reads as one object on
-   the artwork behind it. */
+   the artwork behind it. DRAWN ONLY WHEN THE REPORT HAS A NOTICE (see
+   Reports.jsx): the reference line it used to carry is gone by request, and a
+   draft that is neither translated nor locked draws no plate at all. */
 .ir-case-panel > .ir-status.ir-status--flag {
   margin: 0.7rem 0 0;
   padding: 0.45rem 0.85rem;
@@ -602,21 +604,14 @@
   background: rgba(255, 255, 255, 0.08);
   /* ON THE LEFT (by request): the strip is the first thing under the head row,
      reading from the band's own left edge — a letterhead's annotation line,
-     not a plate floating across the width. Full width is still available for
-     the three notices it can carry; it just starts from the left now. */
+     not a plate floating across the width. A flex-basis of 100% is what
+     GUARANTEES that: as a flex item in the head's wrapped row, a content-width
+     strip could still fit on the head row's line on a wide screen, and
+     space-between would carry it to the far right edge. A full-row basis
+     forces it onto its own line under the head row, on every viewport, and
+     the row starts from the band's left edge. */
+  flex-basis: 100%;
   margin-right: auto;
-  /* VISIBLE, ALWAYS: the plate draws even on a fresh draft (see Reports.jsx,
-     where the condition around it was removed) — with nothing to say it
-     carries the report's standing line, and once the report has a number the
-     reference fills it. */
-}
-/* A fresh draft has no reference yet; the strip still shows, so it carries its
-   standing line instead of an empty plate. */
-.ir-case-panel > .ir-status.ir-status--flag::before {
-  content: 'Report in progress';
-}
-.ir-case-panel > .ir-status.ir-status--flag > span + ::before {
-  content: none;
 }
 /* The strip's own sentence reads in the gold; the badges it can carry keep
    their own colour pairs — only the plain text changes ground. */
@@ -919,6 +914,21 @@
   /* Pinned right, however short the left column is. */
   margin-left: auto;
 }
+/* IN THE MASTHEAD, THE ACTIONS TAKE THEIR OWN ROW (by request): the row under
+   the identifiers chip — not beside it on the head row. A full-row flex-basis
+   forces the wrap on every viewport, the way the record strip below already
+   does. The row reads as ONE cluster at its right end — the available actions
+   side by side with the commit control (by request "Save Draft Close beside
+   the submit official record"), never split across the row by a pushed-apart
+   gap. The head is one level deeper than the panel
+   (`.ir-case-panel > .ir-page-head > …`), so the child combinator names BOTH
+   steps — a `.ir-case-panel >` selector alone would never match, and the bar
+   would quietly stay on the head row. */
+.ir-case-panel > .ir-page-head > .ir-case-actions {
+  flex-basis: 100%;
+  margin-left: 0;
+  justify-content: flex-end;
+}
 /* The actions sit ON the navy band now, so they carry their own ink instead of
    borrowing the page's: a ghost plate (hairline white ring, soft white label)
    that fills one step on hover. The generic `.ir-body button` rule is a grey
@@ -945,9 +955,9 @@
 }
 .ir-case-actions button:disabled {
   opacity: 0.45;
-  /* The ghost plate keeps its shape when disabled (by request the whole bar
-     is always drawn): a disabled control is still visible, just quiet — the
-     cursor and the title say why it cannot be pressed. */
+  /* Dormant: the cluster no longer renders a disabled control (unavailable
+     actions are not drawn at all), but the treatment stays as a safety net —
+     a dimmed button here would be exactly what was asked to go. */
   cursor: not-allowed;
 }
 /* Archive keeps its danger read on the band: the same ghost, with the red
@@ -972,6 +982,9 @@
   background: var(--ir-gold);
   border-color: var(--ir-gold);
   color: var(--ir-on-gold);
+  /* No pushed-apart gap: the commit control sits BESIDE the actions that lead
+     it (see the row's justify-content above), not across the row from them. */
+  margin-left: 0;
 }
 .ir-case-actions .ir-submit:hover {
   background: var(--ir-gold-hi);
@@ -1192,19 +1205,20 @@
   border-color: var(--cyan-bg-strong);
 }
 .ir-stepper-dot {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.65rem;
+  height: 1.65rem;
   /* A RINGED CIRCLE, not a filled grey disc (by request): white inside, a
-     hairline ring round it, and the number in the document's own ink — the
-     reference's circled figures. The completed face below still fills. */
-  border: 1px solid var(--line);
+     blue-grey ring round it, and the number in the document's own NAVY — the
+     mockup's circled figures, whose ring and figure both read blue against
+     the white plate. The completed face below still fills. */
+  border: 1px solid rgba(11, 37, 69, 0.35);
   background: #fff;
-  color: var(--ir-text);
-  font-size: 0.7rem;
+  color: var(--ir-navy);
+  font-size: 0.72rem;
 }
 .ir-stepper-dot--pending {
   background: #fff;
-  color: var(--ir-text);
+  color: var(--ir-navy);
 }
 /* The filled face keeps --step-bar, the palette token that already follows the
    theme (navy in light, a bright blue in dark) — the reference's navy disc,
@@ -1289,16 +1303,31 @@
   column-gap: 0.55rem;
   row-gap: 0.05rem;
   text-align: left;
-  padding: 0.45rem 1.6rem 0.45rem 1.2rem;
+  padding: 0.55rem 1.7rem 0.55rem 1.3rem;
   border: 0;
   border-radius: 0;
   background: transparent;
+  /* THE MOCKUP'S DEPTH: each arrow floats a soft shadow onto the one behind
+     it, so the row reads as layered plates rather than flat segments. The
+     filter sits on the NODE, not on the clipped pseudo-elements — a filter
+     reads the node's composited alpha, which the clip-path has already
+     shaped, so the shadow follows the arrow (notch and point included) and
+     lands in the gap between the segments. */
+  filter: drop-shadow(0 2px 3px rgba(11, 37, 69, 0.22));
 }
 .ir-stepper-node::before {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: 0;
+  /* THE FILL RIDES ABOVE THE OUTLINE. Both pseudo-elements are positioned
+     with an integer z-index, and pseudo-elements paint in TREE order at equal
+     z-index — ::before is the node's first child, ::after its last — so at
+     z-index 0 the outline covered the fill and every arrow rendered in the
+     outline's grey, active plate included. An explicit 1 puts the fill back
+     on top; the outline's 1px inflation still shows round the edges, which
+     is the ring the design wants. The label, glyph and dot are z-index 1 too
+     but LATER in tree order, so they still paint above the fill. */
+  z-index: 1;
   /* WHITE, not the card grey (by request): the resting arrows read as the
      document's own paper with the outline drawing the shape, and only the
      step you are standing on is filled. */
@@ -1325,9 +1354,8 @@
 .ir-stepper-step:first-child .ir-stepper-node::after {
   clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%);
 }
-/* The fill is promoted one layer above the outline (both are z-index 0 inside
-   the node, so source order decides — the outline rule is written first and
-   the fill rule after it, which is why this works without touching z-index). */
+/* The first segment keeps a flat left edge — the row starts square. (The fill
+   rides above the outline by z-index, not by source order — see ::before.) */
 .ir-stepper-step:first-child .ir-stepper-node::before {
   clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 50%, calc(100% - 13px) 100%, 0 100%);
 }
@@ -1346,6 +1374,10 @@
   align-items: center;
   gap: 0.35rem;
   text-align: left;
+  /* The mockup's step names and their drawings read NAVY, not black — the
+     same ink the number circles carry, so a resting tile is one colour
+     family. (Dark restates its own ink below in dark-theme.css.) */
+  color: var(--ir-navy);
 }
 .ir-stepper-glyph {
   flex: none;
@@ -1366,10 +1398,22 @@
   color: var(--on-accent);
 }
 .ir-stepper-node--here .ir-stepper-sub {
-  color: rgba(255, 255, 255, 0.75);
+  /* The mockup's "In progress": a light periwinkle on the navy plate, a
+     step cooler than plain white so the state reads as secondary to the
+     white step name above it. */
+  color: #C7D4F0;
 }
 .ir-stepper-node:hover::before {
   background: var(--ir-blue-tint);
+}
+/* ...but NEVER on the step the officer is standing on: the tint rule above
+   out-specifies the here plate (0,2,0 > 0,1,0), so a hovered current step
+   lost its navy plate and kept its WHITE label — white on the light tint was
+   unreadable, and it is exactly the state a click leaves the node in. The
+   standing step keeps its plate under the pointer and the keyboard both. */
+.ir-stepper-node--here:hover::before,
+.ir-stepper-node--here:focus-visible::before {
+  background: var(--ir-bar);
 }
 .ir-stepper-node:focus-visible {
   outline: 2px solid var(--ir-blue);
@@ -1860,12 +1904,15 @@
      the leaf is still capped at short bond (see `.ai-sheet-preview .print-sheet`),
      so a taller window simply shows more of the same one page. `min-height` is
      the floor that keeps a tall review body — a gloss, a warning, the action
-     row — from squeezing the viewer to nothing. */
+     row — from squeezing the viewer to nothing; it is raised to sheet scale
+     (owner request, 2026-10-04: the whole page should be visible) — with more
+     review text than the card can hold beside a sheet-height viewer, the CARD
+     scrolls rather than the page being crushed. */
   .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame .ir-card--accent .ai-inline--sheet > .ai-sheet-preview {
     flex: 1 1 auto;
     height: auto;
     max-height: none;
-    min-height: 8rem;
+    min-height: 20rem;
   }
 }
 
@@ -5166,46 +5213,8 @@
   color: #fff;
 }
 
-/* The heading's mark is the shield artwork DIRECTLY ON the band's navy — the
-   gold tile it used to stand on is gone by request: a solid gold square ahead
-   of the heading read as a block of colour, not as a mark. The artwork is the
-   station's gold line art with its own background keyed out, so it reads
-   straight off the navy (the same ground the sheet's gold line art is measured
-   against), and the heading needs no plate to be the station's own.
-
-   The span stays as the artwork's layout box, and it is a SQUARE while the
-   three panels' marks below are CIRCLES — the heading is a heading, the three
-   under it are items, and the four must not read as a column of five. */
-.ir-remember-title-mark {
-  flex: none;
-  display: grid;
-  place-items: center;
-  /* BIGGER (by request): the shield is the heading's only mark and the band is
-     its own ground, so it takes the band's own line-height as its box — about
-     two and a half times the text size instead of the 2rem it wore. */
-  width: 3.25rem;
-  height: 3.25rem;
-  margin: calc(-1 * max(0.3rem, calc(0.6rem - var(--ir-home-short) * 0.03))) 0;
-  margin-left: calc(-1 * var(--ir-remember-pad));
-}
-
-/* The mark: the OFFICE'S OWN SHIELD — the station's gold line art, a FILE
-   rather than one of the page's drawn glyphs, exactly as the banner's mark is
-   (see .ir-home-banner-icon). The station's crest is artwork, and an icon set
-   cannot be it; its own background has been keyed out, so it sits on the band's
-   navy with no matte of its own.
-
-   Drawn to its box rather than stretched into it (object-fit: contain) so its
-   proportions are the artwork's own. The one thing this rule cannot do is give
-   the mark contrast: the artwork is gold on navy, the sheet's own pairing, and
-   --ir-gold is one value in both themes (see the token), so no theme
-   restatement moves either one. */
-.ir-remember-title-mark-art {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
+/* The heading's mark is GONE by request: the gold shield that used to lead
+   "Remember" is removed, and the heading is the word alone on the band. */
 
 .ir-remember-list {
   list-style: none;

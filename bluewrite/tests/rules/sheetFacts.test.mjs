@@ -53,3 +53,53 @@ test('properNounsFor collects party names and the capitalized words of the place
   // A lower-cased word of the place is NOT promoted to a proper noun.
   assert.ok(!names.includes('market'));
 });
+
+// ---- The AI draft's own Suspect sentence in the facts block -------------------
+// While a draft is under review the sheet's Suspect row reads the model's own
+// formalised sentence for the row it describes (the record's raw values are
+// what the officer typed; the sentence is what the draft proposes). The report
+// itself is never written from them — preview only.
+const RAW_SUSPECT = {
+  sex: 'Male',
+  hair: 'Black',
+  clothing: 'He is wear a violet jacket',
+  suspect_status: 'Unidentified',
+  distinguishing_features: 'Have big nose',
+};
+const FORMAL_LINE =
+  'One unidentified male, described as Black, was reportedly wearing a violet jacket and had a prominent nose.';
+
+const suspectValue = (ts, suspectLines) =>
+  buildTypeFacts('Rape / Sexual Assault', { report: {}, ts, suspectLines })
+    .find((e) => e.label === 'Suspect').values[0];
+
+test('the record\'s raw suspect values compose the sheet line when no draft is under review', () => {
+  assert.equal(
+    suspectValue({ respondent: [RAW_SUSPECT] }, null),
+    'One unidentified male, Black, He is wear a violet jacket, Have big nose',
+  );
+});
+
+test('the draft\'s own sentence replaces the raw line on the row it describes', () => {
+  assert.equal(
+    suspectValue({ respondent: [RAW_SUSPECT] }, [{ row: 0, line: FORMAL_LINE }]),
+    FORMAL_LINE,
+  );
+});
+
+test('a row the model did not describe keeps the record\'s own line', () => {
+  const values = buildTypeFacts('Theft', {
+    report: {},
+    ts: { respondent: [{ name: 'Pedro Reyes', age: '34', sex: 'Male' }, RAW_SUSPECT] },
+    suspectLines: [{ row: 1, line: FORMAL_LINE }],
+  }).find((e) => e.label === 'Suspect').values;
+  assert.deepEqual(values, ['Pedro Reyes, 34, Male', FORMAL_LINE]);
+});
+
+test('a line with no row, a blank line or a non-row key is ignored', () => {
+  const ts = { respondent: [RAW_SUSPECT] };
+  const raw = 'One unidentified male, Black, He is wear a violet jacket, Have big nose';
+  assert.equal(suspectValue(ts, [{ row: 4, line: FORMAL_LINE }]), raw);
+  assert.equal(suspectValue(ts, [{ row: 0, line: '   ' }]), raw);
+  assert.equal(suspectValue(ts, [{ nope: true }, { row: 'x', line: FORMAL_LINE }]), raw);
+});

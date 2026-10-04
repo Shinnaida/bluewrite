@@ -58,15 +58,38 @@ test('the cluster is rendered once, in the case bar, and nowhere else', () => {
 test('every action kept its own guard, and its own icon', () => {
   const jsx = cluster();
 
-  // THE BAR IS ALWAYS DRAWN (by request): a fresh draft shows the same six
-  // controls as a filed one. The guards became DISABLED conditions, kept
-  // verbatim — a control that stops drawing when it has nothing to act on
-  // would re-flow the head at the first save.
+  // DRAWN ONLY WHEN AVAILABLE (by request): a control with nothing to act on
+  // is not dimmed — it is not drawn at all. The old disabled conditions are
+  // kept verbatim as RENDER conditions, keyed to each control's own handler so
+  // a condition cannot drift onto the wrong button.
   assert.match(jsx, /\{canEdit && \([\s\S]*?Save Draft/, 'Save Draft lost its canEdit guard');
-  assert.match(jsx, /disabled=\{!draft\.id\}[\s\S]*?History/, 'History lost its saved-report guard');
-  assert.match(jsx, /disabled=\{!draft\.id || !canEdit\}[\s\S]*?Archive/, 'Archive lost a guard');
-  assert.match(jsx, /disabled=\{!draft\.id\}[\s\S]*?Print Slip/, 'Print Slip lost its saved-report guard');
-  assert.match(jsx, /className="ir-submit"/, 'the commit control is no longer the submit button');
+  assert.match(
+    jsx,
+    /\{draft\.id && \(\s*<button type="button" onClick=\{openHistory\}/,
+    'History lost its saved-report guard',
+  );
+  assert.match(
+    jsx,
+    /\{draft\.id && canEdit && \(\s*<button type="button" className="danger" onClick=\{askArchive\}/,
+    'Archive lost a guard',
+  );
+  // Print Slip SAVES FIRST: the slip reads the STORED copy from the server,
+  // so the officer's latest typing (Notable Findings, narrative edits…)
+  // reaches the record before the sheet is fetched — a slip printed straight
+  // after typing must not read "- None recorded." under a filled field.
+  assert.match(
+    jsx,
+    /\{draft\.id && \(\s*<button[\s\S]*?const saved = await saveDraft\(\);\s*if \(saved\) setPrinting\(true\);/,
+    'Print Slip lost its save-then-print flow',
+  );
+  assert.match(
+    jsx,
+    /\{canEdit && canFinalize && \([\s\S]*?className="ir-submit"/,
+    'Submit lost its permission guard',
+  );
+  // And nothing renders DISABLED in the cluster any more — a ghost of a button
+  // at low opacity is exactly what was asked to go.
+  assert.doesNotMatch(jsx, /disabled=/, 'the cluster still dims a control instead of hiding it');
 
   // An icon on each of the six: the row is icon+label in the case bar, and a
   // button that loses its glyph stops lining up with the rest.

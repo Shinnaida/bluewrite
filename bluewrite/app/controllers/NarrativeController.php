@@ -68,6 +68,10 @@ final class NarrativeController
         $body = NarrativeController::jsonBody();
         $notes = trim((string) ($body['notes'] ?? ''));
         $feedback = trim((string) ($body['feedback'] ?? ''));
+        // An explicit Regenerate asks for a NEW draft: it skips the §8 draft
+        // cache read (the fresh draft is still cached), so the press cannot be
+        // answered with the identical cached text inside the TTL.
+        $regenerate = (bool) ($body['regenerate'] ?? false);
         // Which text is the source: the officer's own narrative ("Translate
         // narrative") or the notes box. Exactly one source per Apply (D3).
         $sourceKind = (($body['source'] ?? 'notes') === 'narrative') ? 'narrative' : 'notes';
@@ -161,7 +165,7 @@ final class NarrativeController
 
         try {
             $svc = new NarrativeService();
-            $out = $svc->generateForReport($report, $ts, $notes, $feedback, $sourceLanguage);
+            $out = $svc->generateForReport($report, $ts, $notes, $feedback, $sourceLanguage, $regenerate);
         } catch (AiUnavailableException $e) {
             Response::json(503, [
                 'error' => $e->getMessage(),
@@ -209,6 +213,12 @@ final class NarrativeController
             // state them. Advisory only: shown in the review panel, never
             // written into the report or the narrative.
             'addedContentWarnings' => array_values($out['addedContentWarnings'] ?? []),
+            // The model's own sheet-shaped suspect sentences, each labelled
+            // with the respondent row it describes. The AI panel draws them
+            // in the draft's sheet under the Suspect label INSTEAD of the raw
+            // recorded values; the report's fields are never written from
+            // them, and Accept is still the only thing that touches the form.
+            'suspectLines' => array_values($out['suspectLines'] ?? []),
             // Phase 6 Stage 3 — the "understood as" gloss pair and the
             // ambiguity list. Self-reports the officer checks BEFORE applying;
             // never a proof, and never written into the report on their own.

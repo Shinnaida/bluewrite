@@ -49,9 +49,10 @@ final class MaskingGateway
      * person on its own: a narrative has to describe an unidentified suspect
      * ("a man in a gray hoodie") or state how a named one looked, and without
      * these the writer gets a bare role label instead of the recorded
-     * description. They reach the model as structured fields for a NAMED
-     * suspect and ride in the unnamed-party phrase for an UNNAMED one, exactly
-     * like the existing sex/age attributes.
+     * description. They reach the model as structured fields — for a NAMED
+     * suspect and for an UNNAMED one alike, whose placeholder restores to the
+     * bare role phrase so the model writes the description itself (see
+     * maskPersons()).
      */
     private const SUSPECT_DESCRIPTOR_FIELDS = [
         'height',
@@ -85,7 +86,7 @@ final class MaskingGateway
      * @param array $report   Full report row (structured + type_specific).
      * @param array $typeSpecific Parsed type_specific (groups).
      * @param string $notes   Officer's rough free-text notes (may be empty).
-     * @return array{masked: array, map: array<string,string>, residualRisk: array}
+     * @return array{masked: array, map: array<string,string>, refIndex: array<string,int>, residualRisk: array}
      */
     public static function buildMaskedPayload(array $report, array $typeSpecific, string $notes = ''): array
     {
@@ -94,6 +95,10 @@ final class MaskingGateway
         // without its surname), token → placeholder. Deliberately kept OUT of
         // $map so the reverse map still restores the FULL name on unmask.
         $tokens = [];
+        // Placeholder → the group row it came from (see maskPersons). Filled
+        // for every person group; the caller reads it as the row labels for
+        // the model's suspect lines.
+        $refIndex = [];
         $masked = [
             'incident_type' => (string) ($report['incident_type'] ?? ''),
             'when' => self::maskWhen($report['incident_datetime'] ?? null),
@@ -118,7 +123,7 @@ final class MaskingGateway
             }
             if (isset(self::PERSON_GROUPS[$groupKey])) {
                 $prefix = self::PERSON_GROUPS[$groupKey];
-                $people = self::maskPersons($items, $prefix, $map, $tokens);
+                $people = self::maskPersons($items, $prefix, $map, $tokens, $refIndex);
                 if ($people !== []) {
                     $masked['groups']->{self::groupOutputKey($prefix)} = $people;
                 }
@@ -208,6 +213,11 @@ final class MaskingGateway
         return [
             'masked' => $masked,
             'map' => $map,
+            // Placeholder → the row it was masked from, in its group's own
+            // array ([RESPONDENT_1] → respondent[0]). The draft's sheet
+            // preview uses it to draw the model's suspect lines on the right
+            // rows; it never enters the prompt and is never persisted.
+            'refIndex' => $refIndex,
             'residualRisk' => self::freeTextResidualRisk($freeTextForRisk),
         ];
     }
@@ -222,16 +232,7 @@ final class MaskingGateway
      */
     private static function unnamedPersonPhrase(string $prefix, array $item): string
     {
-        $rolePhrase = match ($prefix) {
-            'VICTIM' => 'the complainant',
-            'RESPONDENT' => 'an unidentified suspect',
-            'WITNESS' => 'a witness',
-            'MISSING_PERSON' => 'the missing person',
-            'LAST_SEEN_WITH' => 'the person last seen with the victim',
-            'INJURED_PERSON' => 'an injured person',
-            'ARRESTED_PERSON' => 'an arrested person',
-            default => 'the person concerned',
-        };
+        $rolePhrase = self::rolePhrase($prefix);
 
         $attrs = [];
         $sex = trim((string) ($item['sex'] ?? ''));
@@ -263,6 +264,26 @@ final class MaskingGateway
         // live here and nowhere else, so the model cannot state them twice
         // or coin a second phrasing for the same person).
         return $rolePhrase . ', ' . implode(', ', $attrs);
+    }
+
+    /**
+     * The bare role label a placeholder restores to when the party has no
+     * name and no composed phrase is used — the fallback role, and the whole
+     * restored text for an unidentified suspect, whose description the model
+     * writes from the record's fields (maskPersons()).
+     */
+    private static function rolePhrase(string $prefix): string
+    {
+        return match ($prefix) {
+            'VICTIM' => 'the complainant',
+            'RESPONDENT' => 'an unidentified suspect',
+            'WITNESS' => 'a witness',
+            'MISSING_PERSON' => 'the missing person',
+            'LAST_SEEN_WITH' => 'the person last seen with the victim',
+            'INJURED_PERSON' => 'an injured person',
+            'ARRESTED_PERSON' => 'an arrested person',
+            default => 'the person concerned',
+        };
     }
 
     /**
@@ -388,13 +409,14 @@ final class MaskingGateway
      * Person group → masked records. Name/address/exact age are REPLACED
      * (never sent, not even masked-as-text); age becomes a band.
      *
+     * @param array<string,int> $refIndex placeholder → the row's index in $items (filled here)
      * @return array<int, array<string, mixed>>
      */
-    private static function maskPersons(array $items, string $prefix, array &$map, array &$tokens): array
+    private static function maskPersons(array $items, string $prefix, array &$map, array &$tokens, array &$refIndex): array
     {
         $out = [];
         $n = 0;
-        foreach ($items as $item) {
+        foreach ($items as $index => $item) {
             if (!is_array($item)) {
                 continue;
             }
@@ -411,6 +433,19 @@ final class MaskingGateway
             }
             $n++;
             $placeholder = "[{$prefix}_{$n}]";
+            // Which ROW of its group this placeholder was masked from —
+            // 'respondent[0]' for [RESPONDENT_1]. The draft's sheet preview
+            // maps the model's suspect lines back onto the exact rows they
+            // describe; never sent to the provider, never persisted.
+            $refIndex[$placeholder] = (int) $index;
+            // The one unnamed party whose attributes the model must WRITE
+            // rather than have restored: an unidentified suspect. The
+            // placeholder restores to the bare role phrase, and the recorded
+            // description travels as structured fields below, so the model
+            // can render it as prose (SUSPECT DESCRIPTION in the system
+            // prompt). Every other unnamed party keeps the §1.1 phrase that
+            // already carries their attributes.
+            $describesInline = ($name === '' && $prefix === 'RESPONDENT');
             if ($name !== '') {
                 $map[$placeholder] = $name;
                 // A first name alone, or the name written without its surname,
@@ -419,6 +454,8 @@ final class MaskingGateway
                 foreach (self::nameTokens($name) as $tok) {
                     $tokens[$tok] = $placeholder;
                 }
+            } elseif ($describesInline) {
+                $map[$placeholder] = self::rolePhrase($prefix);
             } else {
                 // Addendum §1.1: a party captured only by description (common
                 // for witnesses and unidentified suspects) has no name to
@@ -428,7 +465,11 @@ final class MaskingGateway
                 $map[$placeholder] = self::unnamedPersonPhrase($prefix, $item);
             }
             $record = ['ref' => $placeholder];
-            if ($name !== '') {
+            if ($name !== '' || $describesInline) {
+                // A named party's attributes are woven by the model, and so
+                // are an unidentified suspect's: these fields are the
+                // model's source for the description — never repeated in
+                // the restored phrase.
                 $band = self::ageToBand($item['age'] ?? null);
                 if ($band !== null) {
                     $record['age_band'] = $band;
@@ -445,7 +486,7 @@ final class MaskingGateway
                     }
                 }
             } else {
-                // Addendum §1.2: for an unnamed party the descriptive
+                // Addendum §1.2: for every OTHER unnamed party the descriptive
                 // attributes (sex, age band) are ALREADY embedded in the
                 // fallback phrase above — sending them again as loose fields
                 // makes the model weave them in a second time and coin a

@@ -25,6 +25,15 @@ namespace App\Ai;
  * unclear and each legal-weight term it rendered in the least-committal way.
  * All three are self-reports shown to the officer for checking — never a proof,
  * and never written into the report on their own.
+ *
+ * `suspectPhrases` holds the model's own descriptive phrases for unidentified
+ * suspects, keyed by their placeholder. The service restores the phrase in
+ * place of the bare role phrase, so the suspect's description in the draft is
+ * the model's prose — never the raw form values, and never a prompt-dependent
+ * inline rewrite (see NarrativeService::applySuspectPhrases). Each entry may
+ * also carry a `line`: the same description as the sheet's own Suspect
+ * sentence, drawn by the draft's sheet preview in place of the raw recorded
+ * values (see NarrativeService::suspectLines).
  */
 final class AiNarrativeResult
 {
@@ -35,6 +44,7 @@ final class AiNarrativeResult
      * @param array<int, string> $notableFindings
      * @param array<int, string> $addedContentWarnings
      * @param array<int, string> $ambiguities
+     * @param array<int, array{ref:string,phrase:string,line?:string}> $suspectPhrases
      */
     public function __construct(
         public readonly string $narrative,
@@ -47,6 +57,7 @@ final class AiNarrativeResult
         public readonly string $gloss = '',
         public readonly string $sourceGloss = '',
         public readonly array $ambiguities = [],
+        public readonly array $suspectPhrases = [],
     ) {
     }
 
@@ -63,6 +74,7 @@ final class AiNarrativeResult
             'gloss' => $this->gloss,
             'sourceGloss' => $this->sourceGloss,
             'ambiguities' => $this->ambiguities,
+            'suspectPhrases' => $this->suspectPhrases,
             'usage' => $this->usage,
         ];
     }

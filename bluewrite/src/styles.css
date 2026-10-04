@@ -3512,16 +3512,6 @@ body.profile-panel-open {
   text-transform: uppercase;
   color: var(--steel, #8fa3c8);
 }
-.ai-side-close {
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  color: var(--steel, #8fa3c8);
-  font-size: 0.95rem;
-  cursor: pointer;
-  padding: 0.2rem 0.5rem;
-}
-.ai-side-close:hover { border-color: var(--line-bright, #24355e); color: var(--ink, #e7eefc); }
 .ai-side-body {
   flex: 1;
   overflow-y: auto;
@@ -3533,54 +3523,31 @@ body.profile-panel-open {
   color: var(--steel, #8fa3c8);
 }
 
-/* ---- The AI draft, INLINE (AiNarrativePanel.jsx) -------------------------
+/* ---- The AI draft, IN THE ASSISTANT'S CARD (AiNarrativePanel.jsx) --------
    The draft opens in the assistant's own card, directly under the row that
    asked for it, instead of docking a column to the right edge of the
-   workspace. The letter gets its own compact viewer — and while the letter is
-   up that viewer IS the panel: no title bar, no frame and no second inset
-   around it (see `.ai-inline--sheet` below). */
+   workspace. THERE IS NO SECOND BOX (owner request, 2026-10-04): no "AI draft"
+   title bar, no border, no surface, no inner viewer frame — the AI ASSISTANCE
+   card is the one box, and the page is drawn on it. The card is scrolled to
+   when a draft starts typing into it, so it has to land UNDER the sticky top
+   bar rather than behind it. */
 .ai-inline {
   margin-top: 0.7rem;
-  /* Task 9/10 — the card is scrolled to when a draft starts typing into it, so
-     it has to land UNDER the sticky top bar rather than behind it. */
   scroll-margin-top: 5.5rem;
+}
+/* The wait's own way out, where the title bar's ✕ used to be. */
+.ai-hide-draft {
+  margin-top: 0.7rem;
+  padding: 0.3rem 0.9rem;
   border: 1px solid var(--line-bright);
-  border-radius: 4px;
-  /* The card the assistant owns tints its ready state; the draft reads as a
-     surface ON it, so it takes the raised panel rather than the tint again. */
-  background: var(--panel-raised, var(--panel));
-}
-/* A plain header row, NOT a second sticky bar. The card this panel lives in
-   already carries a sticky head of its own, and two bars pinning to the same
-   edge is how content ends up sliding through the gap between them; inside a
-   bounded scrolling card the arithmetic can only be guessed at anyway, so the
-   bar scrolls with the panel it names. */
-.ai-inline-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.55rem 0.8rem;
-  border-bottom: 1px solid var(--line-bright);
-  background: var(--panel-raised, var(--panel));
-}
-.ai-inline-head .ai-side-close {
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  padding: 0;
-  border: 1px solid transparent;
+  border-radius: 3px;
   background: transparent;
-  color: var(--ir-muted, var(--steel));
-  line-height: 1;
+  color: var(--steel, #8fa3c8);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
 }
-.ai-inline-head .ai-side-close:hover {
-  border-color: var(--ir-blue, var(--cyan));
-  background: transparent;
-  color: var(--ir-blue-ink, var(--cyan));
-}
+.ai-hide-draft:hover { border-color: var(--cyan); color: var(--cyan); }
 .ai-actions > button {
   flex: 1 1 10rem;
   min-width: 0;
@@ -3598,55 +3565,19 @@ body.profile-panel-open {
 .ai-feedback input { flex: 1 1 12rem; min-width: 0; }
 .ai-feedback button { flex: 0 0 auto; }
 
-/* The AI panel's compact dismiss control should not inherit the workspace's
-   generic document-button padding; it is a 36px icon target, not a text action. */
-.ai-side-close {
-  display: inline-grid;
-  place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  padding: 0;
-  line-height: 1;
-}
-.ai-side-close:hover {
-  background: var(--panel-raised, var(--panel));
-  border-color: var(--line-bright);
-  color: var(--ir-text, var(--paper));
-}
-.ai-inline-head .ai-side-close {
-  border-color: transparent;
-  background: transparent;
-  color: var(--ir-muted, var(--steel));
-}
-.ai-inline-head .ai-side-close:hover {
-  border-color: var(--ir-blue, var(--cyan));
-  background: transparent;
-  color: var(--ir-blue-ink, var(--cyan));
-}
 
 @media (max-width: 700px) {
   .ai-toolbar > button,
   .ai-guided-row > button { max-width: 100%; white-space: normal; }
 }
 
-/* Same face as the docked panel's head (.ai-side-head h3) — the title did not
-   change with the placement, so neither should the way it is set. */
-.ai-inline-head h3 {
-  margin: 0;
-  font-size: 0.85rem;
-  font-family: var(--font-hud, monospace);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--steel, #8fa3c8);
-}
 .ai-inline-body { padding: 0.9rem; }
 /* Task 10 REVISED — while the letter is up the panel is the DOCUMENT VIEWER and
-   nothing else: no title bar above the frame, no border and no surface around
-   it, and no second inset between the card and the page. The frame is the one
-   box the officer reads in, so everything that used to be drawn around it was
-   chrome spent twice on the same edge. The card's own tinted accent surface is
-   the backdrop the frame sits on, which is exactly the "paper on a desk"
-   reading the frame was given a muted grey for. */
+   nothing else: no title bar, no border and no surface around the page, and no
+   second inset between the card and it. THE ONE BOX IS THE CARD (owner request,
+   2026-10-04): the page itself is what the officer reads, so everything that
+   used to be drawn around it — the frame's grey desk, its border, its inner
+   scrollbar — was chrome spent twice on the same edge. */
 .ai-inline--sheet {
   margin-top: 0.6rem;
   border: 0;
@@ -3745,9 +3676,12 @@ body.profile-panel-open {
    portal and the inline reveal draw — so the page being reviewed and the page
    that prints cannot drift.
 
-   TASK 10 — it is a DOCUMENT VIEWER, not a growing block. The frame is sized
-   against the screen so the page is compact while the title, dismissal and
-   review controls stay usable; the letter scrolls in its own frame instead of
+   TASK 10 — it is a DOCUMENT VIEWER, not a growing block — but a TALL one
+   (owner request, 2026-10-04): the window is sized so the whole 8.5 × 11in
+   leaf is on screen at the width-fit zoom in the common case. The viewport
+   bound and the frame's own scrollbar still take over on short screens and
+   for a letter that runs past its leaf, and the title, dismissal and review
+   controls stay reachable; the letter scrolls in its own frame instead of
    making the whole report jump. The page is centered in
    the frame with even margins, on a muted surface, so it reads as paper lying on
    a desk rather than as a grey box in a card.
@@ -3765,19 +3699,26 @@ body.profile-panel-open {
    the page from jumping sideways the moment the bar appears. */
 .ai-sheet-preview {
   margin-top: 0.6rem;
-  /* A predictable viewer window leaves room for the draft actions while the
-     page itself remains vertically scrollable. */
-  height: clamp(11rem, 62dvh, 32rem);
-  max-height: calc(100dvh - 7rem);
+  /* THE CARD IS THE VIEWER, SO THE FRAME DRAWS NOTHING (owner request,
+     2026-10-04): no border, no surface, no rounding, no inner box. It exists
+     to give the page ROOM and to hold it at the one scale that fits the WHOLE
+     leaf inside that room — see the `--ai-sheet-zoom` effect in
+     AiNarrativePanel.jsx, which measures the card's content box and the
+     page's own height. The paper's edge and shadow are the only box the
+     officer sees.
+
+     The height is what the card has to give: near the whole window where the
+     panel is its own card, and the leftover height where the assistant's box
+     is fixed (the document format's rule in incident-report.css). A small
+     padding is kept so the page's shadow is not clipped; it is measured out
+     of the fit, not left to eat into it. */
+  height: clamp(24rem, 92dvh, 72rem);
   overflow-x: hidden;
+  /* The fallback, not the normal case: the fit keeps an ordinary page whole,
+     and only a letter that runs past its leaf has a tail to scroll to. */
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  scrollbar-gutter: stable;
-  padding: 0.85rem;
-  border: 1px solid var(--line-bright);
-  border-radius: 4px;
-  /* A muted surface, so the white page reads as PAPER against it. */
-  background: #dfe3e8;
+  padding: 0.5rem;
   display: flex;
   justify-content: center; /* centered like a print preview, not edge-flush */
   align-items: flex-start;
@@ -3841,12 +3782,12 @@ body.profile-panel-open {
 }
 @media (max-width: 700px) {
   .ai-sheet-preview {
-    height: clamp(11rem, 62dvh, 24rem);
-    padding: 0.45rem;
+    height: clamp(18rem, 88dvh, 60rem);
+    padding: 0.35rem;
   }
 }
 @media (max-height: 540px) {
-  .ai-sheet-preview { height: min(44dvh, calc(100dvh - 8rem)); }
+  .ai-sheet-preview { height: calc(100dvh - 4rem); }
 
   .ir-card--accent {
     position: static !important;

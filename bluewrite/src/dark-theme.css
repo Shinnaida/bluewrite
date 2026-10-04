@@ -320,6 +320,60 @@
    that already draws it and let the wash stay quiet. Nothing to restate — this
    comment marks the decision, not a rule. */
 
+/* ---- The report stepper's five chevrons, in dark -------------------------
+   incident-report.css draws the arrows with white literals ("the document's
+   own paper") and navy inks, which is a decision about the LIGHT document and
+   has no page to survive onto here: this theme's page is near-black, and light
+   ink on the white plate would vanish. Dark states its own arrows:
+   raised-panel plates with a visible hairline, light ink, and the standing
+   step on the accent FILL blue — the same surface/ink pair every primary
+   control in this theme wears — with the gold number circle kept, because
+   gold-on-navy is a fixed pair in both themes. */
+:root[data-theme='dark'] .ir-stepper-node::before {
+  background: var(--panel-raised);
+}
+:root[data-theme='dark'] .ir-stepper-node::after {
+  background: var(--line-bright);
+}
+:root[data-theme='dark'] .ir-stepper-node {
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
+}
+:root[data-theme='dark'] .ir-stepper-dot {
+  background: transparent;
+  border-color: rgba(111, 168, 255, 0.45);
+  color: var(--paper);
+}
+:root[data-theme='dark'] .ir-stepper-dot--pending {
+  background: transparent;
+  color: var(--paper);
+}
+:root[data-theme='dark'] .ir-stepper-label {
+  color: var(--paper);
+}
+:root[data-theme='dark'] .ir-stepper-sub {
+  color: var(--steel);
+}
+:root[data-theme='dark'] .ir-stepper-node:hover::before,
+:root[data-theme='dark'] .ir-stepper-node:focus-visible::before {
+  background: var(--cyan-bg);
+}
+:root[data-theme='dark'] .ir-stepper-node--here::before {
+  background: var(--ir-blue);
+}
+/* Hover/focus must not repaint the standing step's plate with the tint —
+   its label is white and the tint rule out-specifies the plate (same bug the
+   light theme had; see incident-report.css). */
+:root[data-theme='dark'] .ir-stepper-node--here:hover::before,
+:root[data-theme='dark'] .ir-stepper-node--here:focus-visible::before {
+  background: var(--ir-blue);
+}
+:root[data-theme='dark'] .ir-stepper-node--here .ir-stepper-label {
+  color: var(--on-accent);
+}
+:root[data-theme='dark'] .ir-stepper-node--here .ir-stepper-sub {
+  color: rgba(255, 255, 255, 0.75);
+}
+
 /* ---- The option cards are drawn by the app, so the theme just carries --------
 
    This block used to hold a `color-scheme` flip: `<input list="…">` opened a menu the

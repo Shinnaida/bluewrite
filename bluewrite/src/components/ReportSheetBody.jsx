@@ -94,9 +94,12 @@ function prefersReducedMotion() {
  * @param {string|null} [props.verificationStatus]
  * @param {object|null} [props.recordedBy]   { name } of the officer using the app
  * @param {object|null} [props.pending]      Task 9 — the UNCOMMITTED AI draft to
- *   type into the sheet: `{ narrative, findingsText?, statusText?, scope }`,
- *   where scope is 'generate' (type the facts too) or 'tighten' (type only the
- *   narrative). Absent → the ordinary, fully-rendered sheet.
+ *   type into the sheet: `{ narrative, findingsText?, statusText?, suspectLines?,
+ *   scope }`, where scope is 'generate' (type the facts too) or 'tighten' (type
+ *   only the narrative). `suspectLines` is `[{ row, line }]` — the model's own
+ *   Suspect sentence per respondent row, drawn in the facts block in place of
+ *   the record's composed line (preview only; the report's fields are never
+ *   written from it). Absent → the ordinary, fully-rendered sheet.
  * @param {number} [props.revealKey]          replays the reveal when it changes
  * @param {boolean} [props.revealPending]     whether a pending proposal should
  *   TYPE itself in (default true). A host drawing a draft it has already shown
@@ -128,7 +131,15 @@ export default function ReportSheetBody({
   const reportNo = report.id ? `BW-${String(report.id).padStart(4, '0')}` : 'BW-____';
   const head = resolveHeader(stationHeader);
   const languageLine = printLanguageLine(report.narrative_language);
-  const facts = buildTypeFacts(report.incident_type, { report, ts });
+  // Task 9 — a draft under review brings the model's own Suspect sentence for
+  // each respondent row it described; the facts block draws it in place of the
+  // record's composed line. A tighten carries none: it rewrites the officer's
+  // prose, not the record's facts.
+  const facts = buildTypeFacts(report.incident_type, {
+    report,
+    ts,
+    suspectLines: pending && pending.scope !== 'tighten' ? pending.suspectLines : null,
+  });
   const findings = buildFindings(ts);
   const recorderName = recordedBy?.name || report.created_by_name || '—';
   const showAppendix = hasSource(report);
@@ -337,17 +348,26 @@ export default function ReportSheetBody({
       {/* D6 — rendered ONLY for a non-English declaration. */}
       {languageLine && <p className="pr-language">{languageLine}</p>}
 
-      {effectiveFindings.length > 0 && (
-        <div className="pr-section">
-          <strong>NOTABLE FINDINGS:</strong>
-          {effectiveFindings.map((fnd, i) => {
-            typeOn = typeFindings;
-            return (
-              <div className="pr-entry" key={`find-${i}`}>{val(`- ${caseValue(fnd)}`)}</div>
-            );
-          })}
-        </div>
-      )}
+      {/* ALWAYS ON THE SHEET (by request): NOTABLE FINDINGS is part of the
+          template between FACTS OF THE CASE and ACTION TAKEN, so the heading
+          prints even on a report whose findings field is empty — an absent
+          block read as an omission, not as a decision. The officer's lines
+          print when the report carries them; otherwise the section says so
+          with one explicit line rather than going quiet. */}
+      <div className="pr-section">
+        <strong>NOTABLE FINDINGS:</strong>
+        {effectiveFindings.length > 0
+          ? effectiveFindings.map((fnd, i) => {
+              typeOn = typeFindings;
+              return (
+                <div className="pr-entry" key={`find-${i}`}>{val(`- ${caseValue(fnd)}`)}</div>
+              );
+            })
+          : (() => {
+              typeOn = typeFindings;
+              return <div className="pr-entry">{val('- None recorded.')}</div>;
+            })()}
+      </div>
 
       {/* Flush-left entries (scanned reference: the action text starts at the
           same margin as the heading). */}

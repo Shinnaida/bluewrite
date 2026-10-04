@@ -216,4 +216,8 @@ test('both states fill the card, and the viewer gives up its own window', () => 
   const floor = value(viewer, 'min-height');
   assert.ok(floor, 'the viewer has no floor: a tall review body could squeeze the page to nothing');
   assert.notEqual(floor, '0', 'a floor of zero is no floor');
+  // ...and the floor is SHEET SCALE (owner request, 2026-10-04): with more
+  // review text than the card can hold beside a sheet-height viewer, the CARD
+  // scrolls — the page is never crushed to a strip.
+  assert.ok(parseFloat(floor) >= 16, `the floor (${floor}) no longer shows sheet-scale paper`);
 });

@@ -228,6 +228,9 @@ final class SystemInstructionTest extends TestCase
         $instruction = GeminiNarrativeProvider::buildSystemInstruction('Theft');
         $this->assertStringContainsString('notableFindings', $instruction);
         $this->assertStringContainsString('EMPTY array when nothing is recorded', $instruction);
+        // An empty block is the SHEET's own line — the model writes no
+        // "None noted"/"None recorded" line into it.
+        $this->assertStringContainsString('the sheet prints its own "- None recorded."', $instruction);
         // A finding is the observation itself — the sheet prints its own
         // heading, so a live run's "It was recorded that no flashlight was
         // used…" is meta-framing the block must not contain.
@@ -311,6 +314,142 @@ final class SystemInstructionTest extends TestCase
         $this->assertStringContainsString('actionTaken', $instruction);
         $this->assertStringContainsString('block of the sheet', $instruction);
         $this->assertStringContainsString('EMPTY string when the', $instruction);
+    }
+
+    /**
+     * The station's part-by-part trainer (glossary §15): each part of the
+     * printed sheet names its destination, the FACTS OF THE CASE chronology is
+     * stated, and the two rules the owner declined stay declined — no
+     * inferential findings, no [TO BE PROVIDED] marker — so the addition can
+     * never quietly reintroduce them.
+     */
+    public function testBaseInstructionCarriesPartByPartTrainer(): void
+    {
+        $instruction = $this->flatten(GeminiNarrativeProvider::buildSystemInstruction('Theft'));
+        $this->assertStringContainsString('INCIDENT-REPORT PART-BY-PART', $instruction);
+        // Each part names the output that carries it.
+        $this->assertStringContainsString('FACTS OF THE CASE — this is the NARRATIVE output itself', $instruction);
+        $this->assertStringContainsString('NOTABLE FINDINGS — this is the notableFindings output', $instruction);
+        $this->assertStringContainsString('ACTION TAKEN / STATUS — this is the actionTaken output', $instruction);
+        // The chronology the trainer states.
+        $this->assertStringContainsString('the initial verification that followed', $instruction);
+        // Ranks keep the PNP abbreviations as written.
+        $this->assertStringContainsString('PMSg, PSMS, PCpl, PSSg, PLT, PCPT, PMAJ', $instruction);
+        // Declined rules stay declined.
+        $this->assertStringContainsString('no "[TO BE PROVIDED]" marker', $instruction);
+        $this->assertStringContainsString('Guilt is never stated and never implied', $instruction);
+    }
+
+    /**
+     * The station's SECOND handed-over trainer text (glossary §16), folded into
+     * the existing sections rather than adopted as a per-field pass: attribution
+     * travels with the fact, a suspect description carries only what the record
+     * supplies, a contradiction is flagged and never resolved, no material
+     * detail is dropped for brevity, and no process talk reaches a field.
+     *
+     * The two declined rules are asserted ABSENT so the addition can never
+     * quietly reintroduce them: no "For verification" note written into a
+     * field, and no instruction to write "Unknown" into a field the record
+     * left silent.
+     */
+    public function testBaseInstructionCarriesFieldTrainer(): void
+    {
+        $instruction = $this->flatten(GeminiNarrativeProvider::buildSystemInstruction('Theft'));
+
+        // Attribution: the account belongs to whoever gave it in the record.
+        $this->assertStringContainsString('ATTRIBUTION TRAVELS WITH THE FACT', $instruction);
+        $this->assertStringContainsString('chosen by WHO actually gave the account in the record', $instruction);
+        $this->assertStringContainsString('never present a reported statement as something the responding team observed itself', $instruction);
+
+        // Suspect description: objective, supplied details only, with the
+        // trainer's own worked pair.
+        $this->assertStringContainsString('SUSPECT DESCRIPTION (objective, observational, supplied details only)', $instruction);
+        $this->assertStringContainsString('Include ONLY details the record supplies', $instruction);
+        $this->assertStringContainsString('Never add an estimated height', $instruction);
+        $this->assertStringContainsString('One unidentified male, described as Black', $instruction);
+        $this->assertStringContainsString('was reportedly wearing a violet jacket', $instruction);
+        $this->assertStringContainsString('and had a prominent nose', $instruction);
+        // The description reaches the draft as the model's OWN phrase for the
+        // suspect (suspectPhrases), never as raw text injected at unmask.
+        $this->assertStringContainsString('suspectPhrases: an ARRAY of zero to five entries', $instruction);
+        $this->assertStringContainsString('the suspect is referred to by the placeholder alone', $instruction);
+        // ...and the SAME description comes back as the sheet's own Suspect
+        // line (`line`), which the draft's sheet preview draws in the facts
+        // block in place of the raw recorded values (glossary §18).
+        $this->assertStringContainsString('each with "ref", "phrase" and "line"', $instruction);
+        $this->assertStringContainsString("the SAME description written as the sheet's own Suspect line", $instruction);
+        $this->assertStringContainsString("it is the worked pair in the suspect-description section, exactly", $instruction);
+        // The line follows the worked pair's own wordings: a bare label stays
+        // the attributed description ("described as Black"), and the
+        // paraphrases it may not become are named.
+        $this->assertStringContainsString('written WORD FOR WORD', $instruction);
+        $this->assertStringContainsString('the hair field recording just "Black" is written "described as Black"', $instruction);
+        $this->assertStringContainsString('"with black hair", "black-haired" and "described as having black hair" are', $instruction);
+        $this->assertStringContainsString('The value describes the PERSON, not a feature of them', $instruction);
+        $this->assertStringContainsString('it never repeats the placeholder, never carries a bracket token', $instruction);
+        // A bare descriptor the record gives is written as an attributed
+        // description, and an informal present-tense phrase is carried into
+        // the report's past tense.
+        $this->assertStringContainsString('recorded "Black" becomes "described as Black"', $instruction);
+        $this->assertStringContainsString('is brought into the report\'s past tense', $instruction);
+        // A witness's opinion is reported as the witness's, never as fact.
+        $this->assertStringContainsString("report it as that witness's description", $instruction);
+
+        // A contradiction is surfaced, not resolved — and it is explicitly NOT
+        // the economy merge rule.
+        $this->assertStringContainsString('A CONTRADICTION IS FLAGGED, NEVER RESOLVED', $instruction);
+        $this->assertStringContainsString('This is NOT the merge rule (ECONOMY rule 3)', $instruction);
+        // Substance survives the economy pass.
+        $this->assertStringContainsString('NO MATERIAL DETAIL IS DROPPED', $instruction);
+
+        // The text's Core Principle, executable: a rewrite keeps the record's
+        // MEANING (the same actors, acts, order and relations), and its rule 9
+        // — no forced rewriting: a record already clear and formal is kept as
+        // written, with only what grammar, register or the field's purpose
+        // requires changed.
+        $this->assertStringContainsString("A REWRITE KEEPS THE RECORD'S MEANING", $instruction);
+        $this->assertStringContainsString('If a proposed sentence would express an idea the record', $instruction);
+        $this->assertStringContainsString('A REWRITE IS NEVER AN END IN ITSELF', $instruction);
+        $this->assertStringContainsString("change only what grammar, register or the field's purpose requires", $instruction);
+
+        // One register, but each field keeps its own shape, and nothing about
+        // the writing itself is written into the report.
+        $this->assertStringContainsString('EACH FIELD IS WRITTEN FOR ITS OWN PURPOSE', $instruction);
+        $this->assertStringContainsString('THE OUTPUT IS THE REPORT, NOT TALK ABOUT THE REPORT', $instruction);
+
+        // The declined "For verification" note is named only as something that
+        // never reaches a field — never as an instruction to write one.
+        $this->assertStringContainsString('never as a marker or a "For verification" note inside a field', $instruction);
+        $this->assertStringNotContainsString('Use "Unknown," "Not provided," or "For verification,"', $instruction);
+
+        // The new section is carried exactly once, like the economy contract.
+        $this->assertSame(1, substr_count($instruction, 'EACH FIELD IS WRITTEN FOR ITS OWN PURPOSE'));
+        $this->assertSame(1, substr_count($instruction, 'SUSPECT DESCRIPTION'));
+    }
+
+    /**
+     * The AI sheet's per-field instruction set (glossary §17) closes with a
+     * validation pass: the rewrite is compared against the original before it
+     * is returned — no fact added, removed, contradicted or changed, the level
+     * of certainty preserved, the meaning corrected wherever it drifted, and
+     * anything unclear flagged as an advisory rather than guessed at.
+     *
+     * The same bundle's value-preservation rule for dates, times and places is
+     * asserted here too.
+     */
+    public function testBaseInstructionCarriesDraftValidationRule(): void
+    {
+        $instruction = $this->flatten(GeminiNarrativeProvider::buildSystemInstruction('Theft'));
+
+        $this->assertStringContainsString('Then compare the whole answer with the original input once more', $instruction);
+        $this->assertStringContainsString('no fact may be added, removed, contradicted or changed', $instruction);
+        $this->assertStringContainsString('the level of certainty must carry over unchanged', $instruction);
+        $this->assertStringContainsString('correct it before returning', $instruction);
+        $this->assertStringContainsString('flag it as a possibleGaps or ambiguities advisory', $instruction);
+
+        // A date, a time or a place keeps its value and its uncertainty.
+        $this->assertStringContainsString('its value is never changed, an uncertain one stays uncertain', $instruction);
+        $this->assertStringContainsString('never turn an uncertain value into an exact one', $instruction);
     }
 
     /**
@@ -595,9 +734,10 @@ final class SystemInstructionTest extends TestCase
         $this->assertStringNotContainsString('at approximately 1400H', $instruction);
         $this->assertStringNotContainsString('"14:00 hours"', $instruction);
 
-        // The closing reference line is the system's to add, not the model's:
-        // the sheet prints one "Investigated by:" line, never two.
-        $this->assertStringContainsString('is added by the system AFTER your text', $instruction);
+        // The signed line belongs to the sheet's own officer fields: the model
+        // writes none, and the narrative carries none (the service wrapper
+        // appends nothing — see MaskingRoundTripTest).
+        $this->assertStringContainsString("that line belongs to the report's own officer fields", $instruction);
 
         // ...and the few-shot examples open the way the rule asks, so the shape
         // being imitated is the shape being described.
@@ -691,6 +831,27 @@ final class SystemInstructionTest extends TestCase
         $raw = (string) file_get_contents($file);
         $this->assertStringContainsString('No example contains a fact its inputs do not', $raw);
         $this->assertStringContainsString('Formal wording is substitution, never addition', $raw);
+    }
+
+    /**
+     * The examples must not TEACH a word the rules ban. ACCURACY forbids
+     * "the perpetrator", "the culprit" and "the offender" for anyone the
+     * record has not adjudicated — and the few-shots are the strongest lever
+     * on the model's wording, so one example using the banned word undoes the
+     * rule for every call that carries it. The same holds for the live slip
+     * the prompt names ("managed to evade capture"): an example may not model
+     * an action the record does not state. Asserted on the FILE, never on the
+     * assembled instruction, because the prompt itself quotes these words on
+     * purpose — to prohibit them.
+     */
+    public function testFewShotsDoNotTeachAdjudicatingOrUnrecordedActions(): void
+    {
+        $raw = (string) file_get_contents(__DIR__ . '/../resources/ai/narrative_few_shots.md');
+        $this->assertStringNotContainsString('perpetrator', $raw);
+        $this->assertStringNotContainsString('culprit', $raw);
+        $this->assertStringNotContainsString('offender', $raw);
+        $this->assertStringNotContainsString('managed to evade', $raw);
+        $this->assertStringNotContainsString('managed to escape', $raw);
     }
 
     public function testResponseSchemaRequestsTheActionTakenLine(): void

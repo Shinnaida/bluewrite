@@ -257,8 +257,9 @@ The findings block has its own answers to "what is a finding?" (added
   "pre-planned", "an insider was involved") is not drawn unless the officer
   wrote it. CCTV "No" never becomes footage reviewed/preserved/requested, and
   CCTV "Yes" with no details never becomes what the footage showed. When
-  nothing qualifies, the array is empty and the sheet leaves the block out —
-  never the words "None noted" as a finding line.
+  nothing qualifies, the array is empty — the sheet prints its own
+  "- None recorded." line for an empty block — and the model never writes
+  "None noted" or "None recorded" as a finding line.
 
 Two of the failures in BW-0295 were not the model's:
 
@@ -316,7 +317,7 @@ for the analyser, `tests/rules/printActions.test.mjs` for the print block.
 | §5 house register | prompt: HOUSE REGISTER AND WORD FORMS | `testBaseInstructionCarriesHouseRegister` |
 | §6 pro-forms | prompt: PRO-FORMS | `testBaseInstructionCarriesHouseRegister` |
 | §7 unidentified parties | prompt: UNIDENTIFIED PARTIES | `testBaseInstructionCarriesNoNewInformationConstraint` |
-| §8 tone / numbers / accuracy | prompt: TONE AND NUMBERS; ACCURACY | `testBaseInstructionCarriesAccuracyRules` |
+| §8 tone / numbers / accuracy | prompt: TONE AND NUMBERS; ACCURACY; the few-shot file teaches none of the banned adjudicating wording | `testBaseInstructionCarriesAccuracyRules`, `testFewShotsDoNotTeachAdjudicatingOrUnrecordedActions` |
 | §9 economy | prompt: ECONOMY AND NON-REDUNDANCY; `app/ai/NarrativeEconomy.php` | `testBaseInstructionCarriesEconomyRules`, `testEconomySectionIsCarriedOnce`, `NarrativeEconomyTest` (whole file) |
 | §9 findings output rules (all fields, a filled field is not a finding, CCTV/recovery limits, no conclusions) | prompt: ADDITIONAL OUTPUTS — notableFindings | `testBaseInstructionCarriesNotableFindingsRules` |
 | §9 F5 on-file note | `src/lib/printActions.js` | `printActions.test.mjs` — on-file note only when the block is empty |
@@ -327,6 +328,19 @@ for the analyser, `tests/rules/printActions.test.mjs` for the print block.
 | §13 the table is NOT fed to the model | (deliberately absent from the instruction block) | `tests/NarrativeTermsPromptGuardTest.php` |
 | §14 translation task and its limits | prompt: SOURCE LANGUAGE AND TRANSLATION | `testBaseInstructionCarriesTranslationSection` |
 | §14 placeholders pass byte-for-byte | prompt: BRACKETED PLACEHOLDERS … BYTE-FOR-BYTE | `testBaseInstructionCarriesTranslationSection`, `MaskingNativeTextTest` |
+| §15 sheet parts → outputs (part-by-part trainer) | prompt: INCIDENT-REPORT PART-BY-PART | `testBaseInstructionCarriesPartByPartTrainer` |
+| §16 attribution travels with the fact | prompt: ATTRIBUTION TRAVELS WITH THE FACT | `testBaseInstructionCarriesFieldTrainer` |
+| §16 objective suspect description | prompt: SUSPECT DESCRIPTION | `testBaseInstructionCarriesFieldTrainer` |
+| §16 contradictions flagged, never resolved | prompt: A CONTRADICTION IS FLAGGED, NEVER RESOLVED | `testBaseInstructionCarriesFieldTrainer` |
+| §17 field-analysis prompt: pre-return validation | prompt: SELF-CHECK under the ABSOLUTE CONSTRAINT | `testBaseInstructionCarriesDraftValidationRule` |
+| §17 field-analysis prompt: date/time/place value preservation | prompt: HOUSE REGISTER AND WORD FORMS | `testBaseInstructionCarriesDraftValidationRule` |
+| §18 unidentified-suspect description (fields → suspectPhrases → screened restoration) | prompt: UNIDENTIFIED PARTIES exception; ADDITIONAL OUTPUTS: suspectPhrases; `app/ai/MaskingGateway.php`; `NarrativeService::applySuspectPhrases` | `testBaseInstructionCarriesFieldTrainer`, `tests/MaskingRoundTripTest.php`, `tests/MaskingGatewayTest.php` |
+| §18 the sheet's own Suspect line (suspectPhrases `line`, drawn in the draft's preview only) | prompt: ADDITIONAL OUTPUTS: suspectPhrases `line`; `NarrativeService::suspectLines`; `MaskingGateway::buildMaskedPayload` → `refIndex`; `src/lib/sheetFacts.js` `ctx.suspectLines` | `testBaseInstructionCarriesFieldTrainer`, `tests/MaskingRoundTripTest.php`, `tests/MaskingGatewayTest.php`, `tests/rules/sheetFacts.test.mjs`, `tests/rules/aiDraftLetter.test.mjs` |
+| §18 Regenerate is always fresh | `app/ai/NarrativeService.php` — the §8 key carries the instruction fingerprint; the `regenerate` flag skips the cache read | no dedicated guard — verified on the live flow; see the paragraph in §18 |
+| §16 no material detail dropped | prompt: NO MATERIAL DETAIL IS DROPPED | `testBaseInstructionCarriesFieldTrainer` |
+| §16 a rewrite keeps the record's meaning (Core Principle) | prompt: A REWRITE KEEPS THE RECORD'S MEANING | `testBaseInstructionCarriesFieldTrainer` |
+| §16 no forced rewriting (an already-clear statement is kept) | prompt: A REWRITE IS NEVER AN END IN ITSELF | `testBaseInstructionCarriesFieldTrainer` |
+| §16 each field for its own purpose / no process talk | prompt: EACH FIELD IS WRITTEN FOR ITS OWN PURPOSE | `testBaseInstructionCarriesFieldTrainer` |
 | §14 least-committal legal terms (Invariant 2) | prompt: LEAST-COMMITTAL LEGAL TERMS | `testBaseInstructionCarriesTranslationSection` |
 | §14 unclear is surfaced, never guessed (Invariant 3) | prompt: UNCLEAR IS SURFACED | `testBaseInstructionCarriesTranslationSection` |
 | §14 pinned terms (D7) | `GeminiNarrativeProvider::pinnedTermsBlock` + prompt: PINNED TERMS | `PinnedTermsTest` |
@@ -484,3 +498,230 @@ configuration alone, and the sensitive types carry mandatory evaluation cases.
 > entries, and the officer lookup shows its "no approved terminology yet"
 > empty state. Terms go live only when the records/legal officer approves them
 > here, after which the file is re-derived.
+
+## §15 The sheet's parts, and the output that carries each (part-by-part trainer)
+
+Why it exists: the station handed over its own report-writing trainer, the rules
+the generator should follow. Most of it was already this register; what it added
+was a **part-by-part map of the printed sheet** — which part of the sheet each
+output answers to, and what each part holds. Rather than leave that knowledge
+outside the executable text, it now rides in the prompt as the
+INCIDENT-REPORT PART-BY-PART section (immediately before INPUTS YOU WILL
+RECEIVE). The section restates destinations only; every rule it points at still
+binds in full.
+
+**Two rules of the handed-over text were NOT adopted**, by the owner's decision
+(2026-10-04), because each contradicted an invariant above:
+
+- **Cautious inferences in findings** ("suggests familiarity with the premises",
+  "indicates planning"). The strict rule stands: an inference appears only
+  where the officer recorded one and is never escalated (the §9 findings rules;
+  prompt rule 6 under ADDITIONAL OUTPUTS). The AI does not draw the conclusion
+  for the officer.
+- **`[TO BE PROVIDED]` markers for missing information.** The strict rule
+  stands: a blank stays blank in the prose — the sheet is an official record —
+  and the absence is reported in `possibleGaps` instead (§1; the ABSOLUTE
+  CONSTRAINT's "A BLANK input is not a gap to fill").
+
+What the section adds to the executable text:
+
+- the **destination** of every sheet part — the narrative, `notableFindings`,
+  `actionTaken`, or a structured field the AI never writes;
+- the **FACTS OF THE CASE chronology** the trainer states explicitly —
+  discovery → initial verification → investigation and evidence → the suspect's
+  recorded actions in sequence — which sharpens §1's structure rule without
+  replacing it;
+- the **PNP rank abbreviations** kept as written where the officer's notes name
+  an officer (PMSg, PSMS, PCpl, PSSg, PLT, PCPT, PMAJ), and the rule that the
+  RECORDED BY / INVESTIGATOR-ON-CASE / NOTED BY lines are never written,
+  restated or guessed by the AI.
+
+## §16 The field-by-field documentation assistant (second trainer text)
+
+The station handed over a **second** trainer text (2026-10-04): the general
+instructions of an AI documentation assistant that rewrites every field of the
+incident form. Its field list (reporting party, type of incident, date/time/
+location, suspect description, narrative, action taken, other fields) largely
+restates what §1–§15 already bind, and it is **not** adopted as a field-by-field
+map — the app has ONE generation call returning the whole draft (§9's economy
+rules assume exactly that), so a per-field rewrite pass would double the
+instruction and split the economy contract across copies. What the text DID add
+is folded into the existing sections instead:
+
+- **attribution travels with the fact** (THE "ALLEGED" RULE): an account is
+  written as the account of whoever gave it in the record — complainant,
+  witness, or the responding team's own observation — and never handed to the
+  wrong speaker or presented as observed fact;
+- **objective suspect description** (new SUSPECT DESCRIPTION section): the
+  observable characteristics the record supplies, nothing added or estimated,
+  informal wording made neutral and present-tense phrasing brought into the
+  report's past tense, a bare descriptor written as an attributed description
+  (the text's own example — "big nose" → "a prominent nose", "violet jacket"
+  → "was reportedly wearing a violet jacket", "Black" → "described as Black"
+  — rides in the prompt as the worked pair), the person stays "an unidentified
+  suspect," and a witness's opinion is reported as that witness's description;
+- **contradictions are flagged, never resolved** (ACCURACY): two conflicting
+  statements are both kept, each in its own place, with the disagreement
+  reported in `possibleGaps` as a warning — explicitly NOT the economy merge
+  rule, which applies to the same proposition stated twice;
+- **no material detail is dropped** (ACCURACY): the economy pass removes
+  repetition and padding, never substance;
+- **the Core Principle, executable** (ACCURACY and REGISTER): a rewrite keeps
+  the record's MEANING — the same actors, acts, order and relations, wording
+  alone changing — and a statement already clear and formal is kept as
+  written (the text's rule 9, "no forced rewriting"), with only what grammar,
+  register or the field's purpose requires changed;
+- **each field is written for its own purpose; no process talk** (new EACH
+  FIELD IS WRITTEN FOR ITS OWN PURPOSE section): one register, but each output
+  field keeps its own shape, and no explanation of the rewriting, no address to
+  the officer, no heading the sheet already prints, and no "For verification"
+  note inside a field — clarification is surfaced only in `possibleGaps` and
+  `ambiguities`, the app's own labeled advisories;
+- **a name, address or contact number keeps the record's own form** wherever it
+  recurs (HOUSE REGISTER).
+
+**Two rules of this text were NOT adopted**, consistent with the owner's §15
+decisions:
+
+- **"Use 'Unknown,' 'Not provided,' or 'For verification' as appropriate to the
+  field."** The strict rule stands: missing information is never written into a
+  field at all, in any wording — not even the word "Unknown" where the record
+  is silent — and the absence is reported in `possibleGaps` (§1; the ABSOLUTE
+  CONSTRAINT's "A BLANK input is not a gap to fill"). "Unknown" remains correct
+  only where the officer's own record uses it (UNIDENTIFIED PARTIES).
+- **"Flag it for verification" written into the draft** — see the process-talk
+  rule above: the flag is a `possibleGaps` advisory, never text inside a field.
+
+## §17 The AI sheet's field-analysis prompt (draft-generation bundle)
+
+The station handed over the complete AI-sheet prompt behind draft generation
+(2026-10-04), titled "BlueWrite AI Prompt: Context-Aware Professional Police
+Report Writing Assistant": a role line; a **Core Principle** (analyze first,
+rewrite second — improve the writing, never the meaning, and keep the original
+level of certainty); field analysis A–G (reporting-party identity, incident
+type, date/time/location, suspect description with the worked pair, incident
+narrative, action taken, other fields); ten **strict rules for factual
+accuracy**; a six-step **workflow** (analyze, identify issues, rewrite,
+validate, return, flag uncertainty); the **expected behavior in the
+application** (buttons, preview, accept/reject, never replace a field
+silently, no content for empty fields); **output requirements**; and a Final
+Instruction (improve the expression, not the information — the assistant is
+not a source of facts, an investigator or a decision-maker).
+
+The bundle is **already carried by §15/§16**, field for field: the type is
+bound by the NATURE OF CASE rule (TERMINOLOGY rule 3 — kept as selected, never
+reclassified or upgraded); names, addresses and contact numbers keep the
+record's own form (HOUSE REGISTER — stricter than the source's "correct
+formatting only when appropriate"); the suspect description is the §16 SUSPECT
+DESCRIPTION section, its worked pair included; the narrative's chronology,
+attribution and "no invented events, motives, evidence or conclusions" are the
+FACTS OF THE CASE map, ATTRIBUTION TRAVELS WITH THE FACT and the ABSOLUTE
+CONSTRAINT; the action-taken limits are the ACTION TAKEN / STATUS rules;
+per-field shape, the field's own purpose and "no structured value forced into
+prose" are EACH FIELD IS WRITTEN FOR ITS OWN PURPOSE; empty fields are the
+ABSOLUTE CONSTRAINT's "A BLANK input is not a gap to fill"; and ambiguities
+and contradictions are the `possibleGaps`/`ambiguities` advisories.
+
+**One rule was added to the executable text** because no existing rule stated
+it: the **pre-return validation pass** (prompt: the SELF-CHECK under the
+ABSOLUTE CONSTRAINT) — the workflow's Step 4, after the source-trace check:
+compare the whole answer with the original input; no fact added, removed,
+contradicted or changed; the level of certainty carried over; a drifted meaning
+corrected before returning; and anything unclear flagged as an advisory rather
+than guessed at. A **value-preservation clause for dates, times and places**
+was folded into the HOUSE REGISTER bullet that already protected names and
+addresses: the house forms may re-form how a value reads, never the value, and
+an uncertain one stays uncertain.
+
+**App-flow requirements, not model text.** The parts of the source that belong
+to the application itself are not written into the instruction: the human
+review and approval step (strict rule 10; §4's accept/reject and "never replace
+an existing field value silently" — the draft UI says "Not saved — review
+before accepting. It is never written into the report automatically"), and the
+"For Verification" note, which the source itself places **separately from the
+proposed report text**: in this app that is the `possibleGaps`/`ambiguities`
+advisory surface and the "AI Understanding — For Verification Only" panel,
+never text inside a field (§16 decision).
+
+**Not adopted:** the assistant's **name** — the role line already states the
+job, and no output is attributed to an assistant.
+
+## §18 The unidentified-suspect description, end to end (pipeline change)
+
+Why it exists: the §16 SUSPECT DESCRIPTION rules were unreachable for an
+unidentified suspect — the gateway composed the recorded attributes into the
+placeholder's restored text and never sent them to the model (addendum §1.2),
+so whatever the prompt said, the raw form values ("He is wear a violet jacket",
+"Have big nose") were injected into the draft at unmask. The owner asked for
+the standing example to actually work: recorded "One unidentified male, Black,
+he is wearing a violet jacket, have big nose" becomes "One unidentified male,
+described as Black, was reportedly wearing a violet jacket and had a prominent
+nose."
+
+What changed:
+
+- **MaskingGateway** — for an UNNAMED RESPONDENT the placeholder now restores
+to the bare role phrase ("an unidentified suspect"), and the recorded
+attributes (sex, age band, height, build, hair, clothing,
+distinguishing_features, suspect_description) travel as structured fields,
+exactly as a NAMED suspect's do. Every other unnamed party keeps the §1.1
+composed phrase. This **supersedes addendum §1.2's "attributes ride in the
+phrase only" decision for suspects**: the model must SEE the description in
+order to rewrite it.
+- **Prompt** — UNIDENTIFIED PARTIES carries the exception; ADDITIONAL OUTPUTS
+defines `suspectPhrases` (`{ref, phrase}`); the phrase is a compact noun
+phrase, written once per SUSPECT DESCRIPTION, and the narrative refers to the
+person by the placeholder alone (no alias, no inline description).
+- **Provider/result** — `suspectPhrases` is part of the response schema
+(required, may be empty) and is normalised: the ref must be a real placeholder
+shape, the phrase non-empty, single-spaced, token-free and capped.
+- **`NarrativeService::applySuspectPhrases`** — a screened phrase replaces the
+bare role phrase as that placeholder's restored text, so the description in
+the draft is the model's own prose. A phrase carrying a bracket token is
+discarded and the role phrase stands.
+
+**Regenerate is now always fresh.** The §8 draft-cache key includes the
+stable-block instruction fingerprint, so a prompt edit invalidates cached
+drafts immediately; and an explicit Regenerate (body `regenerate: true`, sent
+by the panel's regenerate presses) skips the cache read while still caching
+the fresh draft, so it can never be answered with the identical cached text.
+
+**The sheet's own Suspect line, drawn in the draft's preview (owner's decision,
+2026-10-04).** Putting the description in the narrative left the sheet's own
+Suspect fact row untouched: that block is composed from the officer's recorded
+fields (`src/lib/suspectLine.js`), so the draft's page still printed "One
+unidentified male, Black, He is wear a violet jacket, Have big nose" directly
+under `Suspect:`. The owner asked for the SAME sentence there and chose
+**preview only** — the report's fields, the committed sheet and the print keep
+the officer's own wording, so nothing is rewritten behind the officer's back.
+What that took:
+
+- **Prompt** — every `suspectPhrases` entry now carries `line` as well: the same
+  description written as the sheet's own sentence, which is exactly the §16
+  SUSPECT DESCRIPTION worked pair ("One unidentified male, described as Black,
+  was reportedly wearing a violet jacket and had a prominent nose.") — and it
+  follows that pair's own wordings, so a bare recorded label keeps the
+  attributed form ("described as Black") and is never paraphrased into a colour
+  phrase ("with black hair").
+- **Provider** — the response schema requires `line`, and the normaliser screens
+  it by the phrase's own rules (single-spaced, token-free, capped). A bad line
+  fails ALONE: the entry keeps its `phrase`, and the row falls back to the
+  record's own composed line.
+- **`MaskingGateway`** — `buildMaskedPayload()` returns `refIndex` (placeholder →
+  the row it was masked from). It never enters the prompt and is never
+  persisted; it exists so a sentence cannot be drawn on the wrong suspect (a
+  blank row before a filled one would otherwise shift every index).
+- **`NarrativeService::suspectLines`** — screens each `line` again (a bracket
+  token drops it), keeps RESPONDENT refs only (a line written for a witness can
+  never land on a suspect's row however the model labels it), and labels the
+  survivor with its row. The retry path takes whichever pass's payload won, so a
+  retried draft never shows the abandoned pass's sentence.
+- **Client** — the AI panel's pending proposal carries `suspectLines`, and the
+  sheet's fact builder draws the model's sentence in place of the composed one on
+  that row only (`sheetFacts.js`; `ReportSheetBody`'s `pending`). Generating and
+  Accept are unchanged: `applyAiDraft` still writes the narrative and the two
+  formalised blocks alone, and the suspect's fields are never touched.
+
+Privacy note: these are the same non-identifying descriptors already sent for
+a NAMED suspect (NEVER_SEND still excludes name/address/contact); nothing new
+identifies a person.

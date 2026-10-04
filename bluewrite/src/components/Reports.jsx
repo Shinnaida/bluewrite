@@ -58,14 +58,7 @@ import brandMark from '../assets/bluewrite-mark.png';
 // Its own background has been keyed out, so the folder brings no white matte of
 // its own to the disc it sits on (see .ir-home-banner-icon).
 import folderMark from '../assets/folder.png';
-// REMEMBER's heading mark: the office's own shield, the gold line art from the
-// same set as the folder above. A FILE for the reason the folder and the two
-// seals at the foot of the page are files, and it replaces the inlined shield
-// glyph this heading used to draw: the heading is the one mark on Home that is
-// the station's crest rather than one of the page's own drawings. It stands ON
-// the gold tile (see .ir-remember-title-mark), so its strokes are read as a tone
-// against the tile rather than as a shape cut out of it.
-import shieldMark from '../assets/shield.png';
+// REMEMBER's heading mark is GONE by request: the heading is the word alone now.
 // The report masthead's backdrop: the station's own banner artwork, laid behind
 // the band's title, identifiers and actions (see .ir-case-panel > .ir-page-head
 // in incident-report.css — the band's gradient is its fallback ground while the
@@ -2316,17 +2309,7 @@ export function ReportWelcome({
             and the flag over the closing line (see the stylesheet) — the design
             lives there, this is the copy. */}
         <aside className="ir-remember">
-          <h2 className="ir-remember-title">
-            {/* The office's own shield artwork, where an inlined shield glyph
-                used to stand — directly on the band's navy, no plate behind it
-                (the gold tile it sat on is gone by request). It is SQUARE and
-                the three below are CIRCLES, so the heading is not a fourth item
-                in the list. */}
-            <span className="ir-remember-title-mark" aria-hidden="true">
-              <img className="ir-remember-title-mark-art" src={shieldMark} alt="" />
-            </span>
-            Remember
-          </h2>
+          <h2 className="ir-remember-title">Remember</h2>
           <ul className="ir-remember-list">
             <li>
               <span className="ir-remember-mark" aria-hidden="true">
@@ -3389,10 +3372,13 @@ export function ReportEditor({
     dirtyRef.current = false;
   }
 
+  // Resolves true when the draft reached the record, false when validation
+  // stopped it or the server refused — so a caller that needs the save to have
+  // happened (Print Slip reads the STORED copy) can wait for it.
   async function saveDraft() {
     const errs = validate(draft);
     setErrors(errs);
-    if (errs.incident_type || errs.incident_datetime || errs.location) return;
+    if (errs.incident_type || errs.incident_datetime || errs.location) return false;
     try {        const body = { ...draft, status: 'draft', narrative_source: narrativeSourceRef.current };
         if (editingId) {
           await api(`/reports/${editingId}`, { method: 'PATCH', body });
@@ -3406,8 +3392,10 @@ export function ReportEditor({
       setLastSavedAt(new Date());
       notify('Draft saved.');
       onMutated?.();
+      return true;
     } catch (err) {
       setError(err.message);
+      return false;
     }
   }
 
@@ -4040,65 +4028,61 @@ export function ReportEditor({
           Save Draft
         </button>
       )}
-      {/* THE FULL BAR, ALWAYS DRAWN (by request): History, Archive and Print
-          Slip keep their places even on a report that has never been saved —
-          a fresh draft draws the same bar as a filed one, so the head never
-          re-flows at the first save. The guards are kept, not dropped: each
-          control is DISABLED until its condition exists (a report with no
-          number has no history to read, nothing to archive and nothing to
-          print), with the reason on its title. Save Draft and Close never
-          disable: saving is how a fresh draft gains its number, and Close is
-          the way out. */}
-      <button
-        type="button"
-        onClick={openHistory}
-        disabled={!draft.id}
-        title={draft.id ? undefined : 'The report has no history until it is saved'}
-      >
-        <LabelIcon name="clock" />
-        History
-      </button>
-      <button
-        type="button"
-        className="danger"
-        onClick={askArchive}
-        disabled={!draft.id || !canEdit}
-        title={
-          !draft.id
-            ? 'Nothing to archive until the report is saved'
-            : undefined
-        }
-      >
-        <LabelIcon name="archive" />
-        Archive
-      </button>
+      {/* DRAWN ONLY WHEN AVAILABLE (by request): a control with nothing to act
+          on is not dimmed to a ghost of itself — it is not drawn at all, and it
+          appears the moment its condition exists. History, Archive and Print
+          Slip all need a saved report (a fresh draft has no number to read,
+          archive or print), so the three of them arrive at the first save, and
+          Archive also needs the edit permission. Submit needs the role that may
+          commit a report. Save Draft and Close are always drawn: saving is how
+          a fresh draft gains its number, and Close is the way out. The guards
+          are the old disabled conditions, kept verbatim as render conditions —
+          same rules, one behaviour instead of two. */}
+      {draft.id && (
+        <button type="button" onClick={openHistory}>
+          <LabelIcon name="clock" />
+          History
+        </button>
+      )}
+      {draft.id && canEdit && (
+        <button type="button" className="danger" onClick={askArchive}>
+          <LabelIcon name="archive" />
+          Archive
+        </button>
+      )}
       <button type="button" onClick={onClosed}>
         <LabelIcon name="close" />
         Close
       </button>
-      <button
-        type="button"
-        onClick={() => setPrinting(true)}
-        disabled={!draft.id}
-        title={draft.id ? undefined : 'There is nothing to print until the report is saved'}
-      >
-        <LabelIcon name="printer" />
-        Print Slip
-      </button>
-      <button
-        type="button"
-        className="ir-submit"
-        onClick={finalize}
-        disabled={!canEdit || !canFinalize}
-        title={
-          canFinalize
-            ? 'Validate and submit this report for the record'
-            : 'Your role does not have permission to submit reports'
-        }
-      >
-        <LabelIcon name="stamp" />
-        Submit Official Record
-      </button>
+      {draft.id && (
+        <button
+          type="button"
+          onClick={async () => {
+            // The slip prints the STORED copy (it is fetched from the server),
+            // so the officer's latest typing has to reach the record BEFORE
+            // the sheet is read — otherwise a slip printed right after filling
+            // Notable Findings says "- None recorded." while the field holds a
+            // sentence. Saving here is the Save Draft click the print used to
+            // presuppose; the sheet then shows exactly what the record holds.
+            const saved = await saveDraft();
+            if (saved) setPrinting(true);
+          }}
+        >
+          <LabelIcon name="printer" />
+          Print Slip
+        </button>
+      )}
+      {canEdit && canFinalize && (
+        <button
+          type="button"
+          className="ir-submit"
+          onClick={finalize}
+          title="Validate and submit this report for the record"
+        >
+          <LabelIcon name="stamp" />
+          Submit Official Record
+        </button>
+      )}
     </>
   );
 
@@ -4200,26 +4184,27 @@ export function ReportEditor({
               one. */}
           <div className="ir-case-actions">{actionsCluster}</div>
 
-          {/* THE RECORD STRIP, INSIDE THE BAND: the report's reference line
-              ("Report BW-xxxx · Recorded by … · Badge …"), the translation
-              status, or the lock warning — as one rectangular plate set into
-              the letterhead field, under the head row, reading from the LEFT.
-              It is ALWAYS DRAWN (by request): a fresh draft shows the plate
-              with its standing line, and the reference fills it at the first
-              save (the empty-plate sentence is the stylesheet's ::before). */}
-          <div className="ir-status ir-status--flag">
-            {draft.id && (
-              <span>{`Report BW-${String(draft.id).padStart(4, '0')} · Recorded by ${user.full_name} · Badge ${user.badge_number}`}</span>
-            )}
-            {verificationStatus && verificationStatus !== 'english_original' && (
-              <span className={`rv-badge ${statusClass(verificationStatus)}`}>
-                {statusLabel(verificationStatus)}
-              </span>
-            )}
-            {!canEdit && (
-              <span>This report is locked. Only an administrator can make further changes.</span>
-            )}
-          </div>
+          {/* THE RECORD STRIP, INSIDE THE BAND: the notices an officer must
+              not miss — the translation status, or the lock warning — as one
+              rectangular plate set into the letterhead field, under the head
+              row, reading from the LEFT. The report's reference line
+              ("Report BW-xxxx · Recorded by … · Badge …") is GONE by request:
+              the case-meta chip above already prints the draft's BW number, so
+              the strip drew a second copy of it on a plate of its own. DRAWN
+              ONLY WHEN IT HAS SOMETHING TO SAY — a draft that is neither
+              translated nor locked draws no plate at all. */}
+          {(verificationStatus && verificationStatus !== 'english_original') || !canEdit ? (
+            <div className="ir-status ir-status--flag">
+              {verificationStatus && verificationStatus !== 'english_original' && (
+                <span className={`rv-badge ${statusClass(verificationStatus)}`}>
+                  {statusLabel(verificationStatus)}
+                </span>
+              )}
+              {!canEdit && (
+                <span>This report is locked. Only an administrator can make further changes.</span>
+              )}
+            </div>
+          ) : null}
         </div>
 
         {/* (The record strip lives INSIDE the band now — see the block above,

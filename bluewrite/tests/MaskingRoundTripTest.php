@@ -8,7 +8,9 @@
  *
  * Covers:
  *   §1.1 unnamed-party fallback phrase (never a raw [TOKEN] at unmask)
- *   §1.2 attributes embedded once in the canonical phrase only
+ *   §1.2 attributes reach the model once — in the canonical phrase for
+ *        most roles, in the record's fields for an unidentified suspect,
+ *        whose placeholder restores to the bare role phrase
  *   §1.3 first-character survival over a full mask→unmask round trip
  *        (boundary cases: position 0, after punctuation, after sentence cap)
  *   §2  leaked-token safety-gate detector
@@ -64,9 +66,7 @@ echo "Addendum \u{00a7}1.1 \u{2014} unnamed-party fallback phrases\n";
 $out = MaskingGateway::buildMaskedPayload($report, $ts, '');
 $map = $out['map'];
 
-check('suspect placeholder mapped to role phrase', str_starts_with((string) $map['[RESPONDENT_1]'], 'an unidentified suspect'), json_encode($map['[RESPONDENT_1]'] ?? null));
-check('suspect phrase carries sex once', str_contains((string) $map['[RESPONDENT_1]'], 'male'));
-check('suspect phrase carries age band once', str_contains((string) $map['[RESPONDENT_1]'], '30s'));
+check('suspect placeholder mapped to bare role phrase', (string) $map['[RESPONDENT_1]'] === 'an unidentified suspect', json_encode($map['[RESPONDENT_1]'] ?? null));
 check('witness placeholder mapped to role phrase', (string) $map['[WITNESS_1]'] === 'a witness', json_encode($map['[WITNESS_1]'] ?? null));
 check('NO raw name-less placeholder left unmapped', !isset($map['[VICTIM_9]']) || $map['[VICTIM_9]'] !== '');
 
@@ -78,17 +78,19 @@ check('suspect token restored to natural phrase', str_contains($restored, 'an un
 check('victim token restored to real name', str_contains($restored, 'Ana Lopez'), $restored);
 check('no bracket tokens survive unmask', MaskingGateway::leakedTokens($restored) === [], $restored);
 
-echo "\nAddendum \u{00a7}1.2 \u{2014} attributes appear once, in the phrase only\n";
+echo "\nAddendum \u{00a7}1.2 \u{2014} attributes appear once, in the model's single source\n";
 $maskedJson = json_encode($out['masked']);
-// For an UNNAMED party the structured record must not repeat sex/age_band —
-// they are already baked into the canonical fallback phrase.
+// An UNNAMED suspect's attributes ride in the structured record — the
+// placeholder itself restores only to the role phrase, so the model writes
+// the description from these fields and the raw text never reappears at
+// unmask (see MaskingGateway::maskPersons()).
 $masked = (object) $out['masked'];
 $groups = (array) ($masked->groups ?? []);
 $suspects = (array) ($groups['respondents'] ?? []);
 check('unnamed suspect record present', count($suspects) === 1, $maskedJson);
 $rec = $suspects[0] ?? [];
-check('unnamed suspect record has NO loose sex field', !isset($rec['sex']), json_encode($rec));
-check('unnamed suspect record has NO loose age_band field', !isset($rec['age_band']), json_encode($rec));
+check('unnamed suspect record carries sex for the model to write', ($rec['sex'] ?? '') === 'Male', json_encode($rec));
+check('unnamed suspect record carries age_band for the model to write', ($rec['age_band'] ?? '') === '30s', json_encode($rec));
 // A NAMED party keeps the structured fields (the phrase is not used at all).
 $victims = (array) ($groups['victims'] ?? []);
 check('named victim keeps age_band', ($victims[0]['age_band'] ?? '') === '30s', json_encode($victims[0] ?? null));
@@ -98,6 +100,7 @@ check('named victim keeps sex', ($victims[0]['sex'] ?? '') === 'Female', json_en
 $sysPrompt = (string) file_get_contents(__DIR__ . '/../resources/ai/narrative_system_prompt.txt');
 check('system prompt has the one-canonical-phrase rule', str_contains($sysPrompt, 'ONE CANONICAL PHRASE'));
 check('system prompt mandates pro-form after first mention', str_contains($sysPrompt, 'said unidentified suspect'));
+check('system prompt sends the suspect description through the record', str_contains($sysPrompt, 'THE UNIDENTIFIED SUSPECT IS THE ONE EXCEPTION'));
 
 echo "\nAddendum \u{00a7}1.3 \u{2014} first-character survival (mask \u{2192} unmask round trip)\n";
 // The known historical defect: \"On or about\" -> \"n or about\", \"unknown
@@ -151,16 +154,59 @@ require_once __DIR__ . '/../app/core/Config.php';
 require_once __DIR__ . '/../app/core/Database.php';
 require_once __DIR__ . '/../app/ai/NarrativeService.php';
 use App\Ai\NarrativeService;
+// §18 — an unidentified suspect's restored text is the model's own phrase
+// (suspectPhrases), screened; the bare role phrase is the fallback.
+echo "\nSuspect phrase restoration\n";
+$phraseMap = NarrativeService::applySuspectPhrases(
+    ['suspectPhrases' => [
+        ['ref' => '[RESPONDENT_1]', 'phrase' => 'an unidentified suspect, described as Black, reportedly wearing a violet jacket'],
+        ['ref' => '[RESPONDENT_9]', 'phrase' => 'not a registered ref'],
+        ['ref' => '[RESPONDENT_2]', 'phrase' => 'a suspect with a [VICTIM_1] token'],
+    ]],
+    ['[RESPONDENT_1]' => 'an unidentified suspect', '[RESPONDENT_2]' => 'an unidentified suspect'],
+);
+check('model phrase replaces the role text', ($phraseMap['[RESPONDENT_1]'] ?? '') === 'an unidentified suspect, described as Black, reportedly wearing a violet jacket', json_encode($phraseMap));
+check('unregistered ref is ignored', !isset($phraseMap['[RESPONDENT_9]']));
+check('a phrase carrying a token is discarded', ($phraseMap['[RESPONDENT_2]'] ?? '') === 'an unidentified suspect');
+
+// §18 (sheet preview) — the model's SHEET-shaped suspect sentence, labelled
+// with the respondent row it describes. The draft's sheet draws it in the facts
+// block in place of the raw recorded values (preview only; the report's fields
+// are never written from it).
+echo "\nSheet suspect lines\n";
+$sheetLines = NarrativeService::suspectLines(
+    ['suspectPhrases' => [
+        ['ref' => '[RESPONDENT_1]', 'phrase' => 'an unidentified suspect, described as Black', 'line' => 'One unidentified male, described as Black, was reportedly wearing a violet jacket and had a prominent nose.'],
+        // Not a suspect row: a witness line must never land on a Suspect row.
+        ['ref' => '[WITNESS_1]', 'phrase' => 'a witness', 'line' => 'One unidentified male, a witness.'],
+        // A line still holding a bracket token is dropped (the row falls back).
+        ['ref' => '[RESPONDENT_2]', 'phrase' => 'a suspect', 'line' => 'One unidentified male, met [VICTIM_1].'],
+        // No known row for the ref.
+        ['ref' => '[RESPONDENT_9]', 'phrase' => 'a suspect', 'line' => 'One unidentified male, not on any row.'],
+        // No line at all.
+        ['ref' => '[RESPONDENT_3]', 'phrase' => 'a suspect'],
+    ]],
+    ['[RESPONDENT_1]' => 0, '[WITNESS_1]' => 0, '[RESPONDENT_2]' => 1, '[RESPONDENT_3]' => 2],
+);
+check(
+    'the sheet sentence is labelled with its respondent row',
+    $sheetLines === [['row' => 0, 'line' => 'One unidentified male, described as Black, was reportedly wearing a violet jacket and had a prominent nose.']],
+    json_encode($sheetLines)
+);
+check('no line for a non-suspect ref', count($sheetLines) === 1, json_encode($sheetLines));
+
 $wrapped = NarrativeService::withReferences(
     'On or about 22:00 hours, the vendor saw the suspect flee.',
     ['id' => 8, 'officer_name' => 'Juan Dela Cruz', 'officer_rank' => 'Pat'],
 );
 check('narrative does NOT restate the blotter reference', !str_contains($wrapped, 'Blotter Entry No.'), $wrapped);
-check('closing investigator line present', str_contains($wrapped, 'Investigated by: Pat Juan Dela Cruz, City of Naga Police Station.'), $wrapped);
+// The signed line belongs to the sheet's own officer fields, never to FACTS
+// OF THE CASE: the wrapper appends NOTHING (owner decision, 2026-10-04).
+check('no investigator line is appended to the facts', !str_contains($wrapped, 'Investigated by'), $wrapped);
 check('body preserved', str_contains($wrapped, 'the vendor saw the suspect flee'), $wrapped);
 
 $noOfficer = NarrativeService::withReferences('Body text.', ['id' => 8]);
-check('no investigator line when officer unknown', !str_contains($noOfficer, 'Investigated by'), $noOfficer);
+check('officer fields add nothing either', $noOfficer === 'Body text.', $noOfficer);
 
 $noRef = NarrativeService::withReferences('Body text.', []);
 check('no references when report has no officer', $noRef === 'Body text.', $noRef);

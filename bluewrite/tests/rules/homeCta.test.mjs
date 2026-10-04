@@ -138,48 +138,16 @@ test('the banner’s mark is the office’s folder ON the disc, and the reminder
   assert.ok(Number(share[1]) < 100, 'the folder fills the disc, so the blue behind it is gone');
   assert.ok(Number(share[1]) <= 70.8, 'the folder is drawn past the disc’s curve');
 
-  const titleTile = SHEET.match(/\.ir-remember-title-mark\s*\{[^}]*\}/);
-  assert.ok(titleTile, '.ir-remember-title-mark is gone from the stylesheet');
-  // NO PLATE: the gold tile the shield used to stand on is gone by request — a
-  // solid gold square ahead of the heading read as a block of colour, not as a
-  // mark. The artwork sits straight on the band's navy, which is the ground its
-  // own gold line art is measured against.
-  assert.doesNotMatch(titleTile[0], /background/, 'the heading mark still wears a plate');
-  // NO INK either: the box holds ARTWORK, which brings its own colour, so a
-  // `color` here would be a declaration with nothing to paint.
-  assert.doesNotMatch(titleTile[0], /^\s*color\s*:/m, 'the mark names an ink for artwork that brings its own');
-  // And the box is SQUARE — as are the three marks under it (a circle on each
-  // panel, and the three of them are the list) — so the heading must not read as a
-  // fourth item.
-  assert.doesNotMatch(titleTile[0], /border-radius:\s*50%/, 'the heading reads as a fourth item');
-
-  // THE MARK ON IT is the office's own shield artwork, the second file on this
-  // page after the folder. It is read from the heading itself, so putting a drawn
-  // glyph back in there fails here even if the import survives.
+  // THE HEADING'S MARK IS GONE by request: the gold shield that used to lead
+  // "Remember" is removed, and the heading is the word alone on the band. No
+  // mark span, no artwork rule, no import may come back unnoticed.
+  assert.doesNotMatch(SHEET, /\.ir-remember-title-mark\b/, 'the heading mark is back in the stylesheet');
   const headingAt = SRC.indexOf('<h2 className="ir-remember-title">');
   assert.notEqual(headingAt, -1, 'the reminder’s heading is gone');
   const heading = SRC.slice(headingAt, SRC.indexOf('</h2>', headingAt));
-  assert.match(
-    heading,
-    /<img className="ir-remember-title-mark-art" src=\{shieldMark\} alt="" \/>/,
-    'the reminder’s mark is not the shield artwork',
-  );
+  assert.doesNotMatch(heading, /<img/, 'the reminder’s heading draws an image again');
   assert.doesNotMatch(heading, /<HomeMark/, 'the reminder’s heading went back to an inlined glyph');
-  // …and, like the folder, the artwork is BUNDLED rather than fetched: the
-  // station's LAN has no internet, so a mark behind a URL disappears with the link.
-  assert.match(
-    SRC,
-    /import shieldMark from '\.\.\/assets\/shield\.png';/,
-    'the shield mark is not imported from the app’s own assets',
-  );
-  const art = SHEET.match(/\.ir-remember-title-mark-art\s*\{[^}]*\}/);
-  assert.ok(art, 'the shield artwork has no rule of its own');
-  assert.match(art[0], /object-fit:\s*contain/, 'the shield is stretched into the tile');
-  const artShare = art[0].match(/width:\s*([0-9.]+)%/);
-  assert.ok(artShare, 'the shield no longer states its size as a share of its box');
-  // The shield fills its box (by request it is drawn bigger) — the box is the
-  // margin, the contain is the proportions.
-  assert.ok(Number(artShare[1]) <= 100, 'the shield is drawn past its box');
+  assert.doesNotMatch(SRC, /import shieldMark from/, 'the shield mark is imported again');
 });
 
 test("the plate is the station's gold, and the label reads in navy on it", () => {
@@ -306,7 +274,6 @@ test('the reminder card is the station’s own card, and every colour in it is a
   for (const sel of [
     '.ir-remember',
     '.ir-remember-title',
-    '.ir-remember-title-mark',
     '.ir-remember-list li',
     '.ir-remember-list li:nth-child(3)',
     '.ir-remember-mark',

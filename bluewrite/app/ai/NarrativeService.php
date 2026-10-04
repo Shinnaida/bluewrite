@@ -64,6 +64,29 @@ final class NarrativeService
         return dirname(__DIR__, 2);
     }
 
+    /**
+     * Fingerprint of the stable-block files (base prompt, type vocabulary,
+     * few-shot examples) — the same inputs CachedInstructionStore hashes.
+     * The §8 draft-cache key includes it so a prompt edit invalidates cached
+     * drafts immediately; without it a regenerate inside the TTL could be
+     * answered with a draft written under the previous instructions.
+     */
+    private static function instructionFingerprint(): string
+    {
+        $root = self::projectRoot();
+        $ctx = hash_init('sha256');
+        foreach ([
+            'narrative_system_prompt.txt',
+            'type_vocabulary.json',
+            'narrative_few_shots.md',
+        ] as $f) {
+            $path = $root . '/resources/ai/' . $f;
+            hash_update($ctx, $f . '|');
+            hash_update($ctx, is_file($path) ? (string) file_get_contents($path) : '<missing>');
+        }
+        return hash_final($ctx);
+    }
+
     /** @return array<string,mixed> merged ai config (sample defaults if absent) */
     public static function aiConfig(): array
     {
@@ -223,9 +246,9 @@ final class NarrativeService
      * failure in ai_requests and rethrows for the controller to translate
      * into manual-mode guidance.
      *
-     * @return array{narrative:string, suggestions:array, possibleGaps:array, notableFindings:string[], actionTaken:string, addedContentWarnings:string[], cached:bool, residualRisk:array, economy:array}
+     * @return array{narrative:string, suggestions:array, possibleGaps:array, notableFindings:string[], actionTaken:string, addedContentWarnings:string[], suspectLines:array<int,array{row:int,line:string}>, cached:bool, residualRisk:array, economy:array}
      */
-    public function generateForReport(array $report, array $typeSpecific, string $notes, string $feedback = '', string $sourceLanguage = 'en'): array
+    public function generateForReport(array $report, array $typeSpecific, string $notes, string $feedback = '', string $sourceLanguage = 'en', bool $forceFresh = false): array
     {
         $built = MaskingGateway::buildMaskedPayload($report, $typeSpecific, $notes);
         // The declared source language rides ON the masked payload, so the
@@ -233,13 +256,19 @@ final class NarrativeService
         // the §8 cache key changes when only the language changes.
         $built['masked']['source_language'] = $sourceLanguage;
         $maskedJson = json_encode($built['masked'], JSON_UNESCAPED_UNICODE);
-        $hash = hash('sha256', $maskedJson . '|' . $feedback);
+        // The §8 key carries the instruction fingerprint too: a prompt or
+        // few-shot edit invalidates every cached draft on the spot, so a
+        // regenerate after a deploy can never be served pre-deploy text.
+        $hash = hash('sha256', $maskedJson . '|' . $feedback . '|' . self::instructionFingerprint());
 
         $pdo = Database::pdo();
         $reportId = (int) ($report['id'] ?? 0);
 
-        // §8 cache: identical masked input within TTL short-circuits.
-        $cached = $this->cacheGet($pdo, $hash);
+        // §8 cache: identical masked input within TTL short-circuits — except
+        // on an explicit Regenerate, which asks for a NEW draft and must not
+        // be answered with the identical cached one (the fresh draft is still
+        // cached below, for accidental double-clicks).
+        $cached = $forceFresh ? null : $this->cacheGet($pdo, $hash);
         if ($cached !== null) {
             $this->queueMark($pdo, $reportId, $hash, 'done', 'cache-hit');
             // The cache stores the MASKED provider payload (never real
@@ -247,7 +276,7 @@ final class NarrativeService
             // the safety gate exactly like a fresh response — returning it
             // raw would leak bracket tokens into the UI (the §1 sample's
             // "[WITNESS_1] / nknown male" defects).
-            return $this->finalize($pdo, $reportId, $cached, $built['masked'], $built['map'], $built['residualRisk'], $report, true, $hash);
+            return $this->finalize($pdo, $reportId, $cached, $built['masked'], $built['map'], $built['residualRisk'], $report, true, $hash, $built['refIndex'] ?? []);
         }
 
         $queueId = $this->queueStart($pdo, $reportId, $hash);
@@ -286,7 +315,7 @@ final class NarrativeService
                     (string) $reportId,
                     "latency_ms={$result->usage['latency_ms']} tokens={$result->usage['total_tokens']}"
                 );
-                return $this->finalize($pdo, $reportId, $payload, $built['masked'], $built['map'], $built['residualRisk'], $report, false, $hash);
+                return $this->finalize($pdo, $reportId, $payload, $built['masked'], $built['map'], $built['residualRisk'], $report, false, $hash, $built['refIndex'] ?? []);
             } catch (AiProviderException $e) {
                 $lastError = $e->getMessage();
                 if (!$e->retryable) {
@@ -304,6 +333,77 @@ final class NarrativeService
     }
 
     /**
+     * Replace each unidentified suspect's restored text with the model's own
+     * descriptive phrase (suspectPhrases), when one came back for that
+     * placeholder. Screened here as a second line of defence (the provider
+     * already normalises): a phrase carrying a bracket token is discarded,
+     * and the bare role phrase stands. Pure and static so the rule is
+     * testable directly.
+     *
+     * @param array<string,mixed> $payload masked provider payload
+     * @param array<string,string> $map
+     * @return array<string,string>
+     */
+    public static function applySuspectPhrases(array $payload, array $map): array
+    {
+        foreach (($payload['suspectPhrases'] ?? []) as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $ref = (string) ($entry['ref'] ?? '');
+            $phrase = trim((string) ($entry['phrase'] ?? ''));
+            if ($ref === '' || $phrase === '' || !isset($map[$ref])) {
+                continue;
+            }
+            if (MaskingGateway::leakedTokens($phrase) !== []) {
+                continue;
+            }
+            $map[$ref] = $phrase;
+        }
+        return $map;
+    }
+
+    /**
+     * The model's SHEET-SHAPED suspect lines — the `line` of each
+     * suspectPhrases entry — each labelled with the RESPONDENT row it was
+     * recorded on. The AI panel draws them in the draft's sheet preview, in
+     * the facts block, in place of the raw recorded values the row would
+     * otherwise print; the report's own fields are never touched (owner's
+     * decision, 2026-10-04: preview only — Accept writes nothing here).
+     *
+     * Screened a second time here (the provider already normalises): the ref
+     * must be a RESPONDENT placeholder with a known row — a line for any other
+     * party would be drawn on a suspect's row — and a line carrying a bracket
+     * token is dropped, so the row falls back to the record's own line.
+     *
+     * @param array<string,mixed> $payload masked provider payload
+     * @param array<string,int> $refIndex placeholder → the group row it was masked from
+     * @return array<int, array{row:int,line:string}>
+     */
+    public static function suspectLines(array $payload, array $refIndex): array
+    {
+        $out = [];
+        foreach (($payload['suspectPhrases'] ?? []) as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $ref = (string) ($entry['ref'] ?? '');
+            $line = trim((string) ($entry['line'] ?? ''));
+            if ($line === '' || !isset($refIndex[$ref])) {
+                continue;
+            }
+            if (preg_match('/^\[RESPONDENT_[0-9]+\]$/', $ref) !== 1) {
+                continue;
+            }
+            if (MaskingGateway::leakedTokens($line) !== []) {
+                continue;
+            }
+            $out[] = ['row' => (int) $refIndex[$ref], 'line' => $line];
+        }
+        return $out;
+    }
+
+    /**
      * Addendum §2 + §3 — shared exit path for fresh AND cached responses:
      * unmask → safety gate (§2, retry once, then manual-mode) → reference
      * wrapper (§3, deterministic record references appended in code, not
@@ -314,10 +414,21 @@ final class NarrativeService
      * @param array<string,string> $map
      * @param string[] $residualRisk
      * @param string $hash the §8 cache key, so a repaired narrative can be stored back under it
-     * @return array{narrative:string, suggestions:array, possibleGaps:array, notableFindings:string[], actionTaken:string, addedContentWarnings:string[], cached:bool, residualRisk:string[], economy:array}
+     * @param array<string,int> $refIndex placeholder → the group row it was masked from (see MaskingGateway::buildMaskedPayload)
+     * @return array{narrative:string, suggestions:array, possibleGaps:array, notableFindings:string[], actionTaken:string, addedContentWarnings:string[], suspectLines:array<int,array{row:int,line:string}>, cached:bool, residualRisk:string[], economy:array}
      */
-    private function finalize(PDO $pdo, int $reportId, array $payload, array $maskedPayload, array $map, array $residualRisk, array $report, bool $cached, string $hash): array
+    private function finalize(PDO $pdo, int $reportId, array $payload, array $maskedPayload, array $map, array $residualRisk, array $report, bool $cached, string $hash, array $refIndex = []): array
     {
+        // An unidentified suspect's restored text is the model's OWN written
+        // phrase when one came back (suspectPhrases): screened, it replaces
+        // the bare role phrase, so the description is the model's prose and
+        // never the raw form values. The untouched map is kept for the retry
+        // below, whose payload carries its own phrases. The sheet lines follow
+        // whichever payload wins, so a retried draft shows the retry's own
+        // sentences rather than the abandoned pass's.
+        $baseMap = $map;
+        $linePayload = $payload;
+        $map = self::applySuspectPhrases($payload, $baseMap);
         $narrative = MaskingGateway::unmask((string) $payload['narrative'], $map);
         $findings = MaskingGateway::unmaskLines($payload['notableFindings'] ?? [], $map);
         // Same unmask-and-drop rule as the findings: a leaking line is dropped
@@ -355,13 +466,18 @@ final class NarrativeService
                     'incidentType' => (string) ($report['incident_type'] ?? ''),
                 ]);
                 $retryPayload = $retry->toArray();
-                $narrative = MaskingGateway::unmask((string) $retryPayload['narrative'], $map);
-                $findings = MaskingGateway::unmaskLines($retryPayload['notableFindings'] ?? [], $map);
-                $disposition = self::unmaskDisposition($retryPayload['actionTaken'] ?? '', $map);
-                $warnings = MaskingGateway::unmaskLines($retryPayload['addedContentWarnings'] ?? [], $map);
-                $gloss = MaskingGateway::unmask((string) ($retryPayload['gloss'] ?? ''), $map);
-                $sourceGloss = MaskingGateway::unmask((string) ($retryPayload['sourceGloss'] ?? ''), $map);
-                $ambiguities = MaskingGateway::unmaskLines($retryPayload['ambiguities'] ?? [], $map);
+                $linePayload = $retryPayload;
+                $retryMap = self::applySuspectPhrases($retryPayload, $baseMap);
+                // Every retry field is unmasked against the RETRY's map, so a
+                // suspect phrase can never mix one pass's description with
+                // another pass's narrative.
+                $narrative = MaskingGateway::unmask((string) $retryPayload['narrative'], $retryMap);
+                $findings = MaskingGateway::unmaskLines($retryPayload['notableFindings'] ?? [], $retryMap);
+                $disposition = self::unmaskDisposition($retryPayload['actionTaken'] ?? '', $retryMap);
+                $warnings = MaskingGateway::unmaskLines($retryPayload['addedContentWarnings'] ?? [], $retryMap);
+                $gloss = MaskingGateway::unmask((string) ($retryPayload['gloss'] ?? ''), $retryMap);
+                $sourceGloss = MaskingGateway::unmask((string) ($retryPayload['sourceGloss'] ?? ''), $retryMap);
+                $ambiguities = MaskingGateway::unmaskLines($retryPayload['ambiguities'] ?? [], $retryMap);
                 $tokens = self::gateLeaks($narrative, $gloss, $sourceGloss);
             } catch (\Throwable) {
                 // Retry transport failure falls through to the gate result.
@@ -430,7 +546,7 @@ final class NarrativeService
             }
         }
 
-        // ---- §3 record-grounded reference wrapper ------------------------
+        // ---- §3 wrapper seam — appends no reference today ----------------
         $narrative = self::withReferences($narrative, $report);
 
         return [
@@ -440,6 +556,12 @@ final class NarrativeService
             'notableFindings' => $findings,
             'actionTaken' => $disposition,
             'addedContentWarnings' => $warnings,
+            // The model's sheet-shaped suspect sentences, each labelled with
+            // the respondent row it describes. PREVIEW ONLY: the AI panel's
+            // sheet draws them under the Suspect label in place of the raw
+            // recorded values; the report's own fields are never written from
+            // them (the owner's decision, 2026-10-04).
+            'suspectLines' => self::suspectLines($linePayload, $refIndex),
             // Phase 6 Stage 3 — the gloss pair and the ambiguity list.
             'gloss' => $gloss,
             'sourceGloss' => $sourceGloss,
@@ -870,13 +992,17 @@ final class NarrativeService
 
     /**
      * Addendum §3 — record-grounded reference wrapper (deterministic data
-     * belongs in deterministic code, NOT in model output):
+     * belongs in deterministic code, NOT in model output). It appends
+     * NOTHING today:
      *
-     *   closing line: "Investigated by: [rank] [name], City of Naga Police
-     *                 Station" from the logged-in officer's account (the
-     *                 same station name the printed sheet carries).
+     * The one line it used to append — "Investigated by: [rank] [name], City
+     * of Naga Police Station." — was removed by the owner's decision
+     * (2026-10-04): that signed line belongs to the report's own officer
+     * fields, which the printed sheet carries, and it must never appear
+     * inside FACTS OF THE CASE. The model is told the same (ACCURACY rule 8),
+     * so neither side writes it.
      *
-     * The wrapper used to ALSO prepend a "Blotter Entry No. BW-0001." opening
+     * The wrapper also used to PREPEND a "Blotter Entry No. BW-0001." opening
      * line. That line duplicated the certification sentence on the printed
      * sheet — "This is to certify that, according to the police blotter entry
      * # BW-0001, dated …" sits directly above FACTS OF THE CASE — so the same
@@ -885,30 +1011,18 @@ final class NarrativeService
      * (Task 6). See stripLeadingBlotterRestatement() for the second line of
      * defence against a model that restates it anyway.
      *
-     * Evidence-tag and CCTV-request tracking numbers are deliberately NOT
-     * wired (addendum §5, open question): those modules do not exist in the
-     * current codebase, and an invented reference number in a legal
-     * document is worse than none. If/when they land, inject them here.
+     * The seam stays so a future deterministic reference has one place to
+     * land. Evidence-tag and CCTV-request tracking numbers remain deliberately
+     * NOT wired (addendum §5, open question): those modules do not exist in
+     * the current codebase, and an invented reference number in a legal
+     * document is worse than none.
      */
     public static function withReferences(string $narrative, array $report): string
     {
-        $body = trim($narrative);
-        if ($body === '') {
-            return $body;
-        }
-
-        $rank = trim((string) ($report['officer_rank'] ?? ''));
-        $name = trim((string) ($report['officer_name'] ?? ''));
-        $closeRef = '';
-        if ($name !== '') {
-            $closeRef = 'Investigated by: '
-                . ($rank !== '' ? $rank . ' ' : '')
-                . $name
-                . ', City of Naga Police Station.';
-        }
-
-        $parts = array_values(array_filter([$body, $closeRef], static fn ($s) => $s !== ''));
-        return implode("\n\n", $parts);
+        // No deterministic reference is appended today: the signed line was
+        // removed, and the blotter/evidence references belong to the sheet's
+        // own printed fields. See the docblock.
+        return trim($narrative);
     }
 
     /**

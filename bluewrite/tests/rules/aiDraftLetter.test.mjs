@@ -31,12 +31,14 @@ const PANEL = readFileSync(
   'utf8',
 );
 const SHEET = readFileSync(new URL('../../src/components/ReportSheetBody.jsx', import.meta.url), 'utf8');
+const CSS = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
 
 /** Source with comments stripped — the prose names every identifier below. */
 const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
 
 const SRC = code(PANEL);
 const LEAF = code(SHEET);
+const STYLE = code(CSS);
 
 /** The body of `function name(...) { … }`, up to the next top-level function. */
 const bodyOf = (src, marker) => {
@@ -68,8 +70,31 @@ test('the page paints the LIVE draft, so a correction in the boxes reaches it', 
   assert.match(pending, /findingsText: tightenDraft \? undefined : draftFindingsText,/, 'the findings are no longer scoped to a generated draft');
   assert.match(pending, /statusText: tightenDraft \? undefined : draftStatusText,/, 'the disposition is no longer scoped to a generated draft');
   assert.match(pending, /scope: tightenDraft \? 'tighten' : 'generate',/, 'the scope is no longer taken from the draft');
+  // The facts block's Suspect row paints the model's OWN sheet sentence(s) too
+  // (the response's suspectLines, [{ row, line }]), in place of the raw
+  // recorded values — the record itself is never written from them.
+  assert.match(pending, /suspectLines: tightenDraft \? undefined : draft\.suspectLines,/, 'the facts block no longer paints the model\'s own suspect lines');
+  assert.match(LEAF, /suspectLines: pending && pending\.scope !== 'tighten' \? pending\.suspectLines : null,/, 'the sheet is no longer handed the draft\'s suspect lines');
+  assert.match(LEAF, /buildTypeFacts\(report\.incident_type, \{\s*report,\s*ts,\s*suspectLines:/, 'the suspect lines no longer reach the fact builder');
   // And it is handed to the sheet, not to a stored copy.
   assert.match(SRC, /pending=\{sheetPending\}/, 'the sheet is not handed the live draft');
+});
+
+test('the draft has no second box or title of its own — the card is the one box', () => {
+  // The "AI draft" title bar and the framed viewer it sat on were a SECOND box
+  // inside the AI assistance card (owner request, 2026-10-04: one box, the
+  // sheet whole). The card's own head names the assistant; nothing names a
+  // draft again, and the viewer now draws no chrome of its own at all.
+  assert.doesNotMatch(SRC, /ai-inline-head/, 'the "AI draft" title bar is back in the panel');
+  assert.doesNotMatch(SRC, /draftHeadBar/, 'the draft head bar is back in the panel');
+  assert.doesNotMatch(STYLE, /\.ai-inline-head\s*\{/, 'the title bar is back in the stylesheet');
+  assert.doesNotMatch(STYLE, /\.ai-side-close/, 'the bar\'s dismiss control is back in the stylesheet');
+
+  // The way out the bar carried is not gone with it: the wait keeps its own
+  // Hide control, the review row under the page keeps Close, Escape still
+  // closes the body from anywhere, and a failure keeps Dismiss.
+  assert.match(SRC, /className="ai-hide-draft"/, 'the wait lost its way out with the bar');
+  assert.match(SRC, /<button type="button" onClick={closePanel}>Close<\/button>/, 'the review row lost Close');
 });
 
 test('the boxes are added UNDER the page — nothing puts the letter away', () => {

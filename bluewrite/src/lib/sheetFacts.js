@@ -138,9 +138,22 @@ function fmtTimeOnly(v) {
  *   { label, values: [..] }   → first value on the label line, rest as
  *                               continuation lines beneath it
  *   { label, items: [..], total } → numbered Stolen/Items block + TOTAL
+ *
+ * `ctx.suspectLines` is the AI draft's own sheet sentences for unidentified
+ * suspects — `[{ row, line }]`, row being the index in `ts.respondent` (Task 9's
+ * pending proposal). While a draft is under review the Suspect line reads the
+ * model's formalised sentence in place of the record's composed one; the report
+ * itself is never written from them (preview only). Absent → the record's own
+ * line everywhere, exactly as before.
  */
 export function buildTypeFacts(type, ctx) {
   const { report, ts } = ctx;
+  const formalSuspects = new Map();
+  for (const entry of Array.isArray(ctx.suspectLines) ? ctx.suspectLines : []) {
+    const row = Number(entry?.row);
+    const line = N(entry?.line);
+    if (Number.isInteger(row) && row >= 0 && line !== '') formalSuspects.set(row, line);
+  }
 
   // Party values: group arrays first (multi-person capable), legacy
   // singular columns as fallback.
@@ -155,9 +168,17 @@ export function buildTypeFacts(type, ctx) {
   // print it as ", 30, Male" — or drop it entirely, which is a blank where the
   // sheet owes a description. suspectLine() states the person instead
   // ("One unidentified male, about 30, dark jacket").
+  //
+  // While an AI draft is under review, a row the model wrote a sentence for
+  // reads THAT sentence (the panel's pending proposal) — the same replacement
+  // the sheet itself makes for the narrative and the two formalised blocks. The
+  // override is per ROW, so a second suspect the model did not describe keeps
+  // the record's own line.
   const suspects = () => {
     const rows = Array.isArray(ts.respondent) ? ts.respondent : [];
-    const lines = rows.map((row) => suspectLine(row)).filter(Boolean);
+    const lines = rows
+      .map((row, i) => formalSuspects.get(i) ?? suspectLine(row))
+      .filter(Boolean);
     if (lines.length > 0) return lines;
     // A report filed before the groups existed keeps its single legacy string.
     return has(report.respondent) ? [N(report.respondent)] : [];

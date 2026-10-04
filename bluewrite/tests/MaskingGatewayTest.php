@@ -59,9 +59,10 @@ check('location masked', ($m['where'] ?? '') === '[LOCATION]');
 check('map has location', ($out['map']['[LOCATION]'] ?? '') === 'Public market, Barangay Dagatan');
 
 // ---- 1b. Suspect description reaches the narrative ---------------------------
-// A suspect the officer described must be describable in the narrative: an
-// UNNAMED one via the role phrase, a NAMED one via the structured fields —
-// never the name itself.
+// A suspect the officer described must be describable in the narrative — via
+// the structured fields the model writes from (named and unnamed alike), the
+// unnamed one's placeholder restoring to the bare role phrase — never the
+// name itself.
 $tsD = [
     'respondent' => [
         ['suspect_status' => 'Unidentified', 'sex' => 'Male', 'age' => '30', 'build' => 'medium', 'clothing' => 'gray hoodie'],
@@ -71,9 +72,12 @@ $tsD = [
 $outD = MaskingGateway::buildMaskedPayload(['incident_type' => 'Theft', 'location' => 'Market'], $tsD, '');
 $phraseD = (string) ($outD['map']['[RESPONDENT_1]'] ?? '');
 echo "\nSuspect description reaching the narrative\n";
-check('unnamed suspect phrase carries the clothing', str_contains($phraseD, 'gray hoodie'), $phraseD);
-check('unnamed suspect phrase carries the build', str_contains($phraseD, 'medium'), $phraseD);
+check('unnamed suspect restores to role phrase only', $phraseD === 'an unidentified suspect', $phraseD);
 $gD = (array) ($outD['masked']['groups']->respondents ?? []);
+$unnamedD = $gD[0] ?? [];
+check('unnamed suspect record carries the clothing', ($unnamedD['clothing'] ?? '') === 'gray hoodie', json_encode($unnamedD));
+check('unnamed suspect record carries the build', ($unnamedD['build'] ?? '') === 'medium', json_encode($unnamedD));
+check('unnamed suspect record carries age_band', ($unnamedD['age_band'] ?? '') === '30s', json_encode($unnamedD));
 $namedD = $gD[1] ?? [];
 check('named suspect carries the description', ($namedD['suspect_description'] ?? '') === 'dark jacket', json_encode($namedD));
 check('named suspect carries the height', ($namedD['height'] ?? '') === "5'7\"", json_encode($namedD));
@@ -230,6 +234,33 @@ check('65 -> 60 or older', MaskingGateway::ageToBand('65') === '60 or older');
 check('empty -> null', MaskingGateway::ageToBand('') === null);
 check('garbage -> null', MaskingGateway::ageToBand('abc') === null);
 check('999 -> null (out of range)', MaskingGateway::ageToBand('999') === null);
+
+// ---- 7. Placeholder → row index (§18 sheet preview) ---------------------------
+// The draft's sheet draws the model's own Suspect sentence on the row it
+// describes, so the gateway labels each masked placeholder with its row's index
+// in the group array — the MASKED row's own index, not its position among the
+// filled rows (a blank row before a filled one must not shift it).
+$outIdx = MaskingGateway::buildMaskedPayload(
+    ['incident_type' => 'Theft', 'location' => 'Market'],
+    ['respondent' => [
+        ['name' => '', 'sex' => ''],
+        ['suspect_status' => 'Unidentified', 'sex' => 'Male', 'clothing' => 'gray hoodie'],
+    ]],
+    '',
+);
+echo "\nPlaceholder → row index\n";
+check('refIndex labels the masked row, not the blank one before it', ($outIdx['refIndex']['[RESPONDENT_1]'] ?? null) === 1, json_encode($outIdx['refIndex']));
+
+$outIdx2 = MaskingGateway::buildMaskedPayload(
+    ['incident_type' => 'Theft', 'location' => 'Market'],
+    ['respondent' => [
+        ['suspect_status' => 'Identified', 'name' => 'Juan Dela Cruz'],
+        ['name' => ''],
+        ['suspect_status' => 'Unidentified', 'sex' => 'Female'],
+    ]],
+    '',
+);
+check('a skipped blank row does not shift the next row', ($outIdx2['refIndex']['[RESPONDENT_2]'] ?? null) === 2, json_encode($outIdx2['refIndex']));
 
 echo "\n";
 if ($failures !== []) {

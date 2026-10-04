@@ -111,17 +111,17 @@ test('the action is one gold plate, and it is Home’s own control', async () =>
   // The mark is the pen-and-report file-pen, inlined — and it is not the plain
   // page the app draws for a report that already exists.
   assert.match(html, /M12\.659 22H18a2 2 0 0 0 2-2V8/, 'the action lost its file-pen mark');
-  // EVERY MARK ON THIS PAGE IS DRAWN, with five exceptions, and all five are the
+  // EVERY MARK ON THIS PAGE IS DRAWN, with four exceptions, and all four are the
   // station's own artwork files: the two seals in the signature band, the office's
-  // mark beside the wordmark, the folder on the action banner, and the shield on
-  // the reminder's heading. Nothing here is fetched from anywhere, and nothing else
-  // may become an image unnoticed.
+  // mark beside the wordmark, and the folder on the action banner. (The reminder's
+  // heading mark is gone by request — see homeCta.test.mjs.) Nothing here is
+  // fetched from anywhere, and nothing else may become an image unnoticed.
   const imgs = html.match(/<img[^>]*>/g) ?? [];
-  assert.equal(imgs.length, 5, 'Home draws a different number of images');
+  assert.equal(imgs.length, 4, 'Home draws a different number of images');
   for (const img of imgs) {
     assert.match(
       img,
-      /ir-home-footer-seal|ir-home-hero-mark|ir-home-banner-mark|ir-remember-title-mark-art/,
+      /ir-home-footer-seal|ir-home-hero-mark|ir-home-banner-mark/,
       'Home draws an image that is not the station’s own artwork',
     );
   }
@@ -132,12 +132,13 @@ test('the action is one gold plate, and it is Home’s own control', async () =>
   assert.equal(folder.length, 1, 'the action banner lost the office’s folder mark');
   assert.match(folder[0], /alt=""/, 'the banner’s mark is not stated as decorative');
   assert.doesNotMatch(folder[0], /<svg/, 'the banner’s mark is drawn rather than the office’s own file');
-  // The reminder's heading wears the office's shield, decorative on the same
-  // argument: the heading's own word already names the card, so the artwork takes
-  // an empty alt rather than being announced before it.
-  const shield = imgs.filter((img) => img.includes('ir-remember-title-mark-art'));
-  assert.equal(shield.length, 1, 'the reminder’s heading lost the office’s shield');
-  assert.match(shield[0], /alt=""/, 'the shield is not stated as decorative');
+  // The reminder's heading no longer wears the shield (gone by request) — the
+  // heading is the word alone, so no image may carry its class again.
+  assert.equal(
+    imgs.filter((img) => img.includes('ir-remember-title-mark-art')).length,
+    0,
+    'the reminder’s heading draws the shield again',
+  );
   // The lockup's mark is the office's own logo, and it is DECORATIVE: it sits
   // beside the wordmark, which already says the name, so it takes an empty alt
   // rather than repeating it to a screen reader.
@@ -252,7 +253,7 @@ test('the reminder is the aside, with its three items and the office’s line', 
   // The heading's own mark, on the gold tile the stylesheet gives it (see the
   // half of homeCta.test.mjs that owns the card's colours) — and it is not one of
   // the three items, which is why it is counted separately below.
-  assert.ok(html.includes('ir-remember-title-mark'), 'the reminder heading lost its mark');
+  assert.ok(!html.includes('ir-remember-title-mark'), 'the reminder heading drew a mark again');
   assert.equal(html.split('ir-remember-mark').length - 1, 3, 'the reminder is not three items');
   // Three ITEMS — asserted inside the list itself, so a fourth line somewhere
   // else on the page cannot stand in for a missing one.
