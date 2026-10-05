@@ -416,8 +416,13 @@ mean detection is not a guarantee that every Bisaya report is marked as one.
 Gone with the selector: D7's suggestion below (nothing declares a language, so
 there is nothing to suggest), the `ir-language-*` styles, and the "not
 translated" note that sat under the selector. The AI panel's `aiBlockedReason`
-note, the finalize warning and the printed `pr-language` line all still read the
-field, and now read exactly what the narrative says.
+note and the finalize warning still read the field, and read exactly what the
+narrative says.
+
+**Gone since: the printed `pr-language` line (owner request, 2026-10-06).** The
+sheet no longer carries "Narrative language: <short> (not translated)", and
+`printLanguageLine()` and the `.pr-language` rule went with it — see the D6 row
+below, which is otherwise unchanged.
 
 **Q3. What happens to Tighten on a native-language narrative?**
 *Answered in Stage 5, Track C (D2):* offered as a **guided flow**, not one
@@ -495,7 +500,7 @@ declares; nothing detects it, and nothing translates it.
 | `src/components/AiNarrativePanel.jsx` | Generate / Tighten disabled with the visible reason |
 | `src/components/Shell.jsx` | carries the report's language through to the editor |
 | `src/components/ReportPrint.jsx` | the D6 sheet line |
-| `src/incident-report.css`, `src/styles.css` | styling for `.pr-language` and the AI panel's language note (the selector's `ir-language-*` rules were removed with the selector) |
+| `src/incident-report.css`, `src/styles.css` | styling for the AI panel's language note (the `.pr-language` rule was removed with the sheet line on 2026-10-06, and the selector's `ir-language-*` rules with the selector) |
 | `tests/BaseApiTestCase.php` | replays `007` into the scratch DB (without it every create 500s) |
 | `tests/rules/reportLanguages.test.mjs` | **new** — 20 tests for the module and the rule engine |
 | `tests/MultilingualTest.php` | **new** — 19 tests for persistence, round trip, snapshots and guards (18 over HTTP, 1 pure) |
@@ -514,7 +519,7 @@ test alone runs **38 tests / 237 assertions, OK**, unmodified.
 | **D3** | Disabled in the editor with the brief's exact wording — *"AI drafting and tightening currently work on English text only."* — and guarded **on the server too** (Q4): `NarrativeController::languageRefusal()` refuses both endpoints with 409 **before dispatch**, so the guard costs nothing to run and nothing to test. The button is not the guard; the endpoint can be called directly. |
 | **D4** | Automatic: the snapshot is the whole row as JSON, so `narrative_language` is in it from the first snapshot. A change of language therefore leaves the old value in history and the new one on the report (asserted both ways). |
 | **D5** | A warning with explicit confirm/cancel in the editor, stating plainly that the narrative is not in English and has not been translated. It never blocks, and the **server never refuses a filing for language** (asserted: a `ceb` report finalizes 200). Recorded per **Q9** by appending to the existing `change_note` — no new column, no extra audit row. |
-| **D6** | `printLanguageLine()` returns `Narrative language: <short> (not translated)` for non-`en` and **null** for `en`; `ReportPrint.jsx` renders the node only when it is non-null, so an English sheet is the same nodes it always was. The short form exists so the line does not read "Bisaya (Cebuano) (not translated)". The source-text appendix remains Stage 4. |
+| **D6** | `printLanguageLine()` returns `Narrative language: <short> (not translated)` for non-`en` and **null** for `en`; `ReportPrint.jsx` renders the node only when it is non-null, so an English sheet is the same nodes it always was. The short form exists so the line does not read "Bisaya (Cebuano) (not translated)". The source-text appendix remains Stage 4. **Removed 2026-10-06 (owner request):** the sheet carries no language line, and `printLanguageLine()` and `.pr-language` were deleted with it — the field, the notice, the finalize warning and the appendix stay. Guarded from both ends by `tests/rules/reportLanguages.test.mjs`. |
 | **D7** | `suggestedLanguage()` filters the fetched list to the officer's own rows and takes the greatest `id` — not the first row, because the list is sorted by incident date and an Admin's list is the whole station's. A suggestion only: the editor shows a stored report's own value, and the selector is always visible and changeable. **Superseded with Q2:** nothing declares the language any more, so the editor no longer calls it — the function and its tests are kept for the day the selector comes back, and `Shell` still fetches the list for Home. |
 
 ### Live evidence
@@ -594,8 +599,9 @@ no test class, by their own comments, and none of them was touched.
   and was **not** observed by the author, who has no browser here.
 - **The printed-sheet line is verified as data, not as pixels.** The server
   returns `narrative_language` on the print payload (asserted), and
-  `printLanguageLine()` maps it to the line (asserted); that the `<p>` renders
-  on paper in a real browser was not observed.
+  `printLanguageLine()` mapped it to the line (asserted); that the `<p>` rendered
+  on paper in a real browser was not observed. The line was removed on
+  2026-10-06, so the question is closed by absence rather than by evidence.
 
 ### Noticed, not changed
 

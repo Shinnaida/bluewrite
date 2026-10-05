@@ -109,8 +109,14 @@ export function languageLabel(code) {
 }
 
 /**
- * The compact name for printed lines, so a line does not read
- * "Bisaya (Cebuano) (not translated)".
+ * The compact name of a language — "Bisaya", not "Bisaya (Cebuano)" — for any
+ * one-line label that also has to say something else. The server sends the same
+ * form (`LanguageRegistry::short`, `AuthController`), so a client and a server
+ * label cannot disagree about what a language is called in one line.
+ *
+ * IT NO LONGER FEEDS THE SHEET: the printed line it was read for was removed by
+ * owner request (2026-10-06, see ReportSheetBody), and this remains the
+ * registry's own accessor plus the drift guard in languageRegistry.test.mjs.
  * @param {unknown} code
  * @returns {string}
  */
@@ -376,21 +382,6 @@ export function finalizeLanguageWarning(code) {
     `The narrative is written in ${languageLabel(code)} and has NOT been translated to English. ` +
     'Confirm only if the station accepts an untranslated narrative — it will be filed and printed as written.'
   );
-}
-
-/**
- * D6 — the line the printed sheet carries, or null for English.
- *
- * The sheet is the document of record, and a reader of it cannot tell a Bisaya
- * narrative from a badly-written English one. Only a non-English declaration
- * prints this, so an English report's sheet is byte-for-byte what it was.
- *
- * @param {unknown} code
- * @returns {string|null}
- */
-export function printLanguageLine(code) {
-  if (!isUntranslated(code)) return null;
-  return `Narrative language: ${languageShort(code)} (not translated)`;
 }
 
 /**

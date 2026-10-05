@@ -25,6 +25,13 @@
 //      because a single missing `min-height: 0` anywhere in it silently restores
 //      the page scrollbar.
 //
+//   3. THE ROW'S OWN FLOOR. The list takes the overflow, but only because its
+//      rows cannot be squeezed: `.ir-draft-card` clips its own content, an
+//      element that clips has an automatic minimum size of zero, and an `auto`
+//      grid row inherits exactly that. A panel shorter than the list rendered
+//      five drafts as five clipped slivers of themselves until the rows were
+//      stated as content-sized — the last test in this file holds that.
+//
 // Read from source and stylesheet, like the rest of this directory: the harness
 // these render is a page of markup with no shell around it (see
 // tests/rules/renderHarness.mjs), which is exactly why neither failure could be
@@ -209,6 +216,34 @@ test('the blocks that hold words are never the ones that give way', () => {
   for (const selector of ['.ir-home-hero', '.ir-home-banner', '.ir-home-drafts-head', '.ir-home-footer']) {
     assert.match(rule(selector), /flex:\s*none/, `${selector} can be shrunk, and its content clipped`);
   }
+});
+
+test('a short panel squeezes the LIST, never the cards in it', () => {
+  // `.ir-draft-card` carries `overflow: hidden` so the gold stripe is cut by the
+  // card's own rounded corner — and THAT is what left the list's rows with no
+  // floor: an element that clips its content has an automatic minimum size of
+  // zero, so every `auto` row's base size was zero, and a panel with less room
+  // than the list's content took the shortfall out of the ROWS rather than out
+  // of the list. Five drafts came out as five ~18px slivers — the gold edge, the
+  // top of the plate, the badge and the date, with the number, the type, the
+  // Continue button and the progress strip clipped off. The rows are stated as
+  // content-sized, so the overflow is the LIST's to carry (the `overflow-y`
+  // below) and never the cards'.
+  const list = rule('.ir-home-list');
+  assert.match(
+    list,
+    /grid-auto-rows:\s*(max-content|min-content)/,
+    'the rows are compressible again, so a short panel clips every card instead of scrolling the list',
+  );
+  // ...and the two facts the rule exists for, asserted so this test fails for
+  // the RIGHT reason if either of them changes: the card still clips its stripe,
+  // and the list is still the element that takes the overflow.
+  assert.match(
+    rule('.ir-draft-card'),
+    /overflow:\s*hidden/,
+    'the card no longer clips its own stripe — check whether the row floor is still needed',
+  );
+  assert.match(list, /overflow-y:\s*auto/, 'the list is no longer the element that takes the overflow');
 });
 
 test('the list scrolls in the column the register scrolls in, not in a box of its own', () => {

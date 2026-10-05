@@ -33,7 +33,6 @@ import {
   languageLabel,
   languageShort,
   normaliseLanguage,
-  printLanguageLine,
 } from '../../src/lib/reportLanguages.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -115,13 +114,11 @@ test('BEHAVIOUR-PRESERVING: native_gloss matches the prompt\'s stated rule', () 
   assert.equal(findLanguage('en').native_gloss, false);
 });
 
-test('BEHAVIOUR-PRESERVING: the printed line is unchanged for the five languages', () => {
-  assert.equal(printLanguageLine('en'), null);
-  assert.equal(printLanguageLine('ceb'), 'Narrative language: Bisaya (not translated)');
-  assert.equal(printLanguageLine('tl'), 'Narrative language: Tagalog (not translated)');
-  assert.equal(printLanguageLine('mixed'), 'Narrative language: Mixed (not translated)');
-  assert.equal(printLanguageLine('other'), 'Narrative language: Other (not translated)');
-});
+// (A "BEHAVIOUR-PRESERVING: the printed line…" test stood here, and it went with
+//  the printed line itself: the sheet no longer carries "Narrative language: …
+//  (not translated)" — owner request, 2026-10-06, see ReportSheetBody.jsx. The
+//  registry `short` field it read is still asserted above, and the server still
+//  sends it (LanguageRegistry::short), so nothing else moved with it.)
 
 test('BEHAVIOUR-PRESERVING: the read-side fallback still reads junk as English', () => {
   assert.equal(normaliseLanguage('ceb'), 'ceb');

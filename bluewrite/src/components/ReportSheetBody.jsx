@@ -30,7 +30,7 @@
 
 import React, { useRef, useState, useLayoutEffect } from 'react';
 import { resolveHeader } from '../lib/stationSettings.js';
-import { printLanguageLine, languageLabel } from '../lib/reportLanguages.js';
+import { languageLabel } from '../lib/reportLanguages.js';
 import {
   hasSource,
   APPENDIX_HEADING,
@@ -130,7 +130,6 @@ export default function ReportSheetBody({
   const finalized = report.status === 'finalized';
   const reportNo = report.id ? `BW-${String(report.id).padStart(4, '0')}` : 'BW-____';
   const head = resolveHeader(stationHeader);
-  const languageLine = printLanguageLine(report.narrative_language);
   // Task 9 — a draft under review brings the model's own Suspect sentence for
   // each respondent row it described; the facts block draws it in place of the
   // record's composed line. A tighten carries none: it rewrites the officer's
@@ -345,8 +344,18 @@ export default function ReportSheetBody({
         <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(narrativeText); })()}</span>
       </div>
 
-      {/* D6 — rendered ONLY for a non-English declaration. */}
-      {languageLine && <p className="pr-language">{languageLine}</p>}
+      {/* NOTHING HERE ABOUT THE NARRATIVE'S LANGUAGE (owner request,
+          2026-10-06). A one-line "Narrative language: Bisaya (not translated)"
+          note used to sit between this block and the next one, for any report
+          whose narrative was filed in a language other than English (Phase 6
+          Stage 1, D6 — `printLanguageLine`). The sheet is the incident's
+          document, and how the record was PROCESSED is not part of what the
+          incident contains; whoever needs that statement reads it on the
+          screens that keep it, and every one of those is untouched — the
+          editor's notice, the finalize warning, the history note, and the
+          review appendix, which prints the original text with its language
+          named. Neither the node nor its helper is left behind: nothing renders
+          a line here, and nothing computes one. */}
 
       {/* ALWAYS ON THE SHEET (by request): NOTABLE FINDINGS is part of the
           template between FACTS OF THE CASE and ACTION TAKEN, so the heading

@@ -1,40 +1,40 @@
 // BlueWrite — HOW BIG THE BONDPAPER IS IN THE AI ASSISTANCE CARD.
 //
 // The leaf in the assistant's card is 8.5 × 11in of paper, and the card is
-// whatever room it has. THE WHOLE LEAF IS FITTED TO THAT ROOM (owner request,
-// 2026-10-04): the sheet is one page of paper and it is read as the page it is
-// — top to bottom, in the assistant's own card, with no second box around it
-// and no scrollbar inside one. Two ways to reconcile paper and card are in the
-// record, and the trade between them was made deliberately:
+// whatever room it has. THE CARD'S PAGE IS A FLAT 50% (owner request,
+// 2026-10-05), and the frame scrolls — both ways — to reach the rest of it.
 //
-//   * SIZE IT TO THE CARD'S WIDTH ALONE — the page fills the column it was
-//     asked for and the card keeps a scrollbar to reach the foot of the letter.
-//     That is the version this file used to guard. It shows a letterhead, not a
-//     page: the officer asked to see the sheet, top to bottom.
-//   * SIZE IT TO BOTH AXES — the whole leaf at once, at the largest scale the
-//     card can show it. The factor is the SMALLER of the two fits, so width and
-//     height both hold; a letter that runs past its leaf still reaches its tail
-//     through the frame's own scrollbar, which is the fallback, not the
-//     normal case.
+// Two earlier answers are in the record. They are named here because each left
+// behind the thing this file now guards against, and a diff that only shows
+// `zoom: 0.5` does not say why the measurement went away:
 //
-// The second is only honest while the page is allowed to take the paper the
-// letter needs: the stylesheet gives it the leaf's 11in as a FLOOR, never a
-// cap, so a long letter GROWS the page and the fit shrinks with it instead of
-// the signature block being clipped away. That is part of the contract below.
+//   * SIZE IT TO BOTH AXES — the whole leaf measured to fit the card, at the
+//     largest scale the card could take, with a ResizeObserver re-measuring on
+//     every box change. That was the rule until 2026-10-05 and it is a fine
+//     PREVIEW of a page, which is why it lasted. It is gone because the card is
+//     a narrow column in one format and a wide block in another, so the officer
+//     met the same page at a different size in each; and once the page also had
+//     a stepper ladder, TWO sources of size fought over it — the observer kept
+//     re-fitting the page under a size the officer had picked.
+//   * SIZE IT TO THE CARD'S WIDTH ALONE — the page fills the column, the frame
+//     keeps a scrollbar. Same objection: the size changed with the card.
 //
-// Three parts of it can part company, and each is asserted here:
+// ONE FIXED SIZE ends both, and that is the whole rule. What it still owes the
+// document, and what is asserted below:
 //
-//   1. WHICH MEASUREMENT — the card's content WIDTH and HEIGHT against the
-//      page's own width and its measured natural height;
-//   2. HOW OFTEN — whenever the card is resized AND whenever the PAGE changes
-//      size (the reveal grows it), from the moment the page is up rather than
-//      only after the typing lands, so the size never jumps;
-//   3. WHAT THE STYLESHEET DOES WITH IT — one measured zoom on a page drawn at
-//      its own 8.5in, inside a frame that draws no box of its own.
+//   1. THE SIZE — a single declaration, 50% of the paper's own size, in exactly
+//      one place, with NO second source of size anywhere in the component: no
+//      custom property, no measured factor, no state class.
+//   2. THE FRAME — no box of its own (the card is the one box), BOTH scrollbars,
+//      and a height that is a real viewing window rather than a letterhead.
+//   3. THE PAPER — the same 8.5 × 11in leaf the print portal draws, as a FLOOR
+//      and never a cap, so a long letter keeps its signature block.
+//   4. THE CENTRING — the page centres, and an overflowing one keeps its START
+//      edge reachable, which is a real trap in a scrolling flex row.
 //
 // Read from source and stylesheet, like aiDraftLetter.test.mjs: there is no DOM
-// harness in this project, and what is being guarded is which box is measured
-// and which rule reads the result.
+// harness in this project, and what is being guarded is which rule owns the
+// size — exactly what a screenshot cannot tell you.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -73,36 +73,35 @@ const sheetRules = () =>
     return { selector, body: r, classes: (selector.match(/\./g) ?? []).length };
   });
 
-test('the WHOLE leaf is fitted to the card — width and height together', () => {
-  // The page's own width is the leaf's, and its height is measured rather than
-  // assumed: the letter grows it, so it is read back through the zoom in force
-  // (`zoom` scales the rect the DOM reports — see `leafZoom`).
-  assert.match(SRC, /const byWidth = availW \/ SHEET_PX\.width;/, 'the page is no longer fitted to the card\'s width');
-  assert.match(
-    SRC,
-    /const naturalH = page\s*\n\s*\? Math\.max\(SHEET_PX\.height, Math\.round\(page\.getBoundingClientRect\(\)\.height \/ leafZoom\.current\)\)/,
-    'the page\'s own height is no longer measured back through the zoom in force',
-  );
-  // Quantized to the CSS pixel: the observer re-enters on every box change, and
-  // a subpixel figure would let two adjacent factors trade places forever.
-  assert.match(SRC, /Math\.round\(page\.getBoundingClientRect\(\)\.height/, 'the measured height can drift on subpixels, so the observer can ping-pong');
-  assert.match(SRC, /const byHeight = availH \/ naturalH;/, 'the page is no longer fitted to the card\'s height');
-  // The SMALLER of the two: fitting only the larger leaves the page past one
-  // edge of the card, which is the scrolling window the owner asked away.
-  assert.match(
-    SRC,
-    /Math\.max\(0\.3, Math\.min\(1, byWidth, byHeight\)\)/,
-    'the fit is no longer the smaller of the two axes — one of them can overflow',
-  );
+test('the card page is drawn at ONE fixed size — 50% of the paper', () => {
+  // Exactly one rule states it, and it states a NUMBER: a `var()` would be a
+  // second source of size by definition, wherever it was computed.
+  const rules = sheetRules();
+  assert.equal(rules.length, 1, `the preview page is sized by more than one rule: ${rules.length}`);
+  const page = rules[0].body;
+  assert.match(page, /width:\s*8\.5in/, 'the page is not drawn at the paper\'s width');
+  assert.match(page, /zoom:\s*0\.5/, 'the card\'s page is no longer a flat 50%');
+  assert.doesNotMatch(page, /var\(/, 'the size is computed again — one fixed number is the rule');
+  // `min(100%, 8.5in)` would make a percentage and the zoom each take a bite of
+  // the same scaling, and the page would come out at a fraction of its 50%.
+  assert.doesNotMatch(page, /min\(100%/, 'the width is a percentage, so the zoom compounds');
 
-  // The card's own padding is not room for the page, on EITHER axis.
-  assert.match(SRC, /const padX = parseFloat\(cs\.paddingLeft\) \+ parseFloat\(cs\.paddingRight\);/, 'the card\'s horizontal padding is not allowed for');
-  assert.match(SRC, /const padY = parseFloat\(cs\.paddingTop\) \+ parseFloat\(cs\.paddingBottom\);/, 'the card\'s vertical padding is not allowed for');
-  assert.match(SRC, /if \(!\(availW > 0\) \|\| !\(availH > 0\)\) return;/, 'a degenerate box is no longer refused');
-
-  // A floor for a degenerate box, and a cap that keeps a wide card from
-  // MAGNIFYING the page past its own size: a preview enlarges nothing.
-  assert.match(SRC, /const next = Math\.max\(0\.3, Math\.min\(1, byWidth, byHeight\)\)\.toFixed\(4\);/, 'the size lost its floor or its cap');
+  // NO SECOND SOURCE OF SIZE: the measured factor, its custom property and the
+  // ref the observer kept are all gone from the component, and no state class
+  // survives either (the file once banned `--fitted`; `--zoomed` followed it out
+  // with the steppers, so the whole family is refused by name).
+  assert.doesNotMatch(SRC, /--ai-sheet-zoom/, 'a measured size property is back in the card');
+  assert.doesNotMatch(SRC, /leafZoom/, 'the card is measuring its page again');
+  assert.doesNotMatch(SRC, /sheetZoom/, 'a card-size state is back beside a fixed size');
+  assert.equal((SRC.match(/ai-sheet-preview--/g) ?? []).length, 0, 'a second card-size state is back');
+  assert.equal((SHEET.match(/ai-sheet-preview--/g) ?? []).length, 0, 'a second card-size state is back in the stylesheet');
+  // The one ResizeObserver left in the panel belongs to the FULL SCREEN fit
+  // (`sheetFullRef`), and it must not be measuring the card's frame.
+  assert.doesNotMatch(
+    SRC,
+    /ResizeObserver[\s\S]{0,400}sheetViewportRef/,
+    'the card frame is observed again, so something is re-fitting its page',
+  );
 });
 
 test('the frame draws no box of its own — the card is the one box', () => {
@@ -113,89 +112,43 @@ test('the frame draws no box of its own — the card is the one box', () => {
   assert.equal(value(body, 'border'), undefined, 'the viewer frame draws an edge again');
   assert.equal(value(body, 'border-radius'), undefined, 'the viewer frame is a rounded box again');
   assert.equal(value(body, 'scrollbar-gutter'), undefined, 'the viewer frame reserves a scrollbar gutter again');
-  // A letter that runs past its leaf keeps its tail: the scrollbar is the
-  // fallback for that one case, never the normal reading.
-  assert.match(body, /overflow-y:\s*auto/, 'the frame no longer reaches the tail of a long letter');
-  assert.match(body, /overflow-x:\s*hidden/, 'a page filling the width must not draw a horizontal bar');
+
+  // BOTH BARS: the page's size is fixed and the frame does not own it, so the
+  // frame is what reaches the rest of a 408 × 528px leaf in a smaller column.
+  assert.match(body, /overflow-y:\s*auto/, 'the frame no longer reaches the foot of the letter');
+  assert.match(body, /overflow-x:\s*auto/, 'a page wider than the column cannot be reached sideways');
+
   // The room the frame offers is the card's — near the whole window where the
   // panel is its own card — and it is a real viewing window, not a letterhead.
   const height = body.match(/height:\s*clamp\(\s*([\d.]+)rem,\s*([\d.]+)dvh,\s*([\d.]+)rem\s*\)/);
   assert.ok(height, `the frame height is no longer a rem/dvh clamp: ${body}`);
-  assert.ok(Number(height[1]) >= 20, `the floor is too short to show the sheet whole: ${height[1]}rem`);
-  assert.ok(Number(height[3]) >= 60, `the cap is too short to show the sheet whole: ${height[3]}rem`);
-  assert.equal(value(body, 'max-height'), undefined, 'a maximum height is back, so the fit stops owning the height');
-  // The fitted (whole-leaf) state this file once banned is the state now: there
-  // must be exactly ONE behaviour, so no second state is hiding anywhere.
-  assert.equal(
-    (SHEET.match(/ai-sheet-preview--fitted/g) ?? []).length,
-    0,
-    'a second, fitted state is back beside the measured one',
-  );
-  assert.equal(
-    (SRC.match(/ai-sheet-preview--fitted/g) ?? []).length,
-    0,
-    'a second, fitted state is back in the component',
-  );
+  assert.ok(Number(height[1]) >= 20, `the floor is too short to show the sheet: ${height[1]}rem`);
+  assert.ok(Number(height[3]) >= 60, `the cap is too short to show the sheet: ${height[3]}rem`);
+  assert.equal(value(body, 'max-height'), undefined, 'a maximum height is back, so the frame stops owning its window');
 });
 
-test('one measured zoom, on a page drawn at its own size', () => {
-  const rules = sheetRules();
-  const measured = rules.filter((r) => r.body.includes('var(--ai-sheet-zoom'));
-  assert.equal(measured.length, 1, 'the preview must be scaled by exactly one measured rule');
-  assert.match(measured[0].body, /width:\s*8\.5in/, 'the page is not drawn at the paper\'s width');
-  // `min(100%, 8.5in)` would make the percentage and the zoom each take a bite
-  // of the same scaling, and the page would come out smaller than the card.
-  assert.doesNotMatch(measured[0].body, /min\(100%/, 'the width is a percentage again, so the zoom compounds');
-  assert.match(measured[0].body, /zoom:\s*var\(--ai-sheet-zoom, 0\.62\)/, 'the fallback size before the measurement is gone');
-
-  // The small-frame media queries used to state their own zooms. They are gone:
-  // the measurement covers every width, and a hardcoded zoom would overrule it
-  // for the narrow frames where it matters most.
-  const hardcoded = rules.filter((r) => !r.body.includes('var(--ai-sheet-zoom'));
-  assert.equal(hardcoded.length, 0, `a rule still hardcodes a preview zoom: ${hardcoded.map((r) => r.selector.trim()).join(', ')}`);
-});
-
-test('measured on card resize AND on page growth, from the moment the page is up', () => {
-  // From the moment it is up, NOT only after the typing lands: the reveal grows
-  // the page a line at a time, and each line that adds paper has to shrink the
-  // factor in the same frame — or the page silently grows past the card.
-  assert.match(
-    SRC,
-    /if \(!el \|\| !sheeted \|\| typeof ResizeObserver !== 'function'\) return;/,
-    'the size is no longer applied until the typing finishes, so the page jumps at the end of the reveal',
-  );
-  assert.match(SRC, /new ResizeObserver\(sizeLeaf\)/, 'the size no longer follows its boxes');
-  assert.match(SRC, /ro\.observe\(el\);/, 'the card is not observed');
-  assert.match(
-    SRC,
-    /if \(el\.firstElementChild\) ro\.observe\(el\.firstElementChild\);/,
-    'the page is not observed, so a letter that grows beyond its leaf stops being re-fitted',
-  );
-  assert.match(SRC, /return \(\) => ro\.disconnect\(\);/, 'the observer is never disconnected');
-
-  // One custom property, written only when it changed: the observer re-enters on
-  // every box change, and a redundant write would loop.
-  assert.match(SRC, /el\.style\.setProperty\('--ai-sheet-zoom', next\)/, 'the measured size is not handed to the stylesheet');
-  assert.match(
-    SRC,
-    /if \(el\.style\.getPropertyValue\('--ai-sheet-zoom'\) !== next\)/,
-    'the size is rewritten on every observation',
-  );
+test('the frame centres the page WITHOUT putting its start edge out of reach', () => {
+  // The trap this guards: a flex row that centres overflowing content leaves the
+  // START of that content unscrollable — the left-hand column of a 50% leaf in a
+  // narrower column could not be reached at all. Centring therefore belongs to
+  // the PAPER's auto margins, which collapse to zero when there is no room.
+  const frame = rule(SHEET, '.ai-sheet-preview');
+  assert.equal(value(frame, 'justify-content'), 'flex-start', 'the frame centres overflowing content, so its start edge is unreachable');
+  const page = sheetRules()[0].body;
+  assert.match(page, /margin:\s*0 auto/, 'the page no longer centres itself, so it sits flush left on a wide card');
 });
 
 test('the paper the page is sized against is the paper the sheet prints on', () => {
-  // 8.5 × 11in at 96 CSS px to the inch — the leaf's own size, stated beside the
-  // rule that draws it. These two must move together, or the page is sized
-  // against a page that no longer exists.
-  assert.match(SRC, /const SHEET_PX = \{ width: 8\.5 \* 96, height: 11 \* 96 \};/, 'the leaf\'s size is gone');
+  // 8.5 × 11in: the leaf's own size, stated on `.print-sheet` — the page the
+  // print portal and the AI panel's own previews all draw.
   const sheet = SHEET.match(/^\.print-sheet\s*\{[^}]*\}/m);
   assert.ok(sheet, '.print-sheet is gone from the stylesheet');
   assert.match(sheet[0], /max-width:\s*8\.5in/, 'the sheet is no longer US Letter wide');
   assert.match(sheet[0], /min-height:\s*11in/, 'the sheet is no longer short bond tall');
-  // ...and the preview draws the leaf at exactly that — as a FLOOR, never a cap:
-  // a letter that runs a few lines past its leaf grows the page (the fit shrinks
-  // with it, and the frame scrolls to the tail) instead of the signature block
-  // being clipped away.
+
+  // ...and the card draws that leaf at its own width, as a FLOOR and never a
+  // cap: a letter that runs a few lines past its leaf grows the page (the frame
+  // scrolls to the tail) instead of the signature block being clipped away.
   const preview = sheetRules()[0];
   assert.match(preview.body, /min-height:\s*11in/, 'the previewed leaf is no longer one short bond page');
   assert.doesNotMatch(preview.body, /(^|[^-])height:\s*11in/, 'the previewed leaf is pinned at one page again');

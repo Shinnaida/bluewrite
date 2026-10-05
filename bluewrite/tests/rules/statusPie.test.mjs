@@ -421,7 +421,15 @@ test('a hover states the line it is on, and cannot state it on every wedge at on
 });
 
 test('the hover is a state and its motion is optional', () => {
-  const block = styles.match(/@media \(prefers-reduced-motion: no-preference\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  // EVERY no-preference block in the sheet, not only the first one: the sheet has
+  // more than one of them (the assistant's Generate pill carries its own motion),
+  // and what is being asserted is that the pie's transitions live INSIDE one of
+  // these blocks — not inside whichever block happens to be written first. Read
+  // as `match(...)?.[1]`, this test passed for years and then failed on a block
+  // it had never been about.
+  const blocks = [...styles.matchAll(/@media \(prefers-reduced-motion: no-preference\) \{([\s\S]*?)\n\}/g)].map((m) => m[1]);
+  assert.ok(blocks.length > 0, 'the sheet states no reduced-motion branch at all');
+  const block = blocks.find((b) => b.includes('.dash-pie__slice')) ?? '';
   assert.match(block, /\.dash-pie__slice \{ transition: transform/);
   assert.match(block, /\.dash-pie__top \{ transition: stroke/);
   // The outline and the lift are inside the no-preference block ONLY as

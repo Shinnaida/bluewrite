@@ -11,11 +11,14 @@
 //      React tree that owns it. Measured, with the guards removed: the panel
 //      rendered 0 characters and both cases reported no button at all.
 //   2. A CASCADE DRIFT. The component ships its own padding, font-size and drop
-//      shadow, and its stylesheet arrives AFTER the app's, so at equal
-//      specificity those REPLACE the form button's — including the 3px accent
-//      halo that is that button's focus affordance. The integration block in
-//      SpecularButton.css is what holds the app's chrome in place, and nothing
-//      about deleting it would look wrong in a diff.
+//      shadow, and its stylesheet arrives AFTER the app's, so at EQUAL
+//      specificity those REPLACE the form button's. What holds the app's chrome
+//      in place is the app's own rule being TWO classes (`.ai-run.primary`,
+//      styles.css) — which is also why a re-copy of the published CSS can no
+//      longer take the button's surface with it, and why SpecularButton.css
+//      carries no override block any more. Both halves of that are asserted
+//      below: nothing in the vendored sheet may claim the button, and the pill
+//      must still state its own surface.
 //
 // The behaviour itself was checked in a browser against the built component (rim
 // present on the edge facing the pointer, absent when the pointer is far, app
@@ -47,9 +50,18 @@ test('the rim cannot take the panel down when WebGL is unavailable', () => {
 test('the app keeps the button, the component keeps only the rim', () => {
   // The host classes are how the app's chrome reaches the button at all.
   assert.match(PANEL, /<SpecularButton\n\s+className="ai-run primary"/, 'the primary action no longer wears the app\'s classes');
-  // The SDF follows the CSS radius, so the two curves are the same curve: the
-  // button's own radius is 3px (see `button` in styles.css).
-  assert.match(PANEL, /radius=\{3\}/, 'the drawn radius no longer matches the button\'s own 3px');
+  // The SDF follows the CSS radius, so the two curves are the same curve. The
+  // button is a PILL, and the curve is stated once as RUN_RADIUS: CSS and the
+  // SDF each clamp it to half the button's height, so the drawn rim and the CSS
+  // border meet at any size. A number here instead of the constant would be a
+  // second place for the pill's shape, which is what this asserts against.
+  assert.match(PANEL, /radius=\{RUN_RADIUS\}/, 'the drawn radius is no longer the pill\'s own');
+  const radius = PANEL.match(/const RUN_RADIUS = (\d+);/)?.[1];
+  assert.ok(radius, 'RUN_RADIUS is gone — the pill has no stated curve');
+  assert.ok(
+    Number(radius) >= 100,
+    `RUN_RADIUS is ${radius}, which clamps to a non-pill radius on any button shorter than ${radius}px`,
+  );
   // ogl parses these two itself and cannot read a CSS var(), so they must be
   // literals — a "cleanup" that swapped them for var(--…) would blank the rim.
   const lineColor = PANEL.match(/lineColor="([^"]+)"/)[1];
@@ -58,15 +70,27 @@ test('the app keeps the button, the component keeps only the rim', () => {
   assert.match(baseColor, /^#[0-9a-f]{6}$/i, `baseColor must be a literal ogl can parse, got ${baseColor}`);
 });
 
-test('the integration block still out-specifies the component', () => {
-  // The block is what stops the component's presets replacing the app's button.
-  const block = COMPONENT_CSS.slice(COMPONENT_CSS.indexOf('HOST INTEGRATION'));
-  assert.ok(block.length > 0, 'the host integration block is gone from SpecularButton.css');
-  assert.match(block, /\.ai-toolbar \.specular-button \{/, 'the two-class override is gone — a preset would win the cascade again');
-  for (const prop of ['padding', 'font-size', 'box-shadow']) {
-    assert.match(block, new RegExp(`${prop}:`), `the override no longer restates ${prop}`);
+test('the app\'s own rule out-specifies the component, so a re-copy cannot repaint the button', () => {
+  // THE APP'S CHROME IS TWO CLASSES, and that is the whole protection. `main.jsx`
+  // imports styles.css first and this component's stylesheet arrives later, so a
+  // one-class app rule (`.ai-run`) would lose every tie to `.specular-button`
+  // presets, to `button.primary` and to the `--md` size preset at once. This is
+  // what used to force an override block into the vendored file.
+  const APP = read('../../src/styles.css');
+  const pill = APP.replace(/\/\*[\s\S]*?\*\//g, '').match(/\.ai-run\.primary\s*\{[^}]*\}/)?.[0];
+  assert.ok(pill, 'the Generate button is no longer stated as a two-class rule — the vendor presets win again');
+  for (const prop of ['padding', 'font-size', 'box-shadow', 'border', 'background-image']) {
+    assert.match(pill, new RegExp(`${prop}:`), `the pill no longer states its own ${prop}`);
   }
-  assert.match(block, /\.ai-toolbar \.specular-button:hover,/, 'the hover halo override is gone');
+  // ...and the vendored stylesheet must not claim the button back. A rule there
+  // is a second place that decides what renders (and it disappears the next time
+  // the published source is copied over the file); the fix belongs in the app's
+  // own rule, one class up.
+  const vendorRules = COMPONENT_CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(vendorRules, /\.ai-toolbar/, 'an override block is back in the vendored stylesheet');
+  assert.doesNotMatch(vendorRules, /\.ai-run/, 'the vendored stylesheet now styles the app\'s button');
+  // The component still owns the curve it draws, and the prop is what feeds it.
+  assert.match(vendorRules, /border-radius:\s*var\(--sb-radius\)/, 'the component no longer takes its radius from --sb-radius');
 });
 
 test('the vendored dependency is declared', () => {

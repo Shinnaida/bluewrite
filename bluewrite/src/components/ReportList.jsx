@@ -58,7 +58,10 @@ function ReportRow({ report, meta, flash, onOpen, onEdit, onMenu }) {
         aria-label={reportAriaLabel(report, meta)}
         title={reportHint(meta)}
         onClick={() => {
-          if (meta.canOpen) onOpen?.(report.id);
+          // The whole report, not just its id: what the click opens is the
+          // record's SHEET, and the page it lands on names the report from this
+          // very row (see the register's openSheet).
+          if (meta.canOpen) onOpen?.(report);
         }}
         onKeyDown={(e) => {
           // Shift+F10 / the Menu key is the keyboard's own "open the context

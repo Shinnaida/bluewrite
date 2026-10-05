@@ -32,7 +32,7 @@ import {
   untranslatedNotice,
   aiBlockedReason,
   finalizeLanguageWarning,
-  printLanguageLine,
+  languageShort,
   suggestedLanguage,
   languageHint,
   detectNarrativeLanguage,
@@ -60,7 +60,7 @@ const NON_ENGLISH = ['ceb', 'tl', 'mixed', 'other'];
 
 test('the five declarations are offered, English first, in plain words', () => {
   assert.deepEqual(
-    narrativeLanguageOptions().map((l) => l.code),
+    narrativeLanguageOptions()  .map((l) => l.code),
     ['en', 'ceb', 'tl', 'mixed', 'other'],
   );
   assert.equal(narrativeLanguageOptions()[0].code, DEFAULT_LANGUAGE);
@@ -71,11 +71,47 @@ test('the five declarations are offered, English first, in plain words', () => {
   }
 });
 
-test('a printed line has a short name, so D6 does not nest parentheses', () => {
+test('a one-line label has a short name, so it cannot nest parentheses', () => {
   const ceb = narrativeLanguageOptions().find((l) => l.code === 'ceb');
   assert.notEqual(ceb.short, ceb.label);
   assert.ok(!ceb.short.includes('('), 'the short form must not carry its own parentheses');
-  assert.match(printLanguageLine('ceb'), /\(not translated\)$/);
+  // ...and the module reads it from that same registry entry, so a label built
+  // for one line is built from the one place the languages live.
+  assert.equal(languageShort('ceb'), ceb.short);
+  // A code nobody knows is read as English — the same read-side fallback the
+  // label takes, so the two can never disagree about a junk row.
+  assert.equal(languageShort('bogus'), languageLabel('en'), 'a junk code is read as English, never invented');
+});
+
+// THE SHEET CARRIES NO LANGUAGE LINE (owner request, 2026-10-06). It used to:
+// a non-English narrative printed "Narrative language: Bisaya (not translated)"
+// under FACTS OF THE CASE (Phase 6 Stage 1, D6). The removal is guarded from
+// both ends — the helper is gone from the module AND no node mentions it in the
+// sheet — because either one alone can be undone by accident: a restored helper
+// looks harmless, and an unused node renders nothing until someone re-adds the
+// helper it calls.
+test('the printed sheet says nothing about the narrative\'s language', () => {
+  // Comments are stripped before the read, in both files: the record of WHY the
+  // line was removed names what was removed, and a comment saying "the language
+  // line is gone" must not be mistaken for the node coming back.
+  const code = (path) =>
+    readFileSync(resolve(root, path), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+
+  const module = code('src/lib/reportLanguages.js');
+  assert.doesNotMatch(module, /printLanguageLine/, 'the sheet-line helper is back in the language module');
+  assert.doesNotMatch(module, /Narrative language:/, 'the printed wording is back in the language module');
+
+  const sheet = code('src/components/ReportSheetBody.jsx');
+  assert.doesNotMatch(sheet, /pr-language/, 'the sheet renders the language line again');
+  assert.doesNotMatch(sheet, /languageLine|printLanguageLine/, 'the sheet computes a language line again');
+
+  // The statements the officer DOES read are not this line, and they stay: the
+  // appendix names the language of the text it reprints, and the module still
+  // carries the notice and the finalize warning.
+  assert.match(sheet, /appendixSourceLabel\(sourceLanguageLabel\)/, 'the appendix lost its own language wording with it');
+  assert.match(module, /untranslatedNotice|finalizeLanguageWarning/, 'the officer-facing language statements went with the sheet line');
 });
 
 test('isKnownLanguage accepts the five codes and nothing else', () => {
@@ -151,16 +187,6 @@ test('D5 — the finalize warning states it is untranslated and never blocks', (
     assert.match(w, /Confirm only if/);
     assert.doesNotMatch(w, /\b(cannot|must not|blocked|error)\b/i);
   }
-});
-
-test('D6 — the sheet says nothing for English', () => {
-  assert.equal(printLanguageLine('en'), null);
-  assert.equal(printLanguageLine(undefined), null);
-  assert.equal(printLanguageLine('bogus'), null);
-  assert.equal(printLanguageLine('ceb'), 'Narrative language: Bisaya (not translated)');
-  assert.equal(printLanguageLine('tl'), 'Narrative language: Tagalog (not translated)');
-  assert.equal(printLanguageLine('mixed'), 'Narrative language: Mixed (not translated)');
-  assert.equal(printLanguageLine('other'), 'Narrative language: Other (not translated)');
 });
 
 test('the selector hint says the one thing an officer could misread', () => {

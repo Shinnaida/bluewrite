@@ -161,6 +161,91 @@ export function tallyTotal(tally) {
 }
 
 // ===========================================================================
+// The RECENT folder
+// ===========================================================================
+
+/**
+ * "Recent" is ONE WEEK, stated once.
+ *
+ * The shelf's own note, the tally the folder counts from and the date its list
+ * is scoped by all read this number, so the week the officer is shown and the
+ * week they get cannot drift.
+ */
+export const RECENT_DAYS = 7;
+export const RECENT_LABEL = 'Recent';
+
+/**
+ * The glyph the Recent folder wears where a folder shows its identity.
+ *
+ * Recent is NOT an incident type — it is a window over the record — so it can
+ * never come from TYPE_ICON (which is type→glyph and is asserted to be total on
+ * the station's type list). Named here, beside the shelf that wears it, so the
+ * drawing is reachable from one place rather than being an unreferenced glyph.
+ */
+export const RECENT_ICON = 'clock';
+
+/**
+ * `YYYY-MM-DD`, seven days back, on the officer's own calendar.
+ *
+ * Built from the LOCAL date parts rather than from an ISO string slice: the
+ * register's date filter is a plain calendar date too, and `toISOString` would
+ * answer in UTC — which puts the window a day out for eight hours of every
+ * night in Cebu (UTC+8), the hours an officer is most likely to be filing.
+ */
+export function recentFrom(now = new Date()) {
+  const d = new Date(now.getTime());
+  d.setDate(d.getDate() - RECENT_DAYS);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * The from-date the Recent folder scopes its list and its count by.
+ *
+ * The LAST seven days — unless the officer's own From filter already starts
+ * later. That filter narrows every other shelf's numbers too (the tally is
+ * folded through the same pipeline), so it narrows this one rather than being
+ * overridden by it: a folder that counted reports the list inside it refuses to
+ * show would be the register lying to itself. ISO dates compare as strings, so
+ * the later of the two needs no parsing.
+ */
+export function recentWindowFrom(userFrom = '') {
+  const window = recentFrom();
+  const mine = String(userFrom ?? '').trim();
+  return mine && mine > window ? mine : window;
+}
+
+/**
+ * Put the Recent shelf at the top of the register's shelves.
+ *
+ * ONE folder, holding the week's work: every report the filters allow whose
+ * INCIDENT date falls inside the window, whatever its type and whatever its
+ * status. Splitting it by type would be the Draft/Submitted shelves again with a
+ * date filter on top, and the officer asked for the week in one place.
+ *
+ * An empty week still draws its shelf — like every other shelf, it says so
+ * rather than disappearing — but draws no folder in it: an empty folder is a
+ * promise the shelf cannot keep (the same rule `buildShelves` follows).
+ *
+ * @param {Array} shelves  from `buildShelves`
+ * @param {number} count   reports in the window, under the same filters
+ */
+export function withRecentShelf(shelves, count) {
+  const n = Number(count) || 0;
+  return [
+    {
+      key: 'recent',
+      label: RECENT_LABEL,
+      note: `Last ${RECENT_DAYS} days`,
+      recent: true,
+      total: n,
+      folders: n > 0 ? [{ type: RECENT_LABEL, count: n, recent: true }] : [],
+    },
+    ...(Array.isArray(shelves) ? shelves : []),
+  ];
+}
+
+// ===========================================================================
 // The sentences
 // ===========================================================================
 
@@ -197,12 +282,14 @@ export function folderTrail(listTitle, shelfLabel, type) {
  * What a report ROW in an opened folder is called out loud, and what it says on
  * hover.
  *
- * The three states mirror the register's own rules exactly (ReportsTable's
+ * The states mirror the register's own rules exactly (ReportsTable's
  * `rowCanOpen` / `rowLocked`), so a row can never announce an action the list
  * would refuse:
- *   - an ordinary report opens;
- *   - a finalized report, for anyone but an administrator, is LOCKED — the row
- *     says so instead of promising an open it will not perform;
+ *   - clicking a row VIEWS THE SHEET — for every status, because reading a
+ *     filed report is not an edit (owner request, 2026-10-06: a submitted
+ *     report is view-only, a draft also offers Edit draft);
+ *   - a finalized report a non-admin may not change says LOCKED — the sheet
+ *     still opens, and the row is muted to say the pencil is not part of it;
  *   - an archived report is restore-only, and only an administrator is offered
  *     even that.
  *
@@ -220,15 +307,19 @@ export function reportAriaLabel(
   if (archived) {
     return canRestore ? `Restore archived report ${parts}` : `Archived report ${parts}`;
   }
-  if (locked) return `Report ${parts} — finalized, locked`;
-  return canOpen ? `Open report ${parts}` : `Report ${parts}`;
+  if (!canOpen) return `Report ${parts}`;
+  return locked
+    ? `View the sheet for report ${parts} — finalized, locked`
+    : `View the sheet for report ${parts}`;
 }
 
 /** The row's `title`, in the same voice. */
 export function reportHint({ locked = false, archived = false, canOpen = true, canRestore = false } = {}) {
   if (archived) return canRestore ? 'Archived — use ⋮ to restore' : 'Archived report';
-  if (locked) return 'Finalized — locked. Use ⋮ for actions.';
-  return canOpen ? 'Click to open · use ⋮ for actions' : 'Use ⋮ for actions';
+  if (!canOpen) return 'Use ⋮ for actions';
+  return locked
+    ? 'Click to view the sheet · finalized — use ⋮ for actions'
+    : 'Click to view the sheet · use ⋮ for actions';
 }
 
 /**

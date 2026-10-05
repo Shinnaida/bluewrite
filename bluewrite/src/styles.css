@@ -1492,28 +1492,216 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   margin-bottom: 0.45rem;
 }
 
-/* Generate wears the app's own primary fill (`button.primary`) at the size this
-   row needs. It is NOT the sidebar's "New report" button (.side-new) any more:
-   that one carries the sidebar's own margins — 0.85rem above it and 1rem either
-   side — which inside a panel row are a gap and a stray indent.
+/* GENERATE IS A PILL (by request, 2026-10-05), and it is drawn as one object:
+   a fully round plate — a bright blue rim around a navy gradient that is lit
+   from its upper-left — carrying four parts in one row, left to right: the
+   assistant's mark (a page with its spark — see GenerateMark in
+   AiNarrativePanel.jsx), a hairline, the words, and the chevron that says the
+   press goes somewhere.
 
-   It is also the ONE control in the form that is not report data, so it is
-   given more weight than a report control: a taller hit area, the bold ink the
-   other buttons reserve for hover, and the accent's own halo. The halo is what
-   makes the row read as the assistant's even before the pointer reaches it —
-   the panel's left rail says "AI" in words (see .ai-assist), and this says it
-   on the button itself. */
-.ai-run {
+   WHY A PILL, when every other control in the workspace is a 3px-cornered
+   document plate: this is the only control on the screen that ASKS THE MACHINE
+   FOR SOMETHING rather than recording a fact, and the row it sits in is the
+   panel's one action. The shape is what separates it at a glance from the
+   report's own fields — the officer cannot mistake the round thing for a field.
+   It is the same argument the gold action plate on Home makes with colour.
+
+   `.ai-run.primary` AND NOT `.ai-run`. `button.primary` is (0,1,1) and carries
+   the fill (`background`), the border colour and the weight, so a one-class
+   rule could never paint a gradient over it — the shorthand would win on
+   specificity and reset `background-image` to none. Two classes beat it in
+   either order, which is the same tie-break `.ai-run.primary:hover` below uses.
+
+   THE PLATE IS LIGHT BLUE (by request, 2026-10-05). The pill was a navy plate
+   carrying white words; it is now a pale one — a soft blue that still reads as
+   the assistant's own object against the white card — and the accent is kept
+   as the RIM, so the control does not stop looking like a button. The two ends
+   of its gradient are named properties ON the pill (`--ai-run-plate` and
+   `--ai-run-plate-end`) rather than literals scattered through the declarations:
+   a colour this specific is ONE decision, and it belongs in one place — which
+   is also the place a theme would retint if this ever had to live in dark.
+
+   THE INK FOLLOWS THE PLATE, and that is the half a colour change gets wrong:
+   white on a light blue does not merely look weak, it fails (~1.9:1 on the
+   deeper end), so the label and its three marks all take the document's own
+   navy (--ir-navy). The ratios are COMPUTED in generatePill.test.mjs against
+   both ends of the gradient in both themes, rather than asserted in prose here.
+
+   THE SHEEN over it is the same layer as before, re-aimed: on navy it was a
+   diagonal band across the upper-left; on a pale plate the light reads as a
+   GLOSS along the top edge, so that is what `::before` paints, and its hover
+   step — "the plate lights up" — is still one animatable number. */
+.ai-run.primary {
+  /* The plate's own palette, in one place: the two ends of the light-blue
+     gradient, and the hairline that parts the mark from the words (dark here,
+     because a white rule on a pale plate is nothing at all). */
+  --ai-run-plate: #dce9ff;
+  --ai-run-plate-end: #aecbfb;
+  --ai-run-rule: rgba(11, 37, 69, 0.28);
+  position: relative;
+  /* The button is a flex box so its one child — the component's label slot — is
+     centred in it whatever that slot turns out to be. THE ROW OF PARTS IS THE
+     SLOT'S OWN (see the rule below): the mark, the hairline, the words and the
+     chevron are its children, not the button's, and `gap` on the button would
+     be a gap between a box and nothing. */
+  display: inline-flex;
+  align-items: center;
   margin: 0;
-  padding: 0.5rem 0.95rem;
-  font-size: 0.84rem;
-  box-shadow: 0 0 0 3px var(--cyan-bg);
+  /* THE PILL'S SIZE (reduced by request, 2026-10-05 — twice: "a little bit
+     smaller", then "a little bit more smaller"): one step down on every length
+     that sets it — the padding, the type, the mark's box, the hairline and the
+     chevron — so the shape, the proportions and the four parts are the SAME
+     OBJECT at ~37px tall instead of ~49 when it was first drawn. The RATIO is
+     what has to survive, not any one number: the label stays about a third of
+     the height and stays the widest thing on it, which is what keeps a small
+     pill from reading as a small version of a big button. */
+  padding: 0.5rem 0.8rem 0.5rem 0.9rem;
+  border: 2px solid var(--ir-blue);
+  /* THE PILL'S OWN CURVE, stated here rather than left to the rim component's
+     `--sb-radius`: this class is worn by a SECOND control as well — "Open the AI
+     draft", the way back into a draft the officer has hidden — which is a plain
+     <button> with no `radius` prop at all, and it was rendering with `button`'s
+     3px corner under a navy gradient: a half-restyled plate, the one thing a
+     shared class must never produce. 999px is the same number the panel passes
+     as the rim's `radius` (RUN_RADIUS), and both clamps — the browser's and the
+     SDF's — land on half the button's height, so the drawn edge and the CSS edge
+     are still one curve. */
+  border-radius: 999px;
+  /* The plate's base colour as well as its gradient: `button.primary` paints an
+     accent fill underneath, and a gradient is not a reason to leave a colour
+     behind it that nothing chose (it is what a forced-colors or
+     gradients-unavailable client would show). */
+  background-color: var(--ai-run-plate-end);
+  background-image: linear-gradient(104deg, var(--ai-run-plate) 0%, var(--ai-run-plate-end) 78%);
+  /* The plate's ink: the document's navy, which is the darkest ink the app
+     already owns and the one the mark, the hairline and the chevron all take
+     through `currentColor`. White was right on navy and is unreadable here
+     (~1.9:1 on the deeper end) — this is 9.3:1 on it and 8.1:1 on the dark
+     theme's navy. */
+  color: var(--ir-navy);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  /* THE LIFT. A blue glow under the pill rather than the 3px accent halo the
+     old plate wore at rest: the halo was how a small square button said "this
+     row is the assistant's", and the pill says it with its own mark and spark,
+     so a halo there would be a third blue ring around an object that already
+     has a rim. It comes BACK on hover/focus, where it is the app's affordance
+     and not decoration (see below). The component squashes the button on
+     `:active`, so `transform` is in the transition list here — without it the
+     press would snap. */
+  box-shadow: 0 10px 22px rgba(19, 62, 135, 0.34);
+  transition: box-shadow 160ms ease, transform 0.15s ease;
 }
-/* `button.primary:hover` clears the shadow at (0,2,1); this has to out-specify
-   it or the halo pops off the moment the officer points at the button. */
+
+/* THE ROW OF PARTS, on the component's label slot — which is where the four
+   children actually are (the fx canvas is the slot's sibling; see
+   SpecularButton.jsx). Flex rather than inline layout, because these are four
+   FIXED things on one axis: inline boxes ignore a stated width, which is how a
+   1px hairline ends up drawn at zero, and they answer to the baseline rather
+   than to the pill's centre. */
+.ai-run.primary .specular-button__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* THE GLOSS, on its own layer (see above). `border-radius: inherit` is what
+   keeps it inside the pill: the button itself must NOT clip its own overflow,
+   because the rim's canvas is drawn 20px past the edge (see the component) and
+   `overflow: hidden` would cut it off. */
+.ai-run.primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  /* Along the TOP edge and gone by the middle: a pale plate catches the light
+     at its upper lip, which is the same reading the diagonal band had on navy
+     (the light comes from the upper left — see the reference) in the one
+     direction this surface can still show it in. */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 58%);
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+/* The states. `button.primary:hover` repaints the fill AND clears the shadow at
+   (0,2,1); this is (0,3,0) for both, so the plate and its glow are the app's.
+   The plate lights up (the sheen comes to full), the glow deepens, and the
+   accent halo returns — on hover as the row's own colour, and on focus as the
+   affordance it has always been. */
+.ai-run.primary:hover::before,
+.ai-run.primary:focus-visible::before {
+  opacity: 1;
+}
 .ai-run.primary:hover,
 .ai-run.primary:focus-visible {
-  box-shadow: 0 0 0 3px var(--cyan-bg-strong);
+  box-shadow:
+    0 0 0 3px var(--cyan-bg-strong),
+    0 14px 26px rgba(19, 62, 135, 0.42);
+}
+/* Focus also states its own ring, rather than leaving it to the vendor preset's
+   (an outline mixed from the component's own text colour, measured against a
+   grey marketing button rather than this navy plate). */
+.ai-run.primary:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+/* THE MARK. Its box exists so the glyph is one flex item with a stated size
+   rather than a drawing that shifts the row when the font loads; the ink is the
+   button's own (`currentColor`), so it needs no colour of its own. */
+.ai-run-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+/* THE HAIRLINE between the mark and the words. It is the same device the sheet's
+   head band uses to part its mark from its office (a rule, not a gap): the mark
+   says WHO is writing and the words say WHAT is asked for, and the line keeps
+   the two from reading as one long label. It is the INK at a low alpha — the
+   plate is pale now, so the white rule this wore on navy would be nothing at
+   all, and a full-strength rule would be a second rim. The colour is one of the
+   pill's own named properties (`--ai-run-rule`, on the rule above), so the three
+   values that make this object live together. */
+.ai-run-rule {
+  flex: none;
+  width: 1px;
+  height: 1.2rem;
+  background: var(--ai-run-rule, rgba(11, 37, 69, 0.28));
+}
+
+/* The words, on one line: the pill is sized by its own content, and a wrapped
+   label inside a pill is a pill with a broken end. */
+.ai-run-text {
+  white-space: nowrap;
+}
+
+/* The chevron, in a box of its own for the same reason the mark is — and it is
+   the one part that MOVES, on the same argument as the arrow on Home's draft
+   card: "the press goes somewhere" is a direction, and a direction may lean. */
+.ai-run-chevron {
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ai-run-chevron {
+    transition: transform 200ms cubic-bezier(0.34, 1.32, 0.64, 1);
+  }
+  .ai-run.primary:hover .ai-run-chevron {
+    transform: translateX(3px);
+  }
+  /* The lift, and NOT while the press is happening: the component squashes the
+     button on `:active` (see SpecularButton.css), and a rule that out-specifies
+     that would trade the press for a hover that no longer means anything. */
+  .ai-run.primary:hover:not(:active) {
+    transform: translateY(-1px);
+  }
 }
 
 /* THE ⓘ EXPLANATION MARKER: one circle, a tooltip, and the same sentence in the
@@ -1771,10 +1959,23 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   align-items: center;
   gap: 0.55rem;
   text-align: center;
+  /* THE BLOCK ARRIVES RATHER THAN APPEARING. Every generation mounts this block
+     fresh, and what it replaces — an empty panel, or the draft the officer just
+     asked to redo — is a different screen: 6px of rise and a fade, once, in
+     0.34s. NOTHING LOOPS HERE. The wait has four moving parts and each of them
+     is doing a different job: the skeleton says what is coming (shape), the
+     dots say the assistant is still going (pulse), the phrase says which part
+     of the pipeline is running (step), and the bar says time is passing
+     (sweep). One arrival, four jobs — that division IS the animation design. */
+  animation: ai-loading-in 0.34s ease-out both;
   /* Reserve roughly the height of a short draft so the panel does not jump
      when the text lands in the same slot (see .ai-draft). */
   min-height: 12rem;
   justify-content: flex-start;
+}
+@keyframes ai-loading-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .ai-loading-head {
   margin: 0.15rem 0 0;
@@ -1792,21 +1993,45 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   gap: 0.55rem;
   margin: 0.3rem 0;
 }
+/* THE LINES ARE WRITTEN IN, THEN KEPT ALIVE — two animations per line, and the
+   difference between them is the point. The first runs ONCE (`both`) and draws
+   the bar out from its own left edge: the shape of the draft arriving, which is
+   what a skeleton is for. The second is the endless shimmer that says the panel
+   is still working while the request is out. The three lines are staggered by
+   0.12s, so they read as one movement travelling down the block rather than
+   three bars twitching in place.
+
+   THE SHIMMER'S PEAK IS THE APP'S OWN BLUE, not a second grey: a narrow band of
+   `--cyan` inside the same gradient that used to be two greys, so the highlight
+   crossing a line reads as a pen of the accent passing over it. BOTH ENDS of
+   the image are `--line`, which is what keeps the 220% tile seamless — the
+   sweep repeats as one continuous motion instead of showing a join. */
 .ai-skeleton-line {
   display: block;
   height: 0.6rem;
   border-radius: 4px;
-  background: linear-gradient(
+  background-image: linear-gradient(
     90deg,
     var(--line) 0%,
-    var(--line-bright) 40%,
-    var(--line) 80%
+    var(--line-bright) 34%,
+    var(--cyan) 50%,
+    var(--line-bright) 66%,
+    var(--line) 100%
   );
   background-size: 220% 100%;
-  animation: ai-skeleton-shimmer 1.6s ease-in-out infinite;
+  /* The line grows from its own left edge; the right cap squashing for half a
+     second is what "being drawn" looks like. */
+  transform-origin: left center;
+  animation:
+    ai-skeleton-write 0.5s cubic-bezier(0.22, 0.68, 0.2, 1) both,
+    ai-skeleton-shimmer 2s ease-in-out infinite;
 }
-.ai-skeleton-line:nth-child(2) { width: 92%; animation-delay: 0.14s; }
-.ai-skeleton-line--short { width: 58%; animation-delay: 0.28s; }
+.ai-skeleton-line:nth-child(2) { width: 92%; animation-delay: 0.12s; }
+.ai-skeleton-line--short { width: 58%; animation-delay: 0.24s; }
+@keyframes ai-skeleton-write {
+  from { transform: scaleX(0.06); opacity: 0.25; }
+  to { transform: scaleX(1); opacity: 1; }
+}
 @keyframes ai-skeleton-shimmer {
   from { background-position: 220% 0; }
   to { background-position: -80% 0; }
@@ -1827,24 +2052,52 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   font-size: 0.85rem;
   letter-spacing: 0.04em;
 }
+/* THE THINKING DOTS, and this is the one place in the app that draws them: the
+   three dots under the rotating phrase, pulsing in sequence. The phrase changes
+   every 3.2s (useRotatingStatus) and the panel is still in between swaps — the
+   dots are what covers that gap, and they cover it WITHOUT claiming progress,
+   which is why it is dots and not a percentage.
+
+   DRAWN, NOT TYPED: each dot is a sized box with a border-radius rather than a
+   "•" character, so all three are exactly equal and the lift is a transform on
+   an element that already has a size. `height` reserves the row, so the pulse —
+   which moves a dot up 2.5px — cannot shift the note underneath it. */
+.ai-dots {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 0.4rem;
+  margin: 0;
+}
 .ai-dots span {
-  display: inline-block;
-  color: var(--cyan);
+  display: block;
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 50%;
+  background: var(--cyan);
   animation: ai-dot-pulse 1.2s ease-in-out infinite;
 }
 .ai-dots span:nth-child(2) { animation-delay: 0.2s; }
 .ai-dots span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes ai-dot-pulse {
   0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
-  30% { opacity: 1; transform: translateY(-3px); }
+  30% { opacity: 1; transform: translateY(-2.5px); }
 }
 .ai-loading-sub {
   margin: 0;
   color: var(--cyan-dim);
   font-size: 0.78rem;
 }
-/* Indeterminate progress bar: a cyan sweep loops across the track so the
-   panel keeps looking alive during the long (up to 20s) request. */
+/* Indeterminate progress bar: a COMET, and it is still indeterminate on
+   purpose — the panel has no percentage to show and will not invent one. The
+   band fades in at its tail, runs solid and ends on a lit tip, so the bar reads
+   as something travelling the length of the track rather than as a segment of
+   progress that stops at a number.
+
+   THE SCANNING TIP IS THE FILL'S OWN LEADING EDGE — a 2px lit head that rides
+   the band's transform because it is a pseudo-element OF the band. One
+   animation, one timer: a head animated on its own clock would drift out of
+   step with its own tail the moment either one was retimed. */
 .ai-loading-bar {
   width: 100%;
   height: 4px;
@@ -1853,26 +2106,71 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   overflow: hidden;
 }
 .ai-loading-bar-fill {
-  width: 40%;
+  position: relative;
+  width: 42%;
   height: 100%;
   border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-  animation: ai-bar-sweep 1.4s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--cyan) 52%,
+    var(--cyan) 94%,
+    transparent 100%
+  );
+  animation: ai-bar-sweep 1.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+.ai-loading-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 6%;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan-bg), 0 0 2px var(--cyan);
+  opacity: 0.9;
 }
 @keyframes ai-bar-sweep {
   from { transform: translateX(-100%); }
   to { transform: translateX(350%); }
 }
+/* ---- The still frame -----------------------------------------------------
+   Every moving part above stops here, AND WHAT IS LEFT IS A COMPOSED FRAME
+   rather than a paused one. That distinction is the whole of this block.
+
+   The bar is where it matters most. A sweeping 42% band has its rest position
+   at the track's own left edge, so freezing it leaves a stub that reads as a
+   download that stalled at 40% — the one thing an officer must never be shown
+   while the machine is working. With the sweep off, the fill is drawn END TO
+   END with faded ends: the shape of "working, amount unknown" with no motion
+   at all. The skeleton's lines are DRAWN IN FULL (never half-written, which
+   would read as a stall too), the dots stay lit, and the arrival animation is
+   dropped — a block that fades up is motion like any other. */
 @media (prefers-reduced-motion: reduce) {
+  .ai-loading { animation: none; }
   .ai-spinner { animation-duration: 2.4s; }
-  .ai-dots span, .ai-loading-bar-fill { animation: none; }
-  .ai-dots span { opacity: 0.8; }
   /* The skeleton stops shimmering and becomes three steady, dimmed bars. */
   .ai-skeleton-line {
     animation: none;
+    transform: none;
     background: var(--line-bright);
     opacity: 0.7;
   }
+  .ai-dots span { animation: none; opacity: 0.55; }
+  .ai-loading-bar-fill {
+    animation: none;
+    transform: none;
+    width: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--cyan) 24%,
+      var(--cyan) 76%,
+      transparent 100%
+    );
+  }
+  .ai-loading-bar-fill::after { display: none; }
 }
 
 /* Docked AI panel (Claude-sidebar style): while the panel is open in full
@@ -3532,22 +3830,19 @@ body.profile-panel-open {
    when a draft starts typing into it, so it has to land UNDER the sticky top
    bar rather than behind it. */
 .ai-inline {
+  /* THE ANCHOR FOR THE FLOATING PREVIEW CONTROL (see .ai-sheet-bar): the chip
+     is taken out of the card's flow and pinned to this box's top-right corner,
+     so the page underneath it starts at the card's own top edge. Relative here
+     rather than on the frame, deliberately — the frame is a SCROLLER, and an
+     absolutely positioned child of a scroller scrolls away with the letter it
+     is meant to stay over. */
+  position: relative;
   margin-top: 0.7rem;
   scroll-margin-top: 5.5rem;
 }
-/* The wait's own way out, where the title bar's ✕ used to be. */
-.ai-hide-draft {
-  margin-top: 0.7rem;
-  padding: 0.3rem 0.9rem;
-  border: 1px solid var(--line-bright);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--steel, #8fa3c8);
-  font: inherit;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-.ai-hide-draft:hover { border-color: var(--cyan); color: var(--cyan); }
+/* (`.ai-hide-draft` — the wait's Hide button, where the title bar's ✕ used to
+   be — went with the control on owner request, 2026-10-06: the wait carries no
+   control at all, and Escape closes the body. See AiNarrativePanel.jsx.) */
 .ai-actions > button {
   flex: 1 1 10rem;
   min-width: 0;
@@ -3676,15 +3971,14 @@ body.profile-panel-open {
    portal and the inline reveal draw — so the page being reviewed and the page
    that prints cannot drift.
 
-   TASK 10 — it is a DOCUMENT VIEWER, not a growing block — but a TALL one
-   (owner request, 2026-10-04): the window is sized so the whole 8.5 × 11in
-   leaf is on screen at the width-fit zoom in the common case. The viewport
-   bound and the frame's own scrollbar still take over on short screens and
-   for a letter that runs past its leaf, and the title, dismissal and review
-   controls stay reachable; the letter scrolls in its own frame instead of
-   making the whole report jump. The page is centered in
-   the frame with even margins, on a muted surface, so it reads as paper lying on
-   a desk rather than as a grey box in a card.
+   TASK 10 — it is a DOCUMENT VIEWER, not a growing block: the frame is a window
+   of a fixed height, and the page on it is a fixed 50% (see the rule below), so
+   the letter scrolls IN ITS OWN FRAME instead of making the whole report jump.
+   The frame scrolls both ways, deliberately: the size is the page's, stated by
+   the stylesheet, and the frame's job is to reach whatever a page that size
+   occupies. The page is centered in the frame with even margins, on a muted
+   surface, so it reads as paper lying on a desk rather than as a grey box in a
+   card.
 
    The typewriter is kept in view by the component and not by this rule: the
    frame is moved as the sequence lands (ReportSheetBody's `onProgress` →
@@ -3699,28 +3993,33 @@ body.profile-panel-open {
    the page from jumping sideways the moment the bar appears. */
 .ai-sheet-preview {
   margin-top: 0.6rem;
+  /* BOTH BARS, because the page has a fixed size and this frame does not own it
+     (see `.ai-sheet-preview .print-sheet` below): a 50% leaf is 408px wide and
+     528px tall, which is wider than a narrow column and taller than any card,
+     so reaching the whole sheet is this frame's job. */
+  overflow-x: auto;
   /* THE CARD IS THE VIEWER, SO THE FRAME DRAWS NOTHING (owner request,
      2026-10-04): no border, no surface, no rounding, no inner box. It exists
-     to give the page ROOM and to hold it at the one scale that fits the WHOLE
-     leaf inside that room — see the `--ai-sheet-zoom` effect in
-     AiNarrativePanel.jsx, which measures the card's content box and the
-     page's own height. The paper's edge and shadow are the only box the
-     officer sees.
+     to give the page ROOM and to scroll to whatever a page at its fixed size
+     needs. The paper's edge and shadow are the only box the officer sees.
 
      The height is what the card has to give: near the whole window where the
      panel is its own card, and the leftover height where the assistant's box
      is fixed (the document format's rule in incident-report.css). A small
-     padding is kept so the page's shadow is not clipped; it is measured out
-     of the fit, not left to eat into it. */
+     padding is kept so the page's shadow is not clipped. */
   height: clamp(24rem, 92dvh, 72rem);
-  overflow-x: hidden;
-  /* The fallback, not the normal case: the fit keeps an ordinary page whole,
-     and only a letter that runs past its leaf has a tail to scroll to. */
   overflow-y: auto;
   overscroll-behavior-y: contain;
   padding: 0.5rem;
   display: flex;
-  justify-content: center; /* centered like a print preview, not edge-flush */
+  /* `flex-start`, with the CENTERING done by the paper's own auto margins (see
+     the rule below), and that is a correctness point rather than a style one: a
+     flex container that centres overflowing content puts the START edge out of
+     reach — the left-hand column of a 50% leaf in a narrower column could not
+     be scrolled to at all. Auto margins centre when there is room and collapse
+     to zero when there is not, which is exactly the behaviour a scrollable
+     viewer needs. */
+  justify-content: flex-start;
   align-items: flex-start;
   scrollbar-width: thin;
   scrollbar-color: rgba(15, 23, 42, 0.38) transparent;
@@ -3748,28 +4047,25 @@ body.profile-panel-open {
 
    SCOPED TO THE PANEL, deliberately — the print portal and the inline reveal
    keep the sheet's own behaviour, which is the very thing this now matches. */
-/* THE PAGE IS AS BIG AS THE FIELD IS WIDE, AND THE FIELD SCROLLS TO THE REST.
+/* THE CARD'S PAGE IS A FLAT 50%, AND THE FRAME SCROLLS TO THE REST.
 
    The leaf is drawn at its own size — 8.5 × 11in, the station's paper — and
-   scaled by a factor the component MEASURES: the ratio of this frame's content
-   box to the page's own width, which CSS cannot express (one length may not be
-   divided by another). See the `--ai-sheet-zoom` effect in
-   AiNarrativePanel.jsx; the fallback here is the factor the panel's default
-   width lands on, so the first paint before the measurement is never an
-   unstyled full-size page in a small box.
+   scaled by ONE FIXED factor, stated right here. It used to be MEASURED to fit
+   the whole leaf inside whatever room the card had, and to have steppers beside
+   it; both are gone (owner request, 2026-10-05). A single size means the page
+   reads the same in every format and every window — the assistant's card is a
+   column in one format and a wide block in another, and a page that changed
+   size with the column was a different page each time. The one control the card
+   keeps, Preview, is what answers a page too small to read.
+
+   NO JAVASCRIPT SIZES THIS ANY MORE. A fixed size can be wider or taller than
+   the frame, so the FRAME owns both scrollbars and the page keeps its scale —
+   the ResizeObserver that used to re-fit the page on every box change is gone
+   with the fit, rather than left to fight this rule.
 
    `width: 8.5in`, not `min(100%, 8.5in)`: a percentage and the zoom would each
    take a bite of the same scaling, and the page would come out at a fraction of
-   the field it is supposed to fill.
-
-   Fitting the HEIGHT as well — drawing the whole leaf at once, print-preview
-   style, so the NOTED BY block sits on screen — is the other answer, and it was
-   in place before this: it makes the letter about 0.38 of the page's own size,
-   a page glanced at rather than read. The measure here is the width, and the
-   frame below keeps its own scrollbar, so the foot of the page — the Recorded by
-   and IOC lines and the NOTED BY block — is reached the way any long page is.
-   `overflow-x` is hidden on the frame: a page that fills the width exactly must
-   never draw a horizontal bar for a rounding error. */
+   the 50% it is supposed to be. */
 .ai-sheet-preview .print-sheet {
   flex: 0 0 auto;
   width: 8.5in;
@@ -3778,7 +4074,11 @@ body.profile-panel-open {
   min-height: 11in;
   border: 1px solid rgba(0, 0, 0, 0.14);
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
-  zoom: var(--ai-sheet-zoom, 0.62);
+  zoom: 0.5;
+  /* Centred like a print preview, not edge-flush — and it is the PAPER that
+     centres itself, so an overflowing page keeps its left edge reachable (see
+     the frame's note above). */
+  margin: 0 auto;
 }
 @media (max-width: 700px) {
   .ai-sheet-preview {
@@ -3804,6 +4104,242 @@ body.profile-panel-open {
    it types, since a click finishes the reveal early. `prefers-reduced-motion`
    shows the finished page immediately, which the component itself handles. */
 .ai-sheet-preview .pr-sheet-typing { cursor: pointer; }
+
+/* ---- The Preview control, and the screen it opens -------------------------
+   A sheet of short bond drawn at 50% in a column is a preview of a page, and
+   the officer who wants to read the page asks for it at the paper: the control
+   sits directly ABOVE the leaf, right-aligned, so the button and the thing it
+   enlarges are one object on screen. It is one button and not a bar with a
+   title on it — the title bar was deliberately removed from this card (see the
+   note above .ai-inline), and this brings back a control, not the box it used
+   to sit in.
+
+   THE SCREEN IT OPENS IS THE SAME PAGE AND NOTHING ELSE (owner request,
+   2026-10-05). The report is portaled to document.body under `.sheet-fullscreen`
+   — the print portal's own `--overlay-deep` scrim, the app simply behind it —
+   and the only controls on it are the size ladder and the way out, floating
+   clear of the paper in the corner. No card, no review row, no Print, no title:
+   whatever is on this screen is the document.
+
+   THE PAGE IS FITTED TO THE SCREEN BY ONE MEASURED FACTOR (see the
+   `--sheet-full-zoom` effect in AiNarrativePanel): the whole 8.5 × 11in leaf at
+   the largest scale the screen can hold, never magnified past its own size, and
+   the desk scrolls only for a letter that runs past even that floor. The page
+   is drawn at its own 8.5in for the same reason the card's is: a percentage and
+   the zoom would each take a bite of the same scaling. The ladder beside the
+   way out is what takes the page from that overview to a size it can be read
+   at, which is the job the card's own steppers used to do before its page
+   became fixed. */
+/* THE CHIP FLOATS OVER THE PAGE (owner request, 2026-10-05: "so it won't take so
+   much space"). It was a ROW above the frame — one control's height of the
+   card's budget, spent on every draft, which is a line of the letter the officer
+   cannot read on a short panel. The row is gone from the flow: the bar is
+   positioned against the CARD's top-right corner (see `.ai-inline`), so the
+   frame starts at the card's own top edge and the paper gets all of it.
+
+   IT FLOATS RATHER THAN SCROLLS. The anchor is the card, not the frame — a
+   positioned child of the scroller would ride away with a long letter — so the
+   control is where the officer last saw it however far down the page they are.
+   And it is painted ABOVE the paper (z-index), because that is what floating
+   means — a control that ends up under the letter is not a floating one.
+
+   THE CORNER IS THE ONE IT ALREADY HELD: directly over the top-right of the
+   leaf. What it covers there is the sheet's own inch of top MARGIN, which at the
+   card's 50% is ~48px of blank paper under a ~26px chip — the letterhead and the
+   station's seal sit below it. */
+.ai-sheet-bar {
+  position: absolute;
+  top: 0.5rem;
+  /* Wider than the top inset on purpose: the frame keeps its own scrollbar at
+     its right edge — the 10px bar written out below
+     (`.ai-sheet-preview::-webkit-scrollbar`) — and a chip sitting on top of a
+     scrollbar is a control nobody can scroll past. 1.1rem clears that bar at
+     the default root size, and stays clear under `scrollbar-width: thin` too. */
+  right: 1.1rem;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+/* ---- The size controls (the full-screen preview) --------------------------
+   Fit is the overview and 100% is the sheet at the size it prints; the ladder
+   between them and above is in AiNarrativePanel.jsx. The readout sits BETWEEN
+   the steppers, the way every document viewer does it, so "smaller" and
+   "larger" are on the sides they act on and the number they act from is in the
+   middle. */
+.ai-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.ai-zoom-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--steel, #8fa3c8);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.ai-zoom-btn:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
+/* The end of the ladder. Dimmed rather than removed: a stepper that loses a
+   button at the end looks like it broke, and the officer is owed the shape of
+   the control as much as its state. */
+.ai-zoom-btn:disabled { opacity: 0.38; cursor: default; }
+.ai-zoom-value {
+  min-width: 3.1rem;
+  text-align: center;
+  font-family: var(--font-hud, monospace);
+  font-size: 0.78rem;
+  /* Tabular figures: the readout steps 100% → 125% and a proportional face
+     would make the control twitch sideways as it does. */
+  font-variant-numeric: tabular-nums;
+  color: var(--steel, #8fa3c8);
+}
+.ai-zoom-fit {
+  margin-left: 0.2rem;
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--steel, #8fa3c8);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.ai-zoom-fit:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* THE CHIP ITSELF, and it is drawn FOR THE PAPER rather than for the theme,
+   because that is what it lies on: the leaf is white with dark ink in BOTH
+   themes (dark-theme.css deliberately does not touch the print sheet — a printed
+   report is white paper). A `--steel` control with no surface of its own was
+   right while it sat on the card's panel; over the letter it would be a word
+   printed on the report, and in dark it would be a light grey on white. So it
+   takes the sheet's own ink and hairline, plus the lift that says it is NOT part
+   of the document — the same shadow language as the paper's own edge. */
+.ai-sheet-full {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.7rem;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 3px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 0.78rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+/* Hover darkens toward the paper's own black rather than to the accent: the
+   accent is a light blue in dark theme and would measure ~1.8:1 on this white
+   chip — the one place in the app where the ink has to answer for the PAPER
+   instead of for the theme. */
+.ai-sheet-full:hover {
+  border-color: rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+}
+/* And the focus ring follows the same rule: the global ring is the accent, which
+   is a pale blue in dark theme. */
+.ai-sheet-full:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+
+.sheet-fullscreen {
+  position: fixed;
+  inset: 0;
+  /* Above the print portal (200), which is the highest thing the app docks:
+     this screen is asked for on top of everything, or it is not full screen. */
+  z-index: 300;
+  background: var(--overlay-deep);
+  display: flex;
+  flex-direction: column;
+  padding: 0.85rem clamp(0.6rem, 2.5vw, 1.75rem) 1rem;
+}
+/* The desk the paper lies on. It scrolls — and only ever for a letter that needs
+   more paper than the fit can show at its floor — so the sheet is centered and
+   the screen itself never moves. */
+.sheet-fullscreen-desk {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0.15rem;
+}
+.sheet-fullscreen-desk .print-sheet {
+  flex: 0 0 auto;
+  width: 8.5in;
+  min-height: 11in;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.5);
+  zoom: var(--sheet-full-zoom, 0.62);
+}
+/* THE CONTROLS ON THE SCREEN: the size ladder and the way out, in the corner
+   and clear of the paper. They read on the scrim AND on the page, because on a
+   narrow screen the paper fills the width and there is no scrim left beside
+   it — which is also why the ladder wears this light-on-dark treatment here
+   rather than the card's steel-on-panel one. Fixed, so they never scroll away
+   with a long letter. */
+.sheet-fullscreen-controls {
+  position: fixed;
+  top: 0.75rem;
+  right: clamp(0.6rem, 2.5vw, 1.75rem);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.sheet-fullscreen-controls .ai-zoom-btn,
+.sheet-fullscreen-controls .ai-zoom-fit {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(8, 14, 26, 0.74);
+  color: #f2f5fb;
+}
+.sheet-fullscreen-controls .ai-zoom-btn:hover:not(:disabled),
+.sheet-fullscreen-controls .ai-zoom-fit:hover {
+  border-color: #ffffff;
+  background: rgba(8, 14, 26, 0.94);
+}
+.sheet-fullscreen-controls .ai-zoom-value { color: #f2f5fb; }
+.sheet-fullscreen-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(8, 14, 26, 0.74);
+  color: #f2f5fb;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.sheet-fullscreen-close:hover {
+  border-color: #ffffff;
+  background: rgba(8, 14, 26, 0.94);
+}
+@media (max-width: 700px) {
+  .sheet-fullscreen { padding: 0.6rem 0.45rem 0.75rem; }
+  /* The corner keeps both controls at every width — a preview with no way out
+     or no way to enlarge would be a screen the officer has to leave the hard
+     way (Escape) — so the row is what gives, not the controls. */
+  .sheet-fullscreen-controls { gap: 0.3rem; }
+  .sheet-fullscreen-controls .ai-zoom-value { min-width: 2.6rem; }
+  .sheet-fullscreen-close { padding: 0.35rem 0.6rem; }
+}
 
 .ai-draft {
   /* Large, easy-to-read reading experience for the officer reviewing the
@@ -4574,56 +5110,65 @@ button.dash-kpi--link:focus-visible {
 .field-hint { margin: 0.3rem 0 0; font-size: 0.78rem; color: var(--cyan-dim); }
 
 /* ---- Reports toolbar (Phase 2: search/filter/sort) ----
-   ONE row: the search field grows to fill whatever the fixed-width filters
-   leave, so search + every filter + the row actions sit on a single line at
-   desktop widths. Below ~1100px the row wraps instead of squashing the
-   inputs — a wrap is the graceful failure, not a second deliberate row. */
+   THE SEARCH BOX OVER A LABELLED GRID OF FILTERS (owner request, 2026-10-06).
+   One row could not hold six filters: the two date pickers and the sort menu
+   ran into each other once the search box had taken its share, and a control
+   with a value in it said nothing about WHICH filter that value belonged to.
+   So the search box keeps a row of its own — it is the one control an officer
+   uses without looking — and every filter sits in a cell under its own caption.
+
+   The grid fits as many columns as the card can hold and reflows on its own:
+   no breakpoint names a count, and `min-width: 0` on the cell is what lets the
+   control shrink inside its column instead of pushing the row wider (the same
+   rule the old flex row needed and could not get). */
 .reports-toolbar {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.75rem;
   margin-bottom: 1rem;
 }
-.reports-toolbar-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
+.reports-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.6rem 0.7rem;
+  align-items: end;
 }
-.reports-toolbar input,
-.reports-toolbar select {
-  width: auto;
+.reports-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   min-width: 0;
 }
-/* Compact controls: the filters have to share one line, so they run tighter
-   than a form field on the report screen. */
+.reports-filter__label {
+  font-family: var(--font-hud);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+}
+.reports-filter input,
+.reports-filter select {
+  /* The cell is the width: a date field and a select are the same size as
+     their neighbours now, which is most of what "organized" means here. */
+  width: 100%;
+  min-width: 0;
+}
+/* Compact controls: these are filters on a list, not fields on a report. */
 .reports-toolbar input,
 .reports-toolbar select,
-.reports-toolbar-row > button,
-.reports-toolbar-row .button-link {
+.reports-toolbar .button-link {
   padding: 0.42rem 0.6rem;
   font-size: 0.85rem;
 }
-.reports-search {
-  display: flex;
-  /* Grow to absorb the slack, shrink last: the filters keep their natural
-     width while the text field gives up space first. It holds the field alone
-     now — the Search button that used to sit beside it is gone (the search
-     follows what is typed), so there is no gap to keep. */
-  flex: 1 1 12rem;
-  min-width: 8.5rem;
-}
-.reports-search input { flex: 1; min-width: 6rem; }
-.reports-toolbar select {
-  flex: 0 1 auto;
-  max-width: 12rem;
-}
-.reports-toolbar input[type='date'] {
-  /* Fixed width: a date field never benefits from extra room, and the slack
-     it used to absorb is what the search box and the actions need. */
-  flex: 0 0 8.375rem;
-  min-width: 8.375rem;
-  max-width: 8.375rem;
+.reports-search { display: flex; }
+.reports-search input { flex: 1; min-width: 0; }
+/* The clear control rides in the grid, aligned with the CONTROLS rather than
+   with the captions above them — it clears the filters it lines up with. */
+.reports-filter__clear {
+  justify-self: start;
+  align-self: end;
+  white-space: nowrap;
 }
 
 /* ---- Print-ready report view (Phase 2, UC-015/016) ----
@@ -4772,17 +5317,9 @@ button.dash-kpi--link:focus-visible {
   border-bottom: 1px solid #111;
 }
 
-/* Phase 6 Stage 1 (D6) — the "not translated" line on the sheet. Rendered ONLY
-   for a narrative declared as something other than English (see ReportPrint),
-   so an English report's sheet has exactly the nodes it had before this phase.
-   Unemphatic on purpose: it is a fact about the record, not a warning printed
-   on the document. */
-.pr-language {
-  margin: 0 0 1.5rem;
-  font-size: 8.5pt;
-  font-style: italic;
-  color: #444;
-}
+/* (The `.pr-language` block went with the sheet's "Narrative language: … (not
+   translated)" line — owner request, 2026-10-06, see ReportSheetBody.jsx. A
+   rule for a node that is never rendered is a rule that reads as a feature.) */
 
 .pr-narrative {
   text-align: justify;
@@ -4900,6 +5437,40 @@ button.dash-kpi--link:focus-visible {
 .print-actions button { border-color: #444; color: #111; background: #f3f4f6; }
 .print-actions button.primary { background: #111; color: #fff; border-color: #111; }
 
+/* ---- The sheet as a PAGE (RegisterPrint's `variant="page"`) ----
+   The register shows one report by standing the printed sheet INSIDE the page
+   rather than portaling it over the app (owner request, 2026-10-06). Same paper
+   (.print-sheet), same component, same fetch — a different frame:
+
+     · not portaled, so the app's own chrome stays around it;
+     · the print body class is NOT taken (`body.print-sheet-open` hides `.shell`
+       wholesale, which is how print shows the sheet alone — a page wearing it
+       would hide the page it is standing in);
+     · a column, so the bar above the paper keeps its height while the desk of
+       paper below scrolls. That is why the scroll lives on the desk and not on
+       the page: the officer can always see which record they are reading. */
+.sheet-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+.sheet-page__scroll {
+  /* NOT its own scroller: the app already scrolls .main, and a second scroll
+     region inside it would trap the wheel over the paper. The bar sticks, so
+     the record stays named while the page scrolls under it. */
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-sunken);
+}
+/* A page is not a dialog: the paper keeps its shadow, and the desk around it
+   is the palette's own sunken surface rather than the overlay's scrim. */
+.sheet-page .print-sheet { box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
+
 @media print {
   /* The station's paper, stated to the print engine, so a report is laid out on
      SHORT BOND (8.5 × 11 in / Letter) rather than on whatever the workstation's
@@ -4952,6 +5523,12 @@ button.dash-kpi--link:focus-visible {
     min-height: 0;
   }
   .no-print { display: none !important; }
+  /* The fullscreen preview is a SCREEN, not a sheet of paper. Paper goes through
+     the print portal, which prints the record's own copy — with its trail line
+     and its translation appendix — rather than whatever happened to be on the
+     desk at the time. Ctrl+P with the preview up therefore prints the app
+     exactly as it always did, instead of a draft posing as the filed report. */
+  .sheet-fullscreen { display: none !important; }
 }
 
 /* Screen: the portaled sheet sits above everything, including the AI panel */
@@ -4981,7 +5558,6 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 @media (max-width: 720px) {
   .main { padding: 1rem; }
   table { min-width: 34rem; }
-  .reports-toolbar input[type='date'] { flex: 1 1 8rem; }
 }
 
 @media (max-width: 480px) {

@@ -201,7 +201,13 @@ test('picking a line out is a state, and its motion is optional', () => {
   const muted = rule('.dash-rank__line.is-muted');
   assert.match(focused, /stroke-width:\s*[\d.]+/, 'width is what separates the chosen line — six strokes at 0.4 still read as six');
   assert.match(muted, /opacity:\s*0\.4/, 'the dashboard recession value, not a new one');
-  const block = styles.match(/@media \(prefers-reduced-motion: no-preference\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  // EVERY no-preference block, not only the first: this sheet carries more than
+  // one (the assistant's Generate pill has its own motion), and the fact being
+  // asserted is that the rank lines' transition lives INSIDE such a block — not
+  // that no other one was written before it.
+  const blocks = [...styles.matchAll(/@media \(prefers-reduced-motion: no-preference\) \{([\s\S]*?)\n\}/g)].map((m) => m[1]);
+  assert.ok(blocks.length > 0, 'the sheet states no reduced-motion branch at all');
+  const block = blocks.find((b) => b.includes('.dash-rank__line')) ?? '';
   assert.match(block, /\.dash-rank__line \{ transition:/);
   // The recession survives without motion: it is a state, so it lives outside the query.
   assert.ok(

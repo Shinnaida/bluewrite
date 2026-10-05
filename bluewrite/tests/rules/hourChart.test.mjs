@@ -150,7 +150,13 @@ test('the strip is one grid of 24 columns, scaled by the payload', () => {
 });
 
 test('the strip\'s motion is optional, its state is not', () => {
-  const block = styles.match(/@media \(prefers-reduced-motion: no-preference\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  // EVERY no-preference block, not only the first: this sheet has more than one
+  // (the assistant's Generate pill carries its own motion), and the fact being
+  // asserted is that the strip's transitions live INSIDE such a block, not that
+  // no other one was written before it.
+  const blocks = [...styles.matchAll(/@media \(prefers-reduced-motion: no-preference\) \{([\s\S]*?)\n\}/g)].map((m) => m[1]);
+  assert.ok(blocks.length > 0, 'the sheet states no reduced-motion branch at all');
+  const block = blocks.find((b) => b.includes('.dash-hour')) ?? '';
   assert.match(block, /\.dash-hour \{ transition: background-color/);
   assert.match(block, /\.dash-hour__bar \{ transition: opacity/);
   // The track and the brightening are STATES, so they live outside the query — a

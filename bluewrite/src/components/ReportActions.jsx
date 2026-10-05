@@ -181,6 +181,18 @@ export function useReportRowActions({
     }
   }
 
+  /**
+   * The print dialog — the overlay variant of the sheet.
+   *
+   * Exposed because the register now shows the sheet as a PAGE of its own, and a
+   * page cannot print itself: print CSS hides `.shell` while the overlay's body
+   * class is on, and that is where the page stands (see ReportPrint's `variant`).
+   * So the page's bar hands the printing back to the one surface built for it.
+   */
+  function print(r) {
+    setPrintingId(r.id);
+  }
+
   /** The actions this row offers, in menu order. */
   function items(r) {
     if (showArchived) {
@@ -284,5 +296,5 @@ export function useReportRowActions({
     </>
   );
 
-  return { items, ask, askArchive, askRestore, openHistory, dialogs };
+  return { items, ask, askArchive, askRestore, openHistory, print, dialogs };
 }

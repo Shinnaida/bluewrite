@@ -320,10 +320,22 @@ test('a primary button is a primary button, and a destructive one says so', asyn
   // identical weight, and every destructive action lost its red. Specificity beat
   // intent, silently, in the two places where the difference IS the message. The
   // exclusions are what let the variants through, and both are asserted.
-  const chain = css.slice(css.indexOf('.ir-body button:not('), css.indexOf('.ir-body button.primary:hover'));
+  //
+  // THE BOUNDS ARE ASSERTED TOO, because this test reads a SLICE of the sheet and
+  // `indexOf` answers -1 for a moved anchor — which would make the slice the
+  // whole file and let the assertions below pass for the wrong reason, silently.
+  const from = css.indexOf('.ir-body button:not(');
+  const to = css.indexOf('.ir-body button.primary:not(.ai-run):hover');
+  assert.ok(from >= 0, 'the neutral .ir-body button treatment is gone from the sheet');
+  assert.ok(to > from, 'the variant chain moved — re-anchor this test rather than reading the whole sheet');
+  const chain = css.slice(from, to);
   assert.equal((chain.match(/:not\(\.primary\):not\(\.danger\)/g) || []).length, 2);
   assert.match(chain, /\.ir-body button\.danger \{/);
-  assert.match(chain, /\.ir-body button\.primary \{/);
+  // The primary variant NAMES the AI panel's pill as the one button it does not
+  // paint (see the note on the rule): `background` here is a SHORTHAND, so the
+  // pill's gradient is not repainted by it — it is erased, and nothing about that
+  // shows up in a diff.
+  assert.match(chain, /\.ir-body button\.primary:not\(\.ai-run\) \{/);
 });
 
 test('the directory’s own rules: one line per cell, and an absence in words', async () => {

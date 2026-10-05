@@ -86,38 +86,29 @@
 }
 
 /* ---- HOST INTEGRATION: the app's Generate action -------------------------
-   WHY THIS BLOCK EXISTS, and it is a cascade fact rather than a taste.
-   `main.jsx` imports styles.css FIRST; this file arrives later, through the
-   component graph. At equal specificity the later rule wins, so the component's
-   own padding, font-size and drop shadow would silently REPLACE the form
-   button's — including the 3px accent halo that `.ai-run` draws and widens on
-   hover/focus, which is that button's whole focus affordance (see the note on
-   `.ai-run.primary:hover` in styles.css, which had to out-specify `button.primary`
-   for exactly this reason).
+   THIS FILE ADDS NOTHING TO THE APP'S BUTTON ANY MORE, and that is worth
+   stating, because it used to — and because the component cannot be trusted to
+   leave the button alone.
 
-   So the integration rests on specificity instead: `.ai-toolbar .specular-button`
-   is two classes and beats the component's one-class presets whatever the order.
-   What that buys is stated plainly — the app keeps the button's SURFACE (fill,
-   metrics, halo, focus ring) and the component contributes the RIM (the shader
-   canvas, and the radius its SDF must follow, which is passed as a prop so the
-   drawn curve and the CSS curve are the same curve).
+   `main.jsx` imports styles.css FIRST and this file arrives later, through the
+   component graph. At EQUAL specificity the later rule wins, so the component's
+   own padding, font-size and drop shadow would replace the app's. While the
+   Generate button was a one-class rule (`.ai-run`), the app's chrome lost that
+   tie and had to be re-asserted here, which is what this block did.
 
-   The two values repeated below are `.ai-run`'s own. They are repeated rather
-   than inherited because CSS cannot re-assert a rule it lost to the cascade, and
-   because a rim is not worth restructuring the app's button styles for. If
-   `.ai-run`'s metrics change, this is the second place, and this comment is why. */
-.ai-toolbar .specular-button {
-  padding: 0.5rem 0.95rem; /* = .ai-run */
-  font-size: 0.84rem; /* = .ai-run */
-  box-shadow: 0 0 0 3px var(--cyan-bg); /* = .ai-run: the accent halo */
-  /* `button`'s own transition list plus the component's press transform. The
-     component's `transition: transform .15s` on its own would make the hover
-     fill snap instead of easing (see `button { transition: border-color, color,
-     background }`), and dropping the component's would cost the squash. */
-  transition: border-color 120ms ease, color 120ms ease, background 120ms ease, transform 0.15s ease;
-}
+   The button is a PILL now, stated as `.ai-run.primary` (styles.css): two
+   classes, which out-specify `button.primary`, this file's `.specular-button`
+   presets and its size preset at once, in either bundle order. So the app's
+   surface — the navy plate, its blue rim, the pill's metrics, the blue lift,
+   the halo and the focus ring — needs no partner here.
 
-.ai-toolbar .specular-button:hover,
-.ai-toolbar .specular-button:focus-visible {
-  box-shadow: 0 0 0 3px var(--cyan-bg-strong); /* = .ai-run.primary:hover */
-}
+   WHAT THAT BUYS BEYOND TIDINESS: the published source is meant to be re-copied
+   over this file (see the header), and a re-copy takes this note with it. The
+   app's button survives that now; under the old arrangement it came back with
+   the vendor's 14px/30px padding and its dark drop shadow, silently. So if a
+   future re-copy DOES bring a preset that reaches the button, the fix is to
+   raise the app's own rule — not to start a second override block here.
+
+   What the component still contributes is the rim itself: the shader canvas
+   along the edge, and the radius its SDF must follow, which the panel passes as
+   a prop (RUN_RADIUS) so the drawn curve and the CSS curve are one curve. */

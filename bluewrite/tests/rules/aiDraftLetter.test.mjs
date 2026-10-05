@@ -90,10 +90,17 @@ test('the draft has no second box or title of its own — the card is the one bo
   assert.doesNotMatch(STYLE, /\.ai-inline-head\s*\{/, 'the title bar is back in the stylesheet');
   assert.doesNotMatch(STYLE, /\.ai-side-close/, 'the bar\'s dismiss control is back in the stylesheet');
 
-  // The way out the bar carried is not gone with it: the wait keeps its own
-  // Hide control, the review row under the page keeps Close, Escape still
-  // closes the body from anywhere, and a failure keeps Dismiss.
-  assert.match(SRC, /className="ai-hide-draft"/, 'the wait lost its way out with the bar');
+  // The way out the bar carried is not gone with it, and it has MOVED: the
+  // wait's own Hide button was removed (owner request, 2026-10-06), leaving the
+  // KEYBOARD as the way out while a draft is being written, and the review row
+  // under the page keeping Close. The removal is only safe while the key still
+  // works, so the two are asserted together — the absence alone would pass just
+  // as well on a panel where nothing closes.
+  assert.doesNotMatch(SRC, /ai-hide-draft/, "the wait's Hide control is back");
+  assert.doesNotMatch(STYLE, /\.ai-hide-draft\s*\{/, 'the Hide button came back in the stylesheet');
+  const onKey = bodyOf(SRC, 'const onKey = (e) =>');
+  assert.match(onKey, /e\.key !== 'Escape'/, 'the key the card answers to is no longer Escape');
+  assert.match(onKey, /if \(panelOpen\) setPanelOpen\(false\)/, 'Escape no longer hides the draft body');
   assert.match(SRC, /<button type="button" onClick={closePanel}>Close<\/button>/, 'the review row lost Close');
 });
 

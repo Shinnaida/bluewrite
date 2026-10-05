@@ -1,9 +1,9 @@
 // BlueWrite — the pure half of the printed sheet.
 //
 // These helpers were private to ReportPrint.jsx. They are extracted here so the
-// EDITOR can render the SAME sheet inline (Task 4) without a second
+// AI panel's own card can render the SAME sheet inline without a second
 // implementation of the facts. One builder, two surfaces: the print portal and
-// the inline bondpaper-reveal in Write Report.
+// the bondpaper the AI panel types a draft into.
 //
 // Everything here is pure — no React, no fetch — so it runs under node:test and
 // in both callers.

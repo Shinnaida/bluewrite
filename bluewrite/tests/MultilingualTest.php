@@ -484,15 +484,19 @@ final class MultilingualTest extends BaseApiTestCase
         }
     }
 
-    // ---- the sheet's data leg (D6) ------------------------------------------
+    // ---- the print payload carries the record's own language --------------
 
-    public function testTheSheetCarriesTheLanguageSoTheNotTranslatedLineCanBeRendered(): void
+    public function testThePrintPayloadCarriesTheRecordsOwnLanguage(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');
 
-        // The rendered line itself is a front-end concern and is covered by
-        // tests/rules/reportLanguages.test.mjs (printLanguageLine). What the
-        // server owes the sheet is the code, on every report.
+        // THE SHEET NO LONGER PRINTS A LANGUAGE LINE (owner request, 2026-10-06:
+        // the "Narrative language: … (not translated)" note and its helper,
+        // printLanguageLine, are gone — see ReportSheetBody.jsx, guarded by
+        // tests/rules/reportLanguages.test.mjs). The column still leaves the
+        // server on the print payload, because the payload is the whole record
+        // and other readers of it (the review appendix, the editor, the list)
+        // answer for the narrative's language.
         $ceb = $this->createReport($cookie, $csrf, ['narrative_language' => 'ceb', 'narrative' => self::FIXTURES['ceb']]);
         $en = $this->createReport($cookie, $csrf, ['narrative_language' => 'en']);
 

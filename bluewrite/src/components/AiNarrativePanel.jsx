@@ -20,6 +20,10 @@
 // what one contains.
 
 import React, { useEffect, useRef, useState } from 'react';
+// The fullscreen page is portaled to document.body, exactly as the print
+// portal is: it is not content of the card it was asked for, it is a SCREEN of
+// its own, and nothing about the app may be part of that picture.
+import { createPortal } from 'react-dom';
 import { api } from '../lib/api.js';
 import NarrativeReveal from './NarrativeReveal.jsx';
 // TASK 9 — the bondpaper itself. The AI's words type into THE LETTER — the same
@@ -33,6 +37,11 @@ import ReportSheetBody from './ReportSheetBody.jsx';
 // rather than as the panel having stalled. It is a plain SVG badge; see
 // AiVoiceOrb.jsx for why it is drawn rather than simulated.
 import AiVoiceOrb from './AiVoiceOrb.jsx';
+// The glowing gradient behind that orb (the pasted gradient-orb shader, ported
+// to plain three — see AiOrbBackdrop.jsx). It is mounted in the same centred
+// column as the orb and sized from the same number, so the aura cannot drift
+// off the ball it is backing.
+import AiOrbBackdrop from './AiOrbBackdrop.jsx';
 // The specular rim on the panel's primary action (see the mount below). Vendored
 // from React Bits; its header records the one adaptation it needed here.
 import SpecularButton from './SpecularButton.jsx';
@@ -121,6 +130,15 @@ const REVEAL_STAGES = ['facts', 'findings', 'status', 'done'];
 // floor keeps a long one readable rather than strobing.
 const SUB_REVEAL_CAP_MS = 1200;
 
+// THE GENERATE PILL'S OWN CURVE. A pill is a radius of half the button's own
+// height, and 999 is how both halves of the control are told that: CSS clamps
+// the value down to the half-height it can actually reach, and so does the
+// rim's SDF (see SpecularButton.jsx), so the drawn edge and the CSS edge are
+// one curve at whatever size the button is drawn at. ONE number: it is passed
+// as the `radius` prop, which is also what sets `--sb-radius` on the element —
+// change the pill's height and nothing here needs editing.
+const RUN_RADIUS = 999;
+
 // The block's head: the badge, the name, and the ⓘ that carries what both
 // actions do. ONE definition, because the block has two states (ready, and
 // "a draft is waiting") and the two must not drift into naming themselves
@@ -132,6 +150,174 @@ function AssistHead() {
       <span className="ai-assist-title">Writing assistant</span>
       <InfoHint text={AI_TOOLBAR_HINT} />
     </div>
+  );
+}
+
+// THE TWO DRAWINGS THE FULLSCREEN PREVIEW NEEDS — the expand mark on the
+// control that opens it and the ✕ on the one way out of it. Same 24-unit box,
+// same 1.8 stroke and round caps as the section glyphs in Reports.jsx, so they
+// belong to the document's own drawing set rather than to an icon font that may
+// or may not be installed on a station workstation.
+const PREVIEW_GLYPH = ['M15 3h6v6', 'M9 21H3v-6', 'M21 3l-7 7', 'M3 21l7-7'];
+const CLOSE_GLYPH = ['M18 6 6 18', 'M6 6l12 12'];
+
+// HOW BIG THE FULL-SCREEN PAGE IS DRAWN (the card's page is a fixed 50% — see
+// the stylesheet; it has no controls). `FIT` is the whole leaf measured to the
+// screen: the state the screen opens in, and the state the officer returns to.
+// A number is the paper at that fraction of its OWN size, so 1 is 100% — the
+// sheet at the size the station prints it, which is the size to read it at.
+//
+// WHY THE LADDER IS SO COARSE, and why FIT IS ITS FLOOR rather than one rung in
+// the middle: the fit on a screen lands near 0.6, and an officer who reaches for
+// "bigger" has already decided the whole-leaf view is too small to read. One
+// press therefore takes them to the real thing — 100%, the sheet at the size the
+// station prints it — from whatever the fit happened to be, and the stops above
+// are for reading a page from across the room. Below the fit there is nothing
+// worth offering: a stop under it is a smaller page with no more of it visible,
+// which is what the overview already is.
+const FIT = 'fit';
+const ZOOM_STEPS = [1, 1.25, 1.5, 2, 2.5, 3];
+
+// The next stop on the ladder, from wherever the page is NOW. `current` is the
+// size actually on screen — in fit mode that is the MEASURED fit, not a number
+// held in state, because the fit moves with the frame and the ladder has to be
+// climbed from the page the officer is looking at. Stepping DOWN past the
+// lowest stop lands on the overview: Fit is the bottom of the ladder, which is
+// why the "smaller" stepper is disabled there and nowhere else.
+function stepZoom(current, direction) {
+  if (direction > 0) {
+    return ZOOM_STEPS.find((z) => z > current + 0.001) ?? ZOOM_STEPS[ZOOM_STEPS.length - 1];
+  }
+  return [...ZOOM_STEPS].reverse().find((z) => z < current - 0.001) ?? FIT;
+}
+
+// THE SIZE CONTROLS — the full-screen preview's corner. They were drawn in the
+// card as well until the card's page became a fixed 50% (owner request,
+// 2026-10-05); the screen is the frame that keeps them, because reading a page
+// from across the room is what it is for.
+//
+// `value` is the panel's own state: FIT, or a stop on the ladder. The readout
+// NAMES the state rather than inventing a number for it — in fit mode the size
+// is measured and moves with the frame, so "60%" that is really 58% would be a
+// made-up figure; "Fit" is the truth, and the moment a stop is picked the
+// readout becomes that stop's own percentage. "Fit" as a BUTTON appears only
+// when there is something to go back to, and the steppers are disabled at the
+// ends of the ladder: a control that cannot change anything says so instead of
+// taking the press and doing nothing.
+function ZoomControls({ value, onStep, onFit, className = '' }) {
+  const atFit = value === FIT;
+  const index = atFit ? -1 : ZOOM_STEPS.indexOf(value);
+  return (
+    <div
+      className={`ai-zoom${className ? ` ${className}` : ''}`}
+      role="group"
+      aria-label="Page size"
+    >
+      <button
+        type="button"
+        className="ai-zoom-btn"
+        onClick={() => onStep(-1)}
+        // Disabled ONLY at the overview: below that the page would be smaller
+        // with no more of it visible. From any stop, "smaller" is a real size
+        // (and the bottom stop steps back to Fit).
+        disabled={atFit}
+        aria-label="Zoom out"
+        title="Draws the page smaller — the overview is as small as it goes."
+      >
+        −
+      </button>
+      <span
+        className="ai-zoom-value"
+        title="The page is a real 8.5 × 11in sheet. Fit shows the whole leaf; the steppers draw it at an exact size, where 100% is the sheet at the size it prints."
+      >
+        {atFit ? 'Fit' : `${Math.round(value * 100)}%`}
+      </span>
+      <button
+        type="button"
+        className="ai-zoom-btn"
+        onClick={() => onStep(1)}
+        disabled={index === ZOOM_STEPS.length - 1}
+        aria-label="Zoom in"
+        title="Draws the page larger — 100% is the sheet at the size it prints."
+      >
+        +
+      </button>
+      {!atFit && (
+        <button
+          type="button"
+          className="ai-zoom-fit"
+          onClick={onFit}
+          title="Back to the whole leaf, fitted to the frame it is drawn in."
+        >
+          Fit
+        </button>
+      )}
+    </div>
+  );
+}
+
+// THE GENERATE MARK: a record with the assistant's own spark laid on its lower
+// corner — the page every folder card already wears for a plain report (the
+// `file-text` glyph, ReportTypeIcon.jsx) with the four-point star the voice orb
+// carries (AiVoiceOrb), which is what says the page is being WRITTEN rather
+// than filled in. Drawn here rather than borrowed from ReportTypeIcon because
+// this is the assistant's one control mark, not an incident type: the sheet is
+// the same shape on purpose, and the star is what makes it this panel's.
+//
+// The page is STROKED and the star is FILLED, in the one ink: the star is a
+// spark (a solid), and a page drawn solid at this size would be a blob. The
+// second text line stops short of the corner the star occupies, so the two
+// marks do not cross.
+const GENERATE_MARK_PATHS = [
+  'M14 3.2H7.4a2 2 0 0 0-2 2v13.6a2 2 0 0 0 2 2h9.2a2 2 0 0 0 2-2V8z',
+  'M14 3.2V8h5',
+  'M9.2 12.6h4.6M9.2 16.2h2.4',
+];
+const GENERATE_MARK_SPARK =
+  'M18.7 13.2c.5 2.6 1.3 3.4 3.9 3.9-2.6.5-3.4 1.3-3.9 3.9-.5-2.6-1.3-3.4-3.9-3.9 2.6-.5 3.4-1.3 3.9-3.9z';
+
+function GenerateMark() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {GENERATE_MARK_PATHS.map((d) => (
+        <path key={d} d={d} />
+      ))}
+      {/* The spark rides ON the page's corner, so it is stated as a fill in the
+          same ink and takes no stroke of its own. */}
+      <path d={GENERATE_MARK_SPARK} fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function SheetGlyph({ paths }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="15"
+      height="15"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {paths.map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
   );
 }
 
@@ -201,9 +387,6 @@ export default function AiNarrativePanel({
   // report that has never been saved (see the guard near the render).
   ensureReportId,
   canEdit,
-  // Task 4 — Regenerate from the editor's inline bondpaper. A nonce the panel
-  // watches: when it changes, the last press is re-run. 0/absent never fires.
-  regenSignal = 0,
   narrative,
   actionTaken = '',
   // The form's current Notable Findings text: shown in the Generate row so
@@ -346,19 +529,35 @@ export default function AiNarrativePanel({
   // False while the sheet is still typing. The gate stays closed until it is
   // true, so Accept can only be pressed on text the officer has watched land.
   const [sheetTyped, setSheetTyped] = useState(true);
-  // The card the typing happens in. Scrolled to when a draft starts arriving for
-  // a press made OUTSIDE it (the inline bondpaper's Regenerate re-runs the last
-  // press through `regenSignal`), so the officer is never looking at the wrong
-  // end of the page while the letter types.
+  // The card the typing happens in. Scrolled to when a new draft starts arriving
+  // (this card's own Regenerate included), so the officer is never looking at the
+  // wrong end of the page while the letter types.
   const sheetCardRef = useRef(null);
   // The grey viewport the letter sits in. Task 10 gives that frame a fixed,
   // fit-to-screen height so only the DOCUMENT scrolls, which means the values
   // below its fold can no longer type themselves into view by themselves.
   const sheetViewportRef = useRef(null);
-  // The zoom in force on the page. The stylesheet's own fallback
-  // (`.print-sheet`'s `var(--ai-sheet-zoom, 0.62)`) is its initial value, so
-  // the natural height can be read back through it on the first measurement.
-  const leafZoom = useRef(0.62);
+  // WHETHER THE PAGE IS UP ON A SCREEN OF ITS OWN (the Preview control above
+  // the card's paper). The same leaf, portaled to document.body, with the app
+  // behind the scrim and nothing on the screen but the report: no card, no
+  // review controls, no Print. It shows the DRAFT the card is showing — the
+  // page the officer asked to enlarge — and it writes nothing, so closing it
+  // (✕, Escape, or a click on the desk around the paper) leaves the report and
+  // the draft exactly as they were.
+  const [sheetFull, setSheetFull] = useState(false);
+  // HOW BIG THE FULL-SCREEN PAGE IS DRAWN. The screen is the one of the two
+  // frames with size controls (owner request, 2026-10-05 — the card's steppers
+  // are gone and its page is drawn at a fixed 50%, see the stylesheet), so this
+  // is the only zoom state there is. It STARTS at FIT — the whole leaf, so the
+  // screen opens as an overview of the page — and returns to FIT every time it
+  // is opened, because it is a fresh look at the document rather than a
+  // continuation of whatever the officer last did to it.
+  const [screenZoom, setScreenZoom] = useState(FIT);
+  // The desk that screen holds the paper on, and the zoom in force there: the
+  // whole leaf fitted to the screen at the largest scale it can take, never
+  // past its own size.
+  const sheetFullRef = useRef(null);
+  const fullZoom = useRef(0.62);
 
   // TASK 10 — keep the typing in view. ReportSheetBody reports how much of the
   // sequence has landed and the frame is moved to match, so the page is written
@@ -445,19 +644,6 @@ export default function AiNarrativePanel({
     }
   }, [reportId]);
 
-  // Regenerate from the inline bondpaper (Task 4). The editor bumps `regenSignal`
-  // and the panel re-runs the last press. Guarded by a ref so a re-render never
-  // re-fires it and a fresh mount (signal 0) never fires it at all.
-  const regenSeen = useRef(0);
-  useEffect(() => {
-    if (!regenSignal || regenSignal === regenSeen.current) return;
-    regenSeen.current = regenSignal;
-    generate(lastPress?.feedback ?? '', false, true);
-    // Intentionally keyed on the signal alone: `generate` and `lastPress` are
-    // read from the render that observed the bump.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [regenSignal]);
-
   // Single source of truth for whether the draft body is actually VISIBLE.
   // Content exists while loading, on error, or when there is a draft to show:
   // an inline box with nothing inside it is the one thing this must not draw,
@@ -485,43 +671,50 @@ export default function AiNarrativePanel({
     }
   }, [draft, reportId]);
 
-  // TASK 9 — a draft can be asked for from OUTSIDE this card: the inline
-  // bondpaper's own Regenerate re-runs the last press through `regenSignal`, and
-  // the officer's eye is on that page, a screen or more above the panel. The
-  // typing happens HERE, so when a new proposal starts the card is brought into
-  // view — and the page is left exactly where it is when the officer is already
-  // looking at it (the case for every press of Generate in this card, which is
-  // the whole point of typing the letter here instead of in the narrative panel
-  // the officer would have to scroll up to).
-  // HOW BIG THE LETTER IS IN THE CARD, AND WHY THE WHOLE LEAF SHOWS.
+  // TASK 9 — every draft types into THIS card, because this is where Generate
+  // is pressed. When a new proposal starts (this card's own Regenerate included)
+  // the card is brought into view if it is off screen, and the page is left
+  // exactly where it is when the officer is already looking at it — which is the
+  // whole point of typing the letter here instead of in the narrative panel the
+  // officer would have to scroll up to.
+  // HOW BIG THE LETTER IS IN THE CARD — ONE FIXED SIZE, NO CONTROLS.
+  //
+  // The page used to be measured to fit the whole leaf inside whatever room the
+  // card had, with steppers beside it. It is drawn at a FLAT 50% instead (owner
+  // request, 2026-10-05): one size in every format and every window, so the
+  // page reads the same wherever the assistant sits, and the control the card
+  // does keep — Preview — is the one that answers "too small to read".
+  //
+  // Nothing here measures it any more: the size is `zoom: 0.5` on the card's
+  // paper in styles.css, and the frame simply SCROLLS both ways, because a page
+  // at a fixed size can be wider or taller than the column it is drawn in. A
+  // ResizeObserver that re-fitted the page to the card would fight that rule.
+  // `followTyping` below still keeps the typing in view, and it is still the
+  // only thing that moves this frame on its own.
+
+  // HOW BIG THE PAGE IS ON THE FULL SCREEN — THE WHOLE LEAF, MEASURED.
   //
   // The page is drawn at 100% of its own size and scaled by ONE measured
-  // factor, which fits the WHOLE 8.5 × 11in leaf inside the card: the smaller
-  // of "the card is this wide" and "the card is this tall". `object-fit`
-  // cannot do that for a live element, and one length may not be divided by
-  // another in CSS, so the factor is measured here and handed to the
-  // stylesheet as one custom property — the rule that reads it is the
-  // `.ai-sheet-preview .print-sheet` block in styles.css.
+  // factor: the SMALLER of "the screen is this wide" and "the screen is this
+  // tall", against 8.5 × 11in of paper, capped at 1 so a preview enlarges
+  // nothing. `object-fit` cannot do that for a live element and CSS cannot
+  // divide one length by another, so the factor is measured here and handed to
+  // the stylesheet as one custom property — see `.sheet-fullscreen-desk
+  // .print-sheet` in styles.css. A letter that runs past its leaf shrinks the
+  // factor rather than being clipped: whatever paper the report needs, the
+  // whole sheet is on the screen, and only a letter past even the floor has a
+  // tail to scroll to.
   //
-  // The sheet is one page of paper, and it is read as the page it is: top to
-  // bottom, in the assistant's own card, with no second box around it and no
-  // scrollbar inside one. Fitting BOTH axes is what makes that true at any
-  // card size — a wide-but-short card and a narrow-but-tall one land on the
-  // same promise. A letter that runs past its leaf still gets its tail: the
-  // frame keeps `overflow-y: auto` for that one case (the page grows with the
-  // letter because the stylesheet gives it 11in as a FLOOR, never a cap), and
-  // the factor never drops below its own floor for a degenerate box.
-  //
-  // The page's own height is not a constant — the letter grows on it — so it is
-  // read back through the zoom in force (`zoom` scales the rect the DOM
-  // reports). Measured whenever the CARD is resized AND whenever the PAGE
-  // changes size, from the moment it is up rather than only after the typing
-  // lands: a line of typing that pushes the letter onto more paper shrinks the
-  // factor in the same frame, so the whole page stays on screen as it is
-  // written, and `followTyping` above is a no-op for a page that already fits.
+  // The natural height is read back through the zoom in force (`zoom` scales
+  // the rect the DOM reports), and the measure re-runs when the screen is
+  // resized AND when the PAGE grows — the reveal adds a line at a time.
   useEffect(() => {
-    const el = sheetViewportRef.current;
-    if (!el || !sheeted || typeof ResizeObserver !== 'function') return;
+    const el = sheetFullRef.current;
+    if (!el || !sheetFull || typeof ResizeObserver !== 'function') return;
+    // The officer's own size stands the fit down (the effect below owns the
+    // property while a stop is in force): this is the same page, drawn at the
+    // size they asked for instead of the size the screen can hold.
+    if (screenZoom !== FIT) return;
     const sizeLeaf = () => {
       const cs = window.getComputedStyle(el);
       const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
@@ -529,35 +722,33 @@ export default function AiNarrativePanel({
       const availW = el.clientWidth - padX;
       const availH = el.clientHeight - padY;
       if (!(availW > 0) || !(availH > 0)) return;
-      // The page's natural height: whatever paper the letter needs, read back
-      // through the zoom in force (see `leafZoom`). The leaf's own 11in is the
-      // floor the stylesheet draws it at, stated once and read here too.
       const page = el.firstElementChild;
-      // Rounded to the CSS pixel: the observer re-enters on every box change,
-      // and a subpixel drift in this figure would let two adjacent factors
-      // trade places forever.
       const naturalH = page
-        ? Math.max(SHEET_PX.height, Math.round(page.getBoundingClientRect().height / leafZoom.current))
+        ? Math.max(SHEET_PX.height, Math.round(page.getBoundingClientRect().height / fullZoom.current))
         : SHEET_PX.height;
       const byWidth = availW / SHEET_PX.width;
       const byHeight = availH / naturalH;
-      // The floor guards a degenerate box (a card collapsed to a few pixels
-      // must not divide to nothing), and the cap keeps a very wide card from
-      // MAGNIFYING the page past its own size — a preview enlarges nothing.
       const next = Math.max(0.3, Math.min(1, byWidth, byHeight)).toFixed(4);
-      leafZoom.current = Number(next);
-      if (el.style.getPropertyValue('--ai-sheet-zoom') !== next) {
-        el.style.setProperty('--ai-sheet-zoom', next);
+      fullZoom.current = Number(next);
+      if (el.style.getPropertyValue('--sheet-full-zoom') !== next) {
+        el.style.setProperty('--sheet-full-zoom', next);
       }
     };
     sizeLeaf();
     const ro = new ResizeObserver(sizeLeaf);
     ro.observe(el);
-    // The PAGE is observed too: the reveal (and a draft restored from the tab's
-    // store) grows it without touching the card's own box.
     if (el.firstElementChild) ro.observe(el.firstElementChild);
     return () => ro.disconnect();
-  }, [sheeted, panelOpen, genCounter]);
+  }, [sheetFull, screenZoom]);
+
+  // The same single property, written on the full-screen frame (see the card's
+  // note above): one size, one rule, and `fullZoom` kept as the size on screen.
+  useEffect(() => {
+    const el = sheetFullRef.current;
+    if (!el || !sheetFull || screenZoom === FIT) return;
+    fullZoom.current = screenZoom;
+    el.style.setProperty('--sheet-full-zoom', String(screenZoom));
+  }, [screenZoom, sheetFull]);
 
   useEffect(() => {
     const el = sheetCardRef.current;
@@ -574,13 +765,24 @@ export default function AiNarrativePanel({
   // that dismissed the docked panel before the draft moved inline. Kept because
   // the body is a large part of the card: the key that puts it away should not
   // depend on reaching for the corner of it.
+  //
+  // THE FULLSCREEN PAGE TAKES ESCAPE FIRST. It is a screen ON TOP of this card,
+  // so the key has to peel that one layer and stop: one press closes the
+  // preview, the next (from the card) does what it always did. A single press
+  // closing both — the screen and the panel the officer was reading it from —
+  // would lose their place for a keystroke they meant as "back".
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape' && panelOpen) setPanelOpen(false);
+      if (e.key !== 'Escape') return;
+      if (sheetFull) {
+        setSheetFull(false);
+        return;
+      }
+      if (panelOpen) setPanelOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [panelOpen]);
+  }, [panelOpen, sheetFull]);
 
   // Phase 6 Stage 3 — a non-English narrative on the form is a translatable
   // source (D3/D4), so Generate is NOT refused by language here any more.
@@ -1378,8 +1580,10 @@ export default function AiNarrativePanel({
   // no separate "AI draft" to name: the draft is drawn in the AI ASSISTANCE
   // card, which already carries that name on its own head, and the page is the
   // thing the officer reads. The bar's ✕ went with it — the review row under
-  // the page carries Close, an error carries Dismiss, the wait carries Hide,
-  // and Escape still hides the body from anywhere.
+  // the page carries Close, an error carries Dismiss, and Escape hides the body
+  // from anywhere. THE WAIT CARRIES NOTHING: its Hide button was removed by
+  // owner request (2026-10-06), so Escape is the one way out while a draft is
+  // being written.
 
   return (
     <div className="ai-panel">
@@ -1461,38 +1665,54 @@ export default function AiNarrativePanel({
               and it is the one thing on the card that moves — which is what
               makes the wait after Generate feel answered even before the words
               arrive. The aria-hidden is inside the component, so a screen reader
-              hears the panel's own copy and not this. */}
-          <AiVoiceOrb size={200} />
+              hears the panel's own copy and not this.
+
+              THE GLOW BEHIND IT. The two sit in one stage because the aura has
+              to be centred on the BALL, not on the card: the stage is the
+              orb's own column (see AiOrbBackdrop.css), the backdrop is the
+              absolutely positioned square in the middle of it, and the orb
+              paints over the top. Both are handed the same 200, so the glow is
+              the orb's own scale rather than a number that happens to fit
+              today. */}
+          <div className="ai-voice-stage">
+            <AiOrbBackdrop size={200} />
+            <AiVoiceOrb size={200} />
+          </div>
 
           <div className="ai-toolbar">
             {/* THE PRIMARY ACTION WEARS THE SPECULAR RIM (SpecularButton.jsx, a
                 vendored React Bits component). It keeps the app's own classes
                 (`ai-run primary`) rather than the component's chrome: this is the
-                form's primary button, and its fill, its 3px accent halo on
-                hover/focus and its metrics are the app's, not a marketing
-                page's. The component contributes the shader canvas along the
-                edge — and the radius its drawn curve has to follow, which is why
-                `radius` is the button's own 3px and not the component's default
-                18px: an SDF drawn on a different curve than the CSS border sits
-                visibly outside it.
+                form's primary button, and its fill, its rim, its blue lift, its
+                accent halo on hover/focus and its metrics are the app's, not a
+                marketing page's. The component contributes the shader canvas
+                along the edge — and the radius its drawn curve has to follow,
+                which is why `radius` is RUN_RADIUS (the pill's own curve) and
+                not the component's default 18px: an SDF drawn on a different
+                curve than the CSS border sits visibly outside it.
 
                 `lineColor` and `baseColor` are LITERALS, and that is a
                 constraint rather than a preference: ogl parses these two itself
                 (Color.set) and cannot read a CSS `var()`, so the palette cannot
-                reach them the way it reaches the CSS. Line is the shine on the
-                fill (white, the same ink the label uses); base is the static
-                edge stroke under it, a darker navy from the same family.
-                `textColor` IS a `var()` on purpose — it never leaves the
-                stylesheet.
+                reach them the way it reaches the CSS. The PLATE IS PALE now
+                (see the pill in styles.css), so the two literals do different
+                work than they did on navy: line is the LIGHT the plate catches
+                — white, brighter than a light-blue surface — and base is the
+                edge stroke under it, the same deep navy the words use, which on
+                this fill reads as the outline that keeps a pale object's edge
+                crisp. `textColor` IS a `var()` on purpose — it never leaves the
+                stylesheet, which is also how the plate's ink follows the theme.
 
                 `thickness` and `intensity` are bolder than the component's 1/1,
-                and they are measured rather than guessed. On this button's blue
-                fill at DPR 1 the default line peaked at luminance 134 against a
-                fill of 90: the shine was there and almost invisible. */}
+                and they were measured rather than guessed — on the navy fill
+                this button used to wear, where the default line peaked at
+                luminance 134 against a fill of 90 and was almost invisible.
+                They are left as measured: on a pale plate the same line reads as
+                gloss, which is what a light surface catching light looks like. */}
             <SpecularButton
               className="ai-run primary"
               size="md"
-              radius={3}
+              radius={RUN_RADIUS}
               tintOpacity={0}
               textColor="var(--on-accent)"
               lineColor="#ffffff"
@@ -1505,7 +1725,34 @@ export default function AiNarrativePanel({
               onClick={() => generate()}
               disabled={translationOff}
             >
-              {nativeNarrative && effectiveSource === 'narrative' ? 'Translate my narrative' : 'Generate AI draft'}
+              {/* THE PILL'S FOUR PARTS, left to right: the mark, the hairline
+                  that separates it from the words, the words themselves, and
+                  the chevron that says the press GOES somewhere. Only the
+                  words are text — a screen reader hears "Generate AI draft"
+                  once, from the button's own label, and none of the three
+                  marks is announced (each is aria-hidden). */}
+              <span className="ai-run-mark" aria-hidden="true">
+                <GenerateMark />
+              </span>
+              <span className="ai-run-rule" aria-hidden="true" />
+              <span className="ai-run-text">
+                {nativeNarrative && effectiveSource === 'narrative' ? 'Translate my narrative' : 'Generate AI draft'}
+              </span>
+              <span className="ai-run-chevron" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="13"
+                  height="13"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  focusable="false"
+                >
+                  <path d="M9 5.4 15.6 12 9 18.6" />
+                </svg>
+              </span>
             </SpecularButton>
             {/* Offered only when it can run — see `tightenUsable` above. There is
                 no `disabled` attribute on purpose: a button that is never
@@ -1613,16 +1860,56 @@ export default function AiNarrativePanel({
           aria-label="AI narrative draft"
         >
 
+          {/* THE PREVIEW CONTROL, ON THE PAGE IT ENLARGES (owner request,
+              2026-10-05). The letter in this card is a real sheet of paper
+              shrunk to fit a column; the officer who wants to read it as a
+              page asks for it here, so the control and what it opens are one
+              thing on screen. It is a BUTTON and not a bar with a title on it:
+              the title bar was deliberately removed from this card (see
+              above), and this brings back one control, not the box it used to
+              sit in. Nothing is written, applied or decided by pressing it —
+              it is the same page, larger.
+
+              IT FLOATS OVER THE PAPER'S TOP-RIGHT CORNER rather than holding a
+              row above the frame (owner request, 2026-10-05: "so it won't take
+              so much space"). It is a sibling of the frame, not a child of it,
+              for a reason the stylesheet explains: the frame is a SCROLLER, and
+              a control inside a scroller rides away with a long letter. It
+              covers the sheet's own top margin there — blank paper. */}
+          {sheeted && (
+            <div className="ai-sheet-bar">
+              {/* NO SIZE CONTROLS HERE (owner request, 2026-10-05): the card's
+                  page is a fixed 50%, and Preview is the control that answers
+                  a page that is too small to read. The ladder lives on the
+                  full-screen preview, where reading a page from across the
+                  room is the thing being asked for. */}
+              <button
+                type="button"
+                className="ai-sheet-full"
+                onClick={() => {
+                  // The screen opens at FIT every time: it is a fresh look at
+                  // the page, and the card's own size is the card's.
+                  setScreenZoom(FIT);
+                  setSheetFull(true);
+                }}
+                title="Opens this bondpaper full screen — the report alone, with the rest of the app off the screen. Nothing is written into the report."
+              >
+                <SheetGlyph paths={PREVIEW_GLYPH} />
+                Preview
+              </button>
+            </div>
+          )}
+
           {/* TASK 9/10 — the page IN THE CARD: no viewer box, no title bar, no
               surface of its own (owner request, 2026-10-04 — the card is the
-              one box). This div is the card's own area, and the effect above
-              hands it the one scale that fits the WHOLE leaf inside it; the
-              typewriter is followed by `followTyping`, which is a no-op for a
-              page that already fits. */}
+              one box). This div is the card's own area, and the page on it is
+              drawn at the fixed 50% the stylesheet states; the frame scrolls
+              to whatever a page that size needs, and `followTyping` keeps the
+              typing in view while it runs. */}
           {sheeted && (
             <div
-              // MEASURED, NOT DRESSED: it draws nothing, and exists so the
-              // page has somewhere to be fitted (see the CSS rule).
+              // MEASURED, NOT DRESSED: it draws nothing of its own, so the
+              // paper's edge stays the only box the officer sees.
               className="ai-sheet-preview"
               ref={sheetViewportRef}
             >
@@ -1723,6 +2010,21 @@ export default function AiNarrativePanel({
                         {status.phrase}
                       </p>
                     )}
+                    {/* The think ticker: three dots under the phrase, pulsing in
+                        sequence. The phrase itself only changes every 3.2s
+                        (useRotatingStatus), so between swaps these are what
+                        say the assistant is still going — and they say it
+                        WITHOUT claiming progress, which is why it is dots and
+                        not a percentage.
+
+                        Decoration, and it stays that way: aria-hidden, because
+                        the live region above announces the wait ONCE and
+                        per-phrase changes must never re-announce (§5). */}
+                    <div className="ai-dots" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
                     {(thinkPhase === 'waiting' || thinkPhase === 'reading') && !status.slow && (
                       <p className="ai-loading-sub">This can take up to 45 seconds</p>
                     )}
@@ -1735,12 +2037,18 @@ export default function AiNarrativePanel({
                     <div className="ai-loading-bar" aria-hidden="true">
                       <div className="ai-loading-bar-fill" />
                     </div>
-                    {/* The ✕ that used to sit in the title bar went with the box;
-                        the wait keeps its way out, in plain words in the same
-                        content. Escape hides the body too. */}
-                    <button type="button" className="ai-hide-draft" onClick={closePanel}>
-                      Hide
-                    </button>
+                    {/* NO WAY-OUT CONTROL DURING THE WAIT (owner request,
+                        2026-10-06). A "Hide" button stood here — the last piece
+                        of the title bar's furniture, its ✕ wearing a plain
+                        word — and the wait now carries no control at all, so
+                        the block is the heading, the skeleton, the phrase, the
+                        dots and the bar.
+
+                        WHAT CLOSES THE BODY INSTEAD IS ESCAPE, from anywhere in
+                        the card (see `onKey`): the request is not cancelled by
+                        hiding it, the panel is drawn IN the report it belongs
+                        to rather than over it, and nothing about the form is
+                        blocked while the model works. */}
                   </div>
                 )}
 
@@ -2198,6 +2506,101 @@ export default function AiNarrativePanel({
                 )}
           </div>
         </section>
+      )}
+
+      {/* ---- THE REPORT, ON THE SCREEN ALONE -----------------------------
+          The Preview control above the card's paper opens THIS. It is the same
+          sheet the card draws — the very same component (ReportSheetBody), the
+          same letterhead, the same draft — so the page read here and the page
+          accepted in the card cannot drift. What changes is what is AROUND it:
+          nothing. The scrim is the print portal's own `--overlay-deep`, the
+          app is simply behind it, and the only control on the screen is the
+          way out.
+
+          Portaled to document.body: a fixed overlay nested in the card would
+          still be the card's descendant on the screen — clipped by whatever
+          ancestor happens to carry an overflow, and scrolling with it. It has
+          to leave the tree to be a screen.
+
+          `revealPending={false}` DELIBERATELY. The inline page is where the
+          draft TYPES itself in, and that is the card's own performance; the
+          officer who asks for the page full screen is asking to READ the sheet,
+          not to watch the sequence a second time in a second tree. The proposal
+          itself is the same object both draw (see `sheetPending`), so what this
+          screen shows is the letter the card is typing into — whole, because
+          nothing here is waiting to be watched. It never calls
+          onRevealComplete either: the card's own gate opens on the card's own
+          typing, and a second caller would be a second thing claiming to know
+          when the draft had arrived.
+
+          It writes nothing. Closing it (✕, Escape, or a click on the desk
+          around the paper) leaves the report and the draft exactly as they
+          were — Accept is still the only action that moves a draft into the
+          report, and it is not on this screen. */}
+      {/* The click BELOW is the desk around the paper — the third way out,
+          beside ✕ and Escape: the whole screen is dismissable except the
+          document itself. `aria-modal` also makes it a modal to the shell's
+          own shortcut listeners (see src/lib/shortcuts.js), so the letters
+          that navigate the workspace cannot fire behind this page. */}
+      {sheetFull && sheet && createPortal(
+        <div
+          className="sheet-fullscreen"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Bondpaper preview — the report full screen"
+          onClick={() => setSheetFull(false)}
+        >
+          {/* The measured frame — see the `--sheet-full-zoom` effect above. It
+              draws nothing of its own; the paper's edge is the only box on
+              this screen. */}
+          <div className="sheet-fullscreen-desk" ref={sheetFullRef}>
+            {/* The paper takes the DRAFT's chrome and values from the host's
+                own payload (`sheet`), the same three things the card hands over
+                — report, letterhead and recording officer — so a preview can
+                never be a preview of something else. A click on the paper is
+                not a dismissal: the document is the one thing here that is not
+                a way out. */}
+            <div className="print-sheet" onClick={(e) => e.stopPropagation()}>
+              <ReportSheetBody
+                report={sheet.report}
+                ts={sheet.ts}
+                stationHeader={sheet.stationHeader}
+                recordedBy={sheet.recordedBy}
+                pending={sheetPending}
+                revealPending={false}
+              />
+            </div>
+          </div>
+          {/* The corner: the SAME size controls the card draws (one definition)
+              and the way out. Reading a page from across the room is the case
+              the ladder is for, and this is the screen it is read on, so the
+              steppers ride here beside the only other control. */}
+          <div
+            className="sheet-fullscreen-controls"
+            // A click IN HERE is not a click on the desk: without this the
+            // dismiss-on-the-surroundings rule would read a press of the size
+            // steppers (or of the readout between them) as "leave the screen"
+            // — a zoom control that closes the thing it is zooming.
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ZoomControls
+              className="sheet-fullscreen-zoom"
+              value={screenZoom}
+              onStep={(direction) => setScreenZoom(stepZoom(fullZoom.current, direction))}
+              onFit={() => setScreenZoom(FIT)}
+            />
+            <button
+              type="button"
+              className="sheet-fullscreen-close"
+              onClick={() => setSheetFull(false)}
+              title="Closes the preview and returns to the report. Escape does the same."
+            >
+              <SheetGlyph paths={CLOSE_GLYPH} />
+              Close preview
+            </button>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

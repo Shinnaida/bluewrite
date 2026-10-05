@@ -53,8 +53,10 @@ Edit `resources/ai/language_registry.json` and add an entry:
 
 - **`translation_enabled` MUST be `false`.** A new language always starts
   disabled. Only step 8 changes it, and only the owner.
-- `label` is what an officer reads (no bare codes). `short` is for printed
-  lines, so a sheet does not read "Hiligaynon (not translated) (not translated)".
+- `label` is what an officer reads (no bare codes). `short` is the compact form
+  for a one-line label, so a line does not read "Hiligaynon (Cebuano)" plus the
+  rest of a sentence. (It was written for the sheet's "not translated" line,
+  removed on 2026-10-06; the server still sends it — `LanguageRegistry::short`.)
 - `provider_label` is how the language is described **to the model** in the
   per-call `SOURCE LANGUAGE:` line — prose, not a menu entry.
 - `glossary_supported` is whether the bilingual terminology table may carry

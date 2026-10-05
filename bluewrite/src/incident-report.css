@@ -754,6 +754,31 @@
   color: var(--ir-muted);
   line-height: 1.6;
 }
+/* THE REGISTER’S OWN HEAD LINE. The count and the scope read as one
+   sentence (“12 REPORTS · ACTIVE RECORDS”) rather than as two stacked
+   lines, and the ROLE chip sits with them: it used to stand alone in a row
+   of its own under the header, where it read as a stray badge (owner
+   request, 2026-10-06: organize the register). */
+.ir-meta--register {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+}
+.ir-meta__facts {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+.ir-meta__sep {
+  color: var(--ir-border);
+}
+.ir-meta__role .badge {
+  /* The chip is a label on the list, not a status: the register’s own
+     muted ink keeps it from competing with the report badges below. */
+  letter-spacing: 0.05em;
+}
 
 /* The record strip: DRAFT badge, who recorded it, the translation badge.
    Panelled rather than floating text — a tinted card with its own hairline
@@ -1901,13 +1926,12 @@
      the panel is a normal card) and takes the leftover height instead, so the
      bondpaper fills the assistant's box down to the review row rather than
      leaving the tinted card empty beneath it. Nothing about the PAGE changes:
-     the leaf is still capped at short bond (see `.ai-sheet-preview .print-sheet`),
-     so a taller window simply shows more of the same one page. `min-height` is
-     the floor that keeps a tall review body — a gloss, a warning, the action
-     row — from squeezing the viewer to nothing; it is raised to sheet scale
-     (owner request, 2026-10-04: the whole page should be visible) — with more
-     review text than the card can hold beside a sheet-height viewer, the CARD
-     scrolls rather than the page being crushed. */
+     it is drawn at its fixed 50% (see `.ai-sheet-preview .print-sheet`), so a
+     taller window simply shows more of the same one page. `min-height` is the
+     floor that keeps a tall review body — a gloss, a warning, the action row —
+     from squeezing the viewer to nothing, at sheet scale: with more review text
+     than the card can hold beside a sheet-height viewer, the CARD scrolls
+     rather than the page being crushed. */
   .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame .ir-card--accent .ai-inline--sheet > .ai-sheet-preview {
     flex: 1 1 auto;
     height: auto;
@@ -3239,12 +3263,25 @@
   background: var(--red-bg);
   color: var(--ir-red);
 }
-.ir-body button.primary {
+/* `.ai-run` IS EXCLUDED HERE, the same case the neutral rule above names when it
+   excludes `.ai-run` and `.primary`: the AI panel's Generate button asks for
+   `button.primary` AND then states its own surface — the navy gradient, the blue
+   rim and the lift of the pill (see `.ai-run.primary` in styles.css).
+
+   WHAT LOSING THIS TIE COSTS IS INVISIBLE IN A DIFF. This rule is (0,2,1) and
+   the pill's own is (0,2,0), so this one won — and because `background` is a
+   SHORTHAND, its `background-image: none` came with it: the gradient was not
+   repainted, it was erased, leaving a flat accent plate. A one-class button has
+   no way to say "not me"; the pill does, and the pill is the only thing that
+   wears both classes. Measured in a browser, not read: the computed
+   `background-image` of the Generate button came back `none` while every other
+   declaration in the pill's block applied. */
+.ir-body button.primary:not(.ai-run) {
   background: var(--ir-blue);
   border-color: var(--ir-blue);
   color: #fff;
 }
-.ir-body button.primary:hover {
+.ir-body button.primary:not(.ai-run):hover {
   background: var(--ir-blue-hi);
   border-color: var(--ir-blue-hi);
   box-shadow: none;
@@ -3546,20 +3583,40 @@
   color: var(--ir-muted);
   white-space: nowrap;
 }
+/* The shelf own note — what the shelf IS, where a window has to be named
+   (the Recent shelf says "Last 7 days"). It rides between the name and the
+   count so a head still reads as name · note · count. */
+.folder-shelf__note {
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--ir-muted);
+}
 .folder-shelf__empty {
   margin: 0.35rem 0 0;
   font-size: 0.82rem;
   color: var(--ir-muted);
 }
 /* The folders sit DIRECTLY on the page — no card, no grid wrapper — so the
-   hover tilt has room to pop. flex + wrap is the whole layout: a shelf of
-   folders wraps like a row of books and no breakpoint has to be named. The
-   padding at the top is room for the tabs, which stand above the stage. */
+   hover tilt has room to pop. THE SHELF IS A GRID (owner request,
+   2026-10-06): a wrapped flex row left every folder at its natural 15rem and
+   let the tail of a shelf drift, so two shelves of four and of three read as
+   two different layouts. `auto-fill` gives every folder the same width and
+   lines the columns up between shelves, and the columns reflow on their own
+   as the card widens — no breakpoint names a count. The item FILLS its
+   column rather than sitting at its natural 15rem (a start-aligned item was
+   wider than the column it was given and overhung its neighbour), so every
+   folder in a shelf is the same width and the columns line up between shelves.
+   The padding at the top is room for the tabs, which stand above the stage. */
 .folder-shelf__row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  /* 15rem is the FOLDER’S OWN SIZE, not a taste: a column narrower than a
+     folder lets the folder overhang the column beside it (the item can be
+     squeezed, the box inside it cannot). */
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
   gap: 0.9rem 1rem;
-  align-items: flex-end;
+  align-items: end;
   padding: 1.1rem 0.25rem 0.4rem;
   margin-top: 0.5rem;
 }
@@ -3576,6 +3633,10 @@
 }
 .glass-folder__open {
   display: block;
+  /* The item IS the column (the shelf is a grid): a button with `width: auto`
+     shrink-wraps its own stage, which is how a folder ended up wider than the
+     column it was given and over the folder beside it. */
+  width: 100%;
   padding: 0;
   font: inherit;
   color: inherit;
@@ -3612,8 +3673,13 @@
 .glass-folder__stage {
   position: relative;
   display: block;
-  width: 15rem;
-  max-width: 100%;
+  /* The design’s own 15rem (the reference’s 240×160), as a CAP rather than a
+     fixed width: the folder fills its column up to that size and no further,
+     and any slack a wider column leaves is split evenly around it, so folders
+     stay one size and the gaps between them stay even. */
+  width: 100%;
+  max-width: 15rem;
+  margin-inline: auto;
   /* The reference's own 3:2 (240x160). */
   aspect-ratio: 3 / 2;
   perspective: 1500px;
@@ -4363,6 +4429,18 @@
   min-height: 8.5rem;
   overflow-y: auto;
   align-content: start;
+  /* THE ROWS ARE AS TALL AS THEIR CARDS — stated, not left to `auto`, because
+     `auto` is what broke this list. A card carries `overflow: hidden` (the gold
+     stripe is clipped by the card's own corner — see .ir-draft-card), and an
+     element that clips has an automatic minimum size of ZERO. So every row's
+     base size was zero, and a panel with less room than the list's content
+     handed the shortfall to the ROWS: five drafts came out as five 18px
+     slivers — the gold edge, the top of the plate, the badge and the date, with
+     the number, the type, the Continue button and the progress strip clipped
+     off. A row sized to its content, and the list scrolls the overflow instead
+     (its `overflow-y` above, its `min-height` floor for the panel that cannot
+     hold even one). */
+  grid-auto-rows: max-content;
 }
 
 /* THE CARD. A draft is a record with a state, a number of sections written and
@@ -6491,93 +6569,6 @@
   gap: 1.5rem;
 }
 
-/* ---- Task 4 — the inline bondpaper reveal -------------------------------
-   Shown in the narrative area once an AI draft is accepted: the SAME sheet
-   component the print portal draws, on an editor-owned frame. The inner
-   `.print-sheet` supplies the paper (white, Verdana, US Letter); this frame
-   only scrolls it and adds the reveal motion. */
-/* The narrative field is hidden (not unmounted) while the reveal is up, in
-   EVERY format. The stepped-only `[hidden]` rule above does not reach the
-   document/sheet formats, and `.ir-field`'s own display would otherwise win
-   over the UA default — so state it here, at higher specificity. */
-.ir-narrative[hidden] {
-  display: none;
-}
-.ir-sheet-reveal {
-  margin-top: 1rem;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--panel-raised);
-}
-.ir-sheet-reveal-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--line);
-  /* The reference's preview toolbar is a MUTED strip, not a white one, so the
-     white page below reads as paper on a desk rather than as a second panel. */
-  background: var(--panel-raised);
-}
-.ir-sheet-reveal-label {
-  display: flex;
-  align-items: center;
-  font-family: var(--font-hud);
-  font-size: 0.72rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--cyan-dim);
-}
-/* The reference marks the preview as LIVE with a green dot before its title.
-   Drawn, not typed, so it never enters the accessible name; the label beside
-   it already says what the panel is. */
-.ir-sheet-reveal-label::before {
-  content: '';
-  flex: none;
-  width: 0.5rem;
-  height: 0.5rem;
-  margin-right: 0.45rem;
-  border-radius: 50%;
-  background: var(--green-ok);
-}
-.ir-sheet-reveal-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-.ir-sheet-reveal-paper {
-  /* A letter page is taller than the card; scroll it rather than letting it
-     stretch the form. The page itself carries its own padding/shadow.
-
-     The page is CENTRED on a muted desk (the reference's preview centres its
-     sheet the way a PDF viewer does), so it reads as one page on a surface
-     rather than as a panel pinned to one edge. `align-items: flex-start` keeps
-     the page at its own natural height instead of stretching it to the well,
-     and the literal grey is now the palette's own sunken surface. */
-  max-height: min(70vh, 900px);
-  overflow: auto;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  background: var(--panel-sunken);
-  padding: 0.9rem;
-}
-/* Task 9 — the AI's words TYPE THEMSELVES into the letter. The static chrome
-   (header, date, title, certification boilerplate, bold labels) is on screen
-   from the first frame; only the AI-filled values are revealed, one character
-   cursor walked across them top-to-bottom (see ReportSheetBody). There is no
-   keyframe animation to keep in step — the pacing lives in the component — so
-   this rule only marks the sheet while the sequence is running, scoped to the
-   inline reveal. The PRINT PORTAL renders the very same markup and never types
-   (it passes no `pending`), and `prefers-reduced-motion` is handled in the
-   component by showing the finished sheet immediately. Clicking the sheet
-   finishes the sequence early (the wrapper carries the handler + title). */
-.ir-sheet-reveal .pr-sheet-typing {
-  cursor: pointer;
-}
-
 .st-block {
   padding: 1.1rem 1.25rem 1.25rem;
   border: 1px solid var(--ir-border);
@@ -7367,4 +7358,75 @@
   max-width: 8.5in;
   margin-inline: auto;
   padding-inline: var(--ir-sheet-inset);
+}
+
+/* ===========================================================================
+   5d. The SHEET PAGE (one report, read as the page it prints on)
+
+   Clicking a row in an opened folder shows the record the way it will print
+   (owner request, 2026-10-06) instead of opening the writer: the sheet IS the
+   report, and reading one is not an edit. The paper itself is the shared
+   `.print-sheet` (see styles.css — the same component the print dialog portals
+   over the app), so what lives here is the BAR above it: where you are, which
+   record this is, and the two things that may be done from here — Edit draft on
+   a draft, and Print, which opens the dialog (a page cannot print itself; see
+   ReportPrint’s `variant`).
+
+   The bar keeps its height while the paper below it scrolls: the officer can
+   always read which record they are looking at, which is the whole reason the
+   sheet is a page of the register rather than a dialog over it.
+   =========================================================================== */
+.ir-sheet-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+/* THE BAR STAYS PUT WHILE THE PAPER SCROLLS (the app scrolls .main, so
+   `sticky` is enough — no height arithmetic): the officer can always read
+   which record they are looking at, which is the point of the sheet being a
+   page of the register rather than a dialog over it. */
+.ir-sheet-page__bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 0.4rem;
+  background: var(--ir-card);
+}
+.ir-sheet-page__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+.ir-sheet-page__ident {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ir-head-ink);
+  min-width: 0;
+}
+.ir-sheet-page__num {
+  font-family: var(--font-hud);
+  letter-spacing: 0.06em;
+}
+.ir-sheet-page__type {
+  font-weight: 600;
+  color: var(--ir-muted);
+}
+.ir-sheet-page__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
 }

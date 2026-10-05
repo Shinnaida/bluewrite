@@ -37,6 +37,12 @@ import {
   reportAriaLabel,
   reportHint,
   draftEditLabel,
+  RECENT_DAYS,
+  RECENT_LABEL,
+  RECENT_ICON,
+  recentFrom,
+  recentWindowFrom,
+  withRecentShelf,
 } from '../../src/lib/reportFolder.js';
 
 const component = readFileSync(
@@ -75,13 +81,16 @@ test('every incident type has an icon, and no icon is dead', () => {
     assert.ok(glyphKeys.includes(key), `mapped icon "${key}" has no glyph in ReportTypeIcon.jsx`);
   }
   assert.ok(glyphKeys.includes(DEFAULT_ICON), 'the fallback glyph must exist');
-  // ...and every glyph must be reachable from the map (or be the fallback).
+  // ...and every glyph must be reachable from the map — or be the fallback, or
+  // the RECENT folder's own glyph, which cannot come from the map at all: a
+  // window over the record is not an incident type (see RECENT_ICON).
   for (const key of glyphKeys) {
     assert.ok(
-      Object.values(TYPE_ICON).includes(key) || key === DEFAULT_ICON,
+      Object.values(TYPE_ICON).includes(key) || key === DEFAULT_ICON || key === RECENT_ICON,
       `glyph "${key}" is never referenced — dead drawing`,
     );
   }
+  assert.ok(glyphKeys.includes(RECENT_ICON), 'the Recent folder has no glyph to wear');
 
   // Every entry maps to a distinct key, so the folders do not all read alike.
   const keys = Object.values(TYPE_ICON);
@@ -231,11 +240,17 @@ test('a row announces exactly the action the list will perform', () => {
   const r = { id: 319, incident_type: 'Theft' };
   const dateText = 'Sep 12, 2026';
 
-  assert.equal(reportAriaLabel(r, { dateText }), 'Open report BW-0319, Theft, Sep 12, 2026');
-  // Finalized, non-admin: locked — the row must not promise an open it cannot do.
+  // The click shows the SHEET (owner request, 2026-10-06), so that is what the
+  // row promises — for every status, because reading a record is not an edit.
+  assert.equal(
+    reportAriaLabel(r, { dateText }),
+    'View the sheet for report BW-0319, Theft, Sep 12, 2026',
+  );
+  // Finalized, non-admin: locked. The sheet still opens — the pencil is what is
+  // gone — and the row says so rather than refusing to open at all.
   assert.equal(
     reportAriaLabel(r, { dateText, locked: true }),
-    'Report BW-0319, Theft, Sep 12, 2026 — finalized, locked',
+    'View the sheet for report BW-0319, Theft, Sep 12, 2026 — finalized, locked',
   );
   // The archive speaks of RESTORING, and only when that is actually offered.
   assert.equal(
@@ -248,14 +263,19 @@ test('a row announces exactly the action the list will perform', () => {
   );
   assert.equal(reportAriaLabel(r, { dateText, canOpen: false }), 'Report BW-0319, Theft, Sep 12, 2026');
   // A missing date must not leave a dangling comma.
-  assert.equal(reportAriaLabel(r), 'Open report BW-0319, Theft');
-  // An archived report is never announced as "Open", whether or not it restores.
-  assert.doesNotMatch(reportAriaLabel(r, { dateText, archived: true, canRestore: true }), /Open/);
+  assert.equal(reportAriaLabel(r), 'View the sheet for report BW-0319, Theft');
+  // An archived report is never announced as a view, whether or not it restores:
+  // the archive's one action is Restore.
+  assert.doesNotMatch(
+    reportAriaLabel(r, { dateText, archived: true, canRestore: true }),
+    /Open|View the sheet/,
+  );
 });
 
 test('the hover hint names the same state as the label', () => {
-  assert.equal(reportHint({}), 'Click to open · use ⋮ for actions');
-  assert.match(reportHint({ locked: true }), /Finalized — locked/);
+  assert.equal(reportHint({}), 'Click to view the sheet · use ⋮ for actions');
+  assert.match(reportHint({ locked: true }), /view the sheet/i);
+  assert.match(reportHint({ locked: true }), /finalized/i);
   assert.equal(reportHint({ archived: true, canRestore: true }), 'Archived — use ⋮ to restore');
   assert.equal(reportHint({ archived: true }), 'Archived report');
   assert.equal(reportHint({ canOpen: false }), 'Use ⋮ for actions');
@@ -310,7 +330,9 @@ test('an opened folder lists its reports as real rows with their actions', () =>
   assert.match(list, /onContextMenu=\{/);
   assert.match(list, /e\.shiftKey && e\.key === 'F10'/);
   // A locked row must not open on click even though it stays focusable.
-  assert.match(list, /if \(meta\.canOpen\) onOpen\?\.\(report\.id\)/);
+  // The whole report travels with the click: the sheet page names the record off
+  // the row it was opened from (see the register's openSheet).
+  assert.match(list, /if \(meta\.canOpen\) onOpen\?\.\(report\)/);
   // The status and translation badges are the app's own, reused not restyled.
   assert.match(list, /className=\{`badge \$\{report\.status\}`\}/);
   assert.match(list, /rv-badge rv-badge--sm/);
@@ -327,14 +349,22 @@ test('the register draws a shelf, and a folder opens into its own list', () => {
   assert.match(reports, /buildShelves\(folders, \{/);
   assert.match(reports, /shelvesFor\(\{ archived: showArchived, awaiting \}\)/);
   assert.match(reports, /shelf\.folders\.map\(\(folder\) => \(/);
-  // Folders sit in a flex row directly on the page — no grid, no card.
-  assert.match(styles, /\.folder-shelf__row \{[^}]*display:\s*flex/);
+  // Folders sit directly on the page — no card wrapper — in an even grid of
+  // aligned columns (owner request, 2026-10-06: the wrapped flex row left every
+  // folder at its natural width and the columns unaligned between shelves).
+  assert.match(styles, /\.folder-shelf__row \{[^}]*display:\s*grid/);
+  assert.match(styles, /\.folder-shelf__row \{[^}]*grid-template-columns:\s*repeat\(auto-fill/);
 
   // The drill-in: the contents list, the trail back, and a request scoped to
   // the open folder.
   assert.match(reports, /<ReportList/);
   assert.match(reports, /rowMeta=\{rowMeta\}/);
-  assert.match(reports, /const folderParams = openFolder \? \{ bucket: openFolder\.shelf, type: openFolder\.type \} : \{\}/);
+  // ...scoped by the folder: the shelf is the bucket, the folder is the type —
+  // and the RECENT folder, which is neither, is scoped by its window alone.
+  assert.match(
+    reports,
+    /const folderParams = openFolder\s*\n?\s*\? openFolder\.recent\s*\n?\s*\? \{ date_from: recentWindowFrom\(query\.date_from\) \}\s*\n?\s*: \{ bucket: openFolder\.shelf, type: openFolder\.type \}/,
+  );
   assert.match(reports, /folderTrail\(listTitle, openFolder\.label, openFolder\.type\)/);
   assert.match(reports, /onClick=\{closeFolder\}/);
   // The breadcrumb is a real landmark and the last crumb is the current page.
@@ -343,7 +373,9 @@ test('the register draws a shelf, and a folder opens into its own list', () => {
 
   // Opening a folder must not make the filter bar claim the officer chose a
   // type, and it must not leave the previous folder's rows under the new name.
-  assert.match(reports, /setOpenFolder\(\{ shelf: shelf\.all \? null : shelf\.key, label: shelf\.label, type \}\)/);
+  assert.match(reports, /shelf: shelf\.all \|\| shelf\.recent \? null : shelf\.key,/);
+  assert.match(reports, /type: shelf\.recent \? null : type,/);
+  assert.match(reports, /recent: !!shelf\.recent,/);
   assert.match(reports, /function closeFolder\(\)[\s\S]*?setReports\(null\)/);
   // A folder IS a type, so narrowing by type — or clearing the filters — leaves
   // the folder rather than contradicting the breadcrumb.
@@ -413,7 +445,12 @@ test('the shelf, the folder and the row are declared once and used once', () => 
 
   // The motion is optional, the state is not: the transitions live in the
   // no-preference query, and every colour is a role token.
-  const motion = styles.match(/@media \(prefers-reduced-motion: no-preference\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  // EVERY no-preference block, not only the first: the sheet carries more than one
+  // (the assistant's Generate pill has its own motion), and what is asserted is
+  // that the folder's transition lives INSIDE such a block.
+  const blocks = [...styles.matchAll(/@media \(prefers-reduced-motion: no-preference\) \{([\s\S]*?)\n\}/g)].map((m) => m[1]);
+  assert.ok(blocks.length > 0, 'the sheet states no reduced-motion branch at all');
+  const motion = blocks.find((b) => b.includes('.glass-folder__sheet')) ?? '';
   assert.match(motion, /\.glass-folder__sheet,\s*\n\s*\.glass-folder__front \{[^}]*transition:\s*transform/);
   assert.match(styles, /--ir-folder-face:/);
   assert.match(styles, /--ir-folder-ink:/);
