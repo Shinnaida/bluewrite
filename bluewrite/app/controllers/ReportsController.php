@@ -538,6 +538,38 @@ final class ReportsController
                 Response::json(422, ['error' => 'Search is limited to ' . self::MAX_SEARCH_WORDS . ' words.']);
             }
 
+            // WHICH WORDS NAME A REPORT, built once before the per-word loop.
+            //
+            // A report's number is not a column: it is the record's id, spelled
+            // the way the app spells it (BW-0319 — see reportNumber() in the
+            // register), and the register's search field promises it in as many
+            // words ("Search by report number, location, or type…" — owner
+            // request, 2026-10-07). The spelling is loose on purpose, because an
+            // officer reading a stamped sheet types what is printed and one who
+            // remembers it types what they remember: "BW-0319", "bw319", "0319"
+            // and "319" are one number.
+            //
+            // THE PREFIX MAY STAND APART FROM THE DIGITS — "BW 0319" is two words,
+            // and a search that ANDs its words would otherwise need "bw" to appear
+            // somewhere in the record, which it never does. So a word that is just
+            // the prefix takes the number off the word that follows it, and both
+            // words then name the same record.
+            $reportIdFor = [];
+            foreach ($words as $wi => $word) {
+                $digits = null;
+                if (preg_match('/^(?:bw-?)?0*(\d{1,9})$/i', $word, $m) === 1) {
+                    $digits = (int) $m[1];
+                } elseif (preg_match('/^bw-?$/i', $word) === 1) {
+                    $next = (string) ($words[$wi + 1] ?? '');
+                    if (preg_match('/^0*(\d{1,9})$/', $next, $n) === 1) {
+                        $digits = (int) $n[1];
+                    }
+                }
+                if ($digits !== null) {
+                    $reportIdFor[$wi] = $digits;
+                }
+            }
+
             $qCols = [
                 'r.incident_type',
                 'r.location',
@@ -607,6 +639,22 @@ final class ReportsController
                     // error and EVERY keyword search 500s.
                     . ")) jt WHERE jr.id = r.id AND CONCAT_WS('\\n', "
                     . implode(', ', $jsonHaystack) . ") LIKE {$key})";
+
+                // A WORD THAT NAMES A REPORT matches the record it names (see
+                // $reportIdFor above). It is an ALTERNATIVE INSIDE the word's
+                // group, like the party-name EXISTS above, and for the same
+                // reason: a report's number appears nowhere else ON the report,
+                // so the word has to be able to satisfy itself.
+                //
+                // Digits only, cast to an int and bound as a parameter — nothing
+                // typed here reaches the SQL as anything but a NUMBER, and the
+                // pattern caps at nine digits so a long string of them cannot
+                // overflow what the column holds.
+                if (isset($reportIdFor[$wi])) {
+                    $key = ":qid{$wi}";
+                    $params[$key] = $reportIdFor[$wi];
+                    $or[] = "r.id = {$key}";
+                }
 
                 $parts[] = '(' . implode(' OR ', $or) . ')';
             }

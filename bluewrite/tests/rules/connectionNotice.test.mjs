@@ -17,7 +17,9 @@
 // exclusion chains (base and :hover — excluding one would leave the other
 // repainting the pointer state), the Shell wrapper that puts the banner inside
 // `.ir-body` in the first place, and the control's own rule in styles.css, which
-// must stay a link rather than become a plate.
+// must stay a link rather than become a plate. The banner's own placement is read
+// out of the same sheet (see the last test): being visible for the whole outage is
+// the banner's entire job, and in the page's flow it was not.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -104,4 +106,37 @@ test('the banner still reports the state it was given, in the server’s own wor
   // sentence already says it.
   assert.match(SRC, /className=\{`conn-banner \$\{state\}`\} role="alert"/, 'the banner is no longer an alert');
   assert.match(SRC, /<span className="conn-banner-dot" aria-hidden="true" \/>/, 'the banner lost its state dot');
+});
+
+test('the banner floats over the workspace for as long as the outage lasts', () => {
+  // IT MUST NOT SCROLL AWAY. `.main` is the element that scrolls and the register
+  // is a long list, so an in-flow banner was gone within one flick of the wheel —
+  // which is why the owner asked for it floating (2026-10-08).
+  const rule = (STYLES.match(/\.conn-banner \{[\s\S]*?\}/) || [])[0];
+  assert.ok(rule, '.conn-banner is gone from the stylesheet');
+  assert.match(rule, /position:\s*fixed/, 'the banner is back in the page flow, where the page scrolls it away');
+  assert.match(rule, /bottom:\s*[0-9.]+rem/, 'the banner is not pinned to the bottom of the window');
+  assert.match(rule, /transform:\s*translateX\(-50%\)/, 'the banner is not centred on the window');
+  // ...and it no longer reserves a line of flow it does not occupy.
+  assert.doesNotMatch(rule, /margin-bottom/, 'the banner still reserves the flow space it no longer takes');
+
+  // OPAQUE. `--amber-bg` is a 10% wash, which was fine on a panel in the flow and
+  // is a smudge over the register once the thing floats. The wash has to sit on an
+  // opaque colour — the same one the toast uses.
+  assert.match(rule, /var\(--amber-bg\)[^;]*,\s*var\(--panel-raised\)/, 'the floating banner is a translucent wash over the list behind it');
+  assert.match(rule, /box-shadow/, 'the floating banner has no shadow, so it reads as a band across the page');
+
+  // THE LADDER, read from the sheet rather than repeated as a number here: above
+  // the workspace, below the dock's corner and below a confirmation dialog — a
+  // connection problem is not more urgent than the officer's own dialog.
+  const zOf = (selector) => {
+    const block = (STYLES.match(new RegExp(`\\${selector} \\{[\\s\\S]*?\\}`)) || [])[0];
+    assert.ok(block, `${selector} is gone from the stylesheet`);
+    return Number((block.match(/z-index:\s*(\d+)/) || [])[1]);
+  };
+  const banner = Number((rule.match(/z-index:\s*(\d+)/) || [])[1]);
+  assert.ok(Number.isInteger(banner), 'the floating banner carries no z-index');
+  assert.ok(banner > zOf('.main'), 'the banner floats UNDER the workspace it is warning about');
+  assert.ok(banner < zOf('.dash-dock'), 'the banner covers the presence rail and the chatbox');
+  assert.ok(banner < zOf('.dialog-overlay'), 'the banner floats over a confirmation dialog');
 });

@@ -179,11 +179,12 @@ test('the readout holds still while it ticks, and it is stated for the navy band
   // below the band's own wordmark states.
   assert.match(rule[0], /color:\s*#fff/, 'the readout is not stated against the band it prints on');
 
-  // The mark is the band's gold — the same accent the action plate and the WRITE
-  // in the wordmark use, so the hero spends ONE accent and spends it three times.
-  const mark = SHEET.match(/\.ir-hero-clock-mark\s*\{[^}]*\}/);
-  assert.ok(mark, '.ir-hero-clock-mark is gone from the stylesheet');
-  assert.match(mark[0], /color:\s*var\(--ir-gold\)/, 'the clock lost the band’s accent');
+  // THE MARK IS GONE (owner request, 2026-10-07): the clock states itself with
+  // its readout alone, and the gold rule that painted the glyph went with it —
+  // so the accent stays with the WRITE and the action plate, and a rebuild
+  // cannot draw the logo back silently.
+  assert.ok(!SHEET.includes('.ir-hero-clock-mark'), 'the clock mark rule is still in the stylesheet');
+  assert.ok(!SRC.includes('ir-hero-clock-mark'), 'the clock mark is still in the tree');
 
   // The band itself: navy, and bled past the page's gutters by NAME, so the
   // wordmark starts on the same left edge every card under it starts on.
@@ -197,27 +198,15 @@ test('the readout holds still while it ticks, and it is stated for the navy band
   // room the clock lands a measure past the wordmark, clear of the bright middle
   // of the station's own building. Read the other way round, the two rules below
   // are one decision: a clock on the far edge would sit on the busiest part of the
-  // picture. The 62% half of the `min()` is what keeps that true on a very wide
+  // picture. The 76% half of the `min()` is what keeps that true on a very wide
   // screen, where a fixed measure would leave the clock stranded mid-band.
   const inner = SHEET.match(/\.ir-home-hero-inner\s*\{[^}]*\}/);
   assert.ok(inner, '.ir-home-hero-inner is gone from the stylesheet');
-  assert.match(inner[0], /max-width:\s*min\(60rem,\s*62%\)/, 'the band no longer keeps a measure');
-  // …AND THE LETTERHEAD HAS A MEASURE OF ITS OWN, which is what keeps the clock
-  // beside it. The band is a row of two blocks placed with `space-between`, so the
-  // clock lands at the far end of that measure — and any line in the letterhead
-  // wider than the room left for it pushes the WHOLE CLOCK, day and date with it,
-  // onto a second row, under the wordmark. The lead copy is that line, and the one
-  // that changes whenever the station rewrites it: reworded at the same measure it
-  // took the row and the clock dropped. Capped, the sentence wraps inside the
-  // measure instead, and nothing on the band moves.
-  const lead = SHEET.match(/\.ir-home-hero-lead\s*\{[^}]*\}/);
-  assert.ok(lead, '.ir-home-hero-lead is gone from the stylesheet');
-  const leadMeasure = lead[0].match(/max-width:\s*([0-9.]+)rem/);
-  assert.ok(leadMeasure, 'the lead copy has no measure: a longer sentence will push the clock onto its own row');
-  assert.ok(
-    Number(leadMeasure[1]) >= 20 && Number(leadMeasure[1]) <= 30,
-    `the letterhead's measure is ${leadMeasure[1]}rem, which no longer sits inside the band's own 60rem`,
-  );
+  assert.match(inner[0], /max-width:\s*min\(72rem,\s*76%\)/, 'the band no longer keeps a measure');
+  // …AND THE LETTERHEAD'S LAST LINE IS THE SUB: the promise lead the band used
+  // to carry under it was taken off (owner request), so the widest line left is
+  // the sub, which is short. The lead rule is gone with it.
+  assert.ok(!SHEET.includes('.ir-home-hero-lead'), '.ir-home-hero-lead is still in the stylesheet');
   // THE PICTURE IS THE BAND'S RIGHT END, AND THE WHOLE FRAME IS ON IT. That second
   // half is what this block exists for now: the station asked for the photograph it
   // supplied rather than a window cut out of it, so the layer draws the whole 3:1
@@ -235,11 +224,11 @@ test('the readout holds still while it ticks, and it is stated for the navy band
   // is the one number in the rule that follows the FILE, so a station swapping in
   // a photograph of another shape changes it here.
   assert.match(photo[0], /aspect-ratio:\s*3\s*\/\s*1/, 'the photograph is no longer drawn at its own proportions');
-  // The ceiling is only the guard for a band too narrow to hold that shape, and
-  // the width is no longer a share of the band — a share is a crop waiting to
-  // happen. `max-width` is not a `width`: the pattern has to say so, or the guard
-  // would read as the very declaration it replaced.
-  assert.match(photo[0], /max-width:\s*min\(58%,\s*46rem\)/, 'the photograph has lost its narrow-band guard');
+  // NO WIDTH CAP. The box takes its width from the band's own height and the
+  // file's 3:1; a cap narrower than that shape letterboxes the frame (navy
+  // above and below). The narrow band is guarded by the band's own overflow
+  // clip and the picture's left mask instead.
+  assert.match(photo[0], /max-width:\s*none/, 'the photograph is width-capped again, so a tall band letterboxes it');
   assert.doesNotMatch(photo[0], /[;{]\s*width:\s*min\(/, 'the photograph is a share of the band\u2019s width again');
   assert.doesNotMatch(photo[0], /[;{]\s*width:\s*100%/, 'the photograph is the band\u2019s field again, under every word');
   assert.match(photo[0], /height:\s*100%/, 'the photograph no longer fills the band\u2019s height');
@@ -287,18 +276,21 @@ test('the readout holds still while it ticks, and it is stated for the navy band
   // photograph pasted on its right end.
   const scrim = SHEET.match(/\.ir-home-hero-scrim\s*\{[^}]*\}/);
   assert.ok(scrim, '.ir-home-hero-scrim is gone from the stylesheet');
-  assert.match(scrim[0], /rgba\(11, 37, 69, 0\.92\) 0%/, 'the scrim no longer holds the wordmark');
-  assert.match(scrim[0], /rgba\(11, 37, 69, 0\.76\) 52%/, 'the scrim no longer holds the clock\u2019s column');
-  assert.match(scrim[0], /rgba\(11, 37, 69, 0\.5\) 100%/, 'the veil lifts at the far edge');
+  // THE VEIL RUNS 30% LIGHTER (owner request, 2026-10-06): every stop was cut
+  // to 70% of its drawn value — 0.92→0.64, 0.86→0.60, 0.76→0.53, 0.58→0.41,
+  // 0.5→0.35 — so the station shows through more while the navy stays a
+  // surface on it. The assertions track the new stops.
+  assert.match(scrim[0], /rgba\(11, 37, 69, 0\.64\) 0%/, 'the scrim no longer holds the wordmark');
+  assert.match(scrim[0], /rgba\(11, 37, 69, 0\.53\) 52%/, 'the scrim no longer holds the clock\u2019s column');
+  assert.match(scrim[0], /rgba\(11, 37, 69, 0\.35\) 100%/, 'the veil lifts at the far edge');
   assert.doesNotMatch(scrim[0], /rgba\(11, 37, 69, 0\.0\d\)/, 'the scrim clears the picture again');
-  // AND IT IS STILL A VEIL — half the picture and no more. The floor is 0.5 rather
-  // than the 0.7 it was: the photograph is a whole frame at the band's own height
-  // now and is meant to be SEEN, so what this guards is only that the band's navy
-  // is still the surface on top of it. A ramp that reaches a light tint is the
-  // full-bleed design coming back, where the picture was the page.
+  // AND IT IS STILL A VEIL, not a wash — the floor is 0.3: the owner asked for
+  // 30% off every stop, so the ramp may reach 0.35 at the far edge but never
+  // clears to a tint. A ramp under the floor is the full-bleed design coming
+  // back, where the picture was the page.
   for (const stop of scrim[0].matchAll(/rgba\(11, 37, 69, (0\.\d+)\)/g)) {
     const alpha = Number(stop[1]);
-    assert.ok(alpha >= 0.5, `the veil drops to ${alpha} — the photograph is showing past the navy again`);
+    assert.ok(alpha >= 0.3, `the veil drops to ${alpha} — the photograph is showing past the navy again`);
   }
 
   // The zone is its own line, in sentence case: the band's kicker already carries

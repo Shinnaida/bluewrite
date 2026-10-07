@@ -25,6 +25,12 @@ public/assets/
 phpunit.phar
 .phpunit.result.cache
 
+# scripts/export-offline.php — the browsable copy of the register that opens with
+# no server at all (file://), written where the app can be found on disk. It is
+# STATION DATA — real reports and real narratives — so it is never committed: an
+# export is something an officer makes on a workstation, not a file in the repo.
+offline-copy/
+
 # Misc
 .DS_Store
 Thumbs.db

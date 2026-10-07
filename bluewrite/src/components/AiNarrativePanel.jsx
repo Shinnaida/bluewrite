@@ -256,49 +256,9 @@ function ZoomControls({ value, onStep, onFit, className = '' }) {
   );
 }
 
-// THE GENERATE MARK: a record with the assistant's own spark laid on its lower
-// corner — the page every folder card already wears for a plain report (the
-// `file-text` glyph, ReportTypeIcon.jsx) with the four-point star the voice orb
-// carries (AiVoiceOrb), which is what says the page is being WRITTEN rather
-// than filled in. Drawn here rather than borrowed from ReportTypeIcon because
-// this is the assistant's one control mark, not an incident type: the sheet is
-// the same shape on purpose, and the star is what makes it this panel's.
-//
-// The page is STROKED and the star is FILLED, in the one ink: the star is a
-// spark (a solid), and a page drawn solid at this size would be a blob. The
-// second text line stops short of the corner the star occupies, so the two
-// marks do not cross.
-const GENERATE_MARK_PATHS = [
-  'M14 3.2H7.4a2 2 0 0 0-2 2v13.6a2 2 0 0 0 2 2h9.2a2 2 0 0 0 2-2V8z',
-  'M14 3.2V8h5',
-  'M9.2 12.6h4.6M9.2 16.2h2.4',
-];
-const GENERATE_MARK_SPARK =
-  'M18.7 13.2c.5 2.6 1.3 3.4 3.9 3.9-2.6.5-3.4 1.3-3.9 3.9-.5-2.6-1.3-3.4-3.9-3.9 2.6-.5 3.4-1.3 3.9-3.9z';
-
-function GenerateMark() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      {GENERATE_MARK_PATHS.map((d) => (
-        <path key={d} d={d} />
-      ))}
-      {/* The spark rides ON the page's corner, so it is stated as a fill in the
-          same ink and takes no stroke of its own. */}
-      <path d={GENERATE_MARK_SPARK} fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
+// The Generate button's file mark is GONE (owner request, 2026-10-06): the
+// button is its words alone. The old drawing — the record with the spark, and
+// the hairline that parted it from the words — was removed with it.
 
 function SheetGlyph({ paths }) {
   return (
@@ -1721,37 +1681,23 @@ export default function AiNarrativePanel({
               shineFade={40}
               thickness={2}
               intensity={1.6}
-              proximity={250}
+              /* STILL UNDER THE POINTER (owner request, 2026-10-06): the rim
+                 does not answer the mouse — `followMouse={false}` stops the
+                 shine steering, and `proximity={0}` keeps it from brightening
+                 as the pointer approaches, so the drawn edge rests. Focus and
+                 press still respond (the app's own states, not the shader's). */
+              followMouse={false}
+              proximity={0}
               onClick={() => generate()}
               disabled={translationOff}
             >
-              {/* THE PILL'S FOUR PARTS, left to right: the mark, the hairline
-                  that separates it from the words, the words themselves, and
-                  the chevron that says the press GOES somewhere. Only the
-                  words are text — a screen reader hears "Generate AI draft"
-                  once, from the button's own label, and none of the three
-                  marks is announced (each is aria-hidden). */}
-              <span className="ai-run-mark" aria-hidden="true">
-                <GenerateMark />
-              </span>
-              <span className="ai-run-rule" aria-hidden="true" />
+              {/* THE PILL'S ONE PART: the words alone (owner request,
+                  2026-10-06 — the mark and the chevron are gone, and with the
+                  mark the hairline that parted them goes too). The label is
+                  still the button's own text, so the accessible name is
+                  unchanged. */}
               <span className="ai-run-text">
                 {nativeNarrative && effectiveSource === 'narrative' ? 'Translate my narrative' : 'Generate AI draft'}
-              </span>
-              <span className="ai-run-chevron" aria-hidden="true">
-                <svg
-                  viewBox="0 0 24 24"
-                  width="13"
-                  height="13"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  focusable="false"
-                >
-                  <path d="M9 5.4 15.6 12 9 18.6" />
-                </svg>
               </span>
             </SpecularButton>
             {/* Offered only when it can run — see `tightenUsable` above. There is

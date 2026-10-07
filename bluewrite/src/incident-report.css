@@ -90,14 +90,16 @@
      the palette already has the red family (--red, --red-bg, --red-text) with
      dark's own restatement, so nothing here has to answer for the theme. */
   --ir-red-tint: var(--red-bg);
-  /* The middle of the flag stripe on the advice card: the light field between
-     the blue and the red. Its JOB does not change with the theme (a light field
-     that separates the two colours) but its VALUE has to: on the light card a
-     white field is not a field, and in dark the hairline grey would dissolve
-     into the card. So it is named here and re-stated by dark (dark-theme.css),
-     like every other colour in this file that has to survive the switch. */
-  --ir-flag-mid: var(--line);
   --ir-border: var(--line);
+  /* MY REGISTER's own inks (owner request, 2026-10-07, the reference card):
+     the tiles' borders and the icon discs sit on a deeper wash of the same
+     accent than the tile fill, the bars' track sits between the two, and the
+     headings and counts read in the station navy — as TEXT, which --ir-navy
+     cannot be in dark (there it is a BAR fill), so the ink is its own token
+     with a dark restatement, like every colour here that survives the switch. */
+  --ir-ink-navy: var(--ir-navy);
+  --ir-tile-line: var(--cyan-bg-strong);
+  --ir-track: rgba(31, 95, 208, 0.16);
   /* A FIELD's own hairline, and it has to be a legible one: the boundary of an
      input is a UI component, so it is measured against the well it draws rather
      than against the page (WCAG 1.4.11 asks for 3:1). --line-bright (#C2C9D6)
@@ -179,22 +181,49 @@
   --ir-focus-ring: var(--focus-ring);
 
   /* --- The report FOLDER (My Reports / All Reports, section II) -----------
-     The folder face is translucent NAVY — the same navy the top bar and the
-     section bars wear — so a shelf of folders reads as the station's own
-     stationery rather than as a generic blue. It is held here rather than
-     written into the folder rules because the folder sits on the app's PAGE,
-     which goes near-black in dark: the glass has to be restated for that (see
-     dark-theme.css), and a literal in the rule could not follow it.
+     MANILA AND PAPER (owner request, 2026-10-06). A shelf of folders is the
+     station's own stationery, and it is drawn as what it is: an amber board
+     with a tab on the left, sheets inside, and an amber cover tabbed on the
+     right. It is held here rather than written into the folder rules because
+     the folder sits on the app's PAGE, which goes near-black in dark: the
+     board has to be restated for that (see dark-theme.css), and a literal in
+     the rule could not follow it.
 
-     The FACE is the opaque one on purpose. It carries the type name in white,
-     and white over a 20%-navy glass on a pale page would be unreadable — the
-     reference component's `text-white` assumes a saturated swatch behind it.
-     0.86 of the navy measures ~5:1 for the label, which is small text. */
-  --ir-folder-back: rgba(26, 43, 74, 0.30);
-  --ir-folder-sheet: rgba(26, 43, 74, 0.16);
-  --ir-folder-face: rgba(26, 43, 74, 0.86);
-  --ir-folder-edge: rgba(255, 255, 255, 0.28);
-  --ir-folder-ink: #ffffff;
+     THREE SHEETS, THREE SHADES, and the order is the point: the lightest is the
+     one the cover sits on. A fanned stack reads as a sheaf by its steps of
+     shade, and one tint for all three fans as a single sheet of card.
+
+     THE COVER IS A GRADIENT — the light end at its top, the deeper one at its
+     foot — which is the reference's `from-amber-500 to-amber-400` read
+     bottom-up. Its TAB takes the light end as a FLAT colour: a gradient in a
+     16px box restarts inside it, and the tab would stop continuing the cover's
+     own top edge.
+
+     THE INK IS DARK, not white: this face is amber, and the label on it is the
+     problem the navy glass had in reverse. #78350f measures 5.9:1 against the
+     cover's light end and 4.8:1 at its foot, which is where the name sits. */
+  --ir-folder-back: #d97706;
+  --ir-folder-face: linear-gradient(to top, #f59e0b, #fbbf24);
+  --ir-folder-tab: #fbbf24;
+  --ir-folder-sheet-1: #a1a1aa;
+  --ir-folder-sheet-2: #d4d4d8;
+  --ir-folder-sheet-3: #e4e4e7;
+  --ir-folder-ink: #78350f;
+
+  /* ---- The file card (ReportList's PDF page inside an opened folder) -----
+     The reference component draws the page WHITE in both the brief's themes,
+     and the printed sheet is white paper after dark too — but a screen card
+     cannot sit as bare white on a dark panel without glowing. So the paper is
+     a token: white in light, the raised panel after dark (dark-theme.css),
+     with the ghost placeholder lines as two strengths of ink on it. The red
+     PDF banner keeps its reference value in both themes: it is the file
+     format's own mark, like the folder's ambers above — fixed, not themed. */
+  --ir-filecard-paper: #ffffff;
+  --ir-filecard-ring: #d4d4d8;
+  --ir-filecard-line-strong: rgba(0, 0, 0, 0.2);
+  --ir-filecard-line: rgba(0, 0, 0, 0.1);
+  --ir-filecard-red: #ef4444;
+  --ir-filecard-fold: #e4e4e7;
 
   /* The sheet of paper's own writing margin, named once. The paper pads its
      content by this (see .ir-form--sheet) and the controls on the desk BELOW
@@ -753,31 +782,6 @@
   letter-spacing: 0.04em;
   color: var(--ir-muted);
   line-height: 1.6;
-}
-/* THE REGISTER’S OWN HEAD LINE. The count and the scope read as one
-   sentence (“12 REPORTS · ACTIVE RECORDS”) rather than as two stacked
-   lines, and the ROLE chip sits with them: it used to stand alone in a row
-   of its own under the header, where it read as a stray badge (owner
-   request, 2026-10-06: organize the register). */
-.ir-meta--register {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.3rem;
-}
-.ir-meta__facts {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  white-space: nowrap;
-}
-.ir-meta__sep {
-  color: var(--ir-border);
-}
-.ir-meta__role .badge {
-  /* The chip is a label on the list, not a status: the register’s own
-     muted ink keeps it from competing with the report badges below. */
-  letter-spacing: 0.05em;
 }
 
 /* The record strip: DRAFT badge, who recorded it, the translation badge.
@@ -3184,12 +3188,12 @@
    hover, so it enters none of this. See the folder block in section 5c.
 
    HOME'S FOUR ARE THE SAME FAILURE AGAIN, and they are named for the same
-   reason: Home's draft row carries a menu button and a Continue button whose
-   whole design is an OUTLINE, and the row itself sits in a bordered card. This
+   reason: Home's draft card carries a face button that fills the card and a
+   menu button pinned to its corner, and the card itself is the border. This
    selector out-specifies "no border" every time — the register row came back as
    a white plate with a border on all four sides, and the same thing happens to
    any control that states its own surface. So the gold action plate, the two
-   controls on a draft row and the "view all" link-button enter none of this;
+   controls on a draft card and the "view all" link-button enter none of this;
    each states its own fill, border, ink and hover where it is defined.
 
    .conn-banner-retry IS THE ONE THAT HID BEST, and that is because the control
@@ -3215,14 +3219,27 @@
    dashboard groups share one class (`dash-chip`) so this list can name them
    once.
 
+   THE SHELF TABS JOINED THEM (owner request, 2026-10-07): a tab states its own
+   surface — transparent when it is not the one you are on, a raised plate with
+   the accent rule under it when it is — and under this treatment every inactive
+   tab grew a white plate and a hairline, which is exactly the strip the register
+   asked not to have.
+
+   THE RAIL DID TOO, the moment it was drawn (owner request, 2026-10-07): its two
+   keys are raised plates with a radius and a hover of their own, and the
+   magnifier inside the search field is a control with NO surface at all — under
+   this treatment the pill's own magnifier grew a grey plate and a hairline inside
+   the capsule it sits in. All three are named here and in the `:hover` chain
+   below, because the second chain is what repaints the border blue.
+
    The two CHAINS must agree: excluding only the base rule would leave its
    `:hover` repainting the border blue under the pointer. */
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-go):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger) {
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.folder-tab):not(.register-tool):not(.reports-search__go):not(.report-row__open):not(.report-row__edit):not(.report-row__menu):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-face):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger) {
   background: var(--ir-btn);
   border: 1px solid var(--ir-border);
   color: var(--ir-btn-ink);
 }
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-go):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger):hover {
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.folder-tab):not(.register-tool):not(.reports-search__go):not(.report-row__open):not(.report-row__edit):not(.report-row__menu):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-face):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger):hover {
   border-color: var(--ir-blue);
   color: var(--ir-blue-ink);
   background: var(--ir-btn);
@@ -3525,100 +3542,274 @@
 /* ===========================================================================
    5c. The register as a SHELF OF FOLDERS (My Reports / All Reports, II)
 
-   The register was a table. It is a shelf of glass folders now — one folder
-   per incident type per status shelf — and opening a folder lists the reports
+   The register was a table. It is a shelf of folders now — one folder per
+   incident type per status shelf — and opening a folder lists the reports
    inside it.
 
-   THE FOLDER IS THE REFERENCE DESIGN, ported to this app's plain CSS: a back
-   board with a tab on the left, three paper sheets stacked inside, and a front
-   cover tabbed on the right. On hover or keyboard focus the sheets fan out and
-   the cover tips open, so the folder VISIBLY holds a sheaf of reports.
+   THE FOLDER IS THE REFERENCE DESIGN, ported to this app's plain CSS — its
+   materials as well as its shape (owner request, 2026-10-06): a MANILA board
+   with a tab on the left, three PAPER sheets stacked inside, and a manila cover
+   tabbed on the right. On hover or keyboard focus the sheets fan out and the
+   cover tips open, so the folder VISIBLY holds a sheaf of reports.
 
    WHY IT LOOKS LIKE THIS AND NOT LIKE THE APP'S OTHER CARDS. Every other block
    on this screen is a document: paper, hairlines, a navy header. A folder is
    not a document — it is a THING YOU OPEN — and a shelf of them is read by
-   shape before it is read by words. So it is navy glass, the same navy the top
-   bar and the section bars wear, which keeps it this station's stationery.
+   shape before it is read by words. So it is the one piece of station FURNITURE
+   on the page: an amber board with a grey sheaf inside it, and the type name in
+   dark ink on the cover, the way a folder in a records room is labelled.
 
    The face carries NO icon and NO thumbnail: the type name IS the folder's
    identity. The glyph still exists (ReportTypeIcon) in the trail of an OPENED
    folder, where it confirms which folder you are in.
 
    Every colour is a role token (--ir-folder-*, declared on :root with the rest
-   of the document aliases) so the dark theme can restate the glass for a
+   of the document aliases) so the dark theme can restate the board for a
    near-black page without these rules knowing which theme is on.
    =========================================================================== */
 
 /* ---- The shelf ---------------------------------------------------------- */
+/* THE REGISTER'S SUMMARY STRIP (owner request, 2026-10-07): the three numbers
+   an officer opens the register to check — how many reports the filter holds,
+   and how they split between still-mine and gone-to-the-station — stated ONCE
+   above the shelves, in the document grammar the trail wears: a band with its
+   own padding and one hairline under it, label over number, the blocks
+   separated by hairlines rather than boxed into cards. The numbers are folded
+   from the SAME tally the shelves fold (see the strip in Reports.jsx), so a
+   tile and its shelf cannot disagree. */
+.register-tally {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0.85rem 1rem 0.8rem;
+  border-bottom: 1px solid var(--ir-border);
+}
+.register-tally__item {
+  flex: 1 1 9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.15rem 1.4rem;
+  border-left: 1px solid var(--ir-border);
+}
+.register-tally__item:first-child {
+  border-left: 0;
+  padding-left: 0.25rem;
+}
+.register-tally__label {
+  font-family: var(--font-hud);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+}
+.register-tally__num {
+  margin: 0;
+  font-family: var(--font-hud);
+  font-size: 1.55rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: var(--ir-text);
+}
+/* THE REGISTER'S SHELVES ARE TABS. The strip names every shelf and counts it;
+   what that shelf holds — a grid of folders, or ALL REPORTS' list of files — sits
+   under it in the panel below. And when that shelf holds FILES, the register's own
+   controls (the search field and the two keys, see .register-tools) stand at the
+   right end of that SAME row (owner request, 2026-10-08): one line of names, one
+   line of controls, and one hairline under both. The bar owns the padding and the
+   rule now (see .folder-head), so that line runs the full width of the card the
+   way a document's rule does. */
 .folder-shelves {
   display: flex;
   flex-direction: column;
-  gap: 1.6rem;
-  /* The register card is `flush` (its body owns no padding, for a full-bleed
-     table), so the shelf brings its own. */
-  padding: 1rem;
 }
-.folder-shelf {
+
+/* ---- The head: the strip, and the rail beside it ------------------------
+   ONE ROW rather than two stacked ones. The rail used to stand on a line of its
+   own under the strip, which pushed the register's first report row down a whole
+   control's height and left two right-aligned parts of the same register on two
+   different lines. This is the row they share now — and it is why the hairline
+   lives HERE rather than on the strip: with the rail beside it the strip is no
+   longer the full width of the card, and a document's rule does not stop half way.
+
+   Bottom-aligned, because the tabs are: a current tab's 3px rule is pulled down
+   over this hairline (see .folder-tab), and the shelf's note and count sit on the
+   tab's own baseline. */
+.folder-head {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  padding: 0.55rem 1rem 0;
+  border-bottom: 1px solid var(--ir-border);
+}
+
+/* ---- The strip ----------------------------------------------------------
+   One tab per shelf, in the register's own order. The active tab is a raised
+   plate with the accent rule under it — the same two signals the top bar's
+   current destination wears (see .ir-nav-link[aria-current='page']), so "you are
+   here" reads the same way wherever it appears.
+
+   THE RULE IS ALWAYS THERE, transparent until the tab is current, so a tab
+   cannot change height as it becomes the one you are on.
+
+   It brings no padding and no rule of its own any more — both belong to the head
+   it shares with the rail, so the hairline the tabs sit on is the whole row's.
+   `min-width: 0`, so a narrow screen shrinks the strip rather than pushing the
+   rail off the row. */
+.folder-tabs {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.3rem;
+  flex: 1 1 auto;
   min-width: 0;
 }
-.folder-shelf__head {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  margin: 0 0 0.4rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--ir-border);
+.folder-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.75rem 0.55rem;
   font-family: var(--font-hud);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ir-head-ink);
-}
-.folder-shelf__count {
-  margin-left: auto;
-  font-size: 0.7rem;
-  font-weight: 400;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   color: var(--ir-muted);
+  background: transparent;
+  /* A hairline and the accent rule, BOTH TRANSPARENT at rest: the current tab is
+     the one that paints them, and stating them here is what keeps a tab from
+     changing size as it becomes the one you are on (the same trick the top bar's
+     own pill uses — see .ir-nav-link).
+
+     The rule is 3px, the weight that pill carries, and the tab is pulled down
+     over the strip's hairline by the pixel so the current tab's rule COVERS that
+     line rather than sitting above it (see .folder-tabs). */
+  border: 1px solid transparent;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  border-radius: 7px 7px 0 0;
+  cursor: pointer;
+}
+/* Hover states its own surface — see the folder below for why every restated
+   control in this sheet has to: the workspace paints `.ir-body button` and its
+   `:hover` twin, and a pseudo-class is worth a class. */
+.folder-tab:hover {
+  color: var(--ir-text);
+  background: var(--ir-row-hover);
+  border-color: transparent;
+  border-bottom-color: transparent;
+}
+.folder-tab[aria-selected='true'] {
+  color: var(--ir-head-ink);
+  background: var(--ir-raised);
+  border-color: var(--ir-border);
+  border-bottom-color: var(--ir-bar-accent);
+}
+.folder-tab[aria-selected='true']:hover {
+  color: var(--ir-head-ink);
+  background: var(--ir-raised);
+  border-color: var(--ir-border);
+  border-bottom-color: var(--ir-bar-accent);
+}
+.folder-tab:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -2px;
+}
+.folder-tab__icon {
+  flex: none;
+  opacity: 0.75;
+}
+.folder-tab[aria-selected='true'] .folder-tab__icon {
+  opacity: 1;
+  color: var(--ir-blue-ink);
+}
+.folder-tab__label {
   white-space: nowrap;
 }
-/* The shelf own note — what the shelf IS, where a window has to be named
-   (the Recent shelf says "Last 7 days"). It rides between the name and the
-   count so a head still reads as name · note · count. */
-.folder-shelf__note {
+/* The shelf's own note — what the shelf IS, where something about it has to be
+   said on the tab (ALL REPORTS wears the sort: "Newest first"). Small and quiet:
+   it qualifies the label rather than competing with it. */
+.folder-tab__note {
   font-size: 0.68rem;
   font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: none;
   color: var(--ir-muted);
+  white-space: nowrap;
+}
+/* The count, read at a glance: tabular figures so two tabs' numbers line up
+   under one another, and a lit pill rather than bare text so the number reads as
+   a tally and not as part of the shelf's name. The current tab's is filled in,
+   which is what carries the "you are here" from the rule up onto the number. */
+.folder-tab__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  color: var(--ir-blue-ink);
+  background: var(--ir-blue-tint);
+}
+.folder-tab[aria-selected='true'] .folder-tab__count {
+  color: var(--on-accent);
+  background: var(--ir-blue);
+}
+
+/* ---- The panel ----------------------------------------------------------
+   The shelf the officer is on, and only that one — the other shelves are not
+   drawn, so there is nothing behind this one to tab through. It brings the card's
+   own padding back, because the strip runs to the card's edges, and it holds
+   whichever shape that shelf is: a grid of folders (below) or ALL REPORTS' list
+   of files (the register's own report rows — see ReportFiles). */
+.folder-shelf {
+  min-width: 0;
+  /* THE TOP PADDING IS CLEARANCE, not taste: a folder's own tab overhangs its
+     box by a tenth of its height (see .glass-folder__back::before), and the card
+     the panel sits in clips what leaves it — so the room above the first row plus
+     the row's own padding has to clear that overhang, or a shelf of folders draws
+     with its tabs sliced off. 0.5rem here and 0.9rem on the row clears 10% of
+     12.5rem with air to spare. */
+  padding: 0.5rem 1rem 1rem;
 }
 .folder-shelf__empty {
-  margin: 0.35rem 0 0;
+  margin: 0.9rem 0 0;
   font-size: 0.82rem;
   color: var(--ir-muted);
 }
 /* The folders sit DIRECTLY on the page — no card, no grid wrapper — so the
    hover tilt has room to pop. THE SHELF IS A GRID (owner request,
-   2026-10-06): a wrapped flex row left every folder at its natural 15rem and
-   let the tail of a shelf drift, so two shelves of four and of three read as
-   two different layouts. `auto-fill` gives every folder the same width and
-   lines the columns up between shelves, and the columns reflow on their own
-   as the card widens — no breakpoint names a count. The item FILLS its
-   column rather than sitting at its natural 15rem (a start-aligned item was
-   wider than the column it was given and overhung its neighbour), so every
-   folder in a shelf is the same width and the columns line up between shelves.
+   2026-10-06): a wrapped flex row left every folder at its natural width and
+   let the tail of a shelf drift, so two rows of four and of three read as two
+   different layouts. `auto-fill` gives every folder the same width and lines
+   the columns up, and the columns reflow on their own as the card widens — no
+   breakpoint names a count. The item FILLS its column rather than sitting at
+   its natural width (a start-aligned item was wider than the column it was
+   given and overhung its neighbour), so every folder is the same size.
    The padding at the top is room for the tabs, which stand above the stage. */
 .folder-shelf__row {
   display: grid;
-  /* 15rem is the FOLDER’S OWN SIZE, not a taste: a column narrower than a
+  /* 12.5rem is the FOLDER'S OWN SIZE, not a taste: a column narrower than a
      folder lets the folder overhang the column beside it (the item can be
-     squeezed, the box inside it cannot). */
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  gap: 0.9rem 1rem;
+     squeezed, the box inside it cannot). It was 15rem until the folders were
+     asked to come down a size (owner request, 2026-10-07) — the two numbers
+     move together, and .glass-folder__stage states the same one as its cap. */
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  /* THE ROW GAP IS THE OVERHANG'S CLEARANCE TOO, and it has to be bigger than the
+     column gap: a folder's tab stands a tenth of its height above its own box, so
+     when the row WRAPS (a narrow screen stacks them one per line) each folder's
+     tab rises into the row above it — at a 0.8rem row gap the two merged into one
+     silhouette. 1.6rem clears the 10% of 12.5rem with air between. */
+  gap: 1.6rem 0.9rem;
   align-items: end;
-  padding: 1.1rem 0.25rem 0.4rem;
-  margin-top: 0.5rem;
+  padding: 0.9rem 0.25rem 0.4rem;
 }
 
 /* ---- The folder itself --------------------------------------------------
@@ -3626,7 +3817,7 @@
    focus ring is the affordance a table row never had. Everything that moves
    inside is decorative and hidden from assistive tech. */
 /* The wrapper exists so a folder can SHRINK on a narrow shelf: a flex item will
-   not go below its content's width without this, and the stage's 15rem would
+   not go below its content's width without this, and the stage's own width would
    then push the row wider than the card it sits in. */
 .glass-folder {
   min-width: 0;
@@ -3676,9 +3867,14 @@
   /* The design’s own 15rem (the reference’s 240×160), as a CAP rather than a
      fixed width: the folder fills its column up to that size and no further,
      and any slack a wider column leaves is split evenly around it, so folders
-     stay one size and the gaps between them stay even. */
+     stay one size and the gaps between them stay even.
+
+     A SIZE DOWN (owner request, 2026-10-07): 12.5rem, so a row of folders takes
+     a shorter shelf and more of them sit on one line. .folder-shelf__row's
+     `minmax()` states the same number — the cap and the column have to agree, or
+     a folder either overhangs its column or leaves a gap beside it. */
   width: 100%;
-  max-width: 15rem;
+  max-width: 12.5rem;
   margin-inline: auto;
   /* The reference's own 3:2 (240x160). */
   aspect-ratio: 3 / 2;
@@ -3687,24 +3883,27 @@
   user-select: none;
 }
 
-/* The board, the sheets and the cover are the same glass; only the tint and
-   the angle differ. */
+/* The board, the sheets and the cover are the same MANILA; only the shade and
+   the angle differ. NO BORDER AND NO BLUR (owner request, 2026-10-06): this is
+   a paper folder, and a hairline round every leaf was what made a fanned stack
+   read as panes of glass rather than as a sheaf. The shades separate them. */
 .glass-folder__back,
 .glass-folder__sheet,
 .glass-folder__front {
   position: absolute;
   border-radius: 1rem;
-  border: 1px solid var(--ir-folder-edge);
-  backdrop-filter: blur(10px);
 }
 
 /* The back board: full size, with a TAB on the left standing above its top edge
    and the diagonal shoulder that steps back down to the board. The two shapes
-   together are the folder silhouette — a plain rectangle with a lid is a tray. */
+   together are the folder silhouette — a plain rectangle with a lid is a tray.
+   `border-top-left-radius: 0` is what makes the tab's own left edge continue
+   straight down into the board's: with that corner left round, the silhouette
+   grew a shoulder under the tab and the folder read as two stacked things. */
 .glass-folder__back {
   inset: 0;
   background: var(--ir-folder-back);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  border-top-left-radius: 0;
 }
 .glass-folder__back::before {
   content: '';
@@ -3714,8 +3913,6 @@
   width: 33%;
   height: 10%;
   border-radius: 1rem 1rem 0 0;
-  border: 1px solid var(--ir-folder-edge);
-  border-bottom: 0;
   background: var(--ir-folder-back);
 }
 .glass-folder__back::after {
@@ -3726,17 +3923,34 @@
   width: 7%;
   height: 10%;
   background: var(--ir-folder-back);
-  clip-path: polygon(0 0, 0 100%, 100% 100%);
+  /* The ramp that closes the notch between the tab's right edge and the board's
+     top edge: it starts a third of the way down its own box and runs out to the
+     middle of it (the reference's own `polygon(0 35%, 0% 100%, 50% 100%)`). */
+  clip-path: polygon(0 35%, 0 100%, 50% 100%);
+}
+/* THE BOARD LIFTS OFF THE PAGE as the folder opens: the fan happens over a
+   folder that has come up, and this shadow is the only thing on the back that
+   moves. */
+.glass-folder__open:hover .glass-folder__back,
+.glass-folder__open:focus-visible .glass-folder__back {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
 }
 
-/* The sheets inside: inset from the board, so the stack reads as paper IN a
-   folder rather than as more folder. At rest they lie exactly on top of one
-   another — which is what keeps the folder reading as ONE thing — and the fan
-   is what shows there are reports in it. */
+/* The sheets inside: inset 0.25rem — the reference's own 4px, which is exactly
+   the margin the cover leaves above itself (156 of 160), so the sheaf's edges
+   sit under the cover's — and the stack reads as paper IN a folder rather than
+   as more folder. At rest they lie exactly on top of one another, which is what
+   keeps the folder reading as ONE thing; the fan is what shows there are reports
+   in it. One shade each, the lightest nearest the cover. */
 .glass-folder__sheet {
-  inset: 3% 3% 0;
-  background: var(--ir-folder-sheet);
+  inset: 0.25rem;
+  /* Hinged at the base, like the cover. Without this a leaf turns about its own
+     middle, which is a card pivoting rather than paper lifting out of a folder. */
+  transform-origin: bottom;
 }
+.glass-folder__sheet--1 { background: var(--ir-folder-sheet-1); }
+.glass-folder__sheet--2 { background: var(--ir-folder-sheet-2); }
+.glass-folder__sheet--3 { background: var(--ir-folder-sheet-3); }
 .glass-folder__open:hover .glass-folder__sheet--1,
 .glass-folder__open:focus-visible .glass-folder__sheet--1 {
   transform: rotateX(-20deg);
@@ -3752,7 +3966,8 @@
 
 /* The cover: nearly the full height, anchored at the bottom, with its own tab
    on the RIGHT. The two tabs are what make it a folder opened from the front
-   rather than a lid lifted off the top. The type name sits bottom-left. */
+   rather than a lid lifted off the top, and `border-top-right-radius: 0` is the
+   same join the board's tab makes on the left. The type name sits bottom-left. */
 .glass-folder__front {
   left: 0;
   right: 0;
@@ -3760,10 +3975,13 @@
   height: 97.5%;
   display: flex;
   align-items: flex-end;
-  gap: 0.4rem;
-  padding: 0.7rem 0.8rem;
+  gap: 0.35rem;
+  /* The face came down with the folder (owner request, 2026-10-07): the label
+     and its count have to fit a smaller cover, so the padding gives back the
+     difference in SIZE rather than the label losing a line of legibility. */
+  padding: 0.6rem 0.65rem;
   background: var(--ir-folder-face);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  border-top-right-radius: 0;
   transform-origin: bottom;
 }
 .glass-folder__front::before {
@@ -3774,9 +3992,7 @@
   width: 61%;
   height: 10%;
   border-radius: 1rem 1rem 0 0;
-  border: 1px solid var(--ir-folder-edge);
-  border-bottom: 0;
-  background: var(--ir-folder-face);
+  background: var(--ir-folder-tab);
 }
 .glass-folder__front::after {
   content: '';
@@ -3785,19 +4001,24 @@
   bottom: 100%;
   width: 5%;
   height: 10%;
-  background: var(--ir-folder-face);
-  clip-path: polygon(100% 0, 50% 100%, 100% 100%);
+  background: var(--ir-folder-tab);
+  /* The front's own notch-filler, mirrored: the reference's
+     `polygon(100% 14%, 50% 100%, 100% 100%)`. */
+  clip-path: polygon(100% 14%, 50% 100%, 100% 100%);
 }
+/* The cover catches its own light as it tips — the two ambers it is made of,
+   thrown back at the reader (the reference's inset glow, kept on this leaf and
+   nowhere else: the cover is the only surface that turns to face the lamp). */
 .glass-folder__open:hover .glass-folder__front,
 .glass-folder__open:focus-visible .glass-folder__front {
   transform: rotateX(-46deg) translateY(1px);
   box-shadow:
-    inset 0 20px 40px rgba(100, 149, 237, 0.4),
-    inset 0 -20px 40px rgba(65, 105, 225, 0.3);
+    inset 0 20px 40px var(--ir-folder-tab),
+    inset 0 -20px 40px var(--ir-folder-back);
 }
 .glass-folder__label {
   min-width: 0;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 600;
   line-height: 1.2;
   color: var(--ir-folder-ink);
@@ -3817,7 +4038,9 @@
   font-size: 0.68rem;
   font-weight: 700;
   color: var(--ir-folder-ink);
-  background: rgba(255, 255, 255, 0.22);
+  /* A lit pill on the amber, where the glass wanted a white one: 45% of the
+     band's white lifts the plate without the dark ink losing its edge on it. */
+  background: rgba(255, 255, 255, 0.45);
 }
 
 /* The motion is optional; the states are not. A reader who asked for less
@@ -3826,6 +4049,10 @@
   .glass-folder__sheet,
   .glass-folder__front {
     transition: transform 300ms ease, box-shadow 300ms ease;
+  }
+  /* The board only ever lifts, so its transition is a shadow and nothing else. */
+  .glass-folder__back {
+    transition: box-shadow 300ms ease;
   }
 }
 
@@ -3900,6 +4127,263 @@
   height: 0.95rem;
 }
 
+/* ===========================================================================
+   THE RAIL above a list of reports (owner request, 2026-10-07)
+
+   A shelf of files is read by eye, so the officer arrives at it with something
+   already in mind — a case number, a place, a type — and until now the register
+   gave them no way to ask. This is what they ask with, at the TOP RIGHT of the
+   list: a rounded search field with its magnifier inside it, a hairline, and two
+   square keys — the funnel (show or fold away the filter row) and the lines with
+   an arrow (the order these rows are in).
+
+   IT LOOKS LIKE A RAIL RATHER THAN THREE BUTTONS because that is what it is: every
+   control on it narrows or orders the SAME list, and the hairline is the seam
+   between the two halves of that job — what you are looking for, and how the
+   register is showing you what it found. The two jobs get the two materials this
+   app already keeps apart: the field is a WELL with the legible edge every input
+   wears in a capsule, and the keys are the raised plates its buttons wear — so the
+   rail reads as a field and two controls rather than as three of either.
+
+   IT IS RIGHT-ALIGNED, WHICH COSTS THE LIST NOTHING: the first report row still
+   starts at the card's left edge under it, so the column of report numbers an
+   officer scans is not stopped by a control standing in its way. On a narrow
+   screen the rail wraps as a whole (`flex-wrap`), the keys falling to their own
+   line at the right rather than the field being squeezed to nothing. */
+.register-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  /* Top padding clear of the trail (or of the card's own head), bottom padding
+     small: the list under it brings its own. */
+  padding: 0.75rem 1rem 0.15rem;
+}
+
+/* ...AND ON A SHELF OF FILES IT RIDES THE STRIP'S OWN ROW (owner request,
+   2026-10-08). The padding above belongs to the HEAD then and not to the rail:
+   the head holds the clearance at the top and the card's 1rem at the right, and
+   the rail keeps only a little room under its feet, clear of the hairline the
+   tabs are pulled down over.
+
+   IT TAKES THE REST OF THE ROW rather than its own content's width, and that is
+   what keeps the search field the width it has always been: the field grows to
+   its 22rem cap inside the rail (see .register-tools__search), so the rail is
+   given the room to hold that cap plus the keys beside it — the strip keeps the
+   left of the row and `justify-content: flex-end` parks the field and its two
+   keys at the card's right edge. A rail left at its content's width would be a
+   narrower rail, and the field would pay for the difference. */
+.folder-head .register-tools {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* AND IT NEVER FOLDS ITSELF AWAY: the rail is three controls read as ONE rail,
+     and the head's own wrapping (see .folder-head) is what moves it, whole, onto
+     a line of its own when the strip and it no longer fit side by side. Under
+     that, a narrow row costs the FIELD width — its own `min-width: 0` — rather
+     than dropping the two keys under it. */
+  flex-wrap: nowrap;
+  padding: 0 0 0.35rem;
+}
+
+/* ---- The field ----------------------------------------------------------
+   THE PILL IS THE SHAPE, so the input inside it is not a field: no border, no
+   fill, no radius of its own. The app's own `input` rule draws all three (see
+   styles.css — every text field in the product is a box), and a box inside a pill
+   is the one thing this drawing must not have. `!important` is not in this file's
+   vocabulary, so the overrides here are written as the pill's own rules, which
+   out-specify the element-level ones by name.
+
+   THE RING IS THE PILL'S, drawn on `:focus-within` — that is the honest shape of
+   the thing the officer is typing into, and it keeps the field's own focus ring
+   (a rounded rectangle inside a capsule) from showing up as a second edge. */
+.register-tools__search {
+  flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 22rem;
+  align-items: center;
+  gap: 0.15rem;
+  height: 2.4rem;
+  padding: 0 0.65rem 0 0.5rem;
+  /* A FIELD, not a plate — and in this app a field is a WELL with an edge drawn
+     round it: `--ir-input` is the fill every input wears (white in light, #12161D
+     in dark) and `--ir-field-border` is the one boundary in the palette measured
+     at 3:1 against THAT fill (3.08:1 light, 3.2:1 dark — see the token block,
+     which says why a field's edge is held to a legible measure and a card's is
+     not). So the pill takes the pair, exactly as the filter selects under it do,
+     and it is a capsule rather than a box: the radius is the only thing this
+     field changes. The two KEYS beside it keep the plate fill and `--ir-border`,
+     because a button is a filled plate and its mark carries it. */
+  background: var(--ir-input);
+  border: 1px solid var(--ir-field-border);
+  border-radius: 999px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.register-tools__search:focus-within {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+/* The magnifier, which is the form's own submit button: the mark the reference
+   draws at the field's left, and the only control a pointer has for a box whose
+   Enter key they cannot press. It states no surface — the pill is the surface.
+   It is also the field's own affordance in the reference's other sense: the
+   magnifier is what makes a rounded box with no label read as a SEARCH. */
+.reports-search__go {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  color: var(--ir-blue-ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.reports-search__go:hover {
+  color: var(--ir-blue-ink-hi);
+}
+.reports-search__go:focus-visible,
+.register-tool:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+.register-tools__search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  height: 100%;
+  padding: 0 0.2rem;
+  font-size: 0.85rem;
+  color: var(--ir-text);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  caret-color: var(--cyan);
+}
+/* The input's own ring is the one thing the pill cannot absorb: it would draw a
+   rounded rectangle inside the capsule on every click into the field. */
+.register-tools__search input:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* The seam between "what you are looking for" and "how you are being shown it".
+   A printed hairline rather than a second border: it separates without becoming
+   an edge of its own. */
+.register-tools__rule {
+  flex: none;
+  width: 1px;
+  height: 1.5rem;
+  background: var(--ir-border);
+}
+
+/* ---- The two keys --------------------------------------------------------
+   The same raised plate as the field beside them, with the accent as their ink —
+   they are marks, not words, and the accent is what this screen paints a control
+   that does something. A key that is ON wears the blue WASH and a blue edge (the
+   shelf tab's own "you are here" language): the funnel while the filter row is
+   showing, the sort key while its menu is open, and the sort key again while the
+   list is in an order other than the one the register opens in — a register in an
+   unusual order with nothing on screen saying why reads as a register that is
+   wrong. */
+.register-tool {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  color: var(--ir-blue-ink);
+  /* The plate the app's own keys wear (--ir-raised, one step up from the card
+     they sit on) — the pill beside them is a well, and a field and a button
+     should not be the same object in two jobs. */
+  background: var(--ir-raised);
+  border: 1px solid var(--ir-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.register-tool:hover {
+  border-color: var(--line-bright);
+  color: var(--ir-blue-ink-hi);
+}
+.register-tool[aria-expanded='true'],
+.register-tool[data-on='true'],
+.register-tool--mode[aria-pressed='true'] {
+  background: var(--ir-blue-tint);
+  border-color: var(--ir-blue);
+}
+/* The count the funnel carries while the filter row is folded away: the row's own
+   state has to survive its being hidden, or a folded filter is a list that is
+   quietly narrowed. Sits on the key's corner, clear of the mark. */
+.register-tool__count {
+  position: absolute;
+  top: -0.4rem;
+  right: -0.4rem;
+  display: grid;
+  place-items: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.25rem;
+  font-family: var(--font-hud);
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--on-accent);
+  background: var(--ir-blue);
+  border-radius: 999px;
+}
+
+/* THE ARCHIVE SWITCH came with the card that used to hold it, so it stands in the
+   register's head now (owner request, 2026-10-08): the same raised plate as the
+   two keys beside it, at their height, with the words a mark cannot carry — a
+   mode whose name lives in a tooltip is a mode nobody finds. Admin-only, as it
+   always was. */
+.register-tool--mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: auto;
+  padding: 0 0.75rem;
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* THE FILTER ROW FOLDS, and `hidden` is what folds it: the attribute is the
+   state, so the funnel's `aria-controls` always names a row that is in the DOM
+   whether or not it is showing. It has to be said out loud here because
+   `.reports-toolbar` is a flex box (styles.css): a `display` from the author
+   out-ranks the UA's `[hidden]` rule, and without this the row would stay on
+   screen with the attribute set. */
+.reports-toolbar[hidden] {
+  display: none;
+}
+
+/* ---- The register's filter line ------------------------------------------
+   THE FILTERS STAND IN THE REGISTER'S OWN HEAD (owner request, 2026-10-08), on
+   the line under the strip the shelves are on — the head's own hairline (see
+   .folder-head) is the rule between the two. They used to be a CARD of their
+   own above this one: a navy strip holding nothing, a gold dot, its own border
+   and its own shadow, and then the fields. The page therefore opened on two
+   stacked panels that were really one instrument, because "which shelf am I
+   looking at" and "what am I narrowing it to" are two questions about one list.
+
+   STATED WITH TWO CLASSES on the same element, because this sheet lands BEFORE
+   styles.css in the bundle and `.reports-toolbar` alone would lose the tie — the
+   same reason `.main.ir-body` names two (see the panel's own note). The grid and
+   the compact controls stay styles.css's; what is restated here is only where the
+   line stands. The register's card is `flush`, so the line brings its own side
+   padding (the strip's own 1rem) and no bottom margin — the list follows it. */
+.reports-toolbar.register-filters {
+  margin: 0;
+  padding: 0.7rem 1rem 0.9rem;
+  gap: 0.5rem;
+}
+
 /* The pager belongs to the LIST's own margins rather than to the card edge: the
    register card is `flush`, so without this the Prev/Next row touches it. */
 .reports-pagination {
@@ -3907,36 +4391,50 @@
 }
 
 /* ---- The reports inside an opened folder -------------------------------
-   A register list, one row per report. The row's number and badges lead, the
-   three facts the register has always shown follow, and the row's own actions
-   hold the right-hand rail — so a folder reads as a page of the blotter rather
-   than as a second kind of document. */
+   One FORMAL ROW per report (owner request, 2026-10-07): the register's grid
+   of upright PDF pages gives way to a stack of wide horizontal file cards —
+   the same card the Home draft list wears. Each row is still the PDF FILE
+   CARD (see FileCard.jsx): the folder mark names it a file, the red PDF tag
+   rides the folder's corner, and the report's number, status and facts sit
+   on the card in labelled columns — with Edit and the More pill at the row's
+   end. Hovering rings nothing; the row is the control. */
 .report-list {
   margin: 0;
-  padding: 0;
+  padding: 0.5rem 1rem 1rem;
   list-style: none;
-}
-.report-list > .report-row + .report-row {
-  border-top: 1px solid var(--ir-border);
+  /* One row per report, edge to edge of the opened folder, so the facts line
+     up in their columns down the list the way a register should. */
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
 }
 .report-row {
-  display: flex;
-  align-items: stretch;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
+  position: relative;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: 0;
 }
-.report-row:hover {
-  background: var(--ir-row-hover);
+/* The row's file mark: the reference's orange FILE LOGO (see FileLogo in
+   ReportList.jsx), one per row at the paper's left padding — the row's whole
+   file mark since the PDF tag went (owner request, 2026-10-07). */
+.report-row__folder {
+  position: relative;
+  flex: none;
+  width: 2.55rem;
+}
+.report-row__filemark {
+  display: block;
+  width: 100%;
+  height: auto; /* 24:28 — the page's own proportion */
+  filter: drop-shadow(0 1px 2px rgba(11, 37, 69, 0.22));
 }
 .report-row__open {
-  /* The row's whole left side is the control, so the click target is the row
-     and not only its number. */
-  flex: 1;
+  /* The row is the control: the whole click target is the card. */
+  display: block;
+  width: 100%;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.1rem 0;
+  padding: 0;
   font: inherit;
   color: inherit;
   text-align: left;
@@ -3944,82 +4442,294 @@
   border: 0;
   cursor: pointer;
 }
+/* A SHEET IS NOT A BUTTON CHROME: excluded from the generic .ir-body button
+   treatment above (same reason the folder is), the element-level `button`
+   and `button:hover` in styles.css are the next rule out-specifying this one
+   — they would paint the page a panel grey and ring it blue under the
+   pointer. THE CARD IS STILL UNDER THE POINTER (owner request, 2026-10-06):
+   the hover-neutralizer below holds the ground so the paint never lands at
+   all — no lift, no tint, no chrome. The keyboard ring below is untouched. */
+.report-row__open:hover {
+  background: none;
+  border: 0;
+  color: inherit;
+}
 .report-row__open:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
+/* The identity column: a fixed track so every BW number starts on the same
+   line down the list — the first thing that makes the rows read as a table. */
 .report-row__head {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.18rem;
+  min-width: 0;
+}
+.report-row__badges {
+  display: flex;
   align-items: center;
-  gap: 0.45rem;
-  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
 }
 .report-row__num {
   font-family: var(--font-hud);
   font-weight: 700;
   letter-spacing: 0.04em;
+  font-size: 0.95rem;
   color: var(--ir-text);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.report-row__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.15rem 0.75rem;
-  font-size: 0.74rem;
-  color: var(--ir-muted);
+/* ---- THE TYPE PILL ------------------------------------------------------
+   The incident type as a MARK, not as a line of grey text (owner request,
+   2026-10-08). The owner sent the reference's card for this list — the type
+   drawn as a tinted chip with its glyph, above a date and time set large — and
+   the chip is the first thing in the row's identity column: down a column of
+   rows the eye meets a row of COLOURED chips before it reads a single word,
+   which is the whole point of the design.
+
+   IT IS THE SENSITIVE PILL'S OWN IDIOM, one screen over: Home's draft card
+   already draws a type-derived fact as a tinted chip wearing the status pill's
+   geometry (see .ir-draft-sensitive), and a register that drew its type some
+   third way would be two vocabularies for one idea.
+
+   THE TWO HALVES OF THE COLOUR ARE DECLARED BY THE HUE CLASS BESIDE IT (see the
+   five families below), and the fallback pair on this rule is a real pair rather
+   than a placeholder: a hue class this build cannot name — an administrator's new
+   type, a value from a newer client — still draws a legible neutral chip instead
+   of white on white. */
+.report-row__type {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  padding: 0.14rem 0.5rem 0.14rem 0.42rem;
+  border-radius: 999px;
+  /* The TYPE is what is small, not the row: the chip is a label, and at 0.66rem
+     tracked in capitals it reads as one. It is stated in `rem` so the guard that
+     forbids shrinking type to fit a short window has nothing to catch here. */
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  background: var(--ir-type-wash, var(--panel-raised));
+  color: var(--ir-type-ink, var(--ir-muted));
 }
-.report-row__cell {
+/* THE GLYPH, keyed by the type map (lib/reportFolder.js `typeIcon`) — the same
+   drawing the header of an OPENED folder wears, at the chip's scale. A hair
+   heavier than that header's 1.6 stroke: the drawing is half the size here, and
+   at 13px the folder header's own weight thins out to a grey smudge. */
+.report-row__type-mark {
+  flex: none;
+  width: 0.86rem;
+  height: 0.86rem;
+  stroke-width: 2;
+}
+/* The name gives way, never the glyph: the chip elides where the identity column
+   is too narrow for the station's longest type ("Property Damage / Malicious
+   Mischief") rather than growing the row, and the record's full type is still on
+   the button's own accessible name. */
+.report-row__type-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* THE FIVE FAMILIES (owner request, 2026-10-08), and every one of them is a pair
+   the palette already owns — the same wash and ink a badge or an alert in that
+   family wears, so a red chip on this screen is the red of the app's warnings
+   rather than a fifth red. What each family MEANS is documented once, on
+   TYPE_HUE in lib/reportFolder.js; the assertion that every type has one is in
+   tests/rules/reportFolder.test.mjs.
+
+   GREEN IS DELIBERATELY ABSENT: --green-ok means a STATE everywhere in this app
+   (active, finalized, verified), and a green type chip sitting beside a green
+   Finalized badge would be two unrelated facts wearing one colour. The neutral
+   family is the fallback on the rule above and is named here anyway, so the set
+   is complete to read. */
+.report-row__type--blue {
+  --ir-type-wash: var(--cyan-bg);
+  --ir-type-ink: var(--ir-blue-ink);
+}
+.report-row__type--violet {
+  --ir-type-wash: var(--violet-bg);
+  --ir-type-ink: var(--violet);
+}
+.report-row__type--red {
+  --ir-type-wash: var(--red-bg);
+  --ir-type-ink: var(--red-text);
+}
+.report-row__type--amber {
+  --ir-type-wash: var(--amber-bg);
+  --ir-type-ink: var(--amber);
+}
+.report-row__type--slate {
+  --ir-type-wash: var(--panel-raised);
+  --ir-type-ink: var(--ir-muted);
+}
+/* The facts: three FIXED tracks — date, location, recorder — so the columns
+   line up down the list instead of shifting with each row's longest value.
+   Hairline rules between them turn the row into a legible table. */
+.report-row__meta {
+  display: grid;
+  grid-template-columns: minmax(8.5rem, 10rem) minmax(0, 1.5fr) minmax(7rem, 9rem);
+  align-items: center;
+  gap: 0 1.25rem;
+  line-height: 1.35;
+  color: var(--ir-muted);
+  min-width: 0;
+}
+.report-row__cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.14rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.report-row__cell + .report-row__cell {
+  border-left: 1px solid var(--ir-border);
+  padding-left: 1.25rem;
+}
+.report-row__cell-value {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ir-text);
+}
+.report-row__cell-value svg {
+  flex: none;
+  opacity: 0.75;
+}
+/* THE WHEN LEADS THE FACTS (owner request, 2026-10-08). In the reference's card
+   the date and time is the value the card is built around — set large, dark,
+   with its own caption under it — and it is also the register's own order (the
+   list is sorted by `incident_datetime`), so the column the register is read by
+   is the one the eye is given first. The other two facts keep the row's plain
+   value size: they are what the report is about and who filed it, and a row with
+   three equally loud values has no first fact at all. Its glyph goes with it —
+   the calendar is drawn one step larger (see the RowMark in ReportList) and at
+   full strength rather than the 0.75 the two quieter facts' marks wear. */
+.report-row__cell--when .report-row__cell-value {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ir-text);
+}
+.report-row__cell--when .report-row__cell-value svg {
+  opacity: 0.9;
+}
+.report-row__cell-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.report-row__cell-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+}
+/* The officer's own name is the one value that reads as a name: set it in the
+   same weight the Home draft card gives it. */
+.report-row__cell--who .report-row__cell-value {
+  font-weight: 700;
+}
+/* Narrow folders: the three fact columns wrap under the identity instead of
+   squeezing — two columns up top, recorder full-width below, rules off so
+   the stacked rows stay clean. */
+@media (max-width: 760px) {
+  .file-card__paper {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 0.6rem;
+  }
+  .report-row__meta {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
+    row-gap: 0.5rem;
+  }
+  .report-row__cell + .report-row__cell {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .report-row__cell--who {
+    grid-column: 1 / -1;
+  }
+}
 .report-row__actions {
+  /* Inside the row's right-hand end, vertically centred (owner request,
+     2026-10-07): Edit and the More pill share the card's end the way the Home
+     draft card's controls do. The paper reserves their width in its own
+     right-hand padding, so a control never overlays the facts. */
+  position: absolute;
+  top: 50%;
+  right: 0.7rem;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   gap: 0.4rem;
   flex-shrink: 0;
+  z-index: 3;
 }
+/* Icon-only actions: a pencil for Edit, dots-and-caret for More — two round
+   keys at the row's end instead of two word pills competing with the facts. */
 .report-row__edit {
-  padding: 0.28rem 0.6rem;
-  font-size: 0.74rem;
-  font-family: var(--font-hud);
-  letter-spacing: 0.04em;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
   color: var(--ir-blue-ink);
   background: var(--ir-btn);
   border: 1px solid var(--ir-border);
-  border-radius: 5px;
+  border-radius: 50%;
   cursor: pointer;
 }
 .report-row__edit:hover {
-  border-color: var(--cyan);
+  border-color: var(--line-bright);
 }
+
 .report-row__edit:focus-visible,
 .report-row__menu:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 2px;
 }
-/* Always drawn, never a hover-only reveal: the whole point of the ⋮ is that
-   the actions are no longer something you have to already know about. */
+/* Always drawn, never a hover-only reveal: the whole point of the menu is
+   that the actions are no longer something you have to already know about.
+   Dressed as the More pill the row format asks for (owner request,
+   2026-10-07) — the same round-ended dress the Home draft card's kebab sits
+   in, so the two screens' menus answer to one another. */
 .report-row__menu {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 1.7rem;
-  height: 1.7rem;
-  padding: 0;
-  font-size: 1rem;
+  gap: 0.1rem;
+  height: 2rem;
+  padding: 0 0.55rem 0 0.65rem;
   line-height: 1;
   color: var(--ir-muted);
   background: var(--ir-btn);
   border: 1px solid var(--ir-border);
-  border-radius: 5px;
+  border-radius: 999px;
   cursor: pointer;
 }
-.report-row__menu:hover {
-  color: var(--ir-text);
-  border-color: var(--cyan);
+.report-row__menu-caret {
+  opacity: 0.75;
+}.report-row__menu:hover {
+  color: var(--ir-blue-ink);
+  border-color: var(--line-bright);
 }
+
 
 /* ---- A LOCKED row (finalized, and not the administrator's to edit) ------
    Muted, exactly as the row it replaces was: the register should read at a
@@ -4030,15 +4740,95 @@
   cursor: default;
 }
 .report-row.is-locked .report-row__num,
-.report-row.is-locked .report-row__meta {
+.report-row.is-locked .report-row__meta,
+.report-row.is-locked .report-row__cell-value {
+  color: var(--cyan-dim);
+}
+/* ...and the type pill loses its FAMILY with it (owner request, 2026-10-08): a
+   locked row is muted as a whole, and a chip that kept its tint would be the one
+   loud thing in it. The wash drops to the neutral well and the ink to the same
+   dim grey the row's other words wear, so the chip still states the type and
+   still reads as a chip. */
+.report-row.is-locked .report-row__type {
+  background: var(--panel-raised);
   color: var(--cyan-dim);
 }
 
 /* The just-acted-on row (restored / archived an instant ago), the same green
-   flash the table used so the eye can find it again. */
-.report-row.is-flash {
-  box-shadow: inset 0 0 0 2px var(--green-line);
+   flash the table used so the eye can find it again. The frame is gone, so
+   the flash rings the PAGE itself. */
+.report-row.is-flash .file-card__paper {
+  box-shadow:
+    0 0 0 1px var(--ir-filecard-ring),
+    0 0 0 3px var(--green-line);
 }
+.report-row.is-flash {
+  border-radius: 6px;
+}
+
+/* ---- The PDF file card itself ------------------------------------------
+   Ported from the brief's reference (PDF format only — see FileCard.jsx),
+   and drawn as the FORMAL ROW CARD the register now asks for (owner request,
+   2026-10-07): one wide white panel — the file-card paper's own tokens, so
+   the dark theme answers through them — carrying the folder mark, the
+   identity and the labelled facts on a single line. The paper reserves the
+   actions' width in its right-hand padding (see .report-row__actions). The
+   ghost lines remain only as an empty card's fallback. */
+.file-card {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}.file-card__paper {
+  display: grid;
+  /* The identity track is a step wider than it was (owner request, 2026-10-08):
+     the type is a tracked-capital chip now instead of a line of sentence-case
+     grey, and capitals with letter-spacing want about a fifth more width than
+     the same words set plain. It is still a bounded track, so the numbers line
+     up down the list. */
+  grid-template-columns: auto minmax(9rem, 11.5rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0 1.25rem;
+  width: 100%;
+  padding: 0.8rem 6.5rem 0.8rem 1rem;
+  background: var(--ir-filecard-paper);
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--ir-filecard-ring);
+  position: relative;
+  z-index: 1;
+}
+/* The card stays still under the pointer (owner request, 2026-10-06): no
+   hover lift, no tint — the resting row is the only row there is. */
+/* The page's ruled lines: the ghost placeholder, and the real text sitting
+   where the lines would be. */
+.file-card__ghost {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem; /* the reference's space-y-1.5 */
+}
+.file-card__row {
+  display: flex;
+  gap: 0.25rem; /* the reference's flex gap-1 */
+}
+.file-card__line {
+  display: block;
+  height: 2px; /* the reference's h-0.5 */
+  border-radius: 999px;
+  background: var(--ir-filecard-line);
+  flex: 0 0 auto;
+}
+.file-card__line--strong {
+  background: var(--ir-filecard-line-strong);
+}
+.file-card__line--w33 {
+  width: 33%;
+  min-width: 0.5rem;
+}
+.file-card__line--w50 {
+  width: 50%;
+}
+/* THE FORMAT TAG IS GONE (owner request, 2026-10-07): the red PDF banner and
+   its rule went with the `formatFile` prop, and --ir-filecard-red now only
+   answers the tokens' own block above. */
 
 /* ===========================================================================
    6. Home — the officer's landing page, in the same document grammar
@@ -4142,17 +4932,17 @@
   place-items: center;
   width: clamp(38px, 4.2vw, 46px);
   height: clamp(38px, 4.2vw, 46px);
-  border-radius: 50%;
-  background: var(--ir-blue);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  background: transparent;
+  box-shadow: none;
 }
 /* INSET rather than filling the disc, which is the one thing the artwork must not
    do here: the folder is drawn wider than it is tall with its tab at the top, so
    stretched to the rim it would read as a blue shape with an amber corner rather
-   than as a folder on a disc. 70% is the largest square that fits inside a circle
-   (it is a shade under 71% of the diameter), which leaves the blue showing as a
-   rim all the way round the folder while keeping the artwork's own corners off
-   the curve.
+   than as a folder on a disc.
+
+   70% is the largest square that fits inside a circle (a shade under 71% of the
+   diameter), which leaves the blue showing as a rim all the way round the folder
+   while keeping the artwork's own corners off the curve.
 
    `contain`, because the artwork is 512x512 with roughly 24px of transparent
    padding at the head and foot: it is drawn wider than it is tall, and filling
@@ -4160,7 +4950,28 @@
    result, which is the shape it was drawn in. Named on the image rather than on
    the slot's `img`, the way the band's shield and the footer's two seals are, so
    the artwork can be found from the markup without knowing its parent. */
+/* The galaxy and its blue circle are 25% larger than the original slot,
+   centred behind the unchanged folder; neither layer intercepts controls. */
+.ir-home-banner-galaxy {
+  position: absolute;
+  inset: -12.5%;
+  width: 125%;
+  height: 125%;
+  background: #2563eb;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+.spiral-galaxy-canvas {
+  position: absolute;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  pointer-events: none;
+}
 .ir-home-banner-mark {
+  position: relative;
+  z-index: 1;
   width: 70%;
   height: 70%;
   object-fit: contain;
@@ -4329,8 +5140,8 @@
    rather than the page: a flex item's floor is its content by default, and that
    floor is what a long list pushes through. */
 .ir-home-drafts {
-  margin-top: clamp(0.9rem, 2vw, 1.4rem);
-  margin-top: max(0.6rem, calc(clamp(0.9rem, 2vw, 1.4rem) - var(--ir-home-short) * 0.035));
+  margin-top: clamp(0.7rem, 1.6vw, 1.1rem);
+  margin-top: max(0.45rem, calc(clamp(0.7rem, 1.6vw, 1.1rem) - var(--ir-home-short) * 0.035));
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -4341,7 +5152,10 @@
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  margin-bottom: 0.7rem;
+  /* Tighter against the list under it (owner request, 2026-10-08): the section
+     is two cards and its head, and the gap between the two was the last piece of
+     slack the panel could spend on a draft the officer cannot see. */
+  margin-bottom: 0.35rem;
   /* The head is a label, not a row of the list: it stays put while the list under
      it scrolls, and it is never squeezed. */
   flex: none;
@@ -4393,7 +5207,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.2rem 0.1rem;
+  padding: 0.15rem 0.1rem;
   border: 0;
   background: none;
   /* Also the ink token: it is a link, and the blue that reads as a fill on this
@@ -4420,13 +5234,31 @@
   display: grid;
   gap: 0.6rem;
   flex: 1 1 auto;
-  /* ONE ROW IS THE FLOOR. A `0` here would let a short panel squeeze the list out
-     of existence, and a page whose drafts have silently gone is worse than a page
-     that scrolls: below one row the panel takes the overflow back, which is the
-     only case in which Home is allowed to scroll at all. The floor is sized to
-     the COMPRESSED card (see .ir-draft-card), so one card fits a short laptop's
-     panel instead of spilling over the signature band under it. */
-  min-height: 8.5rem;
+  /* TWO ROWS IS THE FLOOR (owner request, 2026-10-08). A `0` here would let a
+     short panel squeeze the list out of existence, and a page whose drafts have
+     silently gone is worse than a page that scrolls. ONE row was that floor, and
+     it is what made this section look half-drawn on a laptop: the panel handed
+     the list a single card's worth of room, so the officer read one draft and the
+     top of the next.
+
+     The floor is now two rows of the COMPRESSED card — measured in a headless
+     Chrome at a 1366×768 window with the real top bar on the page, 2 × 60.7px
+     plus the 0.6rem gap ≈ 130px, so 8.75rem (131.25px at this app's 15px root)
+     leaves a little air under the second card. It is stated as a length rather than as a formula because the
+     card's own height is drawn in the same rem, and the two numbers have to be
+     read together. A panel shorter than this hands the overflow back to the page:
+     two drafts are the one thing the section guarantees, and Home scrolls rather
+     than break that promise silently.
+
+     AND IT IS A CEILING AS WELL AS A FLOOR, which is the half an earlier version
+     of this rule got wrong. The floor is what decides where the list STARTS on a
+     panel that cannot hold everything: the list takes the room left after the
+     band, the action board and the head. A floor set ABOVE two rows' worth does
+     not buy air under the cards — it pushes the whole section down and slides the
+     second card under the signature band, which is exactly what the owner's
+     screenshot caught (one card, the top of the next, and a band over it). Two
+     rows, measured, and not a pixel more. */
+  min-height: 8.75rem;
   overflow-y: auto;
   align-content: start;
   /* THE ROWS ARE AS TALL AS THEIR CARDS — stated, not left to `auto`, because
@@ -4452,12 +5284,10 @@
   /* Both for the stripe: it is the card's own edge, and the corner on that side
      comes from the card's curve rather than from a radius of the stripe's own. */
   overflow: hidden;
-  padding: 0.75rem clamp(0.85rem, 1.6vw, 1.2rem) 0.7rem clamp(1rem, 1.8vw, 1.3rem);
-  /* A card keeps its shape — the plate, the three identity lines, the meta pair,
-     the two controls and the progress strip set its height — but not its air: on
-     a short panel the cards come up tighter rather than the last one dropping
-     below the fold. The floor is what keeps a card a card. */
-  padding-block: max(0.5rem, calc(0.75rem - var(--ir-home-short) * 0.02));
+  /* The card carries no padding of its own any more: the FACE (the button that
+     fills the card) owns it, so the whole field answers a press. On a short
+     panel the cards come up tighter rather than the last one dropping below
+     the fold; the floor keeps a card a card. */
   background: var(--ir-card, #fff);
   border: 1px solid var(--ir-border);
   border-radius: 14px;
@@ -4496,20 +5326,97 @@
   gap: clamp(0.7rem, 1.8vw, 1.1rem);
 }
 
-/* The record's mark, on a plate of the station's own navy: the card is a
-   document, and the plate is what makes it findable at a glance down the list.
-   NAVY rather than a wash of the accent, deliberately: this is the largest
-   object on the card, and a tint that size reads as a second page behind the
-   glyph. White on this navy is 13:1, so the mark needs no help from its size. */
-.ir-draft-plate {
+/* ---- The record's folder (DraftFolder.jsx) ------------------------------
+   The brief's folder, ported (owner request, 2026-10-06), in place of
+   the flat navy file plate the card used to carry. It held the plate's footprint
+   when it landed, so the card's row did not move then; the same file-card paper
+   tokens as the register's PDF page, so the sheets theme together; and the
+   folder itself is the STATION's navy — the brief's blue, re-inked. The sheaf is
+   still: no hover motion (owner request, 2026-10-06).
+
+   ...AND IT HAS SINCE COME DOWN A SIZE with the card around it (owner request,
+   2026-10-08 — see the rule's own note below). */
+.draft-folder {
+  position: relative;
   flex: none;
-  display: grid;
-  place-items: center;
-  width: 2.9rem;
-  height: 2.9rem;
-  border-radius: 0.8rem;
-  background: var(--ir-navy);
-  color: #fff;
+  /* A SIZE DOWN, TWICE (owner request, 2026-10-08): the mark sets the card's own
+     height — it is taller than the single line of facts beside it — so it is
+     what the card's size is really made of. Two drafts have to read at once on a
+     laptop panel (see .ir-home-list), and the second request asked for the
+     card's field to sit a little higher again, so the mark came down with it.
+     Every drawing inside is scaled by the same step, so the folder reads as the
+     same folder at the smaller size rather than as a shrunken one. */
+  width: 2rem;
+  height: 1.75rem;
+}
+.draft-folder__board {
+  position: absolute;
+  inset: 0;
+  border-radius: 0.4rem;
+  /* The brief's from-blue-400/to-blue-500, in the station's own inks. */
+  background: linear-gradient(to bottom, var(--ir-navy-hi), var(--ir-navy));
+  /* The brief's border-t-2 white/30: a lit top edge on the board. */
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.28);
+}
+.draft-folder__paper {
+  position: absolute;
+  left: 0.28rem;
+  right: 0.28rem;
+  bottom: 0.22rem;
+  height: 1.2rem;
+  border-radius: 0.26rem;
+  background: var(--ir-filecard-paper);
+}
+.draft-folder__paper--fan-right {
+  transform: rotate(4deg);
+  background: var(--ir-filecard-fold);
+}
+.draft-folder__paper--fan-left {
+  transform: rotate(-4deg);
+  background: var(--ir-filecard-fold);
+}
+.draft-folder__paper--front {
+  border-top: 1px solid var(--ir-filecard-ring);
+}
+.draft-folder__lines {
+  position: absolute;
+  top: 0.28rem;
+  left: 0.28rem;
+  right: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.draft-folder__line {
+  display: block;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--ir-filecard-line-strong);
+}
+.draft-folder__line--a { width: 72%; }
+.draft-folder__line--b { width: 48%; }
+.draft-folder__line--c { width: 62%; }
+.draft-folder__flap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.7rem;
+  border-radius: 0 0.32rem 0.38rem 0.38rem;
+  background: linear-gradient(to bottom, rgba(19, 62, 135, 0.45), rgba(11, 37, 69, 0.92));
+  backdrop-filter: blur(1.5px);
+}
+/* The flap's tab, at the folder's left: the brief's tabLeft, so the shape
+   reads as a FOLDER and not a stack of sheets. */
+.draft-folder__flap::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -0.2rem;
+  width: 0.8rem;
+  height: 0.22rem;
+  background: rgba(19, 62, 135, 0.55);
+  border-radius: 0.26rem 0.18rem 0 0;
 }
 
 /* The identity, stacked: the pills, then the record's number, then what the
@@ -4523,16 +5430,92 @@
   align-items: flex-start;
   gap: 0.2rem;
   min-width: 0;
+  /* THE KEBAB'S CORNER IS NOT CONTENT'S TO USE (owner request, 2026-10-08). The
+     menu is 2.05rem wide and pinned 0.55rem in from the card's right edge, and
+     the facts line it sits beside is the card's TOP line — so the row's last
+     field would run underneath it. The face's own right padding (about 0.9rem)
+     is not enough, so the identity keeps the rest back by name: the type, which
+     is the one field that gives way, is elided that much earlier instead of
+     disappearing behind the button. */
+  padding-right: 1.8rem;
+  /* ...and nothing may spill past that edge. The facts line no longer wraps (see
+     .ir-draft-row), so a record with an unusually long incident type elides
+     rather than widening the card, and this is what makes the elision a cut
+     rather than an overflow. */
+  overflow: hidden;
 }
 
-/* The pills, on one line, wrapping rather than squeezing on a narrow card: they
-   answer two different questions — what STATE the record is in, and what KIND of
-   account it holds — so they are two pills and not one. */
-.ir-draft-pills {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
+/* The number and its facts on one line (owner request, 2026-10-06): the date
+   and the officer align with the ID the officer remembers, rather than standing
+   in a column of their own at the card's far end. */
+.ir-draft-row {
+  /* THE FOUR FACTS LINE UP IN COLUMNS (owner request, 2026-10-08). The row reads
+     as one line — the number, then when it happened, who recorded it and what it
+     is about — and until now the last three each began wherever the one before
+     it ended, so a list of drafts had four ragged left edges: the dates stepped
+     in and out by a character as the month or the day grew, and the types began
+     at four different places down the card.
+
+     IT IS A GRID, and its tracks are FIXED LENGTHS rather than `max-content`.
+     That is the whole point and the one thing that would not work otherwise: a
+     card is its own grid, so a track sized to its content lines up only INSIDE
+     that card. Stated in rem, every row's columns start on the same x down the
+     list.
+
+     ONE LINE, ALWAYS, is kept from the earlier fix and for its own reason: the
+     row used to wrap between roughly 1150px and 1080px of window, which grew
+     every card by about a quarter (66px to 99px) and is how a panel holding two
+     drafts came to show one and a half. The type gives way instead (see
+     .ir-draft-type) — the one field of the three a reader can afford to see
+     truncated. */
+  display: grid;
+  /* the number · everything else. See .ir-draft-meta for the three facts' own
+     tracks; the widths are read together, so the sum of the six is the row's
+     floor. */
+  grid-template-columns: 4.9rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0 0.7rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* What the report is about, with the sensitive mark beside it — riding the
+   facts row beside the officer's name (owner request, 2026-10-07) rather than
+   standing alone under the number. A flex item of the meta row like the two
+   meta lines, so it wraps with them; its own row keeps the type and its
+   sensitive mark glued together. */
+.ir-draft-kind {
+  /* position, padding and baseline for the same reason as the meta lines above:
+     the type's own drawing is out of flow, so this column reports the TYPE's
+     baseline and not the glyph's bottom edge. `inline-flex` stays, because the
+     sensitive pill rides beside the type and the type is the one of the two that
+     gives way (it shrinks and elides; the pill keeps its size). */
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding-left: 1.26rem;
+  /* THE ONE FIELD THAT GIVES WAY: inside its track it shrinks and elides (see
+     .ir-draft-type), which is what keeps the three columns to its left where
+     they are however long the station's type names get. */
+  min-width: 0;
+  max-width: 100%;
+}
+/* THE TYPE'S MARK, where the separator dot was (owner request, 2026-10-08). The
+   three fact columns each open with a drawing — the calendar, the person, and
+   now the type's own glyph — because with the facts in columns a mark is what
+   says where a column starts, and a dot was only ever a separator for a line
+   that ran on. The key comes from the type map (lib/reportFolder.js `typeIcon`),
+   the same one the register's type chip draws, so the two screens name a type
+   with one glyph. */
+.ir-draft-kind-mark {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.86rem;
+  height: 0.86rem;
+  opacity: 0.75;
 }
 
 /* SENSITIVE, in the palette's red pair — the same wash and ink the advice card's
@@ -4566,6 +5549,10 @@
   white-space: nowrap;
 }
 .ir-draft-type {
+  /* `min-width: 0` is what lets the ellipsis below actually reach: without it a
+     flex item's floor is its own content, so a long type would push the row
+     wider instead of being elided. */
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4574,78 +5561,117 @@
   color: var(--ir-muted);
 }
 
-/* The right-hand column: the facts about the record, then its two controls. */
-.ir-draft-aside {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: clamp(0.4rem, 1.4vw, 0.7rem);
-}
-
-/* When it happened, and who recorded it. Two lines with their own marks,
-   because they answer two different questions and a reader scans down each
-   column in turn. */
+/* When it happened, who recorded it and what it is about — INLINE now, beside
+   the record's number (owner requests, 2026-10-06 and 2026-10-07), so the facts
+   read on the ID's own line rather than in a column of their own at the card's
+   far end. */
 .ir-draft-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 0.18rem;
+  /* when · who · what, in that order — the three facts after the number, each on
+     a track of its own, measured against the same list of real values the
+     number's track was (see .ir-draft-row). Both fixed lengths were READ OFF THE
+     CARD rather than estimated, and the numbers are in the comment because the
+     two of them together are what the type's column gets:
+
+       10rem (150px) is the calendar and the longest date the app can print —
+       "Sep 30, 2026 · 02:44", a 12-hour clock and a four-digit year — and it is
+       ENOUGH ONLY JUST: the line reports scrollWidth 150 at a clientWidth of 150.
+       (The mark's 1.4rem of padding is inside that length, not on top of it — see
+       .ir-draft-meta-line.)
+
+       9.4rem (141px) is the person mark and a FULL name. `created_by_name` is
+       `u.full_name` from the join, not the login the officer typed, and the
+       longest on the fixture — "Maria Celestine Santos" — needs 138px of it. The
+       track used to be 6.5rem, which held a username and cut every real name off
+       mid-surname; the officer reads their own register, so their colleagues'
+       names are the last value on the card that should be elided.
+
+     The type takes what is left and elides there, so a long incident type
+     shortens its own column instead of pushing the three beside it. That trade is
+     only free while the panel is wide enough for four facts on one line: with the
+     Home body in two columns the drafts panel is about half the page, so between
+     roughly 1150px and the 900px single-column breakpoint the type's track is
+     down to a few characters, and on the shortest of those widths to none of
+     them. Below 900px the body stacks and the room comes back. */
+  display: grid;
+  grid-template-columns: 10rem 9.4rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0 0.7rem;
   min-width: 0;
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
   color: var(--ir-muted);
 }
 .ir-draft-meta-line {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
+  /* THE LINE IS ITS TEXT, and the mark is lifted out of it (owner request,
+     2026-10-08 — this is what \"align them\" needed). A line whose first child is
+     an icon reports the ICON's baseline, not its words': the drawing has no
+     baseline of its own, so the browser synthesises one from its bottom edge —
+     and every column that aligned to such a line inherited that offset. Measured
+     on the card, the report number sat 4.2px below the date beside it.
+
+     So the line is a block of one line of words and the glyph is out of flow, in
+     the column reserved for it below. Every fact is then aligned to its TEXT,
+     which is the only thing an officer is reading. */
+  position: relative;
+  display: block;
+  padding-left: 1.4rem;
+  /* A fixed column is not a promise that every value fits it: an officer's name
+     is the one value here that is a word rather than a number, and the register
+     answered that the same way long before this card did — the value gives way,
+     the column does not move. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ir-draft-meta-line svg { flex: none; opacity: 0.75; }
-
-/* The two controls, side by side at the card's end. */
-.ir-draft-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+/* The mark, in the padding's own column and centred on the line. */
+.ir-draft-meta-line svg {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.75;
 }
 
-/* The card's own way in, and it is FILLED — a reversal of the outlined plate
-   this control used to wear, by request. What makes the reversal safe is the
-   COLOUR: the fill is the station's navy, not the accent blue, so the page's one
-   loud thing is still the action at the top (gold on navy) and the blue stays
-   with the section's name above these cards. White on this navy is 13:1, well
-   past the label it has to carry. */
-.ir-draft-go {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.42rem 0.85rem;
-  border: 1px solid var(--ir-navy);
-  border-radius: 8px;
-  background: var(--ir-navy);
-  color: #fff;
-  font-size: 0.78rem;
-  font-weight: 700;
-  white-space: nowrap;
+/* THE WHOLE CARD IS THE WAY IN. The Continue button is gone (owner request,
+   2026-10-06) — the card face is one button that fills the card, so the way in
+   is the card itself and there is no second control competing with it. The
+   generic button treatment is told to leave it alone (see the `:not()` chains),
+   and the face passes the card's own surface through: the card, not the button,
+   owns the paint. */
+.ir-draft-face {
+  display: block;
+  width: 100%;
+  /* The card's own air, moved onto the face: a press anywhere in the field
+     lands on it, and the compressed-block floor still applies on a short
+     panel. It came DOWN with the mark and the progress strip (owner request,
+     2026-10-08 — see .ir-home-list for the two-row budget those three share). */
+  padding: 0.4rem clamp(0.8rem, 1.5vw, 1.1rem) 0.4rem clamp(0.95rem, 1.7vw, 1.2rem);
+  padding-block: max(0.25rem, calc(0.38rem - var(--ir-home-short) * 0.02));
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease;
 }
-.ir-draft-go:hover {
-  background: var(--ir-navy-hi);
-  border-color: var(--ir-navy-hi);
+.ir-draft-face:focus-visible {
+  outline: 2px solid var(--ir-blue-ink, #1d4ed8);
+  outline-offset: 2px;
 }
-.ir-draft-go:hover svg { transform: translateX(2px); }
-.ir-draft-go svg { transition: transform 140ms ease; }
 
-/* The kebab, in a round of the accent's own wash — a mark whose meaning is
-   "there is more here", not a third button competing with Continue. Round
-   rather than square because the pill above it is already the card's square
-   object, and the hover is the app's own row wash, the same step every other
-   quiet control takes. */
+/* The kebab, in a round of the accent's own wash — the register's OWN menu on
+   the record, pinned to the card's TOP RIGHT CORNER (owner request, 2026-10-06).
+   It is a SIBLING of the face, absolutely positioned over the card, because a
+   button cannot hold buttons. Round rather than square because the plate is
+   already the card's square object, and the hover is the app's own row wash. */
 .ir-draft-more {
-  flex: none;
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  z-index: 1;
   display: grid;
   place-items: center;
   width: 2.05rem;
@@ -4672,9 +5698,12 @@
    the numbers are text and the track is `aria-hidden`: a screen reader reads
    "3 of 5 sections" once, from the pair that says it, instead of a role
    announcing the same number twice. */
+/* Tightened with the card (owner request, 2026-10-08): the strip is the card's
+   tallest block after the mark, and the two-row budget in .ir-home-list is what
+   it was measured against. `5px` track rather than 6 for the same reason. */
 .ir-draft-progress {
-  margin-top: 0.5rem;
-  padding-top: 0.45rem;
+  margin-top: 0.15rem;
+  padding-top: 0.15rem;
   border-top: 1px solid var(--ir-border);
 }
 .ir-draft-progress-head {
@@ -4682,7 +5711,12 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem;
-  margin: 0 0 0.32rem;
+  margin: 0 0 0.1rem;
+  /* A TIGHT LEADING, and it is air rather than type: the labels keep the size
+     they are drawn at (see the note on .ir-draft-progress below), and the line
+     they sit on gives back the leading a list row does not need — the two labels
+     are a caption and the count beside it, not prose. */
+  line-height: 1.2;
 }
 .ir-draft-progress-label {
   font-size: 0.72rem;
@@ -4703,7 +5737,7 @@
    property, exactly as the stepper's fill is. */
 .ir-draft-progress-track {
   display: block;
-  height: 6px;
+  height: 4px;
   border-radius: 999px;
   background: var(--ir-blue-tint);
   overflow: hidden;
@@ -4748,12 +5782,15 @@
      never negotiable, so it is stated as such. */
   flex: none;
   margin: calc(-1 * var(--ir-gutter-top, 0px)) calc(-1 * var(--ir-gutter-x, 0px)) 0;
-  padding: clamp(1.75rem, 4vw, 3rem) var(--ir-gutter-x, 0px);
+  /* THE BAND'S AIR RUNS 20% LIGHTER (owner request, 2026-10-06): the drawn
+     padding — clamp(1.75rem, 4vw, 3rem) — is cut to four fifths of itself, so
+     the band's height follows with the photo filling it end to end. */
+  padding: clamp(1.4rem, 3.2vw, 2.4rem) var(--ir-gutter-x, 0px);
   /* The band is the tallest block on the page, so it gives back the most — a
      fifth of every pixel the window is short, off each end of it. */
   padding-block: max(
     0.75rem,
-    calc(clamp(1.75rem, 4vw, 3rem) - var(--ir-home-short) * 0.11)
+    calc(clamp(1.4rem, 3.2vw, 2.4rem) - var(--ir-home-short) * 0.11)
   );
   background: var(--ir-navy);
   color: #fff;
@@ -4816,9 +5853,18 @@
   height: 100%;
   width: auto;
   aspect-ratio: 3 / 1;
-  /* The guard for a narrow band: the picture gives way rather than running off
-     the band's edge. Nothing else sets the size. */
-  max-width: min(58%, 46rem);
+  /* NO WIDTH CAP. The cap used to be the guard for a narrow band
+     (min(58%, 46rem), then 62%/56rem, then 68%/64rem as the band grew), but
+     every cap loses the same way once the band runs tall — the letterhead's
+     type at half again its drawn size and the clock stacked under it made a
+     band a 3:1 frame at full height no longer fits inside, and a capped box
+     letterboxes: navy above and below the frame (owner request, 2026-10-06).
+     So the width is the height's own consequence, always: `height: 100%` plus
+     the 3:1 below makes it, and the two things that already protected the
+     narrow band keep protecting it — the band's own `overflow: hidden` clips
+     whatever frame outruns its width, and the mask on the left edge fades the
+     seam where it does. */
+  max-width: none;
   object-fit: contain;
   /* Flush with the band's right edge, and — only when the box has been capped
      and there is slack to place — centred on what is left of the height. */
@@ -4854,64 +5900,82 @@
   inset: 0;
   background: linear-gradient(
     96deg,
-    rgba(11, 37, 69, 0.92) 0%,
-    rgba(11, 37, 69, 0.86) 28%,
-    rgba(11, 37, 69, 0.76) 52%,
-    rgba(11, 37, 69, 0.58) 72%,
-    rgba(11, 37, 69, 0.5) 100%
+    rgba(11, 37, 69, 0.64) 0%,
+    rgba(11, 37, 69, 0.6) 28%,
+    rgba(11, 37, 69, 0.53) 52%,
+    rgba(11, 37, 69, 0.41) 72%,
+    rgba(11, 37, 69, 0.35) 100%
   );
   pointer-events: none;
 }
 
-/* Two blocks — the letterhead and the clock — inside one column of the band's
-   own width. `space-between` rather than a fixed gap so the clock lands at the
-   column's far end at every width; `wrap` so a narrow screen stacks them
-   instead of crushing the wordmark. */
+/* Two blocks — the letterhead and the clock — STACKED IN ONE COLUMN (owner
+   request, 2026-10-06): the clock reads below the letterhead rather than beside
+   it. The row is a plain column now, so `space-between`/`wrap` and the wrap
+   threshold gap are gone with the side-by-side arrangement. The measure stays:
+   it is what keeps the clock's lines starting on the wordmark's own left edge,
+   over the navy half of the band rather than the veiled end of the picture. */
 .ir-home-hero-inner {
   position: relative;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  /* THE GAP IS A WRAP THRESHOLD, not a spacing. At the band's own width the two
-     blocks are held apart by `space-between` and this only decides how close they
-     are ALLOWED to come — but below about 1100px it is the whole difference
-     between the letterhead and the clock sharing one line and the clock dropping
-     to a second one, which costs the band a hundred pixels of height on exactly
-     the screens that have none to give. Tighter than it looks like it should be,
-     and deliberately. */
-  gap: clamp(0.85rem, 2.4vw, 1.6rem);
-  /* IT KEEPS A MEASURE, and the measure is what puts the clock where the drawing
-     puts it. The row is NOT pushed to the band's two edges: the station's
-     photograph holds the band's right end (see .ir-home-hero-photo) and the
-     building sits centre-right in it, so a clock set on the far right of a
-     1440-wide band would be dropped on the part of the picture the mask has
-     already faded UP — the brightest, busiest part of it. Held to 60rem the clock
-     lands a letterhead's width past the wordmark — at 1440, a little over 60%
-     across — which is where the reference sets it, and which is also where the
-     picture's own mask is still mostly navy.
+  flex-direction: column;
+  align-items: flex-start;
+  /* IT KEEPS A MEASURE, and the measure is what keeps the clock over the
+     band's own navy. The station's photograph holds the band's right end (see
+     .ir-home-hero-photo) and the building sits centre-right in it, so the
+     clock's lines must not run onto the part of the picture the mask has only
+     half faded — the brightest, busiest part of it. Held to 72rem the whole
+     column — letterhead, then clock — starts on the wordmark's own left edge.
 
-     BOTH ENDS OF THE `min()` ARE LOAD-BEARING. The measure is the `60rem`; the
-     `62%` is its ceiling on a screen wide enough that a fixed measure would stop
-     meaning "the left two-thirds" and start meaning "the left third", which is
-     where the clock would drift back to the middle of an ultrawide band and the
-     words would have to be read off the veiled end of the picture.
+     BOTH ENDS OF THE `min()` ARE LOAD-BEARING. The measure is the `72rem`; the
+     `76%` is its ceiling on a screen wide enough that a fixed measure would stop
+     meaning "the left three-quarters" and start meaning "the left third".
 
-     The band still bleeds past the page's gutters and this row does not, so the
-     wordmark starts on the exact left edge every card under it starts on, which
-     is what makes the band read as the page's head rather than a banner dropped
-     on it. `wrap` is what keeps that true on a narrow screen: the measure is
-     finite, so the clock moves under the letterhead rather than off the edge. */
-  max-width: min(60rem, 62%);
+     The band still bleeds past the page's gutters and this column does not, so
+     the wordmark starts on the exact left edge every card under it starts on,
+     which is what makes the band read as the page's head rather than a banner
+     dropped on it. */
+  max-width: min(72rem, 76%);
+}
+
+/* The gap between the letterhead and the clock that now reads under it: about
+   0.2cm, stated once, per the owner's measure — close enough that the clock
+   reads as part of the letterhead's own block. */
+.ir-home-hero-inner > .ir-hero-clock {
+  margin-top: 0.45rem;
 }
 
 .ir-home-hero-brand {
   min-width: 0;
+  /* THE BAND KEEPS THE HEIGHT THE STATION'S SENTENCE MADE (owner request,
+     2026-10-06). The promise and the sentence under it came off the letterhead;
+     the room they stood in did not — measured on the shipped stylesheets, the
+     band without it is 78-82px shorter, and the clock rises with it, because
+     the brand column is the taller of the band's two blocks at every width.
+     The copy is gone; the size is not.
+
+     THE RESERVE IS THE OLD BLOCK'S OWN BOX, spelled out rather than guessed: the
+     promise's line (1rem at the copy's 1.5 leading), the 0.15rem gap under it,
+     and the two lines the sentence took at the 26rem measure it was given —
+     4.2rem. It is padding and not a spacer element because there is nothing to
+     put in it: what the letterhead carries is unchanged, and only the space the
+     words occupied is still occupied.
+
+     THE MARGIN ABOVE IT IS THE COPY'S OWN, and it is the one length left here
+     that gives way as the window shortens (this rule inherits the job when the
+     copy's own rule went with the words).
+
+     THE RESERVE IS GONE (owner request, 2026-10-06): the clock now reads under
+     the letterhead, in the very room the reserve held open, so keeping the
+     padding put a 4.2rem dead band between the sub line and the clock. The
+     margin below — the one length that gives way on a short window — stays. */
+  padding-bottom: 0;
+  margin-bottom: max(0.45rem, calc(clamp(0.9rem, 2vw, 1.3rem) - var(--ir-home-short) * 0.02));
 }
 
 .ir-home-hero-kicker {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: calc(1.2rem - 5px);
   font-weight: 700;
   letter-spacing: 0.3em;
   text-transform: uppercase;
@@ -4937,8 +6001,11 @@
    49x50 — a hair off square — so it lands on the box without being stretched. */
 .ir-home-hero-mark {
   flex: none;
-  width: clamp(2.9rem, 4.9vw, 3.9rem);
-  height: clamp(2.9rem, 4.9vw, 3.9rem);
+  /* 50% LARGER than the size it shipped at (2026-10-07, owner request): the
+     mark was reading small beside the wordmark, so its whole clamp was scaled
+     by 1.5 — floor, vw step and ceiling alike. */
+  width: clamp(4.35rem, 7.35vw, 5.85rem);
+  height: clamp(4.35rem, 7.35vw, 5.85rem);
   object-fit: contain;
 }
 
@@ -4947,7 +6014,7 @@
   /* The masthead is the band's largest type and reads as the station's name
      rather than as a heading among others: the open panel is wide enough for it
      and the clock opposite is a readout, not a second headline. */
-  font-size: clamp(2.15rem, 1.2rem + 3.4vw, 3.5rem);
+  font-size: calc(clamp(3.25rem, 1.67rem + 5.61vw, 5.47rem) - 5px);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1;
@@ -4960,50 +6027,20 @@
 
 .ir-home-hero-sub {
   margin: 0.5rem 0 0;
-  font-size: clamp(0.7rem, 0.66rem + 0.2vw, 0.82rem);
+  font-size: calc(clamp(1.16rem, 1.1rem + 0.33vw, 1.35rem) - 5px);
   font-weight: 600;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.74);
 }
 
-/* The station's own sentence about the system: the bold promise, and under it
-   what the promise means. Each is a child of its own, so the break lands between
-   them rather than wherever the band's width happens to run out.
-
-   IT KEEPS A MEASURE, and that measure is what keeps the clock on the same row.
-   The band is a flex row of two blocks placed with `space-between`, so the clock
-   sits at the far end of the band's own measure — which means the DAY AND DATE
-   ARE PUSHED UNDER THE LETTERHEAD the moment this column's longest line is wider
-   than the space left for it. The lead is that longest line, and the one that
-   changes whenever the station rewrites its copy: reworded at the same measure it
-   took the whole row and the clock dropped to a second one.
-
-   26rem IS THE PREVIOUS SHAPE OF THIS BLOCK — the width the three-line version of
-   the copy already occupied — so the letterhead keeps the height and the clock
-   keeps the place it had, and a longer sentence wraps INSIDE the measure instead
-   of moving anything. The clock's own column (its mark and the three lines of the
-   readout) is about 15rem, so a measure of 26rem plus a gap still fits the band's
-   60rem well before the row itself runs out at about 1100px. */
-.ir-home-hero-lead {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  margin: clamp(0.9rem, 2vw, 1.3rem) 0 0;
-  margin-top: max(0.45rem, calc(clamp(0.9rem, 2vw, 1.3rem) - var(--ir-home-short) * 0.02));
-  max-width: 26rem;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.82);
-}
-.ir-home-hero-lead strong {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #fff;
-}
-
 /* The working time, live, at the band's other end (HomeClock on the officer's
-   Home). Three lines behind the gold mark: the reading, the date, and the zone.
+   Home). A LOCKUP of two halves (owner request, 2026-10-07): the reading, a
+   hairline, and the calendar half — date over zone — beside it, the whole
+   thing vertically centred on one row. It used to be three stacked lines of
+   descending size, and under the letterhead they read as sprawl; one composed
+   unit reads as the working instrument it is, and the band falls into two
+   blocks — letterhead, then clock — instead of six loose lines.
 
    IT IS THE SECOND-LOUDEST THING ON THE BAND, after the wordmark, and it is
    deliberately set close to it: an officer reads the incident time off the
@@ -5023,31 +6060,37 @@
    two-digit hour is the other half of the same rule: an unpadded "9" would
    grow the string by a character at nine o'clock.
 
-   THE ZONE IS ITS OWN LINE, not a note trailing the date. It is the half an
-   officer checks when a record's minute looks wrong ("the sheet says 02:44"),
-   and on a band this wide there is no reason to make them read past the date to
-   reach it. Sentence case, not the band's tracked capitals: the kicker at the
-   other end already carries the uppercase register. */
+   THE ZONE IS ITS OWN LINE inside the calendar half, not a note trailing the
+   date. It is the half an officer checks when a record's minute looks wrong
+   ("the sheet says 02:44"), and its line stands beside the reading rather
+   than under it, so it is found without reading past the date. Sentence case,
+   not the band's tracked capitals: the kicker above already carries the
+   uppercase register. */
 .ir-hero-clock {
   display: flex;
   align-items: center;
-  gap: clamp(0.6rem, 1.4vw, 0.9rem);
+  gap: clamp(0.7rem, 1.5vw, 1rem);
   margin: 0;
   text-align: left;
 }
 
-/* The mark, in the band's gold — the same gold as the WRITE in the wordmark and
-   the action plate at the foot of the page. It is the only accent the hero
-   spends on anything but type. */
-.ir-hero-clock-mark {
+/* The hairline between the reading and the calendar half: it separates two
+   kinds of fact — the time it is NOW, and the day and zone that time was read
+   in. It takes the time's own height, so the lockup centres as one object; in
+   the band's white at a whisper, since the words already say it. */
+.ir-hero-clock-rule {
   flex: none;
-  display: grid;
-  place-items: center;
-  color: var(--ir-gold);
+  width: 1px;
+  height: clamp(1.9rem, 0.9rem + 1.4vw, 2.7rem);
+  background: rgba(255, 255, 255, 0.28);
 }
 
-.ir-hero-clock-readout {
-  display: block;
+/* The calendar half: the date, and the zone it was read in. */
+.ir-hero-clock-cal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
 }
 
 .ir-hero-clock-time {
@@ -5083,7 +6126,6 @@
 
 .ir-hero-clock-date {
   display: block;
-  margin-top: 0.25rem;
   font-size: 0.85rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
@@ -5091,7 +6133,6 @@
 
 .ir-hero-clock-zone {
   display: block;
-  margin-top: 0.1rem;
   font-size: 0.76rem;
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -5156,7 +6197,13 @@
    what makes the band read as full-bleed chrome rather than as a wide block. */
 .ir-home-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(17rem, 24vw, 22rem);
+  /* THE REMINDER'S COLUMN IS 5cm WIDER THAN THE REFERENCE DRAWS IT (owner
+     request, 2026-10-08): the register card's tiles and its graph wanted more
+     room than `clamp(17rem, 24vw, 22rem)` left them beside the work. The clamp
+     is kept and the centimetre is added ON TOP of it, so the column still
+     breathes with the window at both ends and the card still folds to one
+     column below 900px (see the media query under .ir-home-main). */
+  grid-template-columns: minmax(0, 1fr) calc(clamp(17rem, 24vw, 22rem) + 5cm);
   /* ONE ROW, and it takes the height the column has left after the band and the
      signature — which is what lets the work below it be sized to the SCREEN
      rather than to its own content (the `0` floor is the usual guard: without it
@@ -5169,8 +6216,8 @@
      the small step the reference leaves between the two, not a second full
      gutter: with the panel's height pinned (see .ir-home), every pixel spent here
      is a pixel the draft list does not get. */
-  margin-top: clamp(0.7rem, 1.6vw, 1rem);
-  margin-top: max(0.4rem, calc(clamp(0.7rem, 1.6vw, 1rem) - var(--ir-home-short) * 0.02));
+  margin-top: clamp(0.55rem, 1.3vw, 0.85rem);
+  margin-top: max(0.35rem, calc(clamp(0.55rem, 1.3vw, 0.85rem) - var(--ir-home-short) * 0.02));
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -5219,14 +6266,60 @@
    because it is the one sentence on this card that is a warning rather than a
    note. The office's own line closes the card under the flag's three fields.
 
-   EVERY FILL HERE IS A TOKEN. The card is drawn in both themes, so a colour
-   written rather than named would be a pale-blue panel glowing on a near-black
-   page; the two families (blue and red) come from the palette, and the gold is
-   the one value that is the same in both because it is only ever drawn on navy,
-   which is a fixed surface. And nothing is louder than the head: this is still
-   the page's quiet column, and the one loud thing on Home is the action above
-   it. */
+   Every colour is a token, the same rule the rest of the card is read
+   under, because the card is drawn in both themes. The tiles now carry their
+   own icon disc and the card's THREE light facets close it — the header,
+   the card and the sections all say MY REGISTER is its own card. */
+/* THE CARD'S TWO CLOSING MARKS, from the reference drawing (owner request,
+   2026-10-07): the navy-over-gold band ACROSS the foot, and the two diagonal
+   slashes at the foot's right corner.
+
+   The band is ::after — navy, then the plate's gold directly under it, both
+   running the card's full width and clipped by its rounded corners. The gold
+   here is --ir-gold, the PLATE's fill, because a band this thick is a plate
+   and not a marker; the band is a fixed navy surface in both themes, which is
+   what the accent on it is measured against.
+
+   The slashes are ::before — two hard-stop diagonal bands on one small field
+   pinned to the foot's right corner, navy leading and gold following, the
+   same two inks the band wears. The angle leans the cut edges the way the
+   reference does. The field stays SMALL and sits directly on the band, inside
+   the card's own bottom air — never tall enough to reach the content above
+   it, which is what made the old large slashes read as a protrusion over the
+   last row. */
+.ir-remember::before {
+  content: '';
+  position: absolute;
+  right: 0.6rem;
+  bottom: 13px;
+  width: 3rem;
+  height: 0.8rem;
+  background: linear-gradient(
+    135deg,
+    transparent 0 34%,
+    var(--ir-navy) 34% 55%,
+    transparent 55% 63%,
+    var(--ir-gold) 63% 86%,
+    transparent 86% 100%
+  );
+  pointer-events: none;
+}
+.ir-remember::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 13px;
+  background: linear-gradient(
+    180deg,
+    var(--ir-navy) 0 8px,
+    var(--ir-gold) 8px 100%
+  );
+}
+
 .ir-remember {
+  position: relative;
   /* The card's own gutter, named because the head band cancels it to run full
      bleed — and the first of the card's lengths to give way on a short screen:
      it is pure air, and the band reads it back, so giving way here keeps the
@@ -5247,179 +6340,267 @@
   );
 
   /* Advice, not a queue: content-height, and it keeps its own height even though
-     the column beside it fills the row. It still may not run past the panel, so
-     on a short screen the card takes a scrollbar of its own rather than pushing
-     the signature off the bottom. The `x` half is what lets the head band reach
-     the card's own edges and be clipped by its corners — without it the band
-     would hang out over the border. */
+     the column beside it fills the row. It still may not run past the panel
+     (`max-height` below), but THE CARD NO LONGER SCROLLS ITSELF (owner request,
+     2026-10-08): the register card's own rail was the one scroll container on
+     this page that nobody asked for, so the `y` half is `hidden` and the card
+     is clipped by its own corners instead. The `x` half stays hidden for the
+     same reason it always was — the foot band and the corner slashes run to the
+     card's edges and are cut by its radius rather than hanging over the border. */
   align-self: start;
   max-height: 100%;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: hidden;
   background: var(--ir-card, #fff);
-  border: 1px solid var(--ir-border);
-  border-radius: 8px;
+  border: 1px solid var(--ir-tile-line);
+  border-radius: 14px;
   box-shadow: var(--shadow-xs);
   padding: var(--ir-remember-pad);
+  /* Room for the corner slashes above the foot band: the two marks together
+     stand 13px (band) plus 0.8rem (slashes, standing directly on the band) —
+     a hair under 1.7rem, and any reservation under it puts the marks ON the
+     last row, which is the protrusion the owner reported (2026-10-07). The
+     band's own height is fixed, so this half of the reservation is fixed too
+     and survives every compression the pad above it takes. */
+  padding-bottom: calc(var(--ir-remember-pad) + 1.75rem);
 }
 
-/* The head of the card, bled to its edges. The padding comes back as a negative
-   margin so the band runs the width of the card, and the card's own radius
-   clips it, so band and card have one corner between them rather than two. The
-   gradient runs navy-hi into navy rather than the other way round, so the
-   brightest end of the band is the end the gold tile sits on and the eye lands
-   there first. White on either end measures 9:1 or better, and both values are
-   the fixed navy pair the rest of the app's chrome is drawn in.
-
-   THE RULE UNDER THE BAND IS --ir-bar-accent, not --ir-gold: that token exists
-   for exactly this, an accent ON a navy bar (the active nav tab's own rule, and
-   the marker a bar-level element wears), and it is measured against navy rather
-   than against white paper. */
+/* The card's NAME is stated for the reading order and for a screen reader
+   alone: the reference card opens straight on the tiles — no head band, no
+   mark — so the h2 is visually hidden with the clip pattern (not display:none,
+   which would drop it from the accessibility tree). The tiles' own labels are
+   what the eye reads first. */
 .ir-remember-title {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin: calc(-1 * var(--ir-remember-pad)) calc(-1 * var(--ir-remember-pad))
-    max(0.4rem, calc(0.9rem - var(--ir-home-short) * 0.04));
-  padding: max(0.3rem, calc(0.6rem - var(--ir-home-short) * 0.03)) var(--ir-remember-pad);
-  border-bottom: 3px solid var(--ir-bar-accent);
-  background: linear-gradient(135deg, var(--ir-navy-hi) 0%, var(--ir-navy) 100%);
-  font-size: 0.82rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: #fff;
-}
-
-/* The heading's mark is GONE by request: the gold shield that used to lead
-   "Remember" is removed, and the heading is the word alone on the band. */
-
-.ir-remember-list {
-  list-style: none;
-  margin: 0;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
   padding: 0;
-  display: grid;
-  gap: max(0.2rem, calc(0.45rem - var(--ir-home-short) * 0.03));
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
-/* One thing to remember, one PANEL: a wash with a 4px edge down its left side,
-   so the three are counted before they are read. The edge is the accent itself
-   (--ir-blue, which is the theme's accent FILL and lifts in dark where it has
-   to) and the panel behind it is --ir-blue-tint, the palette's own accent wash —
-   one shape in two tokens, three times over. */
-.ir-remember-list li {
+/* MY REGISTER, the summary card's numbers and bars (owner request,
+   2026-10-07): the card now states the officer's own counts — the total and
+   the drafts as two tiles with THEIR OWN DISC MARK (the reference row that
+   replaced the plain tiles), then a light horizontal bar per incident type
+   with its own glyph keyed by the register's ONE type→icon map. Every colour
+   is a token, the same rule the rest of the card is read under, because the
+   card is drawn in both themes. */
+/* THE TILES OPEN THE CARD (owner request, 2026-10-08): the two numbers are what
+   the officer came to the card for, so they are its first row, with the
+   frequency graph standing under them — and the STEP that separates the two
+   blocks is this row's own (see .ir-remember-bars, which carries none). */
+.ir-remember-stats {
+  display: flex;
+  gap: max(0.4rem, calc(0.6rem - var(--ir-home-short) * 0.02));
+  margin: 0 0 max(0.5rem, calc(0.8rem - var(--ir-home-short) * 0.03));
+}
+.ir-remember-stat {
+  flex: 1 1 0;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  padding: max(0.2rem, calc(0.5rem - var(--ir-home-short) * 0.035)) 0.65rem;
-  border-left: 4px solid var(--ir-blue);
-  border-radius: 8px;
+  gap: 0.55rem;
+  padding: max(0.45rem, calc(0.65rem - var(--ir-home-short) * 0.03)) 0.7rem;
+  border: 1px solid var(--ir-tile-line);
+  border-radius: 10px;
   background: var(--ir-blue-tint);
-  font-size: 0.82rem;
+}
+/* The tile's corner facet, from the reference: one diagonal wash at the
+   foot's right corner, the same deeper accent the disc and the border wear.
+   It is decoration, clipped by the tile's own radius. */
+.ir-remember-stat::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 3.4rem;
+  height: 2.6rem;
+  background: linear-gradient(
+    135deg,
+    transparent 0 42%,
+    var(--ir-tile-line) 42% 72%,
+    transparent 72% 100%
+  );
+  pointer-events: none;
+}
+/* The tile's own mark: the reference disc — a deeper wash of the accent, the
+   glyph drawn in the station navy over it. The icon is decoration; the label
+   and the number beside it are the fact. */
+.ir-remember-stat-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 50%;
+  background: var(--ir-tile-line);
+  color: var(--ir-ink-navy);
+}
+.ir-remember-stat-icon svg {
+  display: block;
+}
+.ir-remember-stat-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+/* The reference label: the tracked uppercase name with the GOLD TICK before
+   it — the colour of the graph's own fills, so the tiles and the graph name
+   the one accent. Navy ink, measured on the light card; dark restates it. */
+.ir-remember-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-hud);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ir-ink-navy);
+}
+.ir-remember-stat-label::before {
+  content: '';
+  flex: none;
+  width: 0.22rem;
+  height: 0.8rem;
+  border-radius: 2px;
+  background: var(--ir-gold);
+}
+.ir-remember-stat-num {
+  margin: 0;
+  font-family: var(--font-hud);
+  font-size: 2rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ir-ink-navy);
+}
+
+/* The graph: its own INSET PANEL — the reference draws the section on a white
+   plate with the tiles' border, inside the card — then a label, then one row
+   per type: glyph, name, light track with its amber fill, and the count that
+   is the actual fact. The fill's width arrives as a custom property from the
+   component (count against the largest), so the stylesheet states no number a
+   re-sort could make a lie. */
+.ir-remember-bars {
+  /* NO STEP OF ITS OWN: the graph is the card's LAST block now, so the room
+     between it and the numbers above belongs to the tiles' row (see
+     .ir-remember-stats) and the card's own foot padding closes the card under
+     the panel. */
+  margin: 0;
+  padding: max(0.55rem, calc(0.8rem - var(--ir-home-short) * 0.03)) 0.7rem max(0.35rem, calc(0.55rem - var(--ir-home-short) * 0.03));
+  border: 1px solid var(--ir-tile-line);
+  border-radius: 10px;
+  background: var(--ir-card, #fff);
+}
+.ir-remember-bars-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 max(0.35rem, calc(0.55rem - var(--ir-home-short) * 0.02));
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  font-weight: 800;
+  /* One line, always: the longer graph name (owner request, 2026-10-07 —
+     "Incident Report Frequency") is a tracked uppercase string, and at the
+     0.14em the tiles' labels wear it breaks onto a second line at the
+     card's narrowest desktop column. A touch less tracking keeps the whole
+     name on one line there without touching the type's size. */
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ir-ink-navy);
+}
+/* The section's own tick, before its name: a short amber bar at the labels'
+   height — the colour of the graph's own fills, so the section, the bars and
+   the counts all name the one accent. */
+.ir-remember-bars-mark {
+  flex: none;
+  width: 0.3rem;
+  height: 0.85rem;
+  border-radius: 2px;
+  background: var(--ir-gold);
+}
+.ir-remember-bars-empty {
+  margin: 0;
+  font-size: 0.78rem;
   line-height: 1.5;
   color: var(--ir-muted);
 }
-
-/* THE EMERGENCY IS THE ONE THAT IS RED. The third sentence is the only one on
-   the card that is an instruction about danger rather than a note about the
-   record, and the palette has a red family for exactly that job (--red,
-   --red-bg, --red-text, all three restated by dark). It is the SAME panel in
-   another colour rather than a second kind of card: same edge, same radius, same
-   mark — which is what keeps it advice with a warning in it instead of a second
-   alert competing with the action above. */
-.ir-remember-list li:nth-child(3) {
-  border-left-color: var(--red);
-  background: var(--ir-red-tint);
+.ir-remember-bars-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
 }
-
-/* The phrase each sentence turns on is set in the card's own ink rather than in
-   its muted grey — "accurate and complete", "faster and safer response", "local
-   police station" — because that is the half of the sentence the officer is
-   meant to carry away. */
-.ir-remember-list li strong {
-  font-weight: 700;
-  color: var(--ir-text);
+.ir-remember-bar {
+  display: grid;
+  grid-template-columns: auto minmax(5.5rem, 9.5rem) 1fr auto;
+  align-items: center;
+  gap: 0.55rem;
+  padding: max(0.3rem, calc(0.45rem - var(--ir-home-short) * 0.02)) 0;
 }
-
-/* The mark, on a disc of its own family's wash one layer over the panel it sits
-   in: the SAME token painted twice, which is what makes the disc read a step
-   deeper than the panel without a second colour being named for it. The glyph is
-   --ir-blue-ink rather than --ir-blue, because the two are split for exactly
-   this reason (see dark-theme.css) and this is a mark rather than a fill under a
-   white label. */
-.ir-remember-mark {
+/* The hairline BETWEEN rows, never under the last: the reference separates the
+   rows with a light rule so the graph reads as a table of counts rather than
+   as loose bars. */
+.ir-remember-bar + .ir-remember-bar {
+  border-top: 1px solid var(--ir-border);
+}
+/* The type's own glyph, in a soft square: the same drawn marks the register's
+   opened folders wear, keyed by the ONE map (lib/reportFolder.js `typeIcon`)
+   the register is keyed by — so a bar and its folder can never name a type
+   differently. The icon is decoration; the name beside it is the fact. */
+.ir-remember-bar-icon {
   flex: none;
   display: grid;
   place-items: center;
   width: 2rem;
   height: 2rem;
-  border-radius: 50%;
-  background: var(--ir-blue-tint);
-  color: var(--ir-blue-ink);
+  border-radius: 0.55rem;
+  background: var(--ir-tile-line);
+  color: var(--ir-ink-navy);
 }
-
-.ir-remember-list li:nth-child(3) .ir-remember-mark {
-  background: var(--ir-red-tint);
-  color: var(--red-text);
+.ir-remember-bar-icon svg {
+  display: block;
+  width: 1.2rem;
+  height: 1.2rem;
 }
-
-/* THE FLAG, over the office's line: blue, white, red — the colours this card is
-   drawn in, with the gold of the tile making the fourth of the national set. The
-   middle field is --ir-flag-mid rather than a colour named here: the field has
-   to be light grey on the light card (where white would not read) and white on
-   the dark one (where the grey would not), and that is a job for a token with a
-   dark restatement, not for a literal.
-
-   It hangs off the LIST rather than off the line below it, and that is a
-   mechanical choice with a reason: the line needs BOTH of its pseudo-elements
-   for the two gold marks that bracket it, so the stripe has to live on the
-   element above. It is a grid item, so it is centred by `justify-self` and not
-   by a margin. */
-.ir-remember-list::after {
-  content: '';
-  justify-self: center;
-  margin-top: max(0.4rem, calc(0.75rem - var(--ir-home-short) * 0.03));
-  width: 6.5rem;
-  height: 0.3rem;
+.ir-remember-bar-type {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ir-ink-navy);
+}
+.ir-remember-bar-track {
+  display: block;
+  height: 0.65rem;
   border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    var(--ir-blue) 0 42%,
-    var(--ir-flag-mid) 42% 72%,
-    var(--red) 72% 100%
-  );
+  background: var(--ir-track);
+  overflow: hidden;
 }
-
-/* The office's own line, under the flag: the station is speaking, not the
-   system, and it is bracketed by the head band's own gold — a small outlined
-   square, the tile's shape at the size of a full stop, so the card closes
-   between the same two marks it opens with. The ink is the accent's, because
-   this is the one line on the card the station signs.
-
-   A FLEX ROW, so those two marks are flex items in the sentence's own line
-   rather than an image or two absolutely placed boxes: they cannot drift away
-   from the words they bracket, at any width, in either theme. */
-.ir-remember-quote {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  margin: max(0.3rem, calc(0.55rem - var(--ir-home-short) * 0.02)) 0 0;
-  text-align: center;
-  font-size: 0.78rem;
-  font-style: italic;
-  line-height: 1.5;
-  color: var(--ir-blue-ink);
+.ir-remember-bar-fill {
+  display: block;
+  height: 100%;
+  width: var(--ir-remember-fill, 0%);
+  border-radius: inherit;
+  background: var(--ir-gold);
 }
-
-.ir-remember-quote::before,
-.ir-remember-quote::after {
-  content: '';
-  flex: none;
-  width: 0.5rem;
-  height: 0.5rem;
-  border: 1.5px solid var(--ir-gold);
-  border-radius: 2px;
+.ir-remember-bar-count {
+  font-family: var(--font-hud);
+  font-size: 1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ir-ink-navy);
 }
 
 /* ---- THE SIGNATURE BAND -------------------------------------------------

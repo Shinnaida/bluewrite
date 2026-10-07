@@ -3,6 +3,7 @@ import { api, classifyError, isUnreachable } from './lib/api.js';
 import { useTheme } from './lib/theme.js';
 import { useDensity } from './lib/density.js';
 import { setLanguageRegistry } from './lib/languageRegistry.js';
+import { clearFor } from './lib/offlineCache.js';
 import Login from './components/Login.jsx';
 import Shell from './components/Shell.jsx';
 
@@ -67,21 +68,31 @@ export default function App() {
   }, []);
 
   const onLogout = useCallback(() => {
+    // FORGET WHAT THIS SESSION KEPT ON THIS COMPUTER (see
+    // src/lib/offlineCache.js). It is session-scoped already, so a closed tab is
+    // the end of it — but a station PC is handed over between officers without
+    // the browser being closed, and "the tab would have closed anyway" is not a
+    // promise this app can make on a browser that restores tabs. Signing out is
+    // the moment the register stops being this officer's business.
+    if (user?.id) clearFor(user.id);
     // Drop the boot reading rather than reuse it: the workspace was live, so
     // minutes have passed since it was taken and it is worth re-taking.
     setBoot(null);
     setUser(null);
-  }, []);
+  }, [user]);
 
   // The one sign-out that is not a sign-out. The session was ended BY the change
   // rather than by the officer leaving, so they land on the gate owing an
   // explanation — and the thing they need to know is precisely the thing that
   // just changed. Same bookkeeping as onLogout, plus the sentence.
   const onPasswordChanged = useCallback(() => {
+    // Same forgetting as onLogout, and for the same reason: this ends the session
+    // a different account may be about to begin.
+    if (user?.id) clearFor(user.id);
     setBoot(null);
     setGateNotice('Your password was changed. Sign in with the new one.');
     setUser(null);
-  }, []);
+  }, [user]);
 
   // A field of the signed-in account changed while the workspace was open — today
   // that is the profile photo, and it is the one identity field an officer can

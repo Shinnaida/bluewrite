@@ -43,7 +43,6 @@ test('the page opens on the band, and the band carries the clock exactly once', 
     'ir-home-hero-wordmark',
     'ir-home-hero-mark',
     'ir-home-hero-sub',
-    'ir-home-hero-lead',
     'ir-home-hero-scrim',
   ]) {
     assert.ok(html.includes(part), `${part} is missing from the band`);
@@ -51,7 +50,9 @@ test('the page opens on the band, and the band carries the clock exactly once', 
   assert.match(html, /Welcome to/, 'the band lost its kicker');
   assert.match(html, /BLUE<em>WRITE<\/em>/, 'the band lost the wordmark');
   assert.match(html, /AI-Assisted Police Incident Reporting/, 'the band lost the sub line');
-  assert.match(html, /Smarter\. Faster\. More Reliable\./, "the band lost the station's own line");
+  // The station's promise line was taken off the band (owner request): the band
+  // must not carry it back.
+  assert.doesNotMatch(html, /Smarter\. Faster\. More Reliable\./, "the band still carries the station's own line");
 
   // THE CLOCK IS ON THE BAND, IS NOT A LIVE REGION, AND THERE IS ONE OF IT. The
   // count is the assertion that matters: a rebuild that leaves the old masthead
@@ -66,8 +67,9 @@ test('the page opens on the band, and the band carries the clock exactly once', 
   const bandEnd = html.indexOf('</section>', bandAt);
   assert.ok(clockAt > bandAt && clockAt < bandEnd, 'the clock is not inside the band');
   // The date and the zone are separate lines, so the zone can be read without
-  // reading past the date; and the mark is the clock's own.
-  assert.ok(html.includes('ir-hero-clock-mark'), 'the clock lost its mark');
+  // reading past the date. The gold mark is GONE (owner request, 2026-10-07):
+  // the readout alone states the clock on the band.
+  assert.ok(!html.includes('ir-hero-clock-mark'), 'the clock still draws its mark');
   assert.ok(html.includes('ir-hero-clock-zone'), 'the clock lost the zone line');
   assert.match(html, /Philippine Standard Time/, 'the zone is not stated');
   assert.doesNotMatch(html, /aria-live/, 'a ticking clock is not a live region');
@@ -110,12 +112,15 @@ test('the action is one gold plate, and it is Home’s own control', async () =>
 
   // The mark is the pen-and-report file-pen, inlined — and it is not the plain
   // page the app draws for a report that already exists.
-  assert.match(html, /M12\.659 22H18a2 2 0 0 0 2-2V8/, 'the action lost its file-pen mark');
+  const actionAt = html.indexOf('class="ir-home-cta"');
+  const action = html.slice(actionAt, html.indexOf('</button>', actionAt));
+  assert.doesNotMatch(action, /<svg|<img|ir-home-cta-glyph|ir-home-cta-arrow/, 'Start with AI still draws icons');
   // EVERY MARK ON THIS PAGE IS DRAWN, with four exceptions, and all four are the
   // station's own artwork files: the two seals in the signature band, the office's
-  // mark beside the wordmark, and the folder on the action banner. (The reminder's
-  // heading mark is gone by request — see homeCta.test.mjs.) Nothing here is
-  // fetched from anywhere, and nothing else may become an image unnoticed.
+  // mark beside the wordmark, and the folder on the action banner. (MY
+  // REGISTER's heading carries no mark any more — the reference card opens
+  // straight on the tiles; see homeCta.test.mjs.) Nothing here is fetched from
+  // anywhere, and nothing else may become an image unnoticed.
   const imgs = html.match(/<img[^>]*>/g) ?? [];
   assert.equal(imgs.length, 4, 'Home draws a different number of images');
   for (const img of imgs) {
@@ -125,9 +130,6 @@ test('the action is one gold plate, and it is Home’s own control', async () =>
       'Home draws an image that is not the station’s own artwork',
     );
   }
-  // The banner's mark is the folder the block is about, and it is DECORATIVE for
-  // the same reason the band's is: the copy beside it already says what the block
-  // is, so the artwork takes an empty alt rather than being announced first.
   const folder = imgs.filter((img) => img.includes('ir-home-banner-mark'));
   assert.equal(folder.length, 1, 'the action banner lost the office’s folder mark');
   assert.match(folder[0], /alt=""/, 'the banner’s mark is not stated as decorative');
@@ -163,26 +165,27 @@ test('the drafts section lists DRAFTS, as cards with a way in and a menu', async
   assert.ok(first !== -1 && second !== -1, 'the record numbers are gone');
   assert.ok(first < second, 'the newest draft must lead');
 
-  // Each card carries: the mark, the identity and its pills, when it happened,
-  // who recorded it, its two controls and its progress strip.
+  // Each card carries: the mark, the identity (number with its facts beside it),
+  // what it is about, its whole-field way in, its menu and its progress strip.
   for (const part of [
-    'ir-draft-plate',
+    'draft-folder',
     'ir-draft-identity',
-    'ir-draft-pills',
+    'ir-draft-row',
     'ir-draft-no',
     'ir-draft-type',
-    'ir-draft-aside',
     'ir-draft-meta',
-    'ir-draft-actions',
-    'ir-draft-go',
+    'ir-draft-kind',
+    'ir-draft-face',
     'ir-draft-more',
     'ir-draft-progress',
   ]) {
     assert.ok(html.includes(part), `${part} is missing from the draft card`);
   }
-  assert.equal(html.split('class="ir-draft-go"').length - 1, DRAFTS.length, 'a card lost its way in');
+  assert.equal(html.split('class="ir-draft-face"').length - 1, DRAFTS.length, 'a card lost its way in');
   assert.equal(html.split('class="ir-draft-more"').length - 1, DRAFTS.length, 'a card lost its menu');
-  assert.match(html, /class="badge draft">draft</, 'the card lost the shared status pill');
+  // The DRAFT badge above the ID is gone (owner request, 2026-10-06): the card
+  // states its state no more, only its number, its facts and its type.
+  assert.doesNotMatch(html, /class="badge draft">draft</, 'the card still draws the status pill');
   assert.match(html, /Rape \/ Sexual Assault/, 'the card lost the incident type');
   assert.match(html, /Sep 30, 2026/, 'the card lost the date');
   assert.match(html, /Shaine/, 'the card lost the officer who recorded it');
@@ -223,9 +226,9 @@ test('the drafts section lists DRAFTS, as cards with a way in and a menu', async
     'the card menu has no accessible name',
   );
 
-  // A DRAFT says Continue; anything else says Open. A button promising to
-  // "continue" a submitted report would be promising an edit it cannot make.
-  assert.match(html, /class="ir-draft-go">Continue/, 'a draft does not offer Continue');
+  // THE WHOLE CARD IS THE WAY IN (owner request, 2026-10-06): the Continue
+  // button is gone and the card face is one button that opens the record.
+  assert.doesNotMatch(html, /ir-draft-go/, 'the Continue button is still drawn');
   const mixed = renderHome({ reports: MIXED });
   assert.equal(
     mixed.split('class="ir-draft-card').length - 1,
@@ -244,47 +247,60 @@ test('the drafts section lists DRAFTS, as cards with a way in and a menu', async
   );
 });
 
-test('the reminder is the aside, with its three items and the office’s line', async () => {
+test('the reminder card is MY REGISTER: the totals and the type bars', async () => {
   const { renderHome } = await load();
   const html = renderHome();
 
   assert.ok(html.includes('ir-remember'), 'the reminder card is gone');
-  assert.match(html, /Remember/i, 'the reminder lost its title');
-  // The heading's own mark, on the gold tile the stylesheet gives it (see the
-  // half of homeCta.test.mjs that owns the card's colours) — and it is not one of
-  // the three items, which is why it is counted separately below.
+  // MY REGISTER (owner request, 2026-10-07): the advice list became the
+  // officer's own numbers, and the title says so.
+  assert.match(html, /My register/i, 'the card lost its title');
   assert.ok(!html.includes('ir-remember-title-mark'), 'the reminder heading drew a mark again');
-  assert.equal(html.split('ir-remember-mark').length - 1, 3, 'the reminder is not three items');
-  // Three ITEMS — asserted inside the list itself, so a fourth line somewhere
-  // else on the page cannot stand in for a missing one.
-  const listAt = html.indexOf('ir-remember-list');
-  const list = html.slice(listAt, html.indexOf('</ul>', listAt));
-  assert.equal(list.split('<li>').length - 1, 3, 'the reminder list is the wrong length');
-  // Each sentence carries the phrase it turns on in <strong> — the card's design
-  // states what the officer is meant to carry away, and the text inside the
-  // emphasis is asserted with the sentence rather than separately, so the two
-  // cannot drift apart.
-  assert.match(
-    list,
-    /Keep your information <strong>accurate and complete<\/strong>\./,
-    'the reminder lost its first item',
+
+  // THE TWO TILES, from the ONE tally: total reports, then drafts. The
+  // fixture's TALLY holds 7 reports, 3 of them drafts — asserted here so a
+  // computation that drifted from the tally cannot pass unseen.
+  const statsAt = html.indexOf('ir-remember-stats');
+  const stats = html.slice(statsAt, html.indexOf('</dl>', statsAt));
+  assert.match(stats, /Total reports/, 'the card lost its total tile');
+  assert.match(stats, /Drafts/, 'the card lost its drafts tile');
+  assert.match(stats, /<dd class="ir-remember-stat-num">7<\/dd>/, 'the total is not the tally\'s sum');
+  assert.match(stats, /<dd class="ir-remember-stat-num">3<\/dd>/, 'the draft count is not the tally\'s drafts');
+
+  // THE BAR GRAPH: only the three largest types, largest first, each carrying
+  // its count as the fact the bar decorates — no scroll, no "Other" row.
+  const barsAt = html.indexOf('ir-remember-bars-list');
+  const bars = html.slice(barsAt, html.indexOf('</ul>', barsAt));
+  assert.match(html, /Incident Report Frequency/, 'the bar graph lost its label');
+  assert.equal(bars.split('class="ir-remember-bar"').length - 1, 3, 'the graph is not the top three types');
+  assert.match(bars, /Rape \/ Sexual Assault/, 'the graph lost a type');
+  assert.match(bars, /Theft/, 'the graph lost a type');
+  assert.ok(!bars.includes('Robbery'), 'the graph shows more than the top three types');
+  for (const count of ['2', '1', '3']) {
+    assert.match(bars, new RegExp(`ir-remember-bar-count">${count}</span>`), `the graph lost a count (${count})`);
+  }
+  // The bars' widths are the counts against the largest, set from the
+  // component: the 3 is full, the 1s are a third.
+  assert.match(bars, /--ir-remember-fill:100%/, 'the largest bar is not full');
+  assert.match(bars, /--ir-remember-fill:33%/, 'a one-report bar is not a third of the largest');
+
+  // THE TILES OPEN THE CARD AND THE GRAPH CLOSES IT (owner request,
+  // 2026-10-08): the two numbers are the first thing in the card, and the
+  // frequency panel stands under them.
+  assert.ok(
+    html.indexOf('ir-remember-stats') < html.indexOf('ir-remember-bars-list'),
+    'the graph is drawn above the tiles again',
   );
-  assert.match(
-    list,
-    /Your report helps ensure a <strong>faster and safer response<\/strong>\./,
-    'the reminder lost its second item',
-  );
-  assert.match(
-    list,
-    /contact your <strong>local police station<\/strong> immediately\./,
-    'the reminder lost its third item',
-  );
-  // The office speaks last, and the line is the station's, not the system's.
-  assert.match(
-    html,
-    /Sa Bagong Pilipinas, Mas Ligtas ang Bawat Isa\./,
-    'the reminder lost the office’s closing line',
-  );
+
+  // The loading state renders dashes, not zeroes — a clock that has not read
+  // yet is not a register with nothing in it.
+  const loading = renderHome({ tally: null });
+  assert.match(loading, /<dd class="ir-remember-stat-num">—<\/dd>/, 'loading does not render the em-dash state');
+  assert.ok(!loading.includes('ir-remember-bars-list'), 'loading draws bars for a tally it does not have');
+
+  // The office's closing line is GONE with the head band (owner request,
+  // 2026-10-07): the reference card closes on its foot band, not on a sentence.
+  assert.ok(!html.includes('Sa Bagong Pilipinas'), 'the reminder still carries the office’s closing line');
 
   // The reminder is the SECOND column of the body, after the work.
   assert.ok(
@@ -314,7 +330,9 @@ test('the page closes on the signature band, and the grid backdrop is gone', asy
   // this page could go on rendering without any other assertion noticing, and it
   // would sit behind a navy band and two white cards.
   assert.ok(!html.includes('home-grid'), 'Home still draws the grid backdrop');
-  assert.ok(!html.includes('<canvas'), 'a canvas is still mounted on Home');
+  // The requested galaxy is local to the folder mark, not a page backdrop.
+  assert.equal(html.split('<canvas').length - 1, 1, 'Home must draw only the folder galaxy canvas');
+  assert.match(html, /class="ir-home-banner-icon"[^>]*>[\s\S]*?<span[^>]*class="ir-home-banner-galaxy"[^>]*aria-hidden="true"[^>]*>[\s\S]*?<canvas[^>]*class="spiral-galaxy-canvas"[^>]*>[\s\S]*?<img[^>]*class="ir-home-banner-mark"/, 'the galaxy is not behind the folder inside its circle');
 });
 
 test('a quiet week and a slow read both state themselves', async () => {
@@ -325,7 +343,7 @@ test('a quiet week and a slow read both state themselves', async () => {
   const empty = renderHome({ reports: [] });
   assert.match(empty, /No drafts right now/, 'the empty state does not name the section');
   assert.equal(empty.split('class="ir-draft-card').length - 1, 0, 'an empty list drew cards');
-  assert.ok(!empty.includes('ir-draft-go'), 'an empty list drew a Continue button');
+  assert.ok(!empty.includes('ir-draft-face'), 'an empty list drew a way in');
 
   // Loading: the list is not drawn at all, so nothing claims there are no drafts
   // while the answer is still in flight.
@@ -337,5 +355,5 @@ test('a quiet week and a slow read both state themselves', async () => {
   // it — the shape a payload from a build that predates the read-out arrives in.
   const untallied = renderHome({ reports: [{ ...DRAFTS[0], progress: undefined }] });
   assert.ok(!untallied.includes('ir-draft-progress'), 'a card with no tally still drew a bar');
-  assert.ok(untallied.includes('ir-draft-go'), 'the rest of the card was dropped with the strip');
+  assert.ok(untallied.includes('ir-draft-face'), 'the rest of the card was dropped with the strip');
 });

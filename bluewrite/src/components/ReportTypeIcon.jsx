@@ -124,14 +124,6 @@ const GLYPHS = {
       <path d="M9.2 12.8h5.6M9.2 16.4h5.6" />
     </>
   ),
-  // The Recent folder — a window over the record rather than an incident type
-  // (see RECENT_ICON in lib/reportFolder.js): the one glyph that says "time".
-  clock: (
-    <>
-      <circle cx="12" cy="12" r="8.6" />
-      <path d="M12 7.2V12l3.3 2" />
-    </>
-  ),
 };
 
 export default function ReportTypeIcon({ name, className }) {

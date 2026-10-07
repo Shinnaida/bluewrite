@@ -210,10 +210,17 @@ export default function Shell({
 
   // Home is the only consumer of this list now (admins land on the Dashboard),
   // so admins skip the request entirely.
+  // BESIDE IT (owner request, 2026-10-07): the officer's own (status, type)
+  // tally — the register's folder count (`GET /reports/folders`, scoped by the
+  // same role rules) — which Home's summary card folds into its total, its
+  // draft count and its per-type bars. One request, reset with the list it
+  // sits beside, so a save on Home re-reads both.
+  const [reportTally, setReportTally] = useState(null);
   useEffect(() => {
     if (isAdmin) return undefined;
     let alive = true;
     setRecentReports(null);
+    setReportTally(null);
     api('/reports?per_page=100&sort=incident_datetime&dir=desc')
       .then((d) => {
         if (alive) setRecentReports(d.reports);
@@ -222,6 +229,15 @@ export default function Shell({
         if (!alive) return;
         if (isUnreachable(err)) setConnState(classifyError(err));
         setRecentReports([]);
+      });
+    api('/reports/folders')
+      .then((d) => {
+        if (alive) setReportTally(Array.isArray(d.folders) ? d.folders : []);
+      })
+      .catch(() => {
+        // A tally that cannot load costs the card its numbers, not the page:
+        // the tiles render their em-dash state and the bars their empty note.
+        if (alive) setReportTally([]);
       });
     return () => {
       alive = false;
@@ -554,6 +570,7 @@ export default function Shell({
             onMyReports={() => navigate('table')}
             reports={recentReports ?? []}
             loading={recentReports === null}
+            tally={reportTally}
             // Home offers the register's own record actions on its draft rows
             // (Open / History / Print / Archive), so it needs the shell's toast
             // for their outcome, and its list-bump to re-read this very list

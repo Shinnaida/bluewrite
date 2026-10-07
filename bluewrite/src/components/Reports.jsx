@@ -18,6 +18,10 @@ import { SnapshotDiff, useReportRowActions } from './ReportActions.jsx';
 // The register is a SHELF OF FOLDERS now: one glass folder per incident type
 // per status shelf, and opening a folder lists the reports inside it.
 import GlassFolder from './GlassFolder.jsx';
+// The mark on a recent-draft card: the brief's animated folder (board, sheaf
+// and flap), ported to plain CSS, in place of the old navy file plate — see
+// the component.
+import DraftFolder from './DraftFolder.jsx';
 import ReportList from './ReportList.jsx';
 // The type glyph, worn by the header of an OPENED folder — the folder face
 // itself carries no icon (its label is the label), which is what the design
@@ -32,13 +36,19 @@ import {
   folderTrail,
   statusBucket,
   reportNumber,
-  // The RECENT folder: one week, one shelf, counted under the same filters as
-  // every other shelf and scoped by the same window its list is (see the module).
-  RECENT_DAYS,
-  RECENT_ICON,
-  recentWindowFrom,
-  withRecentShelf,
-  tallyTotal,
+  // The shelf the officer is on: their own tab when it is still drawn, and the
+  // module's rule (the first shelf that holds something) otherwise. Read here as
+  // well as in the strip, because the register has to know whether that shelf is
+  // the one drawn as FILES — see `list` in the module.
+  shelfInView,
+  // The orders the register can be read in, and the one a `sort`/`dir` pair
+  // names. The menu offers the module's list and nothing else, because the server
+  // refuses an order it does not know (see SORT_ORDERS) — and the ALL shelf's own
+  // note reads the same rule, so the tab states the order the list is in.
+  SORT_ORDERS,
+  DEFAULT_SORT,
+  sortOrder,
+  UNCLASSIFIED_TYPE,
 } from '../lib/reportFolder.js';
 import ReportPrint from './ReportPrint.jsx';
 // The two station seals, for the sheet format's page. The same files the printed
@@ -61,6 +71,7 @@ import brandMark from '../assets/bluewrite-mark.png';
 // Its own background has been keyed out, so the folder brings no white matte of
 // its own to the disc it sits on (see .ir-home-banner-icon).
 import folderMark from '../assets/folder.png';
+import SpiralGalaxy from './ui/circle-animations-collection-3.jsx';
 // REMEMBER's heading mark is GONE by request: the heading is the word alone now.
 // The report masthead's backdrop: the station's own banner artwork, laid behind
 // the band's title, identifiers and actions (see .ir-case-panel > .ir-page-head
@@ -76,6 +87,9 @@ import reportBanner from '../assets/Navy Police Incident Report Banner.png';
 // second typed-out copy is how a footer ends up advertising a version the
 // system no longer is.
 import { APP_VERSION, STATION } from '../lib/appInfo.js';
+// What the workspace keeps on THIS computer for the session, so a dropped
+// connection does not take the register with it (see the module's header).
+import { readReports, reportListKey, saveReports } from '../lib/offlineCache.js';
 import ConnectionNotice from './ConnectionNotice.jsx';
 import {
   INCIDENT_TYPES,
@@ -259,10 +273,25 @@ function fmtIncident(v) {
 function emptyShelfNote(shelf, { archived, awaiting }) {
   if (archived) return 'Nothing is archived here.';
   if (awaiting) return 'Nothing is waiting for a review.';
-  if (shelf.recent) return `Nothing recorded in the last ${RECENT_DAYS} days.`;
   return shelf.key === 'draft'
     ? 'No drafts here — a new report starts on this shelf.'
     : 'Nothing submitted here yet.';
+}
+
+// What ALL REPORTS says when it has nothing to draw — the one shelf that is files
+// rather than folders, so its empty state is about the register itself rather
+// than about a stack of folders. The officer's own NARROWING is the difference
+// between a station that has recorded nothing and a set that only looks empty, so
+// the sentence says which one this is, and it quotes back what was typed: a
+// search that found nothing has to be answerable at a glance ("did I spell the
+// number right?"), and the way out of it — Clear filters, or Escape in the box —
+// saves them looking for one.
+function emptyAllNote({ q = '', filtered = false } = {}) {
+  if (q && filtered) return `No reports match “${q}” and these filters.`;
+  if (q) return `No reports match “${q}”.`;
+  return filtered
+    ? 'No reports match these filters.'
+    : 'Nothing has been recorded yet — a new report starts in Write Report.';
 }
 
 // Labels for the fields validation can flag — used by the error summary so
@@ -568,9 +597,9 @@ function IrCard({
               {SECTION_STATE[status]}
             </span>
           )}
-          {/* Card-level actions (export, view toggles) sit in the header bar,
-              not in a content row: they are not filters and would otherwise
-              compete with them for the single filter line. */}
+          {/* Card-level actions sit in the header bar, not in a content row:
+              they are not filters and would otherwise compete with them for
+              the single filter line. */}
           {actions && <span className="ir-card-head-actions">{actions}</span>}
         </div>
       )}
@@ -1846,6 +1875,18 @@ const HOME_MARK_PATHS = {
     'M8 9V7a4 4 0 0 1 8 0v2',
   ],
   shieldCheck: [SHIELD_PATH, 'm9 12 2 2 4-4'],
+  // MY REGISTER's two tiles (owner request, 2026-10-07): a clipboard, and the
+  // same clipboard with the check on it — the reference card's own pair of
+  // marks. A clipboard is a REGISTER, which is what the tiles count.
+  clipboard: [
+    'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2',
+    'M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z',
+  ],
+  clipboardCheck: [
+    'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2',
+    'M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z',
+    'm9 14 2 2 4-4',
+  ],
 };
 
 /** One inlined mark. Size and stroke are the call site's, because the same
@@ -1927,14 +1968,15 @@ function HomeClock() {
 
   return (
     <p className="ir-hero-clock" title={`${clock.date} · ${clock.label}`}>
-      {/* The mark comes FIRST and the reading follows it, because on the band
-          the clock is one of two blocks and has to be found by shape as well as
-          by size. It is the mark's own gold, which on navy is the only accent
-          Home spends outside the action button. */}
-      <span className="ir-hero-clock-mark" aria-hidden="true">
-        <HomeMark name="clock" size={32} stroke={1.8} />
-      </span>
-      <span className="ir-hero-clock-readout">
+      {/* THE CLOCK IS A LOCKUP (owner request, 2026-10-07), not a stack: the
+          reading, a hairline, and the calendar half — the date and the zone —
+          beside it. Three sprawled lines of descending size read as an
+          afterthought under the letterhead; one composed unit reads as the
+          working instrument it is, and the band falls into two blocks —
+          letterhead, then clock — instead of six loose lines. The zone keeps
+          its own line inside the calendar half: it is the part an officer
+          checks when a record's time looks wrong. */}
+      <span className="ir-hero-clock-time">
         {/* EVERY FIGURE IN A SLOT OF ITS OWN, and it is the fix for a measured
             defect rather than a flourish: the band's clock is anchored to the
             right end of a `space-between` row, so anything that changes the
@@ -1948,17 +1990,17 @@ function HomeClock() {
             change inside their boxes and the line stays exactly as long. The
             colons, the space and the AM/PM ride along as ordinary text, which
             is what they are — they never change. */}
-        <span className="ir-hero-clock-time">
-          {[...clock.time].map((ch, i) => (
-            <span className={isClockDigit(ch) ? 'ir-hero-clock-digit' : undefined} key={i}>
-              {ch}
-            </span>
-          ))}
-        </span>
-        {/* The date and the ZONE are two lines, not one joined by a dot: the
-            band is wide and the zone is the half an officer checks when a
-            record's time looks wrong, so it gets its own line rather than
-            riding along after the date. */}
+        {[...clock.time].map((ch, i) => (
+          <span className={isClockDigit(ch) ? 'ir-hero-clock-digit' : undefined} key={i}>
+            {ch}
+          </span>
+        ))}
+      </span>
+      {/* The hairline between the reading and the calendar half: it is what
+          says these are two kinds of fact — the time it is NOW, and the day
+          and zone that time was read in. Decorative; the words carry it. */}
+      <span className="ir-hero-clock-rule" aria-hidden="true" />
+      <span className="ir-hero-clock-cal">
         <span className="ir-hero-clock-date">{clock.date}</span>
         <span className="ir-hero-clock-zone">{clock.label}</span>
       </span>
@@ -1976,6 +2018,11 @@ export function ReportWelcome({
   onMyReports,
   reports,
   loading,
+  // The officer's own (status, incident_type) tally — `GET /reports/folders`,
+  // fetched beside the recent list in Shell and reset with it. It is the ONE
+  // number-set the summary card states: totals and the bar graph all fold from
+  // it, so no tile can disagree with another. `null` until the first answer.
+  tally = null,
   // The shell's toast and its list-bump. Home performs the SAME record actions
   // the register does (through the shared useReportRowActions), so archiving a
   // draft from here has to announce itself the same way and tell the shell to
@@ -1990,6 +2037,28 @@ export function ReportWelcome({
   // list sorted by incident date, newest first.
   const all = reports ?? [];
   const recent = all.filter((r) => r.status === 'draft').slice(0, 5);
+
+  // ---- MY REGISTER, the summary card's numbers (owner request, 2026-10-07)
+  // Everything the card states folds from the ONE tally: the total, the drafts,
+  // and the per-type bars. The same `statusBucket` the register's shelves use
+  // decides what a draft is, so Home's number and the register's shelf cannot
+  // disagree. The bars show only the three largest types — no scroll, no
+  // "Other" row — and every bar's width is its count against the largest, so
+  // the longest bar is always full and the graph reads at any size.
+  const tallyRows = Array.isArray(tally) ? tally : [];
+  const totalReports = tallyRows.reduce((n, row) => n + (Number(row?.count) || 0), 0);
+  const draftReports = tallyRows.reduce(
+    (n, row) => n + (statusBucket(row?.status) === 'draft' ? Number(row?.count) || 0 : 0),
+    0,
+  );
+  const byType = new Map();
+  for (const row of tallyRows) {
+    const type = String(row?.incident_type ?? '').trim() || UNCLASSIFIED_TYPE;
+    byType.set(type, (byType.get(type) ?? 0) + (Number(row?.count) || 0));
+  }
+  const barRows = [...byType.entries()].sort((a, b) => b[1] - a[1]);
+  const bars = barRows.slice(0, 3).map(([type, count]) => ({ type, count }));
+  const barMax = Math.max(1, ...bars.map((bar) => bar.count));
 
   // The kebab on a row, at the button's own bottom-left corner (see below).
   const [menu, setMenu] = useState(null);
@@ -2086,12 +2155,6 @@ export function ReportWelcome({
               </span>
             </p>
             <p className="ir-home-hero-sub">AI-Assisted Police Incident Reporting</p>
-            {/* The station's own sentence about the system, in the register the
-                band can carry: a bold promise, then what it means in one line. */}
-            <p className="ir-home-hero-lead">
-              <strong>Smarter. Faster. More Reliable.</strong>
-              <span>Create and manage police incident reports with AI-assisted tools for faster, more accurate documentation.</span>
-            </p>
           </div>
 
           {/* The working time, live, on the band's other end. */}
@@ -2123,6 +2186,7 @@ export function ReportWelcome({
               two pens on one card would be the same mark twice. */}
           <section className="ir-home-banner">
             <span className="ir-home-banner-icon" aria-hidden="true">
+              <SpiralGalaxy className="ir-home-banner-galaxy" />
               <img className="ir-home-banner-mark" src={folderMark} alt="" />
             </span>
             <div className="ir-home-banner-copy">
@@ -2137,13 +2201,7 @@ export function ReportWelcome({
               </p>
             </div>
             <button type="button" className="ir-home-cta" onClick={onNew}>
-              {/* The "file-pen" mark — a report with a pen laid on it, which is
-                  what pressing this does. */}
-              <span className="ir-home-cta-glyph" aria-hidden="true">
-                <HomeMark name="filePen" size={19} stroke={1.7} />
-              </span>
               <span className="ir-home-cta-text">Start with AI</span>
-              <HomeMark name="arrow" size={17} stroke={2} className="ir-home-cta-arrow" />
             </button>
           </section>
 
@@ -2193,109 +2251,117 @@ export function ReportWelcome({
                        uses so the eye can find it again. */
                     className={`ir-draft-card${flashId === r.id ? ' is-flash' : ''}`}
                   >
-                    {/* The card's own row: the record's mark, the identity, and
-                        the two things a reader wants at the END of the line —
-                        when it happened and its two controls. The gold stripe
-                        down the left edge is painted by the card itself (see
-                        .ir-draft-card::before), so nothing here draws it. */}
-                    <div className="ir-draft-body">
-                      <span className="ir-draft-plate" aria-hidden="true">
-                        <HomeMark name="file" size={21} stroke={1.6} />
-                      </span>
+                    {/* THE WHOLE CARD IS THE WAY IN. The Continue button it used
+                        to carry is gone (owner request, 2026-10-06): a button
+                        cannot hold buttons, so the card face is one button that
+                        fills the card and the kebab sits beside it — absolutely
+                        positioned on the card — as its sibling, not its child. */}
+                    <button
+                      type="button"
+                      className="ir-draft-face"
+                      onClick={() => onOpenReport(r)}
+                    >
+                      <div className="ir-draft-body">
+                        {/* The record's folder — the brief's animated folder
+                            (owner request, 2026-10-06) in place of the flat
+                            navy file plate: reaching for the card fans its
+                            papers. Decorative; the face names the record. */}
+                        <DraftFolder />
 
-                      <span className="ir-draft-identity">
-                        <span className="ir-draft-pills">
-                          <span className={`badge ${r.status}`}>{r.status}</span>
-                          {/* A sensitive type's account is written under the
-                              clinical-language rule (see SENSITIVE_TYPES), and
-                              the card says so rather than leaving it to be
-                              inferred from the type's name. It is the record's
-                              own fact, not a state of the record: filing it does
-                              not clear it, which is also why it is not one of
-                              the two status pills. */}
-                          {SENSITIVE_TYPES.includes(r.incident_type) && (
-                            <span className="ir-draft-sensitive">Sensitive</span>
-                          )}
-                        </span>
-                        <span className="ir-draft-no">{number}</span>
-                        <span className="ir-draft-type">{r.incident_type}</span>
-                      </span>
-
-                      <span className="ir-draft-aside">
-                        {/* WHAT the record is about, as facts: when it happened
-                            and who recorded it. Two lines with their own marks,
-                            because they are two different questions and a reader
-                            scans down each column. The officer's name is the join
-                            the list already carries (`created_by_name`); a record
-                            whose account has gone renders no second line rather
-                            than an empty label. */}
-                        <span className="ir-draft-meta">
-                          <span className="ir-draft-meta-line">
-                            <HomeMark name="calendar" size={15} stroke={1.8} />
-                            {fmtIncident(r.incident_datetime)}
-                          </span>
-                          {r.created_by_name && (
-                            <span className="ir-draft-meta-line">
-                              <HomeMark name="person" size={15} stroke={1.8} />
-                              {r.created_by_name}
+                        <span className="ir-draft-identity">
+                          {/* The record's number and its facts on ONE line: when
+                              it happened, who recorded it and what it is about,
+                              aligned with the ID the officer remembers (owner
+                              requests, 2026-10-06 and 2026-10-07). The officer's
+                              name is the join the list already carries
+                              (`created_by_name`); a record whose account
+                              has gone renders no officer line rather than an
+                              empty label, and the type still shows beside the
+                              date. */}
+                          <span className="ir-draft-row">
+                            <span className="ir-draft-no">{number}</span>
+                            <span className="ir-draft-meta">
+                              <span className="ir-draft-meta-line">
+                                <HomeMark name="calendar" size={15} stroke={1.8} />
+                                {fmtIncident(r.incident_datetime)}
+                              </span>
+                              {r.created_by_name && (
+                                <span className="ir-draft-meta-line">
+                                  <HomeMark name="person" size={15} stroke={1.8} />
+                                  {r.created_by_name}
+                                </span>
+                              )}
+                              {/* What the report is about, beside the officer
+                                  who recorded it (owner request, 2026-10-07):
+                                  it used to stand alone under the number, which
+                                  split the card's one fact line in two. A
+                                  sensitive type's account is written under the
+                                  clinical-language rule (see SENSITIVE_TYPES),
+                                  and the card still says so beside the type
+                                  rather than leaving it to be inferred from the
+                                  type's name. It is the record's own fact, not
+                                  a state of the record: filing it does not
+                                  clear it, which is also why it is not a
+                                  status pill. */}
+                              <span className="ir-draft-kind">
+                                {/* THE TYPE'S OWN GLYPH, where the separator dot
+                                    was (owner request, 2026-10-08): with the
+                                    facts in columns, this one is a column like
+                                    the two beside it — the date has its calendar
+                                    and the officer their person, so the type
+                                    wears the drawing its own map gives it (the
+                                    same keyed glyph the register's type chip
+                                    uses). The dot was a separator for a line
+                                    that ran on; a column wants a mark. */}
+                                <ReportTypeIcon
+                                  name={typeIcon(r.incident_type)}
+                                  className="ir-draft-kind-mark"
+                                />
+                                <span className="ir-draft-type">{r.incident_type}</span>
+                                {SENSITIVE_TYPES.includes(r.incident_type) && (
+                                  <span className="ir-draft-sensitive">Sensitive</span>
+                                )}
+                              </span>
                             </span>
-                          )}
-                        </span>
-
-                        <span className="ir-draft-actions">
-                          {/* The card's own way in. It says CONTINUE on the draft
-                              it continues and OPEN on anything else — Home lists
-                              drafts, but a report can change status while the
-                              page is open, and a button that says "Continue"
-                              over a submitted report would be promising an edit
-                              it cannot make. */}
-                          <button
-                            type="button"
-                            className="ir-draft-go"
-                            onClick={() => onOpenReport(r)}
-                          >
-                            {r.status === 'draft' ? 'Continue' : 'Open'}
-                            <HomeMark name="arrow" size={16} stroke={2} />
-                          </button>
-
-                          {/* The card's kebab: the register's OWN menu, on the
-                              same record. The whole row used to be the target;
-                              it cannot be any more, because a button cannot hold
-                              buttons. */}
-                          <button
-                            type="button"
-                            className="ir-draft-more"
-                            onClick={(event) => openRowMenu(r, event)}
-                            aria-label={`Actions for report ${number}`}
-                          >
-                            <HomeMark name="more" size={18} stroke={2} />
-                          </button>
-                        </span>
-                      </span>
-                    </div>
-
-                    {/* The strip under the rule: what the number is FOR — the
-                        reader can see a half-written draft is half-written
-                        before opening it. The track is decoration and is marked
-                        as such; the two numbers beside it are the fact, so a
-                        screen reader reads "3 of 5 sections" once, as text. */}
-                    {progress && (
-                      <div className="ir-draft-progress">
-                        <p className="ir-draft-progress-head">
-                          <span className="ir-draft-progress-label">Draft progress</span>
-                          <span className="ir-draft-progress-count">
-                            {progress.done} of {progress.total} sections
                           </span>
-                        </p>
-                        <span
-                          className="ir-draft-progress-track"
-                          aria-hidden="true"
-                          style={{ '--ir-draft-fill': `${percent}%` }}
-                        >
-                          <span className="ir-draft-progress-fill" />
                         </span>
                       </div>
-                    )}
+
+                      {/* The strip under the rule: what the number is FOR — the
+                          reader can see a half-written draft is half-written
+                          before opening it. The track is decoration and is marked
+                          as such; the two numbers beside it are the fact, so a
+                          screen reader reads "3 of 5 sections" once, as text. */}
+                      {progress && (
+                        <div className="ir-draft-progress">
+                          <p className="ir-draft-progress-head">
+                            <span className="ir-draft-progress-label">Draft progress</span>
+                            <span className="ir-draft-progress-count">
+                              {progress.done} of {progress.total} sections
+                            </span>
+                          </p>
+                          <span
+                            className="ir-draft-progress-track"
+                            aria-hidden="true"
+                            style={{ '--ir-draft-fill': `${percent}%` }}
+                          >
+                            <span className="ir-draft-progress-fill" />
+                          </span>
+                        </div>
+                      )}
+                    </button>
+
+                    {/* The card's kebab: the register's OWN menu, on the same
+                        record — pinned to the card's top right corner, a
+                        sibling of the face it shares the card with. */}
+                    <button
+                      type="button"
+                      className="ir-draft-more"
+                      onClick={(event) => openRowMenu(r, event)}
+                      aria-label={`Actions for report ${number}`}
+                    >
+                      <HomeMark name="more" size={18} stroke={2} />
+                    </button>
                   </li>
                   );
                 })}
@@ -2313,35 +2379,83 @@ export function ReportWelcome({
             and the flag over the closing line (see the stylesheet) — the design
             lives there, this is the copy. */}
         <aside className="ir-remember">
-          <h2 className="ir-remember-title">Remember</h2>
-          <ul className="ir-remember-list">
-            <li>
-              <span className="ir-remember-mark" aria-hidden="true">
-                <HomeMark name="lock" size={18} stroke={1.7} />
+          {/* The card's name, read by a screen reader and by nothing visual:
+              the reference card opens straight on the tiles, so the heading
+              carries no band and no mark of its own — the tiles' own labels
+              are what the eye reads first. */}
+          <h2 className="ir-remember-title">My register</h2>
+          {/* ---- MY REGISTER (owner request, 2026-10-07): the REMEMBER advice
+              card becomes the officer's own numbers — the total they have
+              written, how many are still theirs to finish, and a light bar
+              graph of the incidents by type. Every number folds from the ONE
+              tally Shell fetches (`GET /reports/folders`, the register's own
+              shelf count), so the card and the register cannot disagree. */}
+          {/* The tiles: the total the officer has written and the drafts still
+              theirs to finish — a definition list, a label and the fact it
+              names. THEY OPEN THE CARD (owner request, 2026-10-08): the two
+              numbers are what the officer came to the card for, so they are its
+              first row and the frequency panel stands under them. */}
+          <dl className="ir-remember-stats">
+            <div className="ir-remember-stat ir-remember-stat--total">
+              <span className="ir-remember-stat-icon" aria-hidden="true">
+                <HomeMark name="clipboard" size={22} stroke={2} />
               </span>
-              Keep your information <strong>accurate and complete</strong>.
-            </li>
-            <li>
-              <span className="ir-remember-mark" aria-hidden="true">
-                <HomeMark name="shieldCheck" size={18} stroke={1.7} />
+              <div className="ir-remember-stat-copy">
+                <dt className="ir-remember-stat-label">Total reports</dt>
+                <dd className="ir-remember-stat-num">{tally === null ? '—' : totalReports}</dd>
+              </div>
+            </div>
+            <div className="ir-remember-stat ir-remember-stat--draft">
+              <span className="ir-remember-stat-icon" aria-hidden="true">
+                <HomeMark name="clipboardCheck" size={22} stroke={2} />
               </span>
-              Your report helps ensure a <strong>faster and safer response</strong>.
-            </li>
-            {/* The one sentence that is a warning: the stylesheet paints this
-                row and its mark in the palette's red (li:nth-child(3)). The
-                emphasis is the phrase the sentence turns on — see the note on
-                li strong in the stylesheet. */}
-            <li>
-              <span className="ir-remember-mark" aria-hidden="true">
-                <HomeMark name="person" size={18} stroke={1.7} />
-              </span>
-              For emergencies, please contact your{' '}
-              <strong>local police station</strong> immediately.
-            </li>
-          </ul>
-          <p className="ir-remember-quote">
-            Sa Bagong Pilipinas, Mas Ligtas ang Bawat Isa.
-          </p>
+              <div className="ir-remember-stat-copy">
+                <dt className="ir-remember-stat-label">Drafts</dt>
+                <dd className="ir-remember-stat-num">{tally === null ? '—' : draftReports}</dd>
+              </div>
+            </div>
+          </dl>
+          {/* The bar graph, under the numbers: one light amber bar per incident
+              type, longest at the top, the count at its end. A row's bar is
+              decorative — the count is the fact, so the graph reads with it
+              off. */}
+          <div className="ir-remember-bars">
+            <p className="ir-remember-bars-title">
+              <span className="ir-remember-bars-mark" aria-hidden="true" />
+              Incident Report Frequency
+            </p>
+            {tally === null ? (
+              // The tally has not read yet: the graph states nothing rather
+              // than an empty register — dashes above, no bars here.
+              null
+            ) : bars.length === 0 ? (
+              <p className="ir-remember-bars-empty">
+                No reports yet — your first one will show here.
+              </p>
+            ) : (
+              <ul className="ir-remember-bars-list">
+                {bars.map((bar) => (
+                  <li key={bar.type} className="ir-remember-bar">
+                    <span className="ir-remember-bar-icon" aria-hidden="true">
+                      <ReportTypeIcon name={typeIcon(bar.type)} />
+                    </span>
+                    <span className="ir-remember-bar-type">{bar.type}</span>
+                    <span
+                      className="ir-remember-bar-track"
+                      role="img"
+                      aria-label={`${bar.count} of ${barMax}`}
+                    >
+                      <span
+                        className="ir-remember-bar-fill"
+                        style={{ '--ir-remember-fill': `${Math.round((bar.count / barMax) * 100)}%` }}
+                      />
+                    </span>
+                    <span className="ir-remember-bar-count">{bar.count}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </aside>
       </div>
 
@@ -4154,10 +4268,11 @@ export function ReportEditor({
               the foot of the walk.
 
               The reference's third button, "Export Blotter PDF", is not drawn:
-              there is no per-report export anywhere in the API — the only export
-              route is the register's CSV, on My Reports — so the control would
-              have nothing to call. An unreachable button is worse than an absent
-              one. */}
+              there is no per-report export anywhere in the API — the register's
+              CSV is the only export route, and the register no longer offers a
+              button for it (owner request, 2026-10-06) — so the control would
+              have nothing to call. An unreachable button is worse than an
+              absent one. */}
           <div className="ir-case-actions">{actionsCluster}</div>
 
           {/* THE RECORD STRIP, INSIDE THE BAND: the notices an officer must
@@ -5269,7 +5384,7 @@ export function ReportEditor({
 }
 
 // ===========================================================================
-// ReportsTable — the full blotter with search/filters/sort/pagination.
+// ReportsTable — the full blotter with filters/sort/pagination.
 // Officers see their own reports; admins see everything.
 // ===========================================================================
 
@@ -5280,6 +5395,586 @@ export function ReportEditor({
 // and "Status A→Z / Z→A"), which drives the SAME `query` state the heading used
 // to. No sort capability was lost, only the duplicate affordance a table header
 // hid it behind.
+
+// ===========================================================================
+// The SHELVES, as a TAB STRIP
+//
+// The shelves used to be STACKED SECTIONS — Recent, then Draft, then Submitted,
+// each with its own heading, its own count and its own row of folders — so the
+// folder area ran down the page and an officer looking for their drafts scrolled
+// past a week of nothing to find them (owner request, 2026-10-07). They are TABS
+// now: one strip names every shelf and counts it, and the folders of the shelf
+// you are on sit under it. Nothing is added and nothing is lost — the same
+// shelves, the same counts, the same folders and the same empty-state sentences,
+// organised the way the officer reads them: which stack, then what is in it.
+//
+// THE COUNTS RIDE THE TABS, which is the whole point of the shape: the strip
+// answers "what have I got and where" in one line, before a single folder is
+// drawn — and a shelf with nothing in it says 0 rather than being a section the
+// officer has to scroll into to discover is empty.
+//
+// IT IS A REAL TABLIST: `role="tablist"` / `role="tab"` with `aria-selected`,
+// one tab in the page's tab order at a time (roving tabindex) and the arrow keys
+// moving between them — the pattern a keyboard officer already knows. The panel
+// is the shelf's own area, named by the tab that opened it.
+//
+// ONE SHELF IS FILES, NOT FOLDERS. All Reports (`list: true`) is the whole
+// filtered register, so its panel is the reports themselves — the same rows an
+// opened folder draws, from the same component — and the strip hands it the list
+// its caller built rather than drawing a grid of folders for it. Every other
+// shelf is folders, which is what the rest of this component does.
+//
+// WHICH TAB OPENS is the module's rule (`defaultShelfKey`): the first shelf that
+// HOLDS something, so the register never opens on a quiet week. The choice is
+// the caller's state rather than this component's, so opening a folder and coming
+// back lands the officer on the tab they left.
+// ===========================================================================
+
+/* The mark on each tab, drawn here like every other icon in the app (inline
+   <svg>, currentColor, no icon dependency). One per SHELF, keyed by the shelf's
+   own key — not per incident type, which is what the folders wear. Decorative:
+   the tab's label names the shelf, so the mark is hidden from assistive tech.
+   `default` carries the shelves this build has not drawn a mark for (a mode
+   shelf), for the same reason the type→glyph map has a fallback: an unknown
+   shelf should read as a plain record rather than as a fault. */
+const SHELF_GLYPHS = {
+  // All Reports: a stack of PAGES — two leaves and two ruled lines — which is what
+  // the shelf holds (files) rather than what they are about.
+  all: [
+    'M7.5 6.6V5.2a1.7 1.7 0 0 1 1.7-1.7h7.6a1.7 1.7 0 0 1 1.7 1.7v9.6a1.7 1.7 0 0 1-1.7 1.7h-1.3',
+    'M5.5 8.5h8.8a1.7 1.7 0 0 1 1.7 1.7v8.6a1.7 1.7 0 0 1-1.7 1.7H5.5a1.7 1.7 0 0 1-1.7-1.7v-8.6a1.7 1.7 0 0 1 1.7-1.7z',
+    'M7.6 13h4.6M7.6 16.4h3',
+  ],
+  draft: [
+    'M14 3.2H7.4a2 2 0 0 0-2 2v13.6a2 2 0 0 0 2 2h9.2a2 2 0 0 0 2-2V8z',
+    'M14 3.2V8h5',
+    'M9.2 12.8h5.6M9.2 16.4h3.6',
+  ],
+  submitted: [
+    'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
+    'm8.4 12.2 2.4 2.4 4.8-5',
+  ],
+  default: ['M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'],
+};
+
+/**
+ * A shelf's REPORTS, as rows. The one drawing of a list of reports the register
+ * has, used by both callers: an OPENED folder (its contents, scoped to a type and
+ * a bucket) and the ALL shelf (the whole filtered register, newest first — see
+ * `folderParams`, which is empty for it).
+ *
+ * Everything about a row — what it opens, whether it can be edited, what its menu
+ * holds — arrives as `rowMeta`, computed by the register from its own rules (see
+ * rowMeta in ReportsTable), so this component and the register cannot drift about
+ * a record's state. `emptyText` is the caller's because WHICH emptiness this is
+ * belongs to the caller: an empty folder is a fact about a type, and an empty All
+ * shelf is a fact about the register (and about the filters, if any).
+ */
+export function ReportFiles({
+  reports,
+  pagination,
+  rowMeta,
+  flashId,
+  conn,
+  emptyText,
+  onOpen,
+  onEdit,
+  onMenu,
+  onPage,
+}) {
+  return (
+    <>
+      {reports === null ? (
+        <p className="ir-card-empty">
+          {conn ? 'Waiting for the connection to come back…' : 'Loading reports…'}
+        </p>
+      ) : reports.length === 0 ? (
+        <p className="ir-card-empty">
+          {conn ? 'Waiting for the connection to come back…' : emptyText}
+        </p>
+      ) : (
+        <ReportList
+          reports={reports}
+          rowMeta={rowMeta}
+          flashId={flashId}
+          onOpen={onOpen}
+          onEdit={onEdit}
+          onMenu={onMenu}
+        />
+      )}
+
+      {pagination && pagination.total_pages > 1 && (
+        <div
+          className="reports-pagination"
+          style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginTop: '0.75rem' }}
+        >
+          <button type="button" disabled={pagination.page <= 1} onClick={() => onPage?.(pagination.page - 1)}>
+            Prev
+          </button>
+          <span style={{ fontFamily: 'var(--font-hud)', fontSize: '0.75rem', color: 'var(--cyan-dim)' }}>
+            Page {pagination.page} of {pagination.total_pages} — {pagination.total} report(s)
+          </span>
+          <button
+            type="button"
+            disabled={pagination.page >= pagination.total_pages}
+            onClick={() => onPage?.(pagination.page + 1)}
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ShelfGlyph({ name, className }) {
+  return (
+    <svg
+      className={className}
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {(SHELF_GLYPHS[name] ?? SHELF_GLYPHS.default).map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  );
+}
+
+/* The three marks the register's own controls wear, drawn here like every other
+   icon in the app: inline <svg>, currentColor, 16px, decorative — each control
+   carries its own name (`aria-label`), so the drawing is hidden from assistive
+   tech and cannot be read twice. */
+const TOOL_MARKS = {
+  // The magnifier: the shape of the field it sits in, not a button's label.
+  search: ['M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z', 'm16.2 16.2 4.3 4.3'],
+  // THE FUNNEL is the register's NARROWING: the filter row above the card, which
+  // this control folds away and back. An outline, not a filled glyph — it is the
+  // second control in the row, and a solid mark beside a solid mark is two
+  // buttons shouting at once.
+  filters: ['M3.5 5.2h17l-6.6 7.6v5.4l-3.8-2.1v-3.3z'],
+  // LINES AND AN ARROW: records in an order, which is what sort means. The lines
+  // shorten as they go so the mark reads as a list rather than as a paragraph.
+  sort: ['M4 6.5h11', 'M4 12h7.5', 'M4 17.5h4.5', 'M17.5 9.5v8', 'm14.6 14.9 2.9 2.9 2.9-2.9'],
+};
+
+function ToolMark({ name }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {TOOL_MARKS[name].map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  );
+}
+
+/** How long the register's search field waits for the officer to STOP typing
+ *  before it asks the server (owner request, 2026-10-08). One number for one
+ *  feel: long enough that a word typed at speed is a single request, short enough
+ *  that the list reads as an answer to the BOX rather than as a reply to Enter. */
+const SEARCH_SETTLE_MS = 300;
+
+/**
+ * THE REGISTER'S OWN CONTROLS, at the top right of a list of reports: the search
+ * field, and the two marks beside it (owner request, 2026-10-07).
+ *
+ * WHAT IT IS FOR. A shelf of files is hundreds of rows read by eye — the officer
+ * arrives with a case number, a place or a type already in mind, and the page had
+ * no way to ask for it. The reference is a rounded field with a magnifier in it,
+ * a hairline, and two square keys: FILTER (does the register show its filter row)
+ * and SORT (in what order are these rows).
+ *
+ * WHERE IT SITS is the rule worth saying: the rail is drawn by whoever is drawing
+ * REPORT ROWS, so it stands above the All Reports list AND above the contents of
+ * an opened folder. Not decoration — a search that is filtering a list whose own
+ * box is off screen is a register with an invisible cause, and both of those views
+ * send `q` with every request (see listParams).
+ *
+ * ON THE ALL REPORTS SHELF IT RIDES THE SHELVES' OWN ROW (owner request,
+ * 2026-10-08). The strip names the shelves and counts them; the rail narrows and
+ * orders the list under them — the same register's two controls, so they share one
+ * line: the tabs to the left, the rail right-aligned with them, and ONE hairline
+ * under both (see .folder-head). Inside an opened folder there is no strip to ride,
+ * so the rail keeps a row of its own under the trail.
+ *
+ * THE BOX HOLDS WHAT IS BEING TYPED, the register holds what was ASKED for: the
+ * same string once the officer STOPS, and different while they are still in the
+ * middle of a word. THE FIELD ANSWERS AS IT IS TYPED (owner request, 2026-10-08):
+ * it no longer waits for Enter. What it waits for is a PAUSE — every keystroke
+ * restarts a short clock and only a real stop asks the server, so a word typed at
+ * speed still costs one request rather than one per letter (the register is a
+ * paged server list, and a request per letter repaints the counts under the
+ * officer's hands). Enter is unchanged and commits at once, for the officer who
+ * does press it; the clock it cancels is the only difference. Escape puts the box
+ * back to empty and re-asks, which is the one key a search field owes.
+ *
+ * @param {string} q            the term the list was asked for (the register's own
+ *   `query.q`), so the box can be reset from outside — Clear filters does that.
+ * @param {(term:string) => void} onSearch
+ * @param {string} sort         the server's sort key (`incident_datetime`…)
+ * @param {string} dir          `asc` | `desc`
+ * @param {(order:{key,dir}) => void} onSort  handed one of SORT_ORDERS
+ * @param {boolean} filtersOpen whether the filter row above the card is showing
+ * @param {() => void} onToggleFilters
+ * @param {string} filtersId    the id of that row, for `aria-controls`
+ * @param {number} [filterCount] how many of the row's filters are set, for the
+ *   badge — the one thing the control has to say while the row is folded away
+ */
+export function ReportTools({
+  q = '',
+  onSearch,
+  sort,
+  dir,
+  onSort,
+  filtersOpen = false,
+  onToggleFilters,
+  filtersId,
+  filterCount = 0,
+}) {
+  const [term, setTerm] = useState(q);
+  // WHETHER THE LAST CHANGE TO THE BOX WAS THE OFFICER'S. Set by the field's own
+  // onChange and cleared whenever the register hands the box its own term: a box
+  // that follows `q` must not then ask for the very term it was just given, and
+  // that echo is the one loop a search which answers as it is typed can talk
+  // itself into.
+  const typed = useRef(false);
+  // THE TERM THE REGISTER HAS ALREADY BEEN ASKED FOR, and the asker itself, both
+  // held in refs: the pause below must depend on `term` ALONE. A parent re-render
+  // — a presence tick, a filter set, a sort chosen — would otherwise restart the
+  // officer's clock on every render and the request would never leave.
+  const asked = useRef(q);
+  const ask = useRef(onSearch);
+  useEffect(() => {
+    asked.current = q;
+  }, [q]);
+  useEffect(() => {
+    ask.current = onSearch;
+  }, [onSearch]);
+  // The register can empty the box without the officer touching it (Clear
+  // filters resets `q`), so the field follows the register's own term whenever it
+  // changes.
+  useEffect(() => {
+    typed.current = false;
+    setTerm(q);
+  }, [q]);
+  // THE PAUSE, NOT THE KEYSTROKE (owner request, 2026-10-08). Every change the
+  // officer makes restarts this clock; one real stop sends the term, so the list
+  // answers the box without an Enter. Typing back to what the register already
+  // has asks nothing, and a term Enter has already committed is not asked twice:
+  // the submit below clears `typed`, and the clock's callback reads it again
+  // before it speaks.
+  useEffect(() => {
+    if (!typed.current) return;
+    const next = term.trim();
+    if (next === asked.current) return;
+    const id = setTimeout(() => {
+      if (!typed.current) return;
+      ask.current?.(next);
+    }, SEARCH_SETTLE_MS);
+    return () => clearTimeout(id);
+  }, [term]);
+  // Where the sort menu opened, in viewport coordinates — RowMenu is portaled to
+  // <body> and positions itself there (see the module), so it wants the pointer's
+  // frame rather than this one's. Null while it is closed.
+  const [menuAt, setMenuAt] = useState(null);
+  const order = sortOrder(sort, dir);
+  // Whether the officer is on an order other than the one the register opens in —
+  // the button says so, because a list in an unusual order with nothing on screen
+  // saying why is the register looking wrong.
+  const resorted = order.key !== DEFAULT_SORT.key || order.dir !== DEFAULT_SORT.dir;
+
+  function openSortMenu(e) {
+    const box = e.currentTarget.getBoundingClientRect();
+    setMenuAt({ x: box.left, y: box.bottom + 6 });
+  }
+
+  return (
+    <div className="register-tools">
+      {/* THE FIELD. A form, so Enter submits it the way a search box is expected
+          to answer, and `role="search"` so the box is reachable as a landmark
+          rather than as one more input on a long page. The magnifier is the
+          form's own submit button: the reference draws the mark there, and a
+          control that does nothing when it is pressed is worse than no control. */}
+      <form
+        className="reports-search register-tools__search"
+        role="search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          // Enter commits AT ONCE — the officer who presses it is asking now,
+          // not after a pause — and it cancels the clock the last keystroke
+          // started, so the one term is asked for once.
+          typed.current = false;
+          onSearch?.(term.trim());
+        }}
+      >
+        <button type="submit" className="reports-search__go" aria-label="Search reports">
+          <ToolMark name="search" />
+        </button>
+        <input
+          type="search"
+          className="register-tools__input"
+          placeholder="Search by report number, location, or type…"
+          aria-label="Search by report number, location, or type"
+          value={term}
+          onChange={(e) => {
+            typed.current = true;
+            setTerm(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape') return;
+            e.preventDefault();
+            // The clock the last keystroke started is cancelled with this line,
+            // so an Escape is not also a search for the letters it just threw
+            // away.
+            typed.current = false;
+            setTerm('');
+            // Only a term the list was actually asked for needs re-asking: an
+            // Escape before anything was asked has nothing to undo.
+            if (q) onSearch?.('');
+          }}
+        />
+      </form>
+
+      {/* The hairline between the field and the two keys, exactly as the
+          reference has it: it separates "what you are looking for" from "how
+          the register is showing you what it found", which are two different
+          jobs sitting on one line. */}
+      <span className="register-tools__rule" aria-hidden="true" />
+
+      {/* FILTER. It shows and hides the filter row above the card — the panel and
+          the control are in two different cards, so this one is a disclosure
+          (`aria-expanded` + `aria-controls`) rather than a toggle button, and the
+          count it wears is what the row is holding while it is folded away. */}
+      <button
+        type="button"
+        className="register-tool"
+        aria-label={filterCount > 0 ? `Filters — ${filterCount} set` : 'Filters'}
+        aria-expanded={filtersOpen}
+        aria-controls={filtersId}
+        onClick={() => onToggleFilters?.()}
+      >
+        <ToolMark name="filters" />
+        {filterCount > 0 && (
+          <span className="register-tool__count" aria-hidden="true">
+            {filterCount}
+          </span>
+        )}
+      </button>
+
+      {/* SORT. The register's order, as a menu, with the order in force ticked
+          (see RowMenu's `checked`). The button states that order in its own name
+          — the mark cannot — and wears the accent while the list is in an order
+          other than the one it opened in. */}
+      <button
+        type="button"
+        className="register-tool"
+        aria-label={`Sort reports — ${order.label}`}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(menuAt)}
+        data-on={resorted ? 'true' : undefined}
+        onClick={openSortMenu}
+      >
+        <ToolMark name="sort" />
+      </button>
+
+      {menuAt && (
+        <RowMenu
+          at={menuAt}
+          label="Sort reports"
+          items={SORT_ORDERS.map((o) => ({
+            label: o.label,
+            checked: o.key === order.key && o.dir === order.dir,
+            onSelect: () => onSort?.(o),
+          }))}
+          onClose={() => setMenuAt(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The shelf of folders, as a tab strip. See the block comment above.
+ *
+ * @param {Array} shelves     from `buildShelves`
+ * @param {string|null} activeKey  the officer's own tab, or null for the rule's
+ * @param {(key:string) => void} onSelect
+ * @param {(shelf, type) => void} onOpenFolder
+ * @param {string} groupId    the register's `useId`, for the tab/panel ids
+ * @param {boolean} archived  which empty-state sentence an empty shelf says
+ * @param {boolean} awaiting
+ * @param {React.ReactNode} [tools]  the rail (see ReportTools), when THIS shelf is
+ *   the one drawing report rows — handed in rather than drawn by the panel, because
+ *   it belongs on the strip's own row (owner request, 2026-10-08). A shelf of
+ *   folders passes none: its panel is folders, and nothing in it is searched.
+ * @param {React.ReactNode} children  the FILES panel, for a shelf whose `list` is
+ *   true — see the block comment above
+ */
+export function ReportShelf({
+  shelves,
+  activeKey,
+  onSelect,
+  onOpenFolder,
+  groupId,
+  archived = false,
+  awaiting = false,
+  tools = null,
+  aside = null,
+  filters = null,
+  children,
+}) {
+  const list = Array.isArray(shelves) ? shelves : [];
+  const tabRefs = useRef([]);
+  // The officer's tab wins when it is still one of the shelves (a shelf cannot go
+  // missing between a click and a render), and the rule answers otherwise: on the
+  // first render, and after a mode change swapped the whole set out (the archive
+  // and the translation queue draw a shelf or two of their own). Read through the
+  // module's own resolver, which the register reads too — so the tab that is lit
+  // and the panel under it are the same shelf by construction.
+  const active = shelfInView(list, activeKey);
+  const activeIndex = active ? list.findIndex((s) => s.key === active.key) : -1;
+
+  // Arrow keys / Home / End move BETWEEN tabs, the pattern a tablist follows
+  // (with one tab in the page's tab order, so Tab leaves the strip rather than
+  // walking every shelf in it). Selecting as we move is deliberate: the folders
+  // are the panel, and a keyboard officer should not have to press Enter to see
+  // what the tab they moved to holds.
+  function onTabKey(e, i) {
+    const last = list.length - 1;
+    let next = null;
+    if (e.key === 'ArrowRight') next = i === last ? 0 : i + 1;
+    else if (e.key === 'ArrowLeft') next = i === 0 ? last : i - 1;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = last;
+    if (next === null) return;
+    e.preventDefault();
+    onSelect?.(list[next].key);
+    tabRefs.current[next]?.focus();
+  }
+
+  if (!active) return null;
+  const selectedKey = active.key;
+
+  return (
+    <div className="folder-shelves">
+      {/* THE HEAD OF THE SHELF: the strip, the rail beside it when this shelf is
+          the one drawing report rows, and the Admin's archive switch at the end
+          of that row (owner request, 2026-10-08). ONE row and ONE hairline — the
+          shelves to the left, the search field and its keys right-aligned with
+          them — so the register's names and the register's own controls read as
+          one instrument rather than as two stacked rows. THE FILTER LINE is the
+          line UNDER that hairline (the `filters` prop, drawn below this div):
+          "which shelf" and "narrowed how" are two questions about one list, so
+          they are two lines of one head rather than two panels down the page.
+
+          THE RAIL IS OUTSIDE THE TABLIST, deliberately: `role="tablist"` may
+          hold tabs and nothing else, so a search form inside it would be a
+          landmark lying about its contents. Hence a row around both. */}
+      <div className="folder-head">
+        {/* THE STRIP. A landmark of its own, so a screen reader can jump to the
+            register's shelves rather than to the card. */}
+        <div className="folder-tabs" role="tablist" aria-label="Report shelves">
+          {list.map((shelf, i) => {
+            const selected = shelf.key === selectedKey;
+            return (
+              <button
+                key={shelf.key}
+                type="button"
+                role="tab"
+                id={`${groupId}-tab-${i}`}
+                className="folder-tab"
+                aria-selected={selected}
+                aria-controls={`${groupId}-panel`}
+                tabIndex={selected ? 0 : -1}
+                ref={(el) => {
+                  tabRefs.current[i] = el;
+                }}
+                onClick={() => onSelect?.(shelf.key)}
+                onKeyDown={(e) => onTabKey(e, i)}
+              >
+                <ShelfGlyph name={shelf.key} className="folder-tab__icon" />
+                <span className="folder-tab__label">{shelf.label}</span>
+                {/* The shelf's own note, where it has one — ALL REPORTS wears the
+                    sort ("Newest first"), which is the one thing about a flat
+                    list of everything that the list cannot say before it is
+                    read. It rides the tab so the officer learns it without
+                    opening the shelf. */}
+                {shelf.note && <span className="folder-tab__note">{shelf.note}</span>}
+                {/* The count: the number alone is ambiguous read out, so the word
+                    is there for assistive tech and out of the eye's way. */}
+                <span className="folder-tab__count">
+                  <span aria-hidden="true">{shelf.total}</span>
+                  <span className="sr-only"> {shelf.total === 1 ? 'report' : 'reports'}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {tools}
+        {aside}
+      </div>
+
+      {/* THE FILTER LINE: the second line of the head, on the register's own
+          surface and under the hairline the strip draws — the same element an
+          opened folder draws under its trail (see the register's `filterBar`). */}
+      {filters}
+
+      {/* THE PANEL — the shelf the officer is on, and only that one: the folders
+          of a shelf nobody is looking at are not hidden behind the visible row,
+          they are not drawn. Named by its own tab, so the two cannot drift.
+
+          A LIST SHELF draws the caller's own panel (see ReportFiles) rather than
+          a grid: that shelf IS reports, and its folders — one per incident type,
+          which the tally folds all the same — are not what the officer asked to
+          see. */}
+      <section
+        className="folder-shelf"
+        role="tabpanel"
+        id={`${groupId}-panel`}
+        aria-labelledby={`${groupId}-tab-${activeIndex}`}
+      >
+        {active.list ? (
+          children
+        ) : active.folders.length === 0 ? (
+          <p className="folder-shelf__empty">
+            {emptyShelfNote(active, { archived, awaiting })}
+          </p>
+        ) : (
+          <div className="folder-shelf__row">
+            {active.folders.map((folder) => (
+              <GlassFolder
+                key={folder.type}
+                type={folder.type}
+                count={folder.count}
+                onOpen={(type) => onOpenFolder?.(active, type)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
 
 export function ReportsTable({
   user,
@@ -5315,7 +6010,7 @@ export function ReportsTable({
   stationHeader = null,
   // Tells the shell whether this list is showing its own editor panel. The
   // panel replaces the list WITHOUT changing `view.kind` (that is how the
-  // list's search, filters and page survive closing a report), so the top bar
+  // list's filters and page survive closing a report), so the top bar
   // cannot see it from the route alone — and without this the officer writes a
   // report under a nav that still says My Reports.
   onReportOpenChange,
@@ -5349,6 +6044,10 @@ export function ReportsTable({
   // languages the account is recorded as reading. Empty = no filter, so an
   // ordinary register is unchanged.
   const [query, setQuery] = useState({
+    // The search term. No box on the toolbar carries it any more — the search
+    // box left this row with Export CSV (owner request, 2026-10-06) — but it
+    // stays in the query: it is the endpoint's own key, and Clear filters resets
+    // the whole query in one go.
     q: '',
     type: initialType || '',
     status: initialStatus ?? '',
@@ -5360,17 +6059,11 @@ export function ReportsTable({
     verification: '',
   });
   const [pagination, setPagination] = useState(null);
-  const [search, setSearch] = useState('');
   const [flashId, setFlashId] = useState(null);
   // ---- The folder shelf ----------------------------------------------------
   // The per-type tally behind the folders. `null` until the first answer, so
   // "nothing found" and "not asked yet" cannot be drawn the same way.
   const [folders, setFolders] = useState(null);
-  // How many reports the RECENT window holds, under the filters in force — the
-  // Recent shelf's whole count, since that folder is a window rather than a
-  // type. `null` until asked, like `folders`, so an unasked week is never drawn
-  // as an empty one.
-  const [recentCount, setRecentCount] = useState(null);
   // Which folder is open, or null for the shelf of folders:
   //   { shelf, label, type }  — shelf is the bucket the contents are scoped to
   //   ('draft' / 'submitted'), or null in a mode that draws a single shelf (the
@@ -5380,11 +6073,26 @@ export function ReportsTable({
   // bar claim the officer chose a type they only opened. The request the
   // contents list makes is composed from the two (see listParams/folderParams).
   const [openFolder, setOpenFolder] = useState(null);
-  // One id prefix for the per-type section headings. `useId` rather than a slug
-  // of the type name: two types can differ only in punctuation, and a slug
-  // could collide with an element elsewhere on the page. The suffix is the
-  // group's index, so the id is stable for the life of the render.
+  // Which shelf TAB the officer is on, or null for "wherever the register would
+  // open" (see defaultShelfKey — the first shelf that holds a report). Held here
+  // rather than inside the strip so the choice SURVIVES a folder being opened:
+  // going into a folder and back out lands on the shelf it was opened from.
+  const [shelfKey, setShelfKey] = useState(null);
+  // One id prefix for the shelf tabs and their panel — the tab has to name the
+  // panel it controls (see ReportShelf). `useId` rather than a slug of a shelf
+  // key: a slug could collide with an element elsewhere on the page. The suffix
+  // is the shelf's index, so the ids are stable for the life of the render.
   const groupId = useId();
+  // Whether the filter ROW above the card is showing. It has always been drawn,
+  // and it still is by default: the rail that can fold it away is drawn where the
+  // register draws REPORT ROWS (see ReportTools), and the shelf of folders — where
+  // that rail is not — has no control that could open it again. So the row's
+  // resting state is open, and the funnel narrows the screen only when the officer
+  // asks it to.
+  const [filtersOpen, setFiltersOpen] = useState(true);
+  // The filter row's own id, so the funnel can point at what it shows and hides
+  // (`aria-controls`). Off the same `useId` as the shelf ids for the same reason.
+  const filtersId = `${groupId}-filters`;
 
   const canFinalize = user.role === 'Admin' || user.role === 'Officer';
 
@@ -5398,38 +6106,80 @@ export function ReportsTable({
   // language, not on a stage (see shelvesFor).
   const awaiting = query.verification === 'awaiting';
   // The shelves, with their folders, folded here from the server's raw status
-  // tally — the ONE place that tally enters the UI.
+  // tally — the ONE place that tally enters the UI. ALL REPORTS heads them (see
+  // shelvesFor): the whole filtered set, drawn as files rather than folders, and
+  // its note is the ORDER the list is actually in — the officer can re-sort the
+  // register from the rail above it, and a tab still promising the default order
+  // would be the register contradicting the list beneath it.
+  const shelves = useMemo(
+    () =>
+      buildShelves(folders, {
+        shelves: shelvesFor({ archived: showArchived, awaiting, sort: query.sort, dir: query.dir }),
+        typeOrder: typeOptions,
+      }),
+    [folders, showArchived, awaiting, typeOptions, query.sort, query.dir],
+  );
+  // WHICH SHELF IS ON SCREEN, and whether that shelf is the FILES one. The strip
+  // resolves the same rule (shelfInView) for its own drawing, so the register and
+  // the tab cannot disagree about which shelf the officer is on — and this is what
+  // tells the register whether the panel is a grid of folders or a list of
+  // reports, and therefore which request to make.
+  const activeShelf = shelfInView(shelves, shelfKey);
+  const filesInView = Boolean(activeShelf && activeShelf.list) && !openFolder;
+  // Whether the officer has narrowed anything. Read by the Clear-filters control
+  // and by the ALL shelf's empty state, which says which of the two emptinesses
+  // this is: a station that has recorded nothing, or a set that only looks empty.
+  const filtersOn = Boolean(
+    query.q || query.type || query.status || query.date_from || query.date_to || query.verification,
+  );
+  // How many of the FILTER ROW's own controls are set — what the funnel's badge
+  // counts. The search term is deliberately not one of them: the term has a
+  // control of its own sitting right beside it, and a badge that counted it would
+  // be the same fact twice on one line. `filtersOn` above stays the wider question
+  // (whether the register is narrowed at all), which is what Clear filters and the
+  // empty state read.
+  const filterCount = [
+    query.type,
+    query.status,
+    query.date_from,
+    query.date_to,
+    query.verification,
+  ].filter(Boolean).length;
+  // ---- What the rail above a list of reports does ---------------------------
+  // The search COMMITS: the officer's words become the list's own term, which is
+  // the request that is already in `query` (see listParams) — so a new box needed
+  // no new endpoint. Back to page one, always: the officer is asking a different
+  // question, and page 3 of the old answer is not an answer to it.
+  function applySearch(term) {
+    setQuery((q) => ({ ...q, q: term, page: 1 }));
+  }
+  // The order, from the menu's own list (SORT_ORDERS): both halves land together,
+  // because a key without its direction is a different order.
+  function applySort(order) {
+    setQuery((q) => ({ ...q, sort: order.key, dir: order.dir, page: 1 }));
+  }
+  // Which list request this is. The shelf and an open folder ask separately, and
+  // the officer can leave one for the other before either answer arrives, so two
+  // requests can be in flight at once and the NETWORK decides which lands first.
+  // Only the newest may write its answer; an older one is dropped, answer and
+  // error alike.
   //
-  // RECENT COMES FIRST (owner request, 2026-10-06), and only in the ordinary
-  // register: it is a window over the same filtered set, so it belongs beside
-  // Draft and Submitted rather than inside one of them, and the archive and the
-  // translation queue draw a single shelf of their own. Its count arrives with
-  // the shelf's own tally (see loadFolders); until then the shelves are drawn
-  // without it rather than with a zero that would read as "nothing this week".
-  const shelves = useMemo(() => {
-    const built = buildShelves(folders, {
-      shelves: shelvesFor({ archived: showArchived, awaiting }),
-      typeOrder: typeOptions,
-    });
-    if (showArchived || awaiting || recentCount === null) return built;
-    return withRecentShelf(built, recentCount);
-  }, [folders, showArchived, awaiting, typeOptions, recentCount]);
-  // Which list request this is. Typing fires a request every few hundred
-  // milliseconds now (see the debounce effect below), so two can be in flight at
-  // once and the NETWORK decides which lands first — a slow "rob" arriving after
-  // a fast "robbery" would repaint the register with results for a search the box
-  // no longer holds. Only the newest request may write its answer; an older one is
-  // dropped, answer and error alike.
-  const loadSeq = useRef(0);
+  // TWO COUNTERS, one per endpoint — never one shared counter. The tally and the
+  // list are now asked TOGETHER (the ALL shelf draws files while the strip above
+  // still counts the other shelves), and one shared counter made the second
+  // request invalidate the first: the tally's answer was discarded every time,
+  // `folders` stayed null, and the register sat on "Loading reports…" forever.
+  // Each request now races only ITSELF, so the newest list answer and the newest
+  // tally answer can both land.
+  const listSeq = useRef(0);
+  const foldersSeq = useRef(0);
 
   // The list's own query string, with ONE spelling for every caller: the
-  // contents list, the folder tally and the CSV export. All three have to agree
-  // about what is being looked at — a folder whose face counted a set the list
-  // inside it did not show would be a register lying to itself, and an export
-  // that ignored the open folder would put the whole blotter in a CSV the
-  // officer asked for one shelf of. `extra` carries the folder itself (bucket +
-  // type) and OVERWRITES anything the filter bar set, which is what makes an
-  // opened folder authoritative over the list it opens onto.
+  // contents list and the folder tally. Both have to agree about what is being
+  // looked at — a folder whose face counted a set the list inside it did not show
+  // would be a register lying to itself. `extra` carries the folder itself
+  // (bucket + type) and OVERWRITES anything the filter bar set, which is what
+  // makes an opened folder authoritative over the list it opens onto.
   function listParams(extra = {}) {
     const params = new URLSearchParams();
     if (showArchived) {
@@ -5447,36 +6197,50 @@ export function ReportsTable({
   }
 
   // The open folder as list filters: the shelf IS the bucket, the folder IS the
-  // type. Empty when no folder is open, so the register's ordinary list is the
-  // plain filtered set. A single-shelf mode (the archive, the translation queue)
-  // has no bucket to state — the type alone is its scope. And the RECENT folder
-  // has neither a bucket nor a type: it is a WINDOW, so its list is scoped by the
-  // same date its count was (see recentWindowFrom) and by nothing else.
-  const folderParams = openFolder
-    ? openFolder.recent
-      ? { date_from: recentWindowFrom(query.date_from) }
-      : { bucket: openFolder.shelf, type: openFolder.type }
-    : {};
+  // type. Empty when no folder is open — which is also the ALL shelf's own scope,
+  // so "every report the filters allow" needs no rule of its own. A single-shelf
+  // mode (the archive, the translation queue) has no bucket to state: the type
+  // alone is its scope.
+  const folderParams = openFolder ? { bucket: openFolder.shelf, type: openFolder.type } : {};
+
+  // WHICH QUESTION THIS LIST IS ASKING, as one string — the key the copy kept on
+  // this computer is filed under (see load, and src/lib/offlineCache.js). A
+  // signature rather than the query object itself, because `query` is rebuilt on
+  // every render: object identity and key order both change without the question
+  // changing, and a cache keyed on either would miss every time.
+  const listKey = reportListKey({ ...query, ...folderParams });
 
   async function load() {
-    const seq = ++loadSeq.current;
+    const seq = ++listSeq.current;
     try {
       const qs = listParams(folderParams).toString();
       const data = await api(`/reports${qs ? `?${qs}` : ''}`);
-      if (seq !== loadSeq.current) return;
+      if (seq !== listSeq.current) return;
       setReports(data.reports);
       setPagination(data.pagination);
       setConn(null);
       // The banner belongs to the LAST request: a load that succeeded clears the
-      // message an earlier one left behind. Search fires on every pause now, so
-      // a refusal (the server caps a query at 12 words) would otherwise sit over
-      // a register that has since answered a perfectly good search.
+      // message an earlier one left behind, so a refusal cannot end up sitting
+      // over a register that has since answered.
       setError(null);
+      // ...and what the server just answered with is kept on this computer FOR
+      // THE SESSION, under the question it answers (owner request, 2026-10-08).
+      // Without it, reloading during an outage is the one move that turns a
+      // register into an empty page: the rows were only ever in the response.
+      // sessionStorage and not localStorage, and keyed by account — see the
+      // module for why that is a privacy decision, not a caching one.
+      saveReports(user.id, listKey, { reports: data.reports, total: data.pagination?.total });
     } catch (err) {
-      if (seq !== loadSeq.current) return;
+      if (seq !== listSeq.current) return;
       if (isUnreachable(err)) {
         setConn(classifyError(err));
-        setReports((cur) => cur ?? []);
+        // NOTHING IN MEMORY MEANS THE PAGE JUST LOADED — which is exactly the
+        // reload an officer does when the register looks wrong, and exactly the
+        // moment the server is likely to be unreachable. The list they were
+        // reading a moment ago is still in this tab, so it is shown again under
+        // the stale note rather than replaced by an empty state that is a lie
+        // about the station's records.
+        setReports((cur) => cur ?? readReports(user.id, listKey)?.reports ?? []);
         onConnError?.(err);
       } else {
         setError(err.message);
@@ -5484,39 +6248,25 @@ export function ReportsTable({
     }
   }
 
-  // The FOLDER SHELF. Its own request rather than a count of the rows the list
-  // returned: the list is paged, so counting its rows answers for one page and
-  // not for the register. Shares `loadSeq` with load() — the two are mutually
-  // exclusive (one or the other view is showing), so a slow answer for the view
-  // the officer has left can never repaint the one they are on.
+  // THE FOLDER SHELF'S OWN TALLY. A request of its own rather than a count of the
+  // rows the list returned: the list is paged, so counting its rows answers for
+  // one page and not for the register. It keeps its OWN counter beside load()'s:
+  // the two are in flight together now (see `foldersSeq`), so a slow tally can
+  // never repaint the list, and a slow list can never drop the tally.
   async function loadFolders() {
-    const seq = ++loadSeq.current;
+    const seq = ++foldersSeq.current;
     try {
       const qs = listParams().toString();
-      // THE RECENT SHELF'S OWN COUNT, from the same endpoint and the same
-      // filters, one window back: the officer's own From filter narrows it
-      // rather than being replaced by it (see recentWindowFrom). When that
-      // filter already starts inside the window the two queries ARE one query,
-      // and the filtered tally is the week's tally — asking twice would be the
-      // same answer twice.
-      const windowParams = new URLSearchParams(listParams());
-      windowParams.set('date_from', recentWindowFrom(query.date_from));
-      const windowQs = windowParams.toString();
-      const [data, window] = await Promise.all([
-        api(`/reports/folders${qs ? `?${qs}` : ''}`),
-        windowQs === qs ? Promise.resolve(null) : api(`/reports/folders?${windowQs}`),
-      ]);
-      if (seq !== loadSeq.current) return;
+      const data = await api(`/reports/folders${qs ? `?${qs}` : ''}`);
+      if (seq !== foldersSeq.current) return;
       setFolders(Array.isArray(data.folders) ? data.folders : []);
-      setRecentCount(tallyTotal((window ?? data).folders));
       setConn(null);
       setError(null);
     } catch (err) {
-      if (seq !== loadSeq.current) return;
+      if (seq !== foldersSeq.current) return;
       if (isUnreachable(err)) {
         setConn(classifyError(err));
         setFolders((cur) => cur ?? []);
-        setRecentCount((cur) => cur ?? 0);
         onConnError?.(err);
       } else {
         setError(err.message);
@@ -5524,36 +6274,29 @@ export function ReportsTable({
     }
   }
 
-  /** Re-read whatever the register is showing — the shelf, or the open folder. */
+  /**
+   * Re-read whatever the register is showing: the open folder's reports, the ALL
+   * shelf's reports, or the shelf's own tally — and on the ALL shelf, the tally
+   * as well, because the strip above the list is still counting the other shelves.
+   */
   function refresh() {
-    return openFolder ? load() : loadFolders();
+    if (openFolder) return load();
+    const tally = loadFolders();
+    return filesInView ? Promise.all([tally, load()]) : tally;
   }
 
+  // WHAT TO ASK FOR, given what is on screen. An open folder asks for its own
+  // reports; the ALL shelf asks for the whole filtered set AND the tally (the
+  // strip's counts stay live underneath it); any other shelf asks for the tally
+  // alone, because its folders are the whole of what it draws.
   useEffect(() => {
     if (openFolder) load();
-    else loadFolders();
+    else {
+      loadFolders();
+      if (filesInView) load();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showArchived, query, openFolder]);
-
-  // ---- Search runs as you type (there is no Search button any more) --------
-  // The box is the immediate value; `query.q` follows it after a pause. The
-  // pause is the whole point: this pipeline hits the SERVER — the text ranking
-  // and the paging are computed there — so typing "robbery" must not fire seven
-  // requests. 350ms sits below the half-second where a search starts to feel
-  // laggy and above the gap between ordinary keystrokes, and every other filter
-  // on this row still applies the instant it changes (a select is one commit,
-  // a text box is not). `query.q` is in the deps only so the guard below can see
-  // it catch up; it never starts a timer of its own.
-  useEffect(() => {
-    if (search === query.q) return;
-    const timer = window.setTimeout(() => {
-      // Page one: the search has changed, so the page the officer was on means
-      // nothing. `q.q` is re-checked here because the box can have moved on
-      // (cleared, or edited back) while the timer was pending.
-      setQuery((q) => (q.q === search ? q : { ...q, q: search, page: 1 }));
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [search, query.q]);
+  }, [showArchived, query, openFolder, filesInView]);
 
   // ---- The row menu --------------------------------------------------------
   // The ACTIONS themselves (which items a row offers, the confirm each one puts
@@ -5660,14 +6403,11 @@ export function ReportsTable({
   // they were looking at, not to the one they are looking at now.
   function openFolderAt(shelf, type) {
     setOpenFolder({
-      shelf: shelf.all || shelf.recent ? null : shelf.key,
+      // A shelf that is not a bucket (the archive, the translation queue) has no
+      // bucket to state, so the type alone is the scope.
+      shelf: shelf.all ? null : shelf.key,
       label: shelf.label,
-      // The Recent folder is NOT an incident type: carrying one would make the
-      // filter bar claim the officer chose the type "Recent", and the trail say
-      // "Recent › Recent". No type, and the trail drops the empty crumb (see
-      // folderTrail).
-      type: shelf.recent ? null : type,
-      recent: !!shelf.recent,
+      type,
     });
     // Clear the list the LAST view was showing: keeping it would put the
     // folder's name over another folder's reports for as long as the request
@@ -5821,28 +6561,152 @@ export function ReportsTable({
 
   if (!reports && reports !== null && !error) return <p>Loading reports…</p>;
 
+  // THE RAIL, built once and drawn wherever a LIST OF REPORTS is (see
+  // ReportTools): the All Reports shelf and the inside of an opened folder. One
+  // element rather than two, so the two views cannot be handed different terms,
+  // different orders, or a filter count that only one of them updates.
+  const tools = (
+    <ReportTools
+      q={query.q}
+      onSearch={applySearch}
+      sort={query.sort}
+      dir={query.dir}
+      onSort={applySort}
+      filtersOpen={filtersOpen}
+      onToggleFilters={() => setFiltersOpen((v) => !v)}
+      filtersId={filtersId}
+      filterCount={filterCount}
+    />
+  );
+
+  // THE FILTER LINE, built once beside the rail for the same reason: the shelf and
+  // an opened folder draw the same fields from one element, so the two views
+  // cannot be narrowed by two different sets of values.
+  //
+  // IT IS A LABELLED GRID (owner request, 2026-10-06). One row of unlabelled
+  // controls could not hold six filters: the two date pickers ran into each other
+  // on an ordinary laptop, and once a value was in a control nothing on the row
+  // said which filter it was. Each filter owns a cell under its own caption, and
+  // the grid reflows to as many columns as the band can hold.
+  //
+  // AND IT STANDS IN THE REGISTER'S OWN HEAD NOW (owner request, 2026-10-08). It
+  // used to be a CARD OF ITS OWN above this one — a navy strip holding nothing, a
+  // gold dot, its own border and shadow, and then the fields — so the page opened
+  // on two stacked panels that were really one instrument. Here it is the second
+  // line of the register's head, directly under the shelf strip: what you are
+  // looking at, then what you are narrowing it to, on one surface and under one
+  // hairline. The fields themselves, their captions and handlers, and the funnel
+  // that folds this line away are exactly what they were.
+  //
+  // `hidden` rather than unmounting, so the funnel's `aria-controls` always
+  // resolves to the row it names — and so the controls the officer last typed
+  // into come back as they were.
+  const filterBar = (
+    <div className="reports-toolbar register-filters" id={filtersId} hidden={!filtersOpen}>
+      <div className="reports-filters">
+        <label className="reports-filter">
+          <span className="reports-filter__label">Type</span>
+          <select
+            aria-label="Filter by incident type"
+            value={query.type}
+            onChange={(e) => {
+              // A folder IS an incident type, so choosing one here leaves the
+              // folder you were in: the register must not keep showing one
+              // folder's reports under another type's filter. (While a folder
+              // is open the bar shows "All types", because the officer did
+              // not CHOOSE a type — they opened a folder.)
+              setOpenFolder(null);
+              setQuery((q) => ({ ...q, type: e.target.value, page: 1 }));
+            }}
+          >
+            <option value="">All types</option>
+            {typeOptions.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </label>
+        <label className="reports-filter">
+          <span className="reports-filter__label">Status</span>
+          <select
+            aria-label="Filter by status"
+            value={query.status}
+            onChange={(e) => setQuery((q) => ({ ...q, status: e.target.value, page: 1 }))}
+          >
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="submitted">Submitted</option>
+            <option value="finalized">Finalized</option>
+            {/* Open work is the filter an officer actually needs, and it
+                was Admin-only. The server never restricted it: `attention`
+                is a plain `status != 'finalized'` on the same own-reports
+                scope, so an officer's queue is their own queue. */}
+            <option value="attention">Needs attention (draft + submitted)</option>
+          </select>
+        </label>
+        <label className="reports-filter">
+          <span className="reports-filter__label">Incident from</span>
+          <input
+            type="date"
+            aria-label="Incident date from"
+            title="Incident date from"
+            value={query.date_from}
+            onChange={(e) => setQuery((q) => ({ ...q, date_from: e.target.value, page: 1 }))}
+          />
+        </label>
+        <label className="reports-filter">
+          <span className="reports-filter__label">Incident to</span>
+          <input
+            type="date"
+            aria-label="Incident date to"
+            title="Incident date to"
+            value={query.date_to}
+            onChange={(e) => setQuery((q) => ({ ...q, date_to: e.target.value, page: 1 }))}
+          />
+        </label>
+        {/* The SORT and TRANSLATION dropdowns are OFF the toolbar (owner
+            request, 2026-10-06). The query keeps both keys — `sort`/`dir`
+            hold their default (newest incident first) and the list still
+            sends them; `verification` stays because the Clear-filters reset
+            and the awaiting mode's own logic read it — but nothing on this
+            row draws them any more. Sort is the rail's menu, where it belongs
+            (see ReportTools). */}
+        {filtersOn && (
+          <button
+            type="button"
+            className="reports-filter__clear"
+            onClick={() => {
+              // Clearing the filters puts the officer back on the shelf: a
+              // folder is a view OF a filtered set, and there is no filtered
+              // set left to be inside.
+              setOpenFolder(null);
+              setQuery((q) => ({ q: '', type: '', status: '', date_from: '', date_to: '', sort: q.sort, dir: q.dir, page: 1, verification: '' }));
+            }}
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  // THE ARCHIVE SWITCH came with the card that held it, so it stands in the head
+  // beside the strip now (Admin-only, as it always was). It keeps its own place in
+  // that row rather than riding the filter line: a mode that folds away with the
+  // filters is a mode an Admin can leave the register in and no longer see.
+  const archivedChip =
+    user.role === 'Admin' ? (
+      <button
+        type="button"
+        className="register-tool register-tool--mode"
+        aria-pressed={showArchived}
+        onClick={() => setShowArchived((v) => !v)}
+      >
+        {showArchived ? 'Show Active' : 'Show Archived'}
+      </button>
+    ) : null;
+
   return (
     <>
-      <div className="ir-page-head">
-        <h1 className="ir-title">{user.role === 'Admin' ? 'ALL REPORTS' : 'MY REPORTS'}</h1>
-        {/* WHAT THE LIST IS, in the order the question is asked: how many
-            reports, which shelf of records, and — with those, rather than alone
-            in a row of its own under the header, where it read as a stray chip
-            (owner request, 2026-10-06: organize the register) — the role they
-            are being read as. */}
-        <div className="ir-meta ir-meta--register">
-          <div className="ir-meta__facts">
-            {pagination
-              ? `${pagination.total} REPORT${pagination.total === 1 ? '' : 'S'}`
-              : 'LOADING…'}
-            <span className="ir-meta__sep" aria-hidden="true">·</span>
-            {showArchived ? 'ARCHIVED RECORDS' : 'ACTIVE RECORDS'}
-          </div>
-          <div className="ir-meta__role">
-            <span className="badge draft">{user.role}</span>
-          </div>
-        </div>
-      </div>
 
       {/* Connection failures are reported to Shell (onConnError) which
           shows one workspace-wide banner; here we only note what it means
@@ -5858,185 +6722,6 @@ export function ReportsTable({
           {error}
         </div>
       )}
-
-      <IrCard
-        actions={
-          <>
-            {user.role === 'Admin' && (
-              <button type="button" onClick={() => setShowArchived((v) => !v)}>
-                {showArchived ? 'Show Active' : 'Show Archived'}
-              </button>
-            )}
-            {/* Export honors the CURRENT filters AND the open folder (the server
-                reuses the same query pipeline) — what you see is what you get,
-                down to the shelf. */}
-            <a
-              className="button-link"
-              href={`/api/v1/reports/export${
-                listParams(folderParams).toString()
-                  ? `?${listParams(folderParams).toString()}`
-                  : ''
-              }`}
-              download="bluewrite-reports.csv"
-            >
-              Export CSV
-            </a>
-          </>
-        }
-      >
-        {/* THE FILTER BAR IS A LABELLED GRID (owner request, 2026-10-06). One
-            row of unlabelled controls could not hold six filters: the two date
-            pickers and the sort menu ran into each other on an ordinary laptop,
-            and once a value was in a control nothing on the row said which
-            filter it was. Each filter now owns a cell under its own caption,
-            the grid reflows to as many columns as the card can hold, and the
-            search box keeps a row to itself — it is the one control an officer
-            uses without looking. */}
-        <div className="reports-toolbar">
-          {/* The box IS the search — see the debounce effect above. The form
-              stays for its `search` landmark and to make Enter inert by
-              default; it has no submit control any more, so the keydown
-              handler below is what Enter means here: "commit what I have
-              typed NOW", which spares a fast typist the pause. Escape still
-              clears the search outright. */}
-          <form
-            className="reports-search"
-            role="search"
-            onSubmit={(e) => e.preventDefault()}
-          >
-            <input
-              type="search"
-              placeholder="Search complainant, victim, suspect, place, narrative, officer…"
-              aria-label="Search reports by complainant, victim, suspect, place, narrative, or officer"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  setQuery((q) => ({ ...q, q: search, page: 1 }));
-                  return;
-                }
-                if (e.key === 'Escape') {
-                  setSearch('');
-                  setQuery((q) => ({ ...q, q: '', page: 1 }));
-                }
-              }}
-            />
-          </form>
-          <div className="reports-filters">
-            <label className="reports-filter">
-              <span className="reports-filter__label">Type</span>
-              <select
-                aria-label="Filter by incident type"
-                value={query.type}
-                onChange={(e) => {
-                  // A folder IS an incident type, so choosing one here leaves the
-                  // folder you were in: the register must not keep showing one
-                  // folder's reports under another type's filter. (While a folder
-                  // is open the bar shows "All types", because the officer did
-                  // not CHOOSE a type — they opened a folder.)
-                  setOpenFolder(null);
-                  setQuery((q) => ({ ...q, type: e.target.value, page: 1 }));
-                }}
-              >
-                <option value="">All types</option>
-                {typeOptions.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </label>
-            <label className="reports-filter">
-              <span className="reports-filter__label">Status</span>
-              <select
-                aria-label="Filter by status"
-                value={query.status}
-                onChange={(e) => setQuery((q) => ({ ...q, status: e.target.value, page: 1 }))}
-              >
-                <option value="">All statuses</option>
-                <option value="draft">Draft</option>
-                <option value="submitted">Submitted</option>
-                <option value="finalized">Finalized</option>
-                {/* Open work is the filter an officer actually needs, and it
-                    was Admin-only. The server never restricted it: `attention`
-                    is a plain `status != 'finalized'` on the same own-reports
-                    scope, so an officer's queue is their own queue. */}
-                <option value="attention">Needs attention (draft + submitted)</option>
-              </select>
-            </label>
-            <label className="reports-filter">
-              <span className="reports-filter__label">Incident from</span>
-              <input
-                type="date"
-                aria-label="Incident date from"
-                title="Incident date from"
-                value={query.date_from}
-                onChange={(e) => setQuery((q) => ({ ...q, date_from: e.target.value, page: 1 }))}
-              />
-            </label>
-            <label className="reports-filter">
-              <span className="reports-filter__label">Incident to</span>
-              <input
-                type="date"
-                aria-label="Incident date to"
-                title="Incident date to"
-                value={query.date_to}
-                onChange={(e) => setQuery((q) => ({ ...q, date_to: e.target.value, page: 1 }))}
-              />
-            </label>
-            <label className="reports-filter">
-              <span className="reports-filter__label">Sort</span>
-              <select
-                aria-label="Sort reports"
-                value={`${query.sort}:${query.dir}`}
-                onChange={(e) => {
-                  const [sort, dir] = e.target.value.split(':');
-                  setQuery((q) => ({ ...q, sort, dir, page: 1 }));
-                }}
-              >
-                <option value="incident_datetime:desc">Newest incident first</option>
-                <option value="incident_datetime:asc">Oldest incident first</option>
-                <option value="incident_type:asc">Type A→Z</option>
-                <option value="incident_type:desc">Type Z→A</option>
-                <option value="status:asc">Status A→Z</option>
-                <option value="status:desc">Status Z→A</option>
-                <option value="created_by_name:asc">Officer A→Z</option>
-                <option value="created_by_name:desc">Officer Z→A</option>
-              </select>
-            </label>
-            <label className="reports-filter">
-              <span className="reports-filter__label">Translation</span>
-              {/* Phase 6 Stage 4 — the awaiting-verification view. A second
-                  officer's queue: translated reports they can read and nobody
-                  has reviewed yet. The server filters by their recorded
-                  languages; this control only asks. */}
-              <select
-                aria-label="Filter by translation review"
-                value={query.verification}
-                onChange={(e) => setQuery((q) => ({ ...q, verification: e.target.value, page: 1 }))}
-              >
-                <option value="">All translations</option>
-                <option value="awaiting">Awaiting verification</option>
-              </select>
-            </label>
-            {(query.q || query.type || query.status || query.date_from || query.date_to || query.verification) && (
-              <button
-                type="button"
-                className="reports-filter__clear"
-                onClick={() => {
-                  setSearch('');
-                  // Clearing the filters puts the officer back on the shelf:
-                  // a folder is a view OF a filtered set, and there is no
-                  // filtered set left to be inside.
-                  setOpenFolder(null);
-                  setQuery((q) => ({ q: '', type: '', status: '', date_from: '', date_to: '', sort: q.sort, dir: q.dir, page: 1, verification: '' }));
-                }}
-              >
-                Clear filters
-              </button>
-            )}
-          </div>
-        </div>
-      </IrCard>
 
       <IrCard wide flush headless>
         {openFolder ? (
@@ -6062,11 +6747,7 @@ export function ReportsTable({
                       >
                         {last && (
                           <span className="report-trail__icon" aria-hidden="true">
-                            {/* The Recent folder is a window, not a type: it wears
-                                the one glyph that says time (see RECENT_ICON). */}
-                            <ReportTypeIcon
-                              name={openFolder.recent ? RECENT_ICON : typeIcon(openFolder.type)}
-                            />
+                            <ReportTypeIcon name={typeIcon(openFolder.type)} />
                           </span>
                         )}
                         {crumb}
@@ -6077,102 +6758,82 @@ export function ReportsTable({
               </ol>
             </nav>
 
-            {reports === null ? (
-              <p className="ir-card-empty">
-                {conn ? 'Waiting for the connection to come back…' : 'Loading reports…'}
-              </p>
-            ) : reports.length === 0 ? (
-              <p className="ir-card-empty">
-                {conn
-                  ? 'Waiting for the connection to come back…'
-                  : 'No reports in this folder.'}
-              </p>
-            ) : (
-              <ReportList
-                reports={reports}
-                rowMeta={rowMeta}
-                flashId={flashId}
-                onOpen={openSheet}
-                onEdit={askEdit}
-                onMenu={openRowMenu}
-              />
-            )}
+            {/* THE RAIL, above an opened folder's own rows, for the reason it
+                stands above the All Reports list: both views send this officer's
+                search term with every request, and a filter whose box is off
+                screen is a list with an invisible cause (see ReportTools). */}
+            {tools}
+            {archivedChip}
+            {filterBar}
 
-            {pagination && pagination.total_pages > 1 && (
-              <div
-                className="reports-pagination"
-                style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginTop: '0.75rem' }}
-              >
-                <button
-                  type="button"
-                  disabled={pagination.page <= 1}
-                  onClick={() => setQuery((q) => ({ ...q, page: pagination.page - 1 }))}
-                >
-                  Prev
-                </button>
-                <span style={{ fontFamily: 'var(--font-hud)', fontSize: '0.75rem', color: 'var(--cyan-dim)' }}>
-                  Page {pagination.page} of {pagination.total_pages} — {pagination.total} report(s)
-                </span>
-                <button
-                  type="button"
-                  disabled={pagination.page >= pagination.total_pages}
-                  onClick={() => setQuery((q) => ({ ...q, page: pagination.page + 1 }))}
-                >
-                  Next
-                </button>
-              </div>
-            )}
+            <ReportFiles
+              reports={reports}
+              pagination={pagination}
+              rowMeta={rowMeta}
+              flashId={flashId}
+              conn={conn}
+              emptyText="No reports in this folder."
+              onOpen={openSheet}
+              onEdit={askEdit}
+              onMenu={openRowMenu}
+              onPage={(page) => setQuery((q) => ({ ...q, page }))}
+            />
           </>
         ) : (
           <>
             {/* ---- The SHELF of folders ----------------------------------
-                One glass folder per incident type per shelf, and only the types
-                the shelf actually holds — an empty folder is a promise it
-                cannot keep. The counts come from the server's own tally, folded
-                through the SAME filter pipeline the list uses, so a folder's
-                face and the list inside it cannot disagree. */}
+                One glass folder per incident type, on the shelf the officer's
+                TAB is on, and only the types that shelf actually holds — an
+                empty folder is a promise it cannot keep. The counts come from
+                the server's own tally, folded through the SAME filter pipeline
+                the list uses, so a folder's face and the list inside it cannot
+                disagree.
+
+                The strip itself is a component (see ReportShelf) because the
+                shelves are the page's own tabs now, and because a drawing this
+                one-shaped is worth rendering on its own in a test. */}
             {folders === null ? (
               <p className="ir-card-empty">
                 {conn ? 'Waiting for the connection to come back…' : 'Loading reports…'}
               </p>
             ) : (
-              <div className="folder-shelves">
-                {shelves.map((shelf, i) => (
-                  <section
-                    className="folder-shelf"
-                    key={shelf.key}
-                    aria-labelledby={`${groupId}-${i}`}
-                  >
-                    {/* A real heading, so the shelf can be reached by landmark
-                        the way the eye reaches it by colour — and the shelf's
-                        own note beside its name, which is how the RECENT shelf
-                        says which window it is (see withRecentShelf). */}
-                    <h3 className="folder-shelf__head" id={`${groupId}-${i}`}>
-                      <span className="folder-shelf__name">{shelf.label}</span>
-                      {shelf.note && <span className="folder-shelf__note">{shelf.note}</span>}
-                      <span className="folder-shelf__count">
-                        {shelf.total} {shelf.total === 1 ? 'report' : 'reports'}
-                      </span>
-                    </h3>
-                    {shelf.folders.length === 0 ? (
-                      <p className="folder-shelf__empty">
-                        {emptyShelfNote(shelf, { archived: showArchived, awaiting })}
-                      </p>
-                    ) : (
-                      <div className="folder-shelf__row">
-                        {shelf.folders.map((folder) => (
-                          <GlassFolder
-                            key={folder.type}
-                            type={folder.type}
-                            count={folder.count}
-                            onOpen={(type) => openFolderAt(shelf, type)}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                ))}
-              </div>
+              <ReportShelf
+                shelves={shelves}
+                activeKey={shelfKey}
+                onSelect={setShelfKey}
+                onOpenFolder={openFolderAt}
+                groupId={groupId}
+                archived={showArchived}
+                awaiting={awaiting}
+                /* THE RAIL, handed to the STRIP rather than to the panel (owner
+                   request, 2026-10-08): the search box and the two keys that
+                   narrow and order the list under them now stand on the shelves'
+                   own row, at its right end (see ReportShelf). */
+                tools={tools}
+                /* …and the filter line, and the archive switch, for the same
+                   reason: the shelf's own head draws them (see ReportShelf). */
+                aside={archivedChip}
+                filters={filterBar}
+              >
+                {/* ALL REPORTS' PANEL: the register itself, in the order the
+                    rail above states — the same rows an opened folder draws,
+                    from the same component, so a report reads identically
+                    however the officer reached it. Its rows carry the register's
+                    own actions: the sheet on a click, Edit on a draft, More for
+                    the rest. */}
+                <ReportFiles
+                  reports={reports}
+                  pagination={pagination}
+                  rowMeta={rowMeta}
+                  flashId={flashId}
+                  conn={conn}
+                  emptyText={emptyAllNote({ q: query.q, filtered: filterCount > 0 })}
+                  onOpen={openSheet}
+                  onEdit={askEdit}
+                  onMenu={openRowMenu}
+                  onPage={(page) => setQuery((q) => ({ ...q, page }))}
+                />
+              </ReportShelf>
             )}
           </>
         )}

@@ -32,6 +32,16 @@
 //      five drafts as five clipped slivers of themselves until the rows were
 //      stated as content-sized — the last test in this file holds that.
 //
+//   4. TWO ROWS OF DRAFTS, BY DEFAULT (owner request, 2026-10-08). The list's
+//      floor is not one row but two, so the section shows two cards on a laptop
+//      panel instead of a card and the top of the next one. The card itself came
+//      down a size to make that budget fit, and the floor is stated as TWO ROWS
+//      MEASURED rather than as a generous number — it is a ceiling as much as a
+//      floor, because it is what decides where the list starts on a panel that
+//      cannot hold everything. A floor above two rows does not buy air under the
+//      cards; it slides the second one under the signature band, which is the
+//      screenshot that prompted the second pass at this rule.
+//
 // Read from source and stylesheet, like the rest of this directory: the harness
 // these render is a page of markup with no shell around it (see
 // tests/rules/renderHarness.mjs), which is exactly why neither failure could be
@@ -111,7 +121,13 @@ test('the slack runs down to the draft list, and stops there', () => {
   const aside = rule('.ir-remember');
   assert.match(aside, /align-self:\s*start/, 'the reminder is stretched to the row height');
   assert.match(aside, /max-height:\s*100%/, 'the reminder may run past the panel');
-  assert.match(aside, /overflow-y:\s*auto/);
+  // AND THE CARD DOES NOT SCROLL ITSELF (owner request, 2026-10-08). It used to
+  // take a rail of its own rather than push the signature off the bottom; the
+  // register card is now clipped by its own corners, and the draft list is the
+  // ONLY scroll container this page offers.
+  assert.match(aside, /overflow-y:\s*hidden/, 'the reminder does not clip itself instead of scrolling');
+  assert.doesNotMatch(aside, /overflow-y:\s*auto/, 'the reminder is a scroll container again');
+  assert.match(aside, /overflow-x:\s*hidden/, 'the band and the plate are no longer clipped by the card’s corners');
 
   // ...the drafts section passes the rest to its list...
   const drafts = rule('.ir-home-drafts');
@@ -125,12 +141,24 @@ test('the slack runs down to the draft list, and stops there', () => {
   assert.match(list, /overflow-y:\s*auto/, 'the draft list no longer scrolls itself');
   assert.match(list, /align-content:\s*start/, 'the rows stretch to fill a tall panel');
   assert.match(list, /flex:\s*1 1 auto/);
-  // ONE ROW IS THE FLOOR, not zero: a panel too short for even one draft hands the
-  // overflow back to the page (the one case Home is allowed to scroll) rather than
-  // squeezing the list out of existence.
+  // TWO ROWS IS THE FLOOR, not zero (owner request, 2026-10-08 — it was one row,
+  // and one row is why the section read as a draft and a half on a laptop). A
+  // panel too short for two drafts hands the overflow back to the page (the one
+  // case Home is allowed to scroll) rather than showing fewer cards than the
+  // section promises: the floor is two rows of the COMPRESSED card, measured in
+  // headless Chrome at a 1366×768 window as 2 × 59.8px + the 0.6rem gap ≈ 129px,
+  // which is 8.57rem at this app's 15px root — so the shipped 8.75rem is asserted,
+  // not merely "more than zero".
+  //
+  // AND IT MUST NOT BE MORE THAN THAT. The number is a budget, not a comfort: the
+  // list takes what the panel has left, so a floor taller than two rows pushes the
+  // section down until the second card is behind the signature band. The assertion
+  // is an upper bound as well, one card of slack, because the failure it guards
+  // (11.5rem, with an 80px card) looked exactly like a correct floor.
   const floor = list.match(/min-height:\s*([0-9.]+)rem/);
   assert.ok(floor, 'the list has no floor, so a short panel can hide it entirely');
-  assert.ok(Number(floor[1]) >= 5.5, `the floor is under one row: ${floor[1]}rem`);
+  assert.ok(Number(floor[1]) >= 8.75, `the floor is under TWO rows: ${floor[1]}rem`);
+  assert.ok(Number(floor[1]) <= 9.5, `the floor is more than two rows' worth, so it slides the second card under the band: ${floor[1]}rem`);
 });
 
 test('the page compresses with the window — the AIR gives way, never the type', () => {
@@ -157,22 +185,28 @@ test('the page compresses with the window — the AIR gives way, never the type'
   // (a length reduced past nothing is not a length).
   for (const selector of [
     '.ir-home-hero',
-    '.ir-home-hero-lead',
+    // …and the letterhead inside it, which owns the one length the station's
+    // sentence left behind (the band keeps the height it made, see the rule).
+    '.ir-home-hero-brand',
     '.ir-home-banner',
     '.ir-home-body',
     '.ir-home-drafts',
     '.ir-home-footer',
-    '.ir-draft-card',
+    // The FACE, not the card: the whole field is a button now (owner request,
+    // 2026-10-06), so the card carries no padding of its own and it is the
+    // face that gives way on a short panel.
+    '.ir-draft-face',
     // …and the ADVICE CARD, which is the one block here that is not a row of
-    // the page but a card with an inside: its gutter, the band's margins, the
-    // gaps between the panels and the panels' own padding all give way, because
-    // at a short panel the card is the block that would otherwise put a
-    // scrollbar through the station's own sentence.
+    // the page but a card with an inside: its gutter, the gaps between the
+    // panels and the panels' own padding all give way, because at a short
+    // panel the card is the block that would otherwise put a scrollbar
+    // through the page.
     '.ir-remember',
-    '.ir-remember-title',
-    '.ir-remember-list',
-    '.ir-remember-list li',
-    '.ir-remember-quote',
+    // The card's innards compress too (owner request, 2026-10-07): the tiles'
+    // row, the graph panel's padding and the bars' rows give their air way.
+    '.ir-remember-stats',
+    '.ir-remember-bars',
+    '.ir-remember-bar',
   ]) {
     const body = rule(selector);
     assert.match(body, /var\(--ir-home-short\)/, `${selector} does not compress at all`);
@@ -191,7 +225,12 @@ test('the page compresses with the window — the AIR gives way, never the type'
     '.ir-home-banner-note',
     '.ir-draft-no',
     '.ir-draft-type',
-    '.ir-remember-title',
+    // The card's own labels and counts are the type a reader sees now — the
+    // h2 is clipped out of sight (owner request, 2026-10-07) and states no
+    // size for anyone to shrink.
+    '.ir-remember-stat-label',
+    '.ir-remember-stat-num',
+    '.ir-remember-bar-type',
   ]) {
     const body = rule(selector);
     assert.match(body, /font-size:/, `${selector} no longer states a size — did the guard move?`);

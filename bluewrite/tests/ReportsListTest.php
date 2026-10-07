@@ -80,6 +80,64 @@ final class ReportsListTest extends BaseApiTestCase
     }
 
     /**
+     * A REPORT NUMBER is what an officer most often arrives with, and the
+     * register's own field says so in as many words — "Search by report number,
+     * location, or type…" (owner request, 2026-10-07). The number is not a
+     * column: it is the record's id, spelled the way the app spells it
+     * (BW-0319, see reportNumber() in the register), so every spelling an
+     * officer might type has to find the report — and a number nobody carries is
+     * still no match.
+     */
+    public function testKeywordSearchFindsAReportByItsNumber(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $report = $this->createReport($cookie, $csrf, [
+            'narrative' => 'Nothing numeric in here.',
+        ]);
+        $id = (int) $report['id'];
+        $padded = str_pad((string) $id, 4, '0', STR_PAD_LEFT);
+
+        // What is printed on the sheet, and what an officer who remembers it
+        // types: the number with and without its prefix, padded and bare — and
+        // with the prefix standing apart from the digits, which is two words.
+        foreach (["BW-{$padded}", "bw{$id}", $padded, (string) $id, "BW {$padded}", "bw {$id}"] as $typed) {
+            $res = $this->request('GET', '/reports?q=' . urlencode($typed), null, $cookie);
+            $this->assertSame(
+                1,
+                $res['body']['pagination']['total'],
+                "searching \"{$typed}\" should find report {$id}"
+            );
+            $this->assertSame($id, $res['body']['reports'][0]['id']);
+        }
+
+        // A number no report carries is not a match.
+        $res = $this->request('GET', '/reports?q=' . ($id + 5000), null, $cookie);
+        $this->assertSame(0, $res['body']['pagination']['total']);
+    }
+
+    /**
+     * The number is an ALTERNATIVE, not a filter: a word that happens to be a
+     * number still finds the report whose narrative carries it, and finding by
+     * number never takes a report away from the rest of the search.
+     */
+    public function testANumericWordStillSearchesTheReportItself(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $this->createReport($cookie, $csrf, [
+            'narrative' => 'Recovered 7 mobile phones beside the videoke bar.',
+        ]);
+
+        $res = $this->request('GET', '/reports?q=7', null, $cookie);
+        $this->assertSame(1, $res['body']['pagination']['total']);
+
+        // The word it belongs to still narrows that report further.
+        $res = $this->request('GET', '/reports?q=' . urlencode('7 videoke'), null, $cookie);
+        $this->assertSame(1, $res['body']['pagination']['total']);
+        $res = $this->request('GET', '/reports?q=' . urlencode('7 motorcycle'), null, $cookie);
+        $this->assertSame(0, $res['body']['pagination']['total']);
+    }
+
+    /**
      * Every person a report names has to be findable — the party groups, the
      * representative who files for an organization, and the reporting party
      * that lives on the report row itself. A name that is on the report but

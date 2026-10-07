@@ -91,29 +91,111 @@ AI-assisted police incident report system for the Naga City Police Station, Cebu
 
    ```bash
    npm install
-   npm run dev
+   npm run dev     # http://127.0.0.1:5180/ — the port is pinned in vite.config.js
    ```
+
+   The port is **pinned rather than left to Vite**, because the origin is what a
+   tab, a bookmark and a screenshot are addressed to: unpinned, Vite serves 5173
+   (or 5174 when that is busy) while the browser waits on 5180, and the only thing
+   the browser can report about an origin nobody is listening on is
+   **ERR_CONNECTION_REFUSED** — which the app itself shows as "Connection to the
+   BlueWrite server was lost".
 
 5. Serve the PHP API locally. Laragon vhost example (`http://bluewrite.test`):
 
    - DocumentRoot: this repo's `public/`
    - Laragon's Auto Virtual Hosts (`*.test`) is convenient for solo dev — **but the LAN deployment must still bind Apache to the server's static LAN IP, not a `.test` domain**, so station PCs can reach it.
 
-   Alternative without vhost, quick smoke test:
+   Alternative without vhost, quick smoke test — and **THE PORT IS NOT ARBITRARY**:
+   the dev server proxies `/api` to **8099** (see `vite.config.js`), so a PHP
+   server on any other port leaves the app reporting "Connection to the BlueWrite
+   server was lost" with every request refused:
 
    ```bash
-   php -S 127.0.0.1:8000 -t public router.php
+   php -S 127.0.0.1:8099 -t public router.php
    ```
 
    (The built-in server ignores `.htaccess`, so `router.php` is what sends
    `/api/*` to `public/api.php`; without it every API call 404s. Use
    Laragon/XAMPP Apache for full parity.)
 
+   **That one command is also the whole app.** This server serves the built
+   `public/` as well as the API, so `http://127.0.0.1:8099/` is a complete copy of
+   BlueWrite with no dev server running — worth knowing on a machine where the
+   Vite process is the thing that keeps disappearing. `scripts/serve.cmd` starts
+   this server and the dev server together, starting only whichever is not
+   already listening (safe to run any number of times).
+
+   **...and the machine can keep itself in that state.** Both servers are watched
+   by `scripts/watch-servers.ps1`, installed once as a Windows scheduled task:
+
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\watch-servers.ps1 -Install
+   ```
+
+   Once a minute it asks each of the two ports whether it is still answering and
+   starts the one that is not — never stopping, killing or restarting anything that
+   is already up. It exists because a server started by hand belongs to the shell
+   that started it (and an editor session, or an AI agent session, takes its
+   children with it when it ends), so "it works now" kept turning back into a
+   refused connection with nobody watching. It runs as **you**, only while you are
+   logged on, needing no administrator and no stored password; each repair is
+   appended to `%LOCALAPPDATA%\BlueWrite\watchdog.log`.
+
+   ```powershell
+   # what is up right now, and what the task is doing
+   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\watch-servers.ps1 -Status
+
+   # remove the task (the stack keeps running; it just stops healing itself)
+   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\watch-servers.ps1 -Uninstall
+   ```
+
+   MySQL is checked but never started: a database is not a refreshable web server,
+   and a closed 3306 is recorded in that log rather than papered over.
+
 6. Build the frontend for Apache to serve:
 
    ```bash
    npm run build   # outputs to public/
    ```
+
+## When the server is not answering
+
+An outage used to be the end of the screen: the app arrives from the same origin as
+its API, so a station server that is down is a browser tab that says
+**ERR_CONNECTION_REFUSED** — no register, no draft, not even the sentence that would
+explain it. Three things now stand in for it, and all three are deliberately narrow:
+
+1. **The app itself, from the browser's own cache** — `public-assets/sw.js`, the
+   offline shell, registered by the built app (`src/main.jsx`, **production builds
+   only**: in dev the app is served as unbundled modules and a cache answering
+   those is a broken live-reload). It keeps the shell and the hashed bundles and
+   logo/seal pictures that belong to it, answers a page request from them when the
+   network is gone, and says so plainly when even that was never cached. Bump
+   `VERSION` in that file when the shell changes shape.
+2. **The last list, and the draft being written** — `src/lib/offlineCache.js`, in
+   `sessionStorage`, keyed by account: reloading during an outage shows the register
+   that was on screen a moment ago under the stale note, instead of an empty list.
+   Session-scoped on purpose — a station PC is shared, and the next officer must not
+   inherit the last one's reports. Signing out forgets it.
+3. **A copy on disk that needs no server at all** —
+
+   ```bash
+   php scripts/export-offline.php                   # the whole station → offline-copy/
+   php scripts/export-offline.php --include-drafts   # + the unfinished ones, labelled
+   php scripts/export-offline.php --user=7 --limit=50 --out=D:\\bluewrite-copy
+   ```
+
+   One read-only SELECT, then a self-contained folder: `index.html` (inline styles,
+   relative `assets/` pictures, openable by double-clicking), `data.json`, and the
+   logo images copied out of `src/assets`. No absolute paths, no `http://`, no
+   external fonts — it renders from `file://`. `offline-copy/` is git-ignored: it is
+   station data, not source.
+
+What none of this does is hold the **API's** answers in a shared browser cache: the
+web worker passes `/api/*` straight through, and the only server pictures it keeps
+are officer photographs, so a face does not break mid-shift. Reports are the app's
+own session-scoped business.
 
 ## LAN deployment (station server)
 

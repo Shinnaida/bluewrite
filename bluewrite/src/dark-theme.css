@@ -132,6 +132,11 @@
   --amber-line: rgba(217, 160, 63, 0.42);
   --green-bg: rgba(69, 201, 138, 0.14);
   --green-line: rgba(69, 201, 138, 0.42);
+  /* The violet wash, at the band this theme's other tints take (see
+     styles.css for what it is for). It is stated here because a light 8% wash
+     over a near-black card is invisible — the same reason the four above it are
+     restated. */
+  --violet-bg: rgba(167, 139, 250, 0.14);
   /* No deeper green is needed here: a dark tint DARKENS the plate, so the same
      ink that works on the page also works on the chip (5.80:1). Light has to
      deepen it because its tint lifts the plate toward the ink. */
@@ -259,13 +264,14 @@
      and still reads as navy rather than as grey. */
   --ir-navy: #1E2E50;
   --ir-navy-hi: #22355C;
-  /* …and the middle field of Home's advice card flag, which is the one light
-     field in that card. Light draws it as the hairline grey (a white field on a
-     white card is not a field); here the hairline grey is 1.4:1 against the card
-     and would read as a gap between the blue and the red instead of as the white
-     between them, so it takes the palette's white — the same value the flag's own
-     middle field is on paper. */
-  --ir-flag-mid: var(--on-accent);
+  /* MY REGISTER's own inks, restated (see incident-report.css): the navy text
+     ink is a BAR fill here, so the card's headings and counts read in the
+     card's own white, and the deeper accent washes that back the tiles' discs
+     and the bars' track lift to translucent white so a glyph stays legible
+     on them. */
+  --ir-ink-navy: var(--paper);
+  --ir-tile-line: rgba(255, 255, 255, 0.22);
+  --ir-track: rgba(255, 255, 255, 0.16);
   /* …and the two values light measures against a WHITE well. Inherited as they
      are they would both fail here: #8E93A0 is 1.7:1 on this #12161D input and
      #6E7787 about 2.4:1, so the field would lose its edge and its placeholder
@@ -274,16 +280,28 @@
   --ir-placeholder: var(--cyan-dim);
 
   /* ---- The report FOLDER (what it is FOR is in incident-report.css) ----
-     The glass is restated rather than inherited, for the reason every other
-     alpha in this file is: a navy 30% wash over a near-black page is invisible,
-     so the same intent needs a LIGHTER blue and a smaller alpha. The cover
-     takes the theme's own lifted navy, so a shelf of folders reads as the same
-     stationery as the bars above it — and it stays opaque, which is what keeps
-     its white label measurable (13:1 here). */
-  --ir-folder-back: rgba(111, 168, 255, 0.16);
-  --ir-folder-sheet: rgba(111, 168, 255, 0.1);
-  --ir-folder-face: rgba(34, 53, 92, 0.9);
-  --ir-folder-edge: rgba(255, 255, 255, 0.14);
+     MANILA IS MANILA IN EITHER THEME — a folder is a physical thing, and a
+     shelf of them is read by its silhouette before its colour — so dark does
+     not recolour it. It takes the glare off instead: the board and the cover
+     step down one amber each and the sheets step down with them, because a
+     white sheaf behind a lit cover is a lamp on a near-black page rather than
+     a shelf. The ink is not restated: it sits on amber in both themes. */
+  --ir-folder-back: #b45309;
+  --ir-folder-face: linear-gradient(to top, #d97706, #f59e0b);
+  --ir-folder-tab: #f59e0b;
+  --ir-folder-sheet-1: #71717a;
+  --ir-folder-sheet-2: #a1a1aa;
+  --ir-folder-sheet-3: #d4d4d8;
+
+  /* The file card's page (ReportList's PDF card — see FileCard.jsx). White
+     paper on a near-black panel glows, so after dark the page is the raised
+     panel with lighter ghost lines; the red PDF banner keeps its value in
+     both themes, like the folder's ambers above. */
+  --ir-filecard-paper: #1D222B;
+  --ir-filecard-ring: #363E4C;
+  --ir-filecard-line-strong: rgba(230, 234, 240, 0.22);
+  --ir-filecard-line: rgba(230, 234, 240, 0.12);
+  --ir-filecard-fold: #2A313C;
 }
 
 /* The bar is delimited by its own colour in light (navy against a light-grey

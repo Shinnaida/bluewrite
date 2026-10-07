@@ -73,6 +73,21 @@ export const MIXED = [
   },
 ];
 
+/** The officer's own (status, incident_type) tally — the shape `GET
+ *  /reports/folders` returns, and the ONE number-set Home's summary card
+ *  states. Seven reports: three drafts (matching the DRAFTS above), three
+ *  submitted and one finalized, across four types, so the bar graph has more
+ *  than one row and a largest bar that is not everything.
+ *
+ *  `tally: null` renders the loading state; `tally: []` renders an empty
+ *  register — both are overrides a test can ask for. */
+export const TALLY = [
+  { status: 'draft', incident_type: 'Rape / Sexual Assault', count: 2 },
+  { status: 'draft', incident_type: 'Vehicular Accident (Property Damage)', count: 1 },
+  { status: 'submitted', incident_type: 'Theft', count: 3 },
+  { status: 'finalized', incident_type: 'Robbery', count: 1 },
+];
+
 /** Home, painted. Any prop can be overridden, so a test can render the loading
  *  state, the empty state, or a list with no drafts in it. */
 export function renderHome(overrides = {}) {
@@ -80,6 +95,7 @@ export function renderHome(overrides = {}) {
     React.createElement(ReportWelcome, {
       user: USER,
       reports: DRAFTS,
+      tally: TALLY,
       loading: false,
       onNew: () => {},
       onOpenReport: () => {},

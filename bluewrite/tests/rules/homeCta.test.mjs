@@ -64,14 +64,13 @@ const banner = () => {
   return SRC.slice(at, SRC.indexOf('</section>', at));
 };
 
-test('the plate carries the inlined pen-and-report mark, and the banner the plain page', () => {
+test('the plate is text-only while the banner keeps its folder artwork', () => {
   const block = cta();
   // The plate asks for the file-pen by name; the drawing itself is in the page's
   // own path map (see HOME_MARK_PATHS), which is where the two paths are asserted
   // — one place, so eleven marks can be read in one screenful.
-  assert.match(block, /<HomeMark name="filePen"/, 'the plate no longer wears the file-pen');
-  assert.match(block, /<HomeMark name="arrow"/, 'the plate lost the arrow the gate wears');
-  assert.match(block, /stroke=\{1\.7\}/, "the glyph is not drawn at the app's stroke weight");
+  assert.match(block, /<span className="ir-home-cta-text">Start with AI<\/span>/, 'the button lost its text');
+  assert.doesNotMatch(block, /<HomeMark|<svg|<img|ir-home-cta-glyph|ir-home-cta-arrow/, 'the button still carries an icon');
   // The file-pen's own two paths, unchanged: the page with its folded corner,
   // and the pen laid across the lower half.
   const paths = SRC.slice(SRC.indexOf('const HOME_MARK_PATHS'), SRC.indexOf('function HomeMark'));
@@ -108,7 +107,7 @@ test('the plate carries the inlined pen-and-report mark, and the banner the plai
   );
 });
 
-test('the banner’s mark is the office’s folder ON the disc, and the reminder’s heading the office’s shield ON its tile', () => {
+test('the banner folder has a larger galaxy on a blue circle behind it, and the reminder heading has no mark', () => {
   // THE DISC AND THE TILE ARE TWO OBJECTS, and that is the thing that can silently
   // rot here. The banner's mark is the station's blue disc with the office's folder
   // artwork standing on it, and the REMEMBER heading's is a gold tile with the navy
@@ -122,8 +121,23 @@ test('the banner’s mark is the office’s folder ON the disc, and the reminder
   // artwork, so a `color` here would be a declaration with nothing to paint.
   const bannerMark = SHEET.match(/\.ir-home-banner-icon\s*\{[^}]*\}/);
   assert.ok(bannerMark, '.ir-home-banner-icon is gone from the stylesheet');
-  assert.match(bannerMark[0], /background:\s*var\(--ir-blue\)/, "the banner mark is not the station's blue disc");
-  assert.match(bannerMark[0], /border-radius:\s*50%/, 'the banner mark is no longer a disc');
+  assert.match(bannerMark[0], /background:\s*transparent/, 'the blue circle returned');
+  assert.match(bannerMark[0], /box-shadow:\s*none/, 'the old circle ring returned');
+  assert.doesNotMatch(bannerMark[0], /border-radius:/, 'the old circle shape returned');
+  const galaxy = SHEET.match(/\.ir-home-banner-galaxy\s*\{[^}]*\}/)?.[0];
+  assert.ok(galaxy, 'the galaxy has no styling');
+  assert.match(galaxy, /width:\s*125%/, 'the galaxy is not larger');
+  assert.match(galaxy, /height:\s*125%/, 'the galaxy is stretched');
+  assert.match(galaxy, /background:\s*#2563eb/, 'the galaxy circle does not match the requested royal blue');
+  assert.match(galaxy, /border-radius:\s*50%/, 'the galaxy background is not circular');
+  assert.match(galaxy, /inset:\s*-12\.5%/, 'the enlarged galaxy is not centred');
+  assert.match(galaxy, /pointer-events:\s*none/, 'the galaxy intercepts controls');
+  assert.match(galaxy, /z-index:\s*0/, 'the galaxy is not behind the folder');
+  const animation = readFileSync(new URL('../../src/components/ui/circle-animations-collection-3.jsx', import.meta.url), 'utf8');
+  assert.match(animation, /rgba\(245, 183, 36,/, 'the galaxy lines do not match the requested golden yellow');
+  assert.match(animation, /ctx\.moveTo\(/, 'the galaxy has no short lines');
+  assert.match(animation, /ctx\.lineTo\(/, 'the galaxy has no short lines');
+  assert.doesNotMatch(animation, /ctx\.arc\(/, 'the galaxy still draws circular dots');
   assert.doesNotMatch(bannerMark[0], /^\s*color\s*:/m, 'the disc names an ink for artwork that brings its own');
   // …and the artwork is drawn to its box rather than stretched to it, and INSET
   // into the disc: stretched to the rim the folder would read as a blue shape with
@@ -133,21 +147,29 @@ test('the banner’s mark is the office’s folder ON the disc, and the reminder
   const bannerImg = SHEET.match(/\.ir-home-banner-mark\s*\{[^}]*\}/);
   assert.ok(bannerImg, 'the banner mark’s artwork has no rule of its own');
   assert.match(bannerImg[0], /object-fit:\s*contain/, 'the folder is stretched into the mark’s box');
+  assert.match(bannerImg[0], /z-index:\s*1/, 'the folder is not in front of the galaxy');
   const share = bannerImg[0].match(/width:\s*([0-9.]+)%/);
   assert.ok(share, 'the folder no longer states its size as a share of the disc');
-  assert.ok(Number(share[1]) < 100, 'the folder fills the disc, so the blue behind it is gone');
   assert.ok(Number(share[1]) <= 70.8, 'the folder is drawn past the disc’s curve');
 
-  // THE HEADING'S MARK IS GONE by request: the gold shield that used to lead
-  // "Remember" is removed, and the heading is the word alone on the band. No
-  // mark span, no artwork rule, no import may come back unnoticed.
+  // THE HEADING IS THE WORD ALONE, AND IT IS NOT SEEN (owner request,
+  // 2026-10-07, the reference card): the card opens straight on the tiles, so
+  // the h2 carries no band and no mark — it is stated for the reading order
+  // and a screen reader alone. No artwork rule may come back, and the rule
+  // must be the clip pattern rather than display:none, which would drop the
+  // heading from the accessibility tree.
   assert.doesNotMatch(SHEET, /\.ir-remember-title-mark\b/, 'the heading mark is back in the stylesheet');
+  assert.doesNotMatch(SHEET, /\.ir-remember-title-icon\b/, 'the heading artwork rule is still in the stylesheet');
   const headingAt = SRC.indexOf('<h2 className="ir-remember-title">');
   assert.notEqual(headingAt, -1, 'the reminder’s heading is gone');
   const heading = SRC.slice(headingAt, SRC.indexOf('</h2>', headingAt));
-  assert.doesNotMatch(heading, /<img/, 'the reminder’s heading draws an image again');
-  assert.doesNotMatch(heading, /<HomeMark/, 'the reminder’s heading went back to an inlined glyph');
+  assert.match(heading, /My register/, 'the reminder’s heading lost its name');
+  assert.doesNotMatch(heading, /<img|<HomeMark|<svg/, 'the reminder’s heading draws a mark again');
   assert.doesNotMatch(SRC, /import shieldMark from/, 'the shield mark is imported again');
+  const hidden = SHEET.match(/\.ir-remember-title\s*\{[^}]*\}/);
+  assert.ok(hidden, '.ir-remember-title is gone from the stylesheet');
+  assert.match(hidden[0], /clip-path:\s*inset\(50%\)/, 'the heading is display:none rather than clipped out of sight');
+  assert.match(hidden[0], /position:\s*absolute/, 'the clipped heading still takes up layout');
 });
 
 test("the plate is the station's gold, and the label reads in navy on it", () => {
@@ -191,14 +213,14 @@ test('the banner is the navy card the plate sits in, and it is the page’s own'
 });
 
 test('the reminder card is the station’s own card, and every colour in it is a token', () => {
-  // The advice card was a white box with a disc on it. It is now the station's
-  // own card — a navy band with a gold tile and rule, three edged panels, and the
-  // flag over the office's line — and the parts of that which can silently rot
-  // are pinned here: the head band is drawn FULL BLEED by cancelling the card's
-  // own gutter (a number that drifts the moment one of the two is edited: the
-  // band would stop at the padding, or hang out over the border), the emergency
-  // row is the palette's red rather than a colour of its own, and no fill
-  // anywhere in the card is a literal, because the card is drawn in both themes.
+  // The advice card was a white box with a disc on it. It is now the reference
+  // card the owner asked for (2026-10-07): two light-blue tiles with disc marks
+  // and gold ticks, an inset graph panel with a row per type, the corner
+  // slashes and the navy-over-gold band closing the foot — and no head band and
+  // no office's line. The parts of that which can silently rot are pinned
+  // here: the card still gives way in its air on a short screen, and no fill
+  // anywhere in the card is a literal, because the card is drawn in both
+  // themes.
   const card = SHEET.match(/\.ir-remember\s*\{[^}]*\}/);
   assert.ok(card, '.ir-remember is gone from the stylesheet');
   assert.match(card[0], /--ir-remember-pad:\s*max\(/, 'the card no longer names its own gutter');
@@ -209,60 +231,58 @@ test('the reminder card is the station’s own card, and every colour in it is a
   );
   assert.match(card[0], /padding:\s*var\(--ir-remember-pad\)/, 'the card and its band pad by two different numbers');
   assert.match(card[0], /overflow-x:\s*hidden/, 'the band and the plate are no longer clipped by the card’s corners');
-  assert.match(card[0], /overflow-y:\s*auto/, 'the card no longer scrolls itself instead of the panel');
+  // …AND IT DOES NOT SCROLL ITSELF ANY MORE (owner request, 2026-10-08): the
+  // card's own rail was the one scroll container on Home that nobody asked for,
+  // so the card is clipped by its own corners instead.
+  assert.match(card[0], /overflow-y:\s*hidden/, 'the card is a scroll container again');
+  // THE REFERENCE CARD'S FOOT (owner request, 2026-10-07): the navy-over-gold
+  // band across the bottom, and the two diagonal slashes at the foot's right
+  // corner. The band is a plate, so it wears the PLATE's gold (--ir-gold), on
+  // the fixed navy both themes draw it in.
+  const foot = SHEET.match(/\.ir-remember::after\s*\{[^}]*\}/);
+  assert.ok(foot, 'the card lost its foot band');
+  assert.match(foot[0], /var\(--ir-navy\)/, 'the foot band is not the station navy');
+  assert.match(foot[0], /var\(--ir-gold\)/, 'the foot band lost the gold under the navy');
+  const slashes = SHEET.match(/\.ir-remember::before\s*\{[^}]*\}/);
+  assert.ok(slashes, 'the card lost its corner slashes');
+  assert.match(slashes[0], /var\(--ir-navy\)/, 'the corner slashes lost the navy');
+  assert.match(slashes[0], /var\(--ir-gold\)/, 'the corner slashes lost the gold');
 
+  // THE HEADING IS STATED, NOT SEEN (owner request, 2026-10-07): the reference
+  // card opens straight on the tiles, so the h2 is clipped out of sight for
+  // the eye and kept in the reading order for a screen reader. Asserted in
+  // full in the heading test above; pinned here so the clip cannot rot away
+  // from the token scan's own selector.
   const head = SHEET.match(/\.ir-remember-title\s*\{[^}]*\}/);
   assert.ok(head, '.ir-remember-title is gone from the stylesheet');
-  // The head is the app's own fixed navy pair — the same two values the top bar,
-  // the page's band and the folder chrome are drawn in — so the card reads as
-  // the station's own furniture. White on either end is 9:1 or better. The rule
-  // under it is --ir-bar-accent, the token that exists for an accent ON a navy
-  // bar, rather than --ir-gold, which is a PLATE's fill.
-  assert.match(
-    head[0],
-    /linear-gradient\(135deg,\s*var\(--ir-navy-hi\) 0%,\s*var\(--ir-navy\) 100%\)/,
-    'the head band is not the station’s navy',
-  );
-  assert.match(head[0], /color:\s*#fff/, 'the head band’s type is not stated against its own navy');
-  assert.match(
-    head[0],
-    /border-bottom:\s*3px solid var\(--ir-bar-accent\)/,
-    'the gold rule under the band is gone, or is not the bar-accent token',
-  );
-  assert.match(
-    head[0],
-    /margin:\s*calc\(-1 \* var\(--ir-remember-pad\)\) calc\(-1 \* var\(--ir-remember-pad\)\)/,
-    'the head band stops at the card’s padding instead of reaching its edges',
-  );
+  assert.match(head[0], /clip-path:\s*inset\(50%\)/, 'the heading became visible again');
 
-  // THE EMERGENCY ROW IS THE RED ONE, out of the palette's red family, and it is
-  // the same panel in another colour rather than a second kind of card.
-  const emergency = SHEET.match(/\.ir-remember-list li:nth-child\(3\)\s*\{[^}]*\}/);
-  assert.ok(emergency, 'the emergency row no longer has a rule of its own');
-  assert.match(emergency[0], /border-left-color:\s*var\(--red\)/, 'the emergency edge is not the palette’s red');
-  assert.match(emergency[0], /background:\s*var\(--ir-red-tint\)/, 'the emergency panel is not the red wash');
-  const emergencyNote = SHEET.match(/\.ir-remember-list li:nth-child\(3\) \.ir-remember-mark\s*\{[^}]*\}/);
-  assert.ok(emergencyNote, 'the emergency row’s mark lost its own colour');
-  assert.match(emergencyNote[0], /color:\s*var\(--red-text\)/, 'the emergency mark is not drawn in red ink');
+  // THE ADVICE LIST IS GONE (owner request, 2026-10-07): the card is MY
+  // REGISTER now — two stat tiles and a light bar graph — so the list, its
+  // emergency row and its marks must not come back silently.
+  assert.ok(!SHEET.includes('.ir-remember-list'), 'the advice list is still in the stylesheet');
+  const stat = SHEET.match(/\.ir-remember-stat\s*[,{][^}]*\}/);
+  assert.ok(stat, 'the stat tile has no rule of its own');
+  assert.match(stat[0], /background:\s*var\(--ir-blue-tint\)/, 'the stat tile is not the palette’s wash');
+  const fill = SHEET.match(/\.ir-remember-bar-fill\s*\{[^}]*\}/);
+  assert.ok(fill, 'the bar fill has no rule of its own');
+  assert.match(fill[0], /--ir-gold/, 'the bar fill is not the station’s light amber');
+  assert.match(fill[0], /width:\s*var\(--ir-remember-fill/, 'the bar fill states its own width instead of the component’s');
 
-  // …and the office's line is bracketed by the head band's gold, with the flag's
-  // three fields hanging over it.
-  const flag = SHEET.match(/\.ir-remember-list::after\s*\{[^}]*\}/);
-  assert.ok(flag, 'the flag over the office’s line is gone');
-  for (const field of ['var\\(--ir-blue\\)', 'var\\(--ir-flag-mid\\)', 'var\\(--red\\)']) {
-    assert.match(flag[0], new RegExp(field), `the flag lost its ${field} field`);
-  }
-  // …and the middle field is the one colour in the card whose VALUE follows the
-  // theme while its job does not, so dark has to restate it (a white field on the
-  // light card, a white field on the dark one, a grey in neither).
+  // …and the reference card's THREE NAVY INKS follow the theme, so dark has to
+  // restate all of them: the heading/count ink is a BAR fill in dark and would
+  // be unreadable as text, and the two accent washes that back the tiles' discs
+  // and the bars' track would sit too faint or too strong on the near-black
+  // card. (The flag and the office's line are GONE with the head band — the
+  // reference card closes on the foot band, not on a sentence.)
   const dark = readFileSync(new URL('../../src/dark-theme.css', import.meta.url), 'utf8');
-  assert.match(dark, /--ir-flag-mid:\s*var\(--on-accent\)/, 'the flag’s light field was left to dissolve in dark');
-  const marks = SHEET.match(/\.ir-remember-quote::before,\s*\n\.ir-remember-quote::after\s*\{[^}]*\}/);
-  assert.ok(marks, 'the two gold marks around the office’s line are gone');
-  assert.match(marks[0], /border:\s*1\.5px solid var\(--ir-gold\)/, 'the closing marks are not the head band’s gold');
-  const quote = SHEET.match(/\.ir-remember-quote\s*\{[^}]*\}/);
-  assert.ok(quote, '.ir-remember-quote is gone from the stylesheet');
-  assert.match(quote[0], /display:\s*flex/, 'the office’s line is no longer a row that can hold its two marks');
+  for (const token of ['--ir-ink-navy', '--ir-tile-line', '--ir-track']) {
+    assert.match(dark, new RegExp(`${token}:`), `dark was not told the new ${token}`);
+  }
+  // …and the removed card parts must not come back silently, in either theme.
+  assert.ok(!SHEET.includes('.ir-remember-flag'), 'the flag is back in the stylesheet');
+  assert.ok(!SHEET.includes('.ir-remember-quote'), 'the office’s line is back in the stylesheet');
+  assert.ok(!SHEET.includes('--ir-flag-mid'), 'the flag’s token is still in the palette');
 
   // AND EVERY FILL IN THE CARD IS A TOKEN. This file's rule (see the note on
   // --ir-blue-tint) is that a colour which has to survive the dark theme is named
@@ -274,12 +294,13 @@ test('the reminder card is the station’s own card, and every colour in it is a
   for (const sel of [
     '.ir-remember',
     '.ir-remember-title',
-    '.ir-remember-list li',
-    '.ir-remember-list li:nth-child(3)',
-    '.ir-remember-mark',
-    '.ir-remember-list::after',
-    '.ir-remember-quote',
-    '.ir-remember-quote::before',
+    '.ir-remember-stats',
+    '.ir-remember-stat',
+    '.ir-remember-stat::after',
+    '.ir-remember-stat-num',
+    '.ir-remember-bars',
+    '.ir-remember-bar-track',
+    '.ir-remember-bar-fill',
   ]) {
     const rule = SHEET.match(new RegExp(`${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[,{][^}]*\\}`));
     assert.ok(rule, `${sel} is gone from the stylesheet`);

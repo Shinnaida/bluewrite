@@ -195,6 +195,14 @@
   --amber-line: rgba(178, 106, 0, 0.45);
   --green-bg: rgba(21, 128, 61, 0.12);
   --green-line: rgba(21, 128, 61, 0.4);
+  /* The fifth family's wash, added for the register row's type pill (owner
+     request, 2026-10-08). Violet had no tint of its own — it was only ever drawn
+     as a ring and a progress bar — and the pill needs the same wash-plus-ink pair
+     every other family already had, or the one family would have had to be
+     either left out of the reference's colouring or drawn as a second blue. Same
+     8% band as the blue and red washes beside it, which is what keeps four tinted
+     chips on one screen reading as one set. */
+  --violet-bg: rgba(132, 68, 242, 0.08);
   /* Green has the same two jobs blue has, and for the same reason — see the
      note on --accent-fill above. `--green-ok` is an INK chosen against a
      near-white page, and a chip that tints its own plate with green no longer
@@ -377,7 +385,12 @@ button {
   background: var(--panel-raised);
   color: var(--paper);
   padding: 0.45rem 1rem;
-  border-radius: 3px;
+  /* A LITTLE BIT ROUND (owner request, 2026-10-07): the corner was 3px —
+     nearly square, the way a document form's controls are cut. The buttons
+     read as hard-edged slabs at that radius, so the whole control family
+     takes 6px: enough to read as round at a glance, still a document plate
+     rather than a chip. Proportionally similar to the app's other corners. */
+  border-radius: 6px;
   transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
 }
 button:hover {
@@ -1331,23 +1344,52 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 .row-menu {
   position: fixed;
   z-index: 90;
-  min-width: 11rem;
-  padding: 0.3rem;
+  min-width: 12rem;
+  padding: 0.35rem;
   background: var(--ir-card);
   border: 1px solid var(--ir-border);
-  border-radius: 4px;
+  border-radius: 10px;
   box-shadow: var(--shadow-md);
 }
 .row-menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   width: 100%;
-  padding: 0.42rem 0.6rem;
+  padding: 0.55rem 0.7rem;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: 7px;
   color: var(--ir-text);
-  font-size: 0.82rem;
+  font-size: 0.83rem;
+  font-weight: 500;
   text-align: left;
+  cursor: pointer;
+}
+.row-menu-item__icon {
+  flex: none;
+  opacity: 0.7;
+}
+.row-menu-item__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A menu of CHOICES rather than of actions (see RowMenu's `checked`): every item
+   is a slot the tick can land in — the slot is drawn whether or not it holds one,
+   so the labels cannot shift as the choice moves down the menu — and the item that
+   IS the choice reads in the accent the rest of the app marks a live state with. */
+.row-menu-item__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+}
+.row-menu-item.is-on .row-menu-item__label {
+  color: var(--ir-blue-ink);
+  font-weight: 600;
 }
 /* :not(:disabled) so a dead item cannot look hoverable — the disabled Open on a
    finalized report is the whole point of the item being there. */
@@ -1364,6 +1406,16 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   border-color: var(--red-line);
   color: var(--ir-red);
   background: var(--red-bg);
+}
+/* The destructive action sits apart behind its own rule, so Archive never
+   reads as one more harmless choice. */
+.row-menu-item.danger {
+  margin-top: 0.25rem;
+  border-top: 1px solid var(--ir-border);
+  border-radius: 0 0 7px 7px;
+}
+.row-menu-item.danger .row-menu-item__icon {
+  opacity: 0.85;
 }
 
 /* ---- Forms & sections ---- */
@@ -1529,17 +1581,14 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 
    THE SHEEN over it is the same layer as before, re-aimed: on navy it was a
    diagonal band across the upper-left; on a pale plate the light reads as a
-   GLOSS along the top edge, so that is what `::before` paints, and its hover
-   step — "the plate lights up" — is still one animatable number. */
+   GLOSS along the top edge, so that is what `::before` paints. Only keyboard
+   focus brightens it; hovering leaves it unchanged. */
 .ai-run.primary {
   /* The plate's own palette, in one place: the two ends of the light-blue
-     gradient, and the hairline that parts the mark from the words (dark here,
-     because a white rule on a pale plate is nothing at all). */
+     gradient. (The hairline's `--ai-run-rule` went with the hairline.) */
   --ai-run-plate: #dce9ff;
   --ai-run-plate-end: #aecbfb;
-  --ai-run-rule: rgba(11, 37, 69, 0.28);
-  position: relative;
-  /* The button is a flex box so its one child — the component's label slot — is
+  position: relative;  /* The button is a flex box so its one child — the component's label slot — is
      centred in it whatever that slot turns out to be. THE ROW OF PARTS IS THE
      SLOT'S OWN (see the rule below): the mark, the hairline, the words and the
      chevron are its children, not the button's, and `gap` on the button would
@@ -1586,7 +1635,7 @@ td.num { text-align: left; letter-spacing: 0.02em; }
      old plate wore at rest: the halo was how a small square button said "this
      row is the assistant's", and the pill says it with its own mark and spark,
      so a halo there would be a third blue ring around an object that already
-     has a rim. It comes BACK on hover/focus, where it is the app's affordance
+     has a rim. It comes BACK on keyboard focus, where it is the app's affordance
      and not decoration (see below). The component squashes the button on
      `:active`, so `transform` is in the transition list here — without it the
      press would snap. */
@@ -1625,16 +1674,46 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   transition: opacity 160ms ease;
 }
 
-/* The states. `button.primary:hover` repaints the fill AND clears the shadow at
-   (0,2,1); this is (0,3,0) for both, so the plate and its glow are the app's.
-   The plate lights up (the sheen comes to full), the glow deepens, and the
-   accent halo returns — on hover as the row's own colour, and on focus as the
-   affordance it has always been. */
-.ai-run.primary:hover::before,
+/* THE POINTER ANSWERS (owner request, 2026-10-07 — asked for again once the
+   rim came off and the pill answered nothing): hover states the affordance
+   with light and depth, NEVER with paint. The face is HELD at rest — this
+   rule still out-specifies the generic `button.primary:hover` (0,2,1), which
+   would repaint the pale plate navy under the pointer — and what the pointer
+   buys is the sheen at full strength (its own rule below), the glow a clear
+   step deeper in the same blue, and, where motion is welcome, a two-pixel
+   lift in the no-preference branch below. */
+.ai-run.primary:hover {
+  background-color: var(--ai-run-plate-end);
+  background-image: linear-gradient(104deg, var(--ai-run-plate) 0%, var(--ai-run-plate-end) 78%);
+  border-color: var(--ir-blue);
+  color: var(--ir-navy);
+  box-shadow: 0 16px 30px rgba(19, 62, 135, 0.46);
+}
+/* The sheen's hover step: the gloss along the top edge goes to full strength —
+   the same step keyboard focus states. The layer's opacity is the one
+   animatable number (the transition lives on the layer itself). */
+.ai-run.primary:hover::before {
+  opacity: 1;
+}
+/* THE PRESS keeps its squash: the hover's lift would out-specify the
+   component's own `:active`, so the press restates itself here — back to
+   level and squashed, exactly what the vendored rule did before a lift
+   existed. */
+.ai-run.primary:active {
+  transform: translateY(0) scale(0.97);
+}
+/* The lift is MOTION, so it is optional — the app's own idiom (the state is
+   not optional; the movement is). The glow and the sheen above fire either
+   way; this two-pixel rise is drawn only where the officer has not asked for
+   stillness. */
+@media (prefers-reduced-motion: no-preference) {
+  .ai-run.primary:hover {
+    transform: translateY(-2px);
+  }
+}
 .ai-run.primary:focus-visible::before {
   opacity: 1;
 }
-.ai-run.primary:hover,
 .ai-run.primary:focus-visible {
   box-shadow:
     0 0 0 3px var(--cyan-bg-strong),
@@ -1648,31 +1727,9 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   outline-offset: 3px;
 }
 
-/* THE MARK. Its box exists so the glyph is one flex item with a stated size
-   rather than a drawing that shifts the row when the font loads; the ink is the
-   button's own (`currentColor`), so it needs no colour of its own. */
-.ai-run-mark {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 1.05rem;
-  height: 1.05rem;
-}
-
-/* THE HAIRLINE between the mark and the words. It is the same device the sheet's
-   head band uses to part its mark from its office (a rule, not a gap): the mark
-   says WHO is writing and the words say WHAT is asked for, and the line keeps
-   the two from reading as one long label. It is the INK at a low alpha — the
-   plate is pale now, so the white rule this wore on navy would be nothing at
-   all, and a full-strength rule would be a second rim. The colour is one of the
-   pill's own named properties (`--ai-run-rule`, on the rule above), so the three
-   values that make this object live together. */
-.ai-run-rule {
-  flex: none;
-  width: 1px;
-  height: 1.2rem;
-  background: var(--ai-run-rule, rgba(11, 37, 69, 0.28));
-}
+/* THE MARK and THE HAIRLINE are GONE from the markup (owner request,
+   2026-10-06 — the button is its words alone), and with them the `--ai-run-rule`
+   property they were coloured from. */
 
 /* The words, on one line: the pill is sized by its own content, and a wrapped
    label inside a pill is a pill with a broken end. */
@@ -1680,29 +1737,21 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   white-space: nowrap;
 }
 
-/* The chevron, in a box of its own for the same reason the mark is — and it is
-   the one part that MOVES, on the same argument as the arrow on Home's draft
-   card: "the press goes somewhere" is a direction, and a direction may lean. */
-.ai-run-chevron {
-  flex: none;
-  display: grid;
-  place-items: center;
+/* THE RIM IS OFF (owner request, 2026-10-07): the vendored component draws its
+   specular rim on a canvas that reaches 20px past the button's own box, and
+   its dark navy base stroke — always on, pointer or not — read as a
+   protruding outline around the pill. The button's own 2px blue border is the
+   edge now. The layer is hidden rather than the component unmounted: the
+   vendored file and its WebGL-off guards stay exactly as published, the rim
+   just draws where nobody sees it, and deleting this one rule brings it
+   back. */
+.ai-run.primary .specular-button__fx {
+  display: none;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .ai-run-chevron {
-    transition: transform 200ms cubic-bezier(0.34, 1.32, 0.64, 1);
-  }
-  .ai-run.primary:hover .ai-run-chevron {
-    transform: translateX(3px);
-  }
-  /* The lift, and NOT while the press is happening: the component squashes the
-     button on `:active` (see SpecularButton.css), and a rule that out-specifies
-     that would trade the press for a hover that no longer means anything. */
-  .ai-run.primary:hover:not(:active) {
-    transform: translateY(-1px);
-  }
-}
+/* The chevron is GONE from the markup (owner request, 2026-10-06): the button
+   is its words alone, and the one part that moved goes with it. The motion
+   block the chevron and the hover lift lived in went with them. */
 
 /* THE ⓘ EXPLANATION MARKER: one circle, a tooltip, and the same sentence in the
    accessible text — so the words are still there for a screen reader and for a pointer,
@@ -4761,16 +4810,54 @@ body.profile-panel-open {
 .conn-retry:hover { background: var(--amber-bg); }
 .conn-retry:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
-/* Slim banner for an already-loaded workspace that loses the server. */
+/* Slim banner for an already-loaded workspace that loses the server.
+
+   IT FLOATS (owner request, 2026-10-08). It used to sit in the page's flow at the
+   top of the scroll panel, which is the one place a warning about the server
+   cannot be: `.ir-body` is a scroll container of its own (styles.css: `.main`
+   scrolls, not the document) and the register is a long list, so the sentence that
+   matters — reports can't be loaded or saved until it's back — was scrolled off
+   the top within one flick of the wheel, at exactly the moment it stopped being
+   true that everything was fine. Pinned to the viewport it is on screen for as long
+   as the outage lasts, whatever is being read.
+
+   BOTTOM-CENTRE, and neither word is arbitrary:
+     * not the top: the top of the window belongs to the app's own chrome (the bar
+       carrying the wordmark and the profile menu), and a notice floating over the
+       controls that sign you out is the wrong trade;
+     * not the bottom-RIGHT corner: that corner is spoken for — the presence rail
+       and the chatbox (`.dash-dock`) and the transient `.toast` — and the one
+       thing a warning must never do is print itself over a colleague's open
+       conversation.
+   It keeps a measure of its own rather than spanning the window, so it reads as
+   one sentence instead of as a bar across the screen.
+
+   THE BACKGROUND IS OPAQUE, which the in-flow version never had to be: `--amber-bg`
+   alone is a 10% wash (rgba), and a floating bar you can read the register through
+   is a smudge rather than a notice. The same wash is laid over the panel colour the
+   toast already uses, so it is opaque in both themes.
+
+   z-index 30 is the deliberate middle, the same reason `.dash-dock` documents its
+   40: above the workspace and its content (`.main` is z-index 1), below the dock,
+   the dialogs (40) and the docked panels (95+) — a connection problem is not more
+   urgent than the officer's own confirmation dialog. */
 .conn-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 1.1rem;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(48rem, calc(100vw - 1.5rem));
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
   padding: 0.55rem 0.9rem;
   border: 1px solid var(--amber-line);
   border-left-width: 4px;
-  background: var(--amber-bg);
+  background: linear-gradient(var(--amber-bg), var(--amber-bg)), var(--panel-raised);
+  box-shadow: var(--shadow-md);
   font-size: 0.85rem;
   color: var(--paper);
 }
@@ -5109,13 +5196,14 @@ button.dash-kpi--link:focus-visible {
 /* Password-reset dialog */
 .field-hint { margin: 0.3rem 0 0; font-size: 0.78rem; color: var(--cyan-dim); }
 
-/* ---- Reports toolbar (Phase 2: search/filter/sort) ----
-   THE SEARCH BOX OVER A LABELLED GRID OF FILTERS (owner request, 2026-10-06).
-   One row could not hold six filters: the two date pickers and the sort menu
-   ran into each other once the search box had taken its share, and a control
-   with a value in it said nothing about WHICH filter that value belonged to.
-   So the search box keeps a row of its own — it is the one control an officer
-   uses without looking — and every filter sits in a cell under its own caption.
+/* ---- Reports toolbar (Phase 2: filters/sort) ----
+   A LABELLED GRID OF FILTERS (owner request, 2026-10-06). One row could not
+   hold six filters: the two date pickers and the sort menu ran into each other
+   once a control with a value in it said nothing about WHICH filter that value
+   belonged to. So every filter sits in a cell under its own caption. The search
+   box that used to keep a row above them — and the Export CSV button on the bar
+   — left the card in the same request, which is what lets the six filters stand
+   on one line.
 
    The grid fits as many columns as the card can hold and reflows on its own:
    no breakpoint names a count, and `min-width: 0` on the cell is what lets the
@@ -5153,6 +5241,13 @@ button.dash-kpi--link:focus-visible {
      their neighbours now, which is most of what "organized" means here. */
   width: 100%;
   min-width: 0;
+  /* ...and ONE HEIGHT, which they did not have (owner request, 2026-10-06). A
+     select sizes its own line box and lands on 36px; Chrome draws a date field
+     two pixels taller than that, so a row of filters stood unevenly by exactly
+     the controls an officer reads in pairs — Incident from and Incident to.
+     2.4rem is the select's own height at this app's 15px root, and the height
+     the search box above them used to be. */
+  height: 2.4rem;
 }
 /* Compact controls: these are filters on a list, not fields on a report. */
 .reports-toolbar input,
@@ -5198,7 +5293,15 @@ button.dash-kpi--link:focus-visible {
      scanned reference report). */
   font-family: Verdana, 'DejaVu Sans', 'Segoe UI', Tahoma, sans-serif;
   font-size: 11.5pt;
-  line-height: 1.55;
+  /* ONE LEAF (owner request, 2026-10-08). The sheet's rhythm is stated for
+     PAPER: a record that fits one short bond page must PRINT on one, and the
+     letter below was 9px taller than the printable page — so an ordinary report
+     came out as two sheets of paper with the signature block alone on the
+     second. Every vertical length from here to `.pr-noted` is the tightened
+     set; the type size is untouched, because 11.5pt is what the paper is read
+     at. `line-height` is the largest of those lengths and it is still a
+     document's leading, not a spreadsheet's. */
+  line-height: 1.4;
 }
 
 /* Header: seals left/right flanking the centered org block, as on the
@@ -5250,7 +5353,7 @@ button.dash-kpi--link:focus-visible {
   font-size: 14pt;
   font-weight: 700;
   letter-spacing: 0.35em;
-  margin: 1.25rem 0 1rem;
+  margin: 0.9rem 0 0.7rem;
   color: #111;
 }
 
@@ -5268,7 +5371,7 @@ button.dash-kpi--link:focus-visible {
 
 .pr-certify {
   text-indent: 0.4in;
-  margin: 0 0 1rem;
+  margin: 0 0 0.7rem;
 }
 
 .pr-incident-type {
@@ -5277,10 +5380,10 @@ button.dash-kpi--link:focus-visible {
   font-size: 12.5pt;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  margin: 1.25rem 0;
+  margin: 0.85rem 0;
 }
 
-.pr-facts { margin: 0 0 1rem; }
+.pr-facts { margin: 0 0 0.7rem; }
 /* Facts hang: wrapped value lines align under the FIRST value character
    (see "Degollacion" on the scanned sheet), so label + value are flex
    siblings and multi-values live in one wrapping value span. */
@@ -5299,7 +5402,7 @@ button.dash-kpi--link:focus-visible {
 .pr-item-total { margin: 0.15rem 0 0.1rem 1.05in; font-weight: 400; }
 
 /* ---- NOTABLE FINDINGS / ACTION TAKEN sections ---- */
-.pr-section { margin: 1rem 0; }
+.pr-section { margin: 0.7rem 0; }
 /* NOTABLE FINDINGS: dash-prefixed lines with a HANGING INDENT — a wrapped line
    aligns under the entry's TEXT, not under the dash (Task 7, the scanned
    sheet). The negative `text-indent` pulls the dash (and only the first line)
@@ -5324,7 +5427,7 @@ button.dash-kpi--link:focus-visible {
 .pr-narrative {
   text-align: justify;
   text-indent: 0;
-  margin: 1.25rem 0 1.5rem;
+  margin: 0.85rem 0 0.9rem;
 }
 
 /* Phase 6 Stage 4 (D2) — the appendix page: the officer's original text.
@@ -5374,7 +5477,7 @@ button.dash-kpi--link:focus-visible {
   color: #444;
 }
 
-.pr-footer-block { margin-top: 2rem; }
+.pr-footer-block { margin-top: 1.1rem; }
 /* "Recorded by:" and "IOC:" print as two consecutive lines — no blank line
    between them (the line-height alone sets the spacing). */
 .pr-recorded { margin: 0; }
@@ -5397,7 +5500,7 @@ button.dash-kpi--link:focus-visible {
   align-items: flex-end;
   text-align: right;
   gap: 0;
-  margin-top: 2.5rem;
+  margin-top: 1.4rem;
 }
 .pr-noted-label { font-weight: 700; }
 /* The noting official's name prints straight under "Noted by:" — no

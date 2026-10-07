@@ -89,6 +89,22 @@ export default defineConfig({
   // the reason they are named here rather than left to a second command.)
   publicDir: 'public-assets',
   server: {
+    // THE DEV ORIGIN IS PINNED, and this is not cosmetic. A tab is opened on a
+    // URL and stays there: whatever port the dev server happens to pick is the
+    // port every later request, every bookmark and every screenshot is addressed
+    // to. Left to itself Vite takes 5173 — and takes 5174, 5175… if that is
+    // busy — so a plain `npm run dev` served the app somewhere the browser was
+    // not looking, and the only thing the browser can report about an origin
+    // nobody is listening on is ERR_CONNECTION_REFUSED (in the app's own words,
+    // "Connection to the BlueWrite server was lost"). Pinning it here means
+    // every way of starting the dev server — npm run dev, scripts\serve.cmd,
+    // scripts\watch-servers.ps1 — lands on the same origin the API proxy below
+    // and the README describe.
+    //
+    // NOT `strictPort`: if 5180 is already served by another Vite, this one
+    // should step aside to 5181 rather than refuse to start. The URL that was
+    // already open keeps working either way, which is the point.
+    port: 5180,
     proxy: {
       '/api': {
         target: 'http://localhost:8099',

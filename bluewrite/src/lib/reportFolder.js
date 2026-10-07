@@ -5,6 +5,13 @@
 // being written, Submitted once it has gone forward. Opening a folder lists the
 // reports inside it.
 //
+// AND ONE SHELF IS NOT FOLDERS AT ALL. All Reports (`ALL_SHELF`) is the whole
+// filtered register as FILES — every report the filters allow, newest first, one
+// per row, in the same drawing an opened folder's contents use. It is the shelf
+// an officer lands on: nothing to open first, and the answer to "what is in
+// here" on the first line of the page. `list: true` is the whole of what makes it
+// different; the register draws files instead of folders for that shelf.
+//
 // This module owns everything about that which is not layout:
 //
 //   1. which shelf a status stands on (`statusBucket`) — the ONE rule the
@@ -16,9 +23,14 @@
 //   3. the sentences a folder and a report row say about themselves — the
 //      accessible name read aloud on every folder and every row, which is worth
 //      asserting rather than eyeballing;
-//   4. which glyph an incident type wears, for the header of an opened folder.
-//      The FOLDER itself carries no icon — its label is the label — which is
-//      what the reference design asks for.
+//   4. the ORDERS the register can be read in (`SORT_ORDERS`) and the one it
+//      opens in, because the order is now something the officer changes from the
+//      list itself and the shelf's own note has to say which one is on;
+//   5. which glyph an incident type wears and which COLOUR FAMILY it reads in —
+//      the glyph for the header of an opened folder and for the register row's
+//      type pill, the hue for the pill's wash (owner request, 2026-10-08). The
+//      FOLDER itself carries no icon — its label is the label — which is what
+//      the reference design asks for.
 //
 // Kept pure and out of the component for the same reason every other rules
 // module is: a mapping that forgot one of the fourteen incident types, or a
@@ -28,7 +40,8 @@
 // Incident type → icon key. Every type in INCIDENT_TYPES is here (asserted in
 // tests/rules/reportFolder.test.mjs); anything else — a station's own custom
 // type, a legacy value — falls back to the generic glyph. Used by an OPENED
-// folder's header, not by the folder face.
+// folder's header and by the register ROW's type pill (see TYPE_HUE below), not
+// by the folder face.
 export const TYPE_ICON = {
   'Traffic Accident': 'car',
   'Theft': 'bag',
@@ -56,6 +69,80 @@ export function typeIcon(type) {
   return TYPE_ICON[type] ?? DEFAULT_ICON;
 }
 
+// ===========================================================================
+// The type's colour family
+// ===========================================================================
+
+/**
+ * Incident type → colour family, for the register row's type pill.
+ *
+ * WHY A HUE AT ALL. The reference the owner sent (owner request, 2026-10-08)
+ * draws the incident type as a coloured chip at the head of the card — the type
+ * as a MARK rather than as a line of grey text under the report number. The
+ * colour is what makes a column of rows scannable before a word of them is read.
+ *
+ * THE HUE IS A COARSE FAMILY, NOT A CODE, and there are exactly four of them plus
+ * the neutral. It answers "what kind of thing is this report about" at a glance —
+ * the question an officer arrives at a register with — and it is deliberately not
+ * fine-grained enough to be mistaken for a category: two vintages of theft do not
+ * need two purples.
+ *
+ *   blue    an accident or a loss, with no offender in it — Traffic Accident,
+ *           Lost Property, Property Damage / Malicious Mischief. The station's own
+ *           accent, and the resting colour of the register.
+ *   violet  a deliberate offence against PROPERTY — Theft, Robbery, Burglary,
+ *           Fraud, Drugs. What was taken, or was about to be.
+ *   red     harm to a PERSON — Assault / Physical Injury, Rape / Sexual Assault,
+ *           Domestic Violence. The palette's own red pair, the same one the
+ *           sensitive pill wears on Home: on this screen it is the family that
+ *           has to be recognisable from across a room.
+ *   amber   a PERSON or a PLACE in danger, still unresolved — Missing Person, Fire
+ *           Incident. The palette's own amber, which already means "this one is
+ *           still open" on the draft badge.
+ *   slate   unclassified — Other Incident, and anything a station adds later. NOT
+ *           a fourth guess: a type this build cannot place should read as a plain
+ *           record rather than as a category it does not belong to.
+ *
+ * GREEN IS NOT ONE OF THEM, deliberately: `--green-ok` means a STATE everywhere
+ * in this app (active, finalized, verified), and a green type chip beside a green
+ * Finalized badge would be two unrelated facts wearing one colour.
+ *
+ * The three types the owner's reference happens to draw map to exactly the three
+ * hues it draws them in: Traffic Accident blue, Missing Person amber, Robbery
+ * violet.
+ */
+export const TYPE_HUE = {
+  'Traffic Accident': 'blue',
+  'Lost Property': 'blue',
+  'Property Damage / Malicious Mischief': 'blue',
+  'Missing Person': 'amber',
+  'Fire Incident': 'amber',
+  'Theft': 'violet',
+  'Robbery': 'violet',
+  'Burglary / Break-In': 'violet',
+  'Fraud / Estafa': 'violet',
+  'Drug-Related Incident': 'violet',
+  'Assault / Physical Injury': 'red',
+  'Rape / Sexual Assault': 'red',
+  'Domestic Violence': 'red',
+  'Other Incident': 'slate',
+};
+
+/** What an unclassified type reads in — see the `slate` note in TYPE_HUE. */
+export const DEFAULT_HUE = 'slate';
+
+/**
+ * The colour family for an incident type, always one the stylesheet draws.
+ *
+ * TOTAL, like `typeIcon` and for the same reason: an incident type is the
+ * station's own list (an administrator can add to it), so a type this build has
+ * never seen still has to land in a family — and "unclassified" is a real answer,
+ * not a failure.
+ */
+export function typeHue(type) {
+  return TYPE_HUE[type] ?? DEFAULT_HUE;
+}
+
 // A report whose incident_type is blank (a legacy record, an import) still has
 // to land SOMEWHERE: a shelf that hid it would be a register losing a report.
 export const UNCLASSIFIED_TYPE = 'Unclassified';
@@ -63,6 +150,59 @@ export const UNCLASSIFIED_TYPE = 'Unclassified';
 /** `BW-0319` — the one spelling of a report number, shared by row and menu. */
 export function reportNumber(id) {
   return `BW-${String(id).padStart(4, '0')}`;
+}
+
+// ===========================================================================
+// The order
+// ===========================================================================
+
+/**
+ * The orders the register can be read in, in the order the menu offers them.
+ *
+ * FOUR ORDERS, and the list's own endpoint is what allows them: the server takes
+ * a column from a fixed map (`incident_datetime`, `incident_type`, `status`,
+ * `created_by_name` — see ReportsController's `$sortMap`) and a direction, and
+ * REFUSES anything else with a 422. The menu may therefore offer exactly these:
+ * a menu that offered a fifth order the server does not know would be a control
+ * that blanks the register when it is pressed.
+ *
+ * WHEN IT HAPPENED comes first and is the default, because that is what a
+ * register is read by — an officer opens it for the newest incident. The other
+ * three exist for the questions a sheer list cannot answer: which type is piling
+ * up (type), what is still open (status), whose desk it is (officer).
+ *
+ * `note` is the SAME order said short, for the ALL shelf's own tab, which states
+ * the order of the list under it before the first row is read.
+ */
+export const SORT_ORDERS = Object.freeze([
+  { key: 'incident_datetime', dir: 'desc', label: 'Newest incident', note: 'Newest first' },
+  { key: 'incident_datetime', dir: 'asc', label: 'Oldest incident', note: 'Oldest first' },
+  { key: 'incident_type', dir: 'asc', label: 'Incident type, A to Z', note: 'Type A–Z' },
+  { key: 'status', dir: 'asc', label: 'Status, A to Z', note: 'Status A–Z' },
+  { key: 'created_by_name', dir: 'asc', label: 'Officer, A to Z', note: 'Officer A–Z' },
+]);
+
+/** The register's own order: newest incident first, which is what it opens in. */
+export const DEFAULT_SORT = SORT_ORDERS[0];
+
+/**
+ * The order a `sort`/`dir` pair names, always one of `SORT_ORDERS`.
+ *
+ * TOTAL on purpose, like every other rule here: a pair this build does not know
+ * — a bookmarked URL from an older client, a default that drifted from the
+ * server's — resolves to the register's default rather than to a menu with
+ * nothing to check. The server refuses what it cannot sort by; the list is never
+ * left in an order nothing can name.
+ */
+export function sortOrder(sort, dir) {
+  const key = String(sort ?? '');
+  const way = String(dir ?? '').toLowerCase();
+  return SORT_ORDERS.find((o) => o.key === key && o.dir === way) ?? DEFAULT_SORT;
+}
+
+/** The order said short — the ALL shelf's own note (see ALL_SHELF). */
+export function sortNote(sort, dir) {
+  return sortOrder(sort, dir).note;
 }
 
 // ===========================================================================
@@ -92,6 +232,96 @@ export const STATUS_BUCKETS = [
 ];
 
 /**
+ * The shelf the register OPENS on: every report, as files.
+ *
+ * `all` is the same flag the archive's shelf carries — fold every status of a
+ * type into one — so the tally needs no new rule to count it. `list` is this
+ * shelf's own: the register draws REPORTS here rather than folders, which is what
+ * "by file, not by folder" means (owner request, 2026-10-07).
+ *
+ * The note is the sort, stated on the tab: it is the one thing about a flat list
+ * of everything that the list itself cannot say before you read it, and the
+ * register's own order (newest incident first — see the query's `sort`/`dir`) is
+ * exactly what an officer arriving from Home expects to see at the top.
+ */
+export const ALL_LABEL = 'All Reports';
+export const ALL_SHELF = {
+  key: 'all',
+  label: ALL_LABEL,
+  // The note is the register's DEFAULT order (see `sortNote`): a shelf of
+  // everything has nothing else to say about itself, and this is the order it
+  // opens in. The register asks `shelvesFor` for the note that is actually on,
+  // so the tab cannot go on claiming the default once the officer has changed it.
+  note: DEFAULT_SORT.note,
+  all: true,
+  list: true,
+};
+
+/**
+ * Which shelf the register OPENS on, as the tab strip's resting tab.
+ *
+ * The shelves are tabs now rather than stacked sections, so exactly one is on
+ * screen at a time and something has to decide which. The rule is the officer's
+ * own desk rather than the list's order: the FIRST SHELF THAT HOLDS A REPORT,
+ * and the first shelf at all when none of them do.
+ *
+ * WHY NOT SIMPLY THE FIRST: on a quiet station the shelf that heads the register
+ * holds nothing (the register is a place an officer comes to work, not a place
+ * they come to after a week of incidents), so "open on the first shelf" would
+ * open the register on an empty list often enough to read as a broken screen.
+ * "Where the work is" means a tab is always worth clicking, and a shelf with
+ * nothing in it is still one click away — its badge says 0 before the officer
+ * gets there.
+ *
+ * The rule is TOTAL: shelves the register does not know about are ignored, a
+ * shelf whose `folders` is missing counts as empty, and an empty list has no
+ * resting tab at all (`null`), which the caller draws as no strip.
+ *
+ * @param {Array<{key:string, folders?:Array}>} shelves
+ * @returns {string|null} the key of the shelf to open on
+ */
+export function defaultShelfKey(shelves) {
+  const list = (Array.isArray(shelves) ? shelves : []).filter((s) => s && s.key);
+  if (list.length === 0) return null;
+  const withReports = list.find((s) => shelfHolds(s));
+  return (withReports ?? list[0]).key;
+}
+
+/**
+ * Does this shelf hold anything the officer can open?
+ *
+ * TWO SHAPES, one question: a shelf of folders holds a report when it has a
+ * folder in it, and the ALL shelf — which is files rather than folders — holds
+ * one when its total says so. Both are "there is something here", which is the
+ * only thing the resting tab is asked about.
+ */
+function shelfHolds(shelf) {
+  if ((Number(shelf?.total) || 0) > 0) return true;
+  return Array.isArray(shelf?.folders) && shelf.folders.length > 0;
+}
+
+/**
+ * The shelf the register is ON: the officer's own tab when it is still one of the
+ * shelves it draws, and the module's rule otherwise.
+ *
+ * The one place that resolution lives, because two callers need it and they must
+ * not disagree: the strip draws the shelf this answers with, and the register
+ * asks whether that shelf is the FILES one (see `list`) to know what to request.
+ * A tab the register has stopped drawing (the mode changed under it, or the
+ * first render of all) falls back to `defaultShelfKey` rather than to nothing.
+ *
+ * @param {Array} shelves
+ * @param {string|null} activeKey  the officer's own choice, or null
+ * @returns {object|null} the shelf in view, or null when there are none
+ */
+export function shelfInView(shelves, activeKey) {
+  const list = (Array.isArray(shelves) ? shelves : []).filter((s) => s && s.key);
+  if (list.length === 0) return null;
+  const key = list.some((s) => s.key === activeKey) ? activeKey : defaultShelfKey(list);
+  return list.find((s) => s.key === key) ?? null;
+}
+
+/**
  * The shelves THIS register draws.
  *
  * The ordinary list splits into Draft and Submitted. The two MODES of the same
@@ -100,10 +330,20 @@ export const STATUS_BUCKETS = [
  * is one shelf holding everything the filters returned (`all: true`), and
  * splitting them would invent a distinction the view is not making.
  */
-export function shelvesFor({ archived = false, awaiting = false } = {}) {
+export function shelvesFor({ archived = false, awaiting = false, sort, dir } = {}) {
   if (archived) return [{ key: 'archived', label: 'Archived', all: true }];
   if (awaiting) return [{ key: 'awaiting', label: 'Awaiting verification', all: true }];
-  return STATUS_BUCKETS;
+  // ALL REPORTS HEADS THE ORDINARY REGISTER (owner request, 2026-10-07). It is
+  // the whole filtered set, so it belongs in front of the two shelves that split
+  // it — and the archive and the translation queue, which already ARE one shelf
+  // holding everything, get no third: a tab that repeated the screen would be one
+  // tab too many.
+  //
+  // Its note is the ORDER THE LIST IS ACTUALLY IN rather than the shelf's own
+  // default: the officer can sort the register now (see ReportTools), and a tab
+  // still reading "Newest first" over a list of the oldest three reports would be
+  // the register contradicting the screen beneath it.
+  return [{ ...ALL_SHELF, note: sortNote(sort, dir) }, ...STATUS_BUCKETS];
 }
 
 /**
@@ -111,9 +351,12 @@ export function shelvesFor({ archived = false, awaiting = false } = {}) {
  *
  * @param {Array<{status:string, incident_type:string, count:number}>} tally
  * @param {object} options
- * @param {Array<{key,label,all?}>} options.shelves  from `shelvesFor`
+ * @param {Array<{key,label,all?,list?,note?}>} options.shelves  from `shelvesFor`
  * @param {string[]} [options.typeOrder]  the station's own type list
- * @returns {Array<{key,label,total,folders:Array<{type,count}>}>}
+ * @returns {Array<{key,label,total,folders:Array<{type,count}>}>}  each shelf AS
+ *   IT WAS DECLARED — its own `list` / `note` / `all` travel with it, because the
+ *   register reads those to know whether it is drawing folders or files, and a
+ *   fold that dropped them would turn the All shelf back into an ordinary one.
  *
  * Three properties, each asserted in tests/rules/reportFolder.test.mjs:
  *   - a type the shelf holds no rows for is ABSENT — an empty folder is a
@@ -147,103 +390,18 @@ export function buildShelves(tally, { shelves = STATUS_BUCKETS, typeOrder = [] }
       .map(([type, count]) => ({ type, count }));
 
     return {
-      key: shelf.key,
-      label: shelf.label,
+      ...shelf,
       total: folders.reduce((n, folder) => n + folder.count, 0),
       folders,
     };
   });
 }
 
-/** The sum of every count in a tally — the register's own "N found". */
-export function tallyTotal(tally) {
-  return (Array.isArray(tally) ? tally : []).reduce((n, row) => n + (Number(row?.count) || 0), 0);
-}
-
-// ===========================================================================
-// The RECENT folder
-// ===========================================================================
-
-/**
- * "Recent" is ONE WEEK, stated once.
- *
- * The shelf's own note, the tally the folder counts from and the date its list
- * is scoped by all read this number, so the week the officer is shown and the
- * week they get cannot drift.
- */
-export const RECENT_DAYS = 7;
-export const RECENT_LABEL = 'Recent';
-
-/**
- * The glyph the Recent folder wears where a folder shows its identity.
- *
- * Recent is NOT an incident type — it is a window over the record — so it can
- * never come from TYPE_ICON (which is type→glyph and is asserted to be total on
- * the station's type list). Named here, beside the shelf that wears it, so the
- * drawing is reachable from one place rather than being an unreferenced glyph.
- */
-export const RECENT_ICON = 'clock';
-
-/**
- * `YYYY-MM-DD`, seven days back, on the officer's own calendar.
- *
- * Built from the LOCAL date parts rather than from an ISO string slice: the
- * register's date filter is a plain calendar date too, and `toISOString` would
- * answer in UTC — which puts the window a day out for eight hours of every
- * night in Cebu (UTC+8), the hours an officer is most likely to be filing.
- */
-export function recentFrom(now = new Date()) {
-  const d = new Date(now.getTime());
-  d.setDate(d.getDate() - RECENT_DAYS);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-/**
- * The from-date the Recent folder scopes its list and its count by.
- *
- * The LAST seven days — unless the officer's own From filter already starts
- * later. That filter narrows every other shelf's numbers too (the tally is
- * folded through the same pipeline), so it narrows this one rather than being
- * overridden by it: a folder that counted reports the list inside it refuses to
- * show would be the register lying to itself. ISO dates compare as strings, so
- * the later of the two needs no parsing.
- */
-export function recentWindowFrom(userFrom = '') {
-  const window = recentFrom();
-  const mine = String(userFrom ?? '').trim();
-  return mine && mine > window ? mine : window;
-}
-
-/**
- * Put the Recent shelf at the top of the register's shelves.
- *
- * ONE folder, holding the week's work: every report the filters allow whose
- * INCIDENT date falls inside the window, whatever its type and whatever its
- * status. Splitting it by type would be the Draft/Submitted shelves again with a
- * date filter on top, and the officer asked for the week in one place.
- *
- * An empty week still draws its shelf — like every other shelf, it says so
- * rather than disappearing — but draws no folder in it: an empty folder is a
- * promise the shelf cannot keep (the same rule `buildShelves` follows).
- *
- * @param {Array} shelves  from `buildShelves`
- * @param {number} count   reports in the window, under the same filters
- */
-export function withRecentShelf(shelves, count) {
-  const n = Number(count) || 0;
-  return [
-    {
-      key: 'recent',
-      label: RECENT_LABEL,
-      note: `Last ${RECENT_DAYS} days`,
-      recent: true,
-      total: n,
-      folders: n > 0 ? [{ type: RECENT_LABEL, count: n, recent: true }] : [],
-    },
-    ...(Array.isArray(shelves) ? shelves : []),
-  ];
-}
+// A tally's own total used to live here as `tallyTotal`, for the shelf that
+// counted a WINDOW rather than a bucket (the Recent folder, which the ALL shelf
+// replaced — owner request, 2026-10-07). It went with that shelf: every total the
+// register reads now comes from `buildShelves` above, and a sum nothing calls is
+// a rule that can only be dead.
 
 // ===========================================================================
 // The sentences
@@ -315,11 +473,11 @@ export function reportAriaLabel(
 
 /** The row's `title`, in the same voice. */
 export function reportHint({ locked = false, archived = false, canOpen = true, canRestore = false } = {}) {
-  if (archived) return canRestore ? 'Archived — use ⋮ to restore' : 'Archived report';
-  if (!canOpen) return 'Use ⋮ for actions';
+  if (archived) return canRestore ? 'Archived — use More to restore' : 'Archived report';
+  if (!canOpen) return 'Use More for actions';
   return locked
-    ? 'Click to view the sheet · finalized — use ⋮ for actions'
-    : 'Click to view the sheet · use ⋮ for actions';
+    ? 'Click to view the sheet · finalized — use More for actions'
+    : 'Click to view the sheet · use More for actions';
 }
 
 /**
