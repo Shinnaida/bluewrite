@@ -183,7 +183,7 @@ explain it. Three things now stand in for it, and all three are deliberately nar
    ```bash
    php scripts/export-offline.php                   # the whole station → offline-copy/
    php scripts/export-offline.php --include-drafts   # + the unfinished ones, labelled
-   php scripts/export-offline.php --user=7 --limit=50 --out=D:\\bluewrite-copy
+   php scripts/export-offline.php --user=7 --limit=50 --out=D:/bluewrite-copy
    ```
 
    One read-only SELECT, then a self-contained folder: `index.html` (inline styles,
