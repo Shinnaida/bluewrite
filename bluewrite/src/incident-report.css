@@ -414,6 +414,193 @@
 }
 
 /* ===========================================================================
+   1b. The Admin's rail (owner request, 2026-10-12)
+
+   An Admin's navigation is a RAIL on the left of the window rather than pills at
+   the right of a bar: the department's lockup at its head, the five supervisory
+   destinations under it as full-width rows, and the ACCOUNT at its foot — the
+   bell and the profile control, which used to be all the top bar still drew over
+   an Admin's screens. The strip is gone; the rail is the whole of that chrome
+   (owner request, 2026-10-12).
+
+   THE LETTERHEAD IS THE BAR'S OWN CLASSES, deliberately: `.ir-brand-seal` and the
+   three `.ir-brand-*` lines are the same artwork and the same three facts, set
+   the same way, and a rail that redrew them would be a second answer to "what is
+   this system called". They are stacked in a narrower box here, which is the only
+   difference.
+
+   IT IS NOT THE OLD DARK RAIL. That one (`.sidebar`, still in styles.css for
+   whoever reads the history) was a resizable file browser holding the officer's
+   own reports; it was removed on purpose and none of it comes back. This rail
+   navigates and nothing else, and it is drawn for ADMIN alone.
+   =========================================================================== */
+.ir-sidebar {
+  /* Fixed width, and deliberately not draggable: there is no list inside it to
+     make room for, so a handle would be a control with nothing to adjust. */
+  flex: none;
+  width: clamp(12.5rem, 15vw, 15rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.1rem 0.75rem 1.25rem;
+  /* The bar's own navy, so the rail and the strip beside it read as one chrome
+     rather than as two navies that nearly match. */
+  background: var(--ir-navy);
+  color: #fff;
+  /* The page scrolls; the rail does not. Its own list is five rows, so it never
+     needs a scrollbar — the page is the thing that grows. NOT `overflow: hidden`
+     any more, and that is load-bearing: the account menu and the notification
+     feed hang OUTSIDE the rail's own box (the popovers in 1c), and a clipping
+     column would cut them off at its edge. Nothing else in here overflows. */
+  overflow: visible;
+  /* …and it therefore paints ABOVE the page beside it. `.main` is a positioned
+     z-index 1 box, so without this the account's menu would slide under the
+     screen it belongs to. Below the docked profile panel and the dialogs
+     (z-index 96 and up), which must still cover it. */
+  position: relative;
+  z-index: 30;
+}
+
+.ir-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  /* The rail's own padding is the row's, so the lockup starts on the same left
+     edge as the destinations under it rather than indented from them. */
+  padding: 0.2rem 0.35rem 0.9rem;
+  margin-bottom: 0.6rem;
+  /* A button, which this app styles at element level (styles.css `button`): the
+     plate, the hairline and the centred text all have to be taken back off it —
+     and then the ONE edge that is wanted back is put on by hand. THE WORDS ARE
+     CLOSED BY A RULE, the same job the bar's blue seam does under the whole
+     chrome, one level down. */
+  width: 100%;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0;
+  color: inherit;
+  text-align: left;
+}
+.ir-sidebar__brand:hover { background: rgba(255, 255, 255, 0.08); }
+.ir-sidebar__brand:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+.ir-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+/* A DESTINATION HERE IS A ROW, not a pill: the mark and the label on one full
+   width, which is what makes a rail scannable down its left edge. Sentence case
+   and the bar's own ink, so the two chromes word and paint a destination the
+   same way. */
+.ir-side-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.82);
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  text-align: left;
+}
+.ir-side-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+/* "You are here", in the reference's own shape: the current row is a LIFTED
+   PLATE with the accent hanging off its leading edge — a plate rather than the
+   bar's bottom border, because a row in a column has no bottom edge to share
+   with a rule the way a pill does. */
+.ir-side-link[aria-current='page'] {
+  background: var(--ir-navy-hi);
+  color: #fff;
+  box-shadow: inset 3px 0 0 var(--ir-bar-accent);
+}
+.ir-side-link:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* ---- 1c. The account chrome: ONE component, two chromes ------------------
+
+   The bell and the profile control are drawn by AppChrome and PLACED by whichever
+   chrome is on screen: at the end of the bar's row of pills for an officer
+   (`.ir-chrome--bar`, which takes the same gap as its neighbours in
+   `.ir-nav-links` so the account reads as the end of that row), and at the FOOT
+   of the Admin's rail (`.ir-chrome--rail`). Only the arrangement differs — the
+   bell, the trigger and the menu are one set of classes and one set of rules.
+
+   EVERY RULE BELOW IS WRITTEN AS `.ir-chrome--rail <thing>` rather than as a
+   second copy of the thing, and the specificity is why that works: two classes
+   beat the single-class rule it is adjusting whatever order the sheet puts them
+   in, so the rail's arrival is stated once, here, instead of being threaded
+   through the profile and bell sections hundreds of lines down. */
+.ir-chrome {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.35rem, 1.1vw, 0.9rem);
+}
+
+/* `margin-top: auto` is the whole of "at the foot": the rail is a full-height
+   column, so the account is its last row and everything above it stays at the
+   head. The rule OVER it is the lockup's own (see .ir-sidebar__brand), which is
+   what closes the column at both ends. */
+.ir-chrome--rail {
+  margin-top: auto;
+  gap: 0.35rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+/* The account takes the room; the bell keeps its 34px box beside it. */
+.ir-chrome--rail .ir-profile-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* THE ACCOUNT ROW, not a pill: full width, the name allowed to fill it, and the
+   caret pushed to the far edge — the same shape as the destinations above it,
+   because a row in a column is a row. `min-width: 0` on the name is what lets a
+   long one ellipsis instead of pushing the caret out of the rail. */
+.ir-chrome--rail .ir-profile-trigger {
+  width: 100%;
+  padding: 0.45rem 0.5rem;
+  border-radius: 10px;
+  text-align: left;
+}
+.ir-chrome--rail .ir-profile-trigger-name {
+  max-width: none;
+  min-width: 0;
+}
+.ir-chrome--rail .ir-profile-caret {
+  margin-left: auto;
+}
+
+/* THE TWO POPOVERS OPEN UP, AND THE BELL'S OPENS RIGHT. Neither is a style
+   preference: the rail stands on the window's left edge with the account at its
+   FOOT, so there is nothing above the account to drop a menu into, and a panel
+   anchored `right: 0` at the left edge of the screen would open almost entirely
+   off it. Up and inwards is the only direction with room. */
+.ir-chrome--rail .ir-profile-menu {
+  top: auto;
+  bottom: calc(100% + 0.5rem);
+  left: 0;
+  right: auto;
+}
+.ir-chrome--rail .ir-bell-panel {
+  top: auto;
+  bottom: calc(100% + 0.5rem);
+  left: 0;
+  right: auto;
+}
+
+/* ===========================================================================
    2. The light page itself.
 
    Token inversion is the whole trick: the editor's existing components,
@@ -3234,12 +3421,12 @@
 
    The two CHAINS must agree: excluding only the base rule would leave its
    `:hover` repainting the border blue under the pointer. */
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.folder-tab):not(.register-tool):not(.reports-search__go):not(.report-row__open):not(.report-row__edit):not(.report-row__menu):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-face):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger) {
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.conn-hub-toggle):not(.glass-folder__open):not(.folder-tab):not(.register-tool):not(.reports-search__go):not(.report-row__open):not(.report-row__edit):not(.report-row__menu):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-face):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger) {
   background: var(--ir-btn);
   border: 1px solid var(--ir-border);
   color: var(--ir-btn-ink);
 }
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.glass-folder__open):not(.folder-tab):not(.register-tool):not(.reports-search__go):not(.report-row__open):not(.report-row__edit):not(.report-row__menu):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-face):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger):hover {
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.conn-hub-toggle):not(.glass-folder__open):not(.folder-tab):not(.register-tool):not(.reports-search__go):not(.report-row__open):not(.report-row__edit):not(.report-row__menu):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-face):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger):hover {
   border-color: var(--ir-blue);
   color: var(--ir-blue-ink);
   background: var(--ir-btn);
@@ -8610,4 +8797,124 @@
   align-items: center;
   gap: 0.5rem;
   margin-left: auto;
+}
+
+/* Report register: formal records, explicit controls, and readable small screens.
+   Scoped so the report editor, printed sheets, and Home cards stay unchanged. */
+.reports-register { min-width: 0; }
+.reports-register .folder-head { gap: 0.65rem 1rem; padding-top: 1rem; }
+.reports-register .folder-tabs { flex-basis: 100%; }
+.reports-register .folder-tab { min-height: 44px; font-family: var(--font-body); font-size: 0.88rem; }
+.reports-register .folder-head .register-tools { padding: 0 0 0.75rem; }
+.reports-register .register-tools__search { max-width: none; height: 44px; }
+.reports-register .register-tools__search input { font-size: 0.93rem; }
+.reports-register .register-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: auto;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 0.8rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.reports-register .register-tool--mode { margin-bottom: 0.75rem; }
+.reports-register .reports-filter__label {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ir-muted);
+}
+.reports-register .reports-filter input,
+.reports-register .reports-filter select {
+  height: 44px;
+  font-size: 0.9rem;
+  /* SOFTLY ROUNDED, the shape the rail's own keys wear (owner request,
+     2026-10-12): the fields sit on the line under the search capsule, and a
+     3px corner (the document grammar's own, see `.ir-body input`) read as a
+     box dropped into a rounded instrument. 10px is `.register-tool`'s radius,
+     so the two controls on this screen that a pointer meets are one shape —
+     and it stays a FIELD rather than a capsule: only the corner is stated. */
+  border-radius: 10px;
+}
+.register-results {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  padding: 0.8rem 1rem 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ir-text);
+}
+.register-results__hint { font-weight: 400; color: var(--ir-muted); }
+.reports-register .file-card__paper {
+  grid-template-columns: 2rem minmax(11rem, 14rem) minmax(0, 1fr);
+  min-height: 100px;
+  gap: 1rem;
+  padding: 1rem 11.5rem 1rem 1rem;
+}
+.reports-register .report-row__folder { width: 2rem; }
+.reports-register .report-row__head { gap: 0.4rem; }
+.reports-register .report-row__meta { grid-template-columns: minmax(9rem, 1fr) minmax(0, 1.5fr) minmax(7rem, 1fr); gap: 0.85rem; }
+.reports-register .report-row__cell + .report-row__cell { padding-left: 0.85rem; }
+.reports-register .report-row__cell-label { font-size: 0.74rem; letter-spacing: 0; text-transform: none; }
+.reports-register .report-row__cell-value { font-size: 0.87rem; }
+.reports-register .report-row__cell--when .report-row__cell-value { font-size: 0.9rem; }
+.reports-register .report-row__actions { right: 1rem; }
+.reports-register .report-row__edit,
+.reports-register .report-row__menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: auto;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 0.65rem;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.reports-register .reports-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--ir-border);
+}
+.reports-register .reports-pagination button { min-height: 44px; }
+.reports-pagination__position { font-size: 0.85rem; color: var(--ir-muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 1200px) {
+  .reports-register .file-card__paper { grid-template-columns: 2rem minmax(0, 1fr); padding-right: 1rem; padding-bottom: 4.5rem; }
+  .reports-register .report-row__meta { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr); }
+  .reports-register .report-row__actions { top: auto; bottom: 0.8rem; transform: none; }
+}
+@media (max-width: 760px) {
+  .reports-register .folder-tabs { gap: 0.1rem; }
+  .reports-register .folder-tab { padding-inline: 0.5rem; font-size: 0.8rem; gap: 0.3rem; }
+  .reports-register .folder-tab__note { display: none; }
+  .reports-register .folder-head .register-tools { flex-wrap: wrap; justify-content: flex-start; }
+  .reports-register .register-tools__search { flex-basis: 100%; }
+  .reports-register .register-tools__rule { display: none; }
+  .reports-register .report-row__meta { grid-template-columns: minmax(0, 1fr); gap: 0.7rem; }
+  .reports-register .report-row__cell + .report-row__cell { border-left: 0; padding-left: 0; }
+  .reports-register .report-row__cell-text { white-space: normal; overflow-wrap: anywhere; }
+  .reports-register .report-row__cell--who { grid-column: auto; }
+  .reports-register .reports-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 380px) {
+  .reports-register .reports-filters { grid-template-columns: minmax(0, 1fr); }
+  .reports-register .folder-tab__icon { display: none; }
 }

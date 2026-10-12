@@ -19,7 +19,8 @@
 
 The workspace is a **single-page app with no router**. `App.jsx` owns the
 session and the display preferences; `Shell.jsx` owns one `view` object and
-renders **one top bar for every screen**; each screen is a component that
+renders **one chrome for every screen** — the top bar for an officer, the rail
+for an `Admin` (owner request, 2026-10-12); each screen is a component that
 fetches its own data through one thin API client and renders it under a shared
 token-based stylesheet.
 
@@ -31,7 +32,9 @@ token-based stylesheet.
 |---|---|
 | Session, theme, density, toast, sign-in gate | `src/App.jsx` |
 | View model, navigation, keyboard, idle timeout, docks | `src/components/Shell.jsx` |
-| The one top bar (nav + notifications + profile) | `src/components/AppTopBar.jsx` |
+| The officer's top bar (lockup + nav; no account chrome of its own) | `src/components/AppTopBar.jsx` |
+| The Admin's rail (lockup + nav + the account at its foot) | `src/components/AppSidebar.jsx` |
+| The account chrome both chromes draw (bell + profile menu) | `src/components/AppChrome.jsx` |
 | Home landing page | `ReportWelcome` in `src/components/Reports.jsx` (~L1489) |
 | Write Report editor | `ReportEditor` in `src/components/Reports.jsx` (~L1621) |
 | My Reports / All Reports register | `ReportsTable` in `src/components/Reports.jsx` (~L4190) |
@@ -59,7 +62,7 @@ Three roles, defined once in the database and used as plain strings throughout:
 **`Admin` | `Officer` | `Staff`** (`UsersController.php` L98; the client copies
 are `src/components/Users.jsx` `ROLES`).
 
-| Role | Lands on | Top-bar destinations | Can finalize |
+| Role | Lands on | Destinations (bar, or the Admin's rail) | Can finalize |
 |---|---|---|---|
 | `Admin` | Dashboard | Dashboard · All Reports · User Management · Audit Trail · Station Settings | yes |
 | `Officer` | Home | Home · Write Report · My Reports | yes |
@@ -90,9 +93,11 @@ App mounts
 
 - `user` is three-valued in `App.jsx`: `undefined` = checking (renders a splash),
   `null` = signed out (renders `Login`), object = signed in (renders `Shell`).
-- The gate is rendered **outside** Shell, which is why `theme` lives in `App.jsx`
-  (the gate re-lays-out with it) and why `gateNotice` (the "your password
-  changed" sentence) is held there too.
+- The gate is rendered **outside** Shell. `theme` lives in `App.jsx` because the
+  WORKSPACE re-lays-out with it and the stored preference has to reach the
+  profile switch — the gate itself is one fixed design and takes no theme (see
+  `docs/UI_LIGHT_REDESIGN.md` §12). `gateNotice` (the "your password changed"
+  sentence) is held there because only App knows why a session just ended.
 - `onPasswordChanged` is the one flow that ends a session on purpose. It is
   **not** a logout: `AuthController::changePassword` has already destroyed the
   session, so Shell saves any open draft (`flushPending`) and hands back to the
@@ -149,8 +154,13 @@ Key consequences:
 
 Renders, top to bottom:
 
-1. `AppTopBar` — brand lockup (doubles as Home), role nav, notification bell,
-   profile control.
+1. **One chrome, chosen by role** (owner request, 2026-10-12). An `Officer` or
+   `Staff` account gets `AppTopBar` — brand lockup (doubles as Home), the three
+   destinations, and the account chrome at its end. An `Admin` gets
+   `AppSidebar` — the same lockup, the five supervisory destinations as rows,
+   and the same account chrome at its foot — and **no top bar at all**: with
+   the destinations in the rail, the bar held nothing but that chrome, so the
+   strip was removed rather than left as an empty navy band.
 2. A fixed `.dash-dock` in the lower-right corner holding the **Messages
    window** (when open) and the **presence rail** (`Chatheads`) in one flex row.
 3. `<main class="main ir-body">` — the screen, plus the connection banner and
@@ -182,9 +192,33 @@ session, because the write needs the session to authorise it.
 - Centre/right: role nav links with `aria-current="page"` (that attribute *is*
   the active underline).
 - `activeFor(current, isAdmin)` maps an open report to Write Report for an
-  officer and to All Reports for an admin.
-- The **notification bell** and the **profile control** close the bar. The
-  messages icon that used to sit beside the bell was removed — see §15.
+  officer and to All Reports for an admin. The bar itself is the officer's, so
+  it resolves the officer's answer; the rail reads the same function for its own
+  role (one rule for "where am I", both chromes).
+- The **notification bell** and the **profile control** close the bar — the
+  account chrome, drawn by `AppChrome.jsx` and placed by whichever chrome is on
+  screen (the bar's end, or the Admin's rail foot; see §6.2a). The messages icon
+  that used to sit beside the bell was removed — see §15.
+
+### 6.2a The Admin's rail (`AppSidebar.jsx`) and the account chrome
+(`AppChrome.jsx`)
+
+- The rail is the `Admin`'s whole chrome: the lockup at its head (the same
+  artwork and the same three lines as the bar's, imported from the same two
+  places), the five supervisory destinations under it as full-width rows, and
+  the account at its foot. The current row is a lifted plate with an accent on
+  its leading edge (`aria-current="page"`), the rail's own spelling of the bar's
+  bottom-border rule.
+- **The account chrome is one component in two places.** `AppChrome` draws the
+  bell, the profile control and the menu it opens; `AppTopBar` places it at the
+  end of the bar and `AppSidebar` at the foot of the rail (`variant`). Only the
+  arrangement differs, and it is stated in one place: `incident-report.css`
+  §1c, where every rule is written `.ir-chrome--rail <thing>` so the rail's
+  arrival wins over the single-class rule it adjusts. The rail's two popovers
+  open **up** (nothing is below the account but the page) and the bell's opens
+  **right** (anchored left, `right: 0` would run off the window).
+- The rail must not clip them: `.ir-sidebar` is `overflow: visible` with its own
+  `z-index`, so the menu and the feed paint above the page beside the rail.
 - The profile menu is a popover of *actions*: the identity row (opens the
   Profile panel), idle-limit note, Keyboard shortcuts, About this system, and
   Log out. **No preferences live here** — they moved to the Profile panel.
@@ -320,7 +354,8 @@ portalled to `body` so it paints above docked bars.
 - **Light is the default and the product's look.** `styles.css` holds the light
   palette; `incident-report.css` holds the document grammar (`.ir-*`, `.ir-body`,
   `.ir-card`, `.ir-nav`, `ir-page-head`); `dark-theme.css` overrides the palette
-  for `[data-theme="dark"]`; `login-theme.css` is the gate (the same palette).
+  for `[data-theme="dark"]`; `login-theme.css` is the gate, which states its own
+  navy/gold palette and is deliberately **not** restyled per theme.
 - **Theme** resolves to `<html data-theme="…">`; **density** to
   `<html data-density="…">` and a few spacing custom properties
   (`--density-row-y`, `--density-row-x`, `--density-field-gap`). No component
@@ -458,7 +493,10 @@ that matters legally.
 ## 13. Invariants — do not regress
 
 1. **No router is introduced.** Every navigation goes through `navigate()`.
-2. **The top bar is rendered once**, by Shell, for every view and role.
+2. **One chrome is rendered, by Shell, for every view** — the top bar for
+   Officer/Staff, the rail for `Admin` — **never both**, and an `Admin` has no
+   top bar. The bell and the profile control are `AppChrome`, not a bar feature,
+   so an account control can never exist in one chrome and not the other.
 3. **A report's editor is keyed by identity.** Display preferences are never in
    that key.
 4. **Opening a report from the register does not change `view.kind`** and must
@@ -634,7 +672,10 @@ D1 first (it is a functional gap wearing a design hat), then D2, then D4/D7
 | To change… | Touch |
 |---|---|
 | Navigation destinations, view model | `Shell.jsx` (`navigate`, `view`) |
-| The top bar, brand, nav, profile menu | `AppTopBar.jsx` |
+| The destinations, their marks, the admin's list | `AppTopBar.jsx` (`OFFICER_LINKS`, `ADMIN_LINKS`, `NAV_ICONS`) |
+| The top bar (officer) — brand, nav | `AppTopBar.jsx` |
+| The rail (Admin) — brand, nav rows, account at its foot | `AppSidebar.jsx` |
+| The bell + profile control both chromes draw | `AppChrome.jsx` (+ §1c in `incident-report.css`) |
 | Home landing | `ReportWelcome` in `Reports.jsx` + `.ir-home` in `incident-report.css` |
 | The register (filters, rows, row menu) | `ReportsTable` in `Reports.jsx` |
 | The report form's fields, groups, rules | see `docs/architecture/write-report-architecture.md` |

@@ -139,6 +139,85 @@ final class DashboardTest extends BaseApiTestCase
         $this->assertSame(3, $res['body']['kpis']['total']);
     }
 
+    /**
+     * The activity panel and the summary strip (owner request, 2026-10-12).
+     *
+     * Both are new readers of this response, and both fail quietly on their own:
+     * the panel draws the FIVE NEWEST RECORDS in the range (not the audit feed
+     * it used to ignore), and the strip draws a measured change for three
+     * readings that had no trend figure before. A payload that lost either key
+     * would leave the panel empty and the strip arrowless with nothing broken
+     * enough to notice.
+     */
+    public function testRecentReportsAndPeriodDeltasFeedThePanelAndTheStrip(): void
+    {
+        [$cookie, $csrf] = $this->login('t.admin');
+        $today = date('Y-m-d\TH:i');
+        // Both Theft: the fixture's `type_specific` block is a Theft report's, and
+        // finalizing one needs the type's own required fields to be there. The
+        // two rows are told apart by PLACE, which is what the panel draws under
+        // each type name anyway.
+        $this->createReport($cookie, $csrf, [
+            'location' => 'Barangay San Isidro',
+            'incident_datetime' => $today,
+        ]);
+        $second = $this->createReport($cookie, $csrf, [
+            'location' => 'Rizal Avenue',
+            'incident_datetime' => $today,
+        ]);
+        // The setup has to have really happened: a finalize that quietly failed
+        // would leave this test asserting against a draft and "explaining" a
+        // payload that was never exercised.
+        $patched = $this->patchReport($cookie, $csrf, (int) $second['id'], ['status' => 'finalized']);
+        $this->assertSame(200, $patched['status'], json_encode($patched['body']));
+
+        $res = $this->request('GET', '/dashboard/stats', null, $cookie);
+        $this->assertSame(200, $res['status'], json_encode($res['body']));
+        $b = $res['body'];
+
+        // `kpis` keeps its shape: the three strip figures live BESIDE it, so a
+        // reader of the old contract cannot be surprised by extra keys.
+        $this->assertSame(['total', 'pending', 'submitted', 'finalized', 'periodDeltaPct'], array_keys($b['kpis']));
+        $this->assertArrayHasKey('periodDeltas', $b);
+        $this->assertSame(
+            ['attentionPct', 'finalizedPct', 'medianPct'],
+            array_keys($b['periodDeltas'])
+        );
+
+        // The activity panel: one row per record, newest FILED first, and every
+        // row carries what the panel draws (kind, place, incident time, state).
+        $this->assertArrayHasKey('recentReports', $b);
+        $this->assertCount(2, $b['recentReports']);
+        $row = $b['recentReports'][0];
+        $this->assertSame(
+            ['id', 'type', 'location', 'incident_datetime', 'status'],
+            array_keys($row)
+        );
+        $this->assertSame('Theft', $row['type']);
+        $this->assertSame('Rizal Avenue', $row['location'], 'the newest record must come first');
+        $this->assertSame('finalized', $row['status'], 'a row says where the record stands');
+        $this->assertSame(
+            ['Rizal Avenue', 'Barangay San Isidro'],
+            array_column($b['recentReports'], 'location')
+        );
+
+        // …and the incident-type filter narrows it the way it narrows every
+        // other panel on the page: a list showing reports the rest of the page
+        // is not counting would be the panel lying about its own range.
+        $typed = $this->request('GET', '/dashboard/stats?type=' . urlencode('Robbery'), null, $cookie);
+        $this->assertSame(200, $typed['status']);
+        $this->assertSame(0, $typed['body']['kpis']['total'], 'the premise: no Robbery in range');
+        $this->assertSame([], $typed['body']['recentReports'], 'a filter that matches nothing shows no rows');
+
+        // The window before this one is empty, which is the case the strip is
+        // written for: both counts read +100% (something out of nothing), and
+        // the median has NO figure to compare against — a null rather than a 0,
+        // because 0% would read as "the work is exactly as fast as before".
+        $this->assertSame(100, $b['periodDeltas']['attentionPct']);
+        $this->assertSame(100, $b['periodDeltas']['finalizedPct']);
+        $this->assertNull($b['periodDeltas']['medianPct']);
+    }
+
     public function testOfficerAndStaffAreForbidden(): void
     {
         [$offCookie] = $this->login('t.officer');

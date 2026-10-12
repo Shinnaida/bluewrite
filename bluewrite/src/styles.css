@@ -497,13 +497,14 @@ select option {
 }
 
 /* ===========================================================================
-   The appearance switch — one vocabulary, two homes
+   The appearance switch — one vocabulary, one home
 
-   The sun/moon button exists twice: the circular one in the sign-in gate's
-   bottom-right corner and the one in Profile ▸ Preferences. The drawings, the
+   The sun/moon button lives in Profile ▸ Preferences. (It used to sit on the
+   sign-in gate too, in the page's bottom-right corner; that copy went when the
+   gate stopped following the theme — see Login.jsx.) The drawings, the
    cross-fade between them and the way a press is animated all live HERE, in
-   the app-wide palette file, so the two homes only ever say where the button
-   sits and how big it is — they cannot drift into different suns.
+   the app-wide palette file, so a home only ever says where the button sits and
+   how big it is — two of them could not drift into different suns.
 
    Stated once, for both: light is the sun, dark is the crescent moon, and the
    icon shows the mode in force rather than the one a press would take. The
@@ -650,6 +651,28 @@ select option {
   overflow: hidden;
   position: relative;
   isolation: isolate;
+}
+
+/* THE WORKSPACE COLUMN — the bar and the page, stacked, with or without a rail
+   beside them. It is one element in both cases on purpose: the shell's own axis
+   is the only thing the rail changes (.shell--admin below), so nothing about how
+   the bar meets the page moves when an Admin signs in. */
+.shell__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+/* AND AN ADMIN TURNS THE SHELL ON ITS SIDE (owner request, 2026-10-12): the
+   reference puts navigation in a rail on the left, so the shell becomes a row —
+   the rail, then the workspace column — and the rail is the only element in it
+   that does not stretch or scroll with the page (see .ir-sidebar).
+
+   The officer's shell is untouched: without this class the shell stacks, which is
+   what every screen but an Admin's has always done. */
+.shell--admin {
+  flex-direction: row;
 }
 
 /* ---- Shared cyber workspace atmosphere ---- */
@@ -2321,6 +2344,24 @@ body.profile-panel-open {
   to { transform: translateX(0); }
 }
 
+/* THE MASTHEAD, and it is the one change that makes this panel belong to the
+   system rather than sit on top of it. It used to be a pale strip with grey
+   lettering — correct, tidy, and indistinguishable from any other drawer in any
+   other product. Every official surface in BlueWrite opens the other way: the
+   top bar, the report page's bar and the messages box all lead with the
+   station's NAVY and white lettering (header.ir-nav, .messages-box-head), and
+   this is the panel an officer opens to see who they are — the surface most
+   worth carrying the department's colour.
+
+   NAVY AS A SURFACE, NOT AS A TOKEN THAT FLIPS. `--ir-navy` is restated in dark
+   theme to a lifted #1E2E50, so white on it is ~14:1 in light and ~13:1 in dark
+   — the same pair, and the same argument, as the messages box head: this is the
+   department's colour, so it is the one fill here that must NOT follow the page.
+
+   THE SEAM UNDER IT is `--ir-bar-rule`, the same fixed blue the report bar is
+   closed with, for the same reason it exists there: without a seam the navy and
+   the white page below it read as one surface that changes shade half-way down
+   rather than as chrome over a document. */
 .profile-panel-head {
   flex: none;
   display: flex;
@@ -2328,8 +2369,9 @@ body.profile-panel-open {
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.85rem 1rem;
-  background: var(--panel-raised);
-  border-bottom: 1px solid var(--line-bright);
+  background: var(--ir-navy);
+  border-bottom: 3px solid var(--ir-bar-rule);
+  color: #fff;
 }
 .profile-panel-head h2 {
   margin: 0;
@@ -2337,11 +2379,16 @@ body.profile-panel-open {
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--steel);
+  color: #fff;
 }
 /* No plate and no ring: an icon button on a panel header should read as the way
    out, not as a control competing with the content. Square corners because the
    house radius is 4px and a circle here would read as a different product. */
+/* The way out, dressed for the navy it now sits on: white ink, a lighter navy
+   plate on hover (the bar's own --ir-navy-hi, so the hover is a shade of the
+   surface rather than a colour from another screen), and a WHITE ring on focus
+   — --focus-ring is the accent washed for a pale page and would be invisible
+   here. */
 .profile-panel-close {
   flex: none;
   display: grid;
@@ -2352,16 +2399,16 @@ body.profile-panel-open {
   border: 1px solid transparent;
   border-radius: 4px;
   background: none;
-  color: var(--steel);
+  color: #fff;
 }
 .profile-panel-close:hover {
-  background: var(--cyan-bg);
-  color: var(--paper);
+  background: var(--ir-navy-hi);
+  color: #fff;
 }
 .profile-panel-close:focus-visible {
   outline: none;
-  border-color: var(--cyan);
-  box-shadow: 0 0 0 3px var(--focus-ring);
+  border-color: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
 }
 
 .profile-panel-body {
@@ -2386,17 +2433,18 @@ body.profile-panel-open {
    shut, headings stacked with nothing but whitespace between them read as one
    grey list, and a line says they are four separate things. Written symmetrically
    (margin above, padding below) so it sits in the middle of the space rather than
-   against one of the two blocks.
-
-   It is `--line`, the same divider every other row in this panel uses, and it
+   against one of the two blocks.   It is `--line`, the same divider every other row in this panel uses, and it
    stays that way on measurement rather than on habit: `--line` is 1.37:1 against
    the light panel and 1.24:1 against the dark one, and the brighter `--line-bright`
    is only 1.66/1.62 — too small a gain to be worth this one rule disagreeing with
    every other divider in the app. The line is a HINT, not the load-bearing part:
-   what actually separates four shut sections is the heading ink, which measures
-   4.69:1 in light and 4.88:1 in dark (bold, uppercase, letterspaced, 0.7rem). An
-   officer reading a folded panel is reading the headings first and the rules a
-   distant second, which is the order the contrast puts them in. */
+   what actually separates four shut sections is the heading ink — the accent as
+   small-text ink (`--ir-blue-ink`, the same token Home's section names wear),
+   which measures 5.9:1 in light and 7.9:1 in dark (bold, uppercase, letterspaced,
+   0.7rem). It used to be `--cyan-dim` grey at 4.69/4.88; the blue is both more
+   legible and the colour the rest of the system titles a section in. An officer
+   reading a folded panel is reading the headings first and the rules a distant
+   second, which is the order the contrast puts them in. */
 .profile-block + .profile-block {
   margin-top: 1.4rem;
   padding-top: 1.4rem;
@@ -2445,7 +2493,7 @@ body.profile-panel-open {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--cyan-dim);
+  color: var(--ir-blue-ink);
   transition: color 140ms ease;
 }
 /* The whole row is the control, so the whole row says so on hover. Only the ink
@@ -2650,11 +2698,16 @@ body.profile-panel-open {
   flex: 1;
   min-width: 0;
 }
+/* THE OFFICER'S OWN NAME, in the station navy rather than in the page's ink.
+   `--ir-ink-navy` is the TEXT version of that navy (light draws #0b2545; dark
+   restates it to --paper, because there --ir-navy is a BAR fill and would be
+   unreadable as type) — the same token My Register's counts and headings wear,
+   so the name in a profile and the name over a report read as one system. */
 .profile-identity-name {
   margin: 0;
   font-size: 0.98rem;
   font-weight: 700;
-  color: var(--paper);
+  color: var(--ir-ink-navy);
   overflow-wrap: anywhere;
 }
 .profile-identity-meta {
@@ -2750,11 +2803,16 @@ body.profile-panel-open {
   border: 1px solid var(--line);
   border-radius: 4px;
 }
+/* THE THREE NUMBERS, in the same station navy as the name above them and for
+   the same reason: they are the figures this officer's own record totals, and
+   navy is how the system marks an official figure (see --ir-ink-navy and its
+   dark restatement). The pending state below still has to win, so it keeps its
+   own rule further down. */
 .profile-count-num {
   font-size: 1.35rem;
   font-weight: 700;
   line-height: 1.1;
-  color: var(--paper);
+  color: var(--ir-ink-navy);
 }
 /* A dash is not a number. While the counts are still being read, and after they
    have failed, the value is muted so it does not read as a figure — which is
@@ -5021,6 +5079,7 @@ body.profile-panel-open {
    column (see below), so the width buys the details room rather than empty
    page. */
 .audits-page { max-width: none; }
+.audit-views { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
 .audits-table {
   width: 100%;
   border-collapse: collapse;
@@ -5682,8 +5741,12 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    library — station clients are LAN-only, CDNs would fail).
    ============================================================ */
 
+/* THE PAGE (owner request, 2026-10-12). The reference draws the dashboard as a
+   wide field of cards with generous space between them, so the width is the
+   window's up to a comfortable reading measure — the panels are two columns at
+   most, and the chart wants every pixel it can get. */
 .dash {
-  max-width: 1180px;
+  max-width: 1320px;
   margin: 0 auto;
   padding: 24px 28px 48px;
 }
@@ -5691,16 +5754,56 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash-topbar {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  /* TOP ALIGNED, not bottom: the title block and the range card are two things
+     of different heights, and the reference hangs both off the page's own top
+     edge rather than aligning their feet. */
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
-.dash-topbar h1 { margin: 0; font-size: 22px; font-weight: 700; color: var(--paper); }
-.dash-sub { margin: 4px 0 0; color: var(--steel); font-size: 13.5px; }
+.dash-topbar h1 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.01em; color: var(--paper); }
+.dash-sub {
+  margin: 6px 0 0;
+  color: var(--steel);
+  font-size: 13.5px;
+  /* The sub-line is a sentence with a status dot at its head, so it is one row
+     rather than three inline spans that could wrap between the words. */
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+/* THE LIVE DOT: the reference's green mark before the station's name. It is
+   decoration and is hidden from a screen reader (the sentence beside it already
+   says what the page is), and it is drawn rather than typed as a bullet so it
+   cannot be read as punctuation. */
+.dash-live {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--green-ok);
+  box-shadow: 0 0 0 3px var(--green-bg);
+}
 .dash-updated { color: var(--cyan-dim); font-variant-numeric: tabular-nums; }
 
-.dash-filters { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+/* THE RANGE CARD — the three fields, the presets and the scope on one raised
+   plate at the head of the page (see Dashboard.jsx for why the fields come
+   first). It keeps the row's alignment rules below, which were written against
+   a bare flex row and are still exactly what these five controls need. */
+.dash-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 0.65rem 0.75rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-subtle);
+}
+
 /* TWO THINGS THIS ROW HAS TO UNDO, both of them inherited rather than intended.
 
    The fields are `<label>`s, so they pick up the sheet's generic
@@ -5709,7 +5812,16 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    edge, so that margin held all three labelled fields 5.25px above the two button
    groups beside them: the row was aligned, to a line the margin had moved. The
    row has a `gap` for spacing and does not need the margin as well. */
-.dash-filters .dash-field { margin-bottom: 0; }
+/* ...AND WHERE THE THREE FIELDS STAND IN IT (owner request, 2026-10-12). The
+   card's own order is from → to → incident type, then the two strips this
+   dashboard already had, to their right. Stated as flex ORDER rather than by
+   moving markup, so the tab order still walks the row the way it always did and
+   each strip keeps the rules it was written with.
+
+   ONE rule rather than two, deliberately: the margin rule above is the one the
+   layout test looks up by name, and a second `.dash-filters .dash-field` block
+   would be a rule that wins or loses by source order. */
+.dash-filters .dash-field { margin-bottom: 0; order: 1; }
 /* One control height for the whole row. Left alone, Chrome draws a date input at
    37.5px and a select at 35px from the same padding, and because every field
    stacks a label above its control, unequal controls also pull the three LABELS
@@ -5727,6 +5839,9 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   border-radius: 8px;
   overflow: hidden;
   background: var(--panel);
+  /* Both strips follow the three fields in the range card, and keep their own
+     relative order (flex preserves document order for equal values). */
+  order: 2;
 }
 .dash-scope button,
 .dash-presets button {
@@ -5785,52 +5900,306 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 }
 .dash-alert__retry:hover { background: var(--red-bg); }
 
-/* KPIs */
+/* ---- The four readings ------------------------------------------------------
+   A CARD PER READING (owner request, 2026-10-12), in the reference's shape: a
+   tinted circular mark at the left, the caption and the number stacked beside
+   it, and the card's own sub-line under the number. Four columns while there is
+   room and two below that, stated as a fluid auto-fit rather than as a
+   breakpoint so the row reflows on its own in a half-width window.
+
+   15rem is the narrowest a card can be with its number at 30px: the caption is
+   one word per line after that, and "Median draft to final" would wrap into the
+   mark beside it. */
 .dash-kpis {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1.2fr;
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 16px;
   margin-bottom: 18px;
 }
 .dash-kpi {
+  position: relative;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--accent, var(--line-bright));
-  border-radius: 10px;
-  padding: 16px 18px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-subtle);
+  padding: 18px 20px;
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: flex-start;
+  gap: 14px;
+  /* The card is a flex item in the row above and, for the one that is also a
+     control, a button this sheet styles at element level (styles.css `button`)
+     — so its own alignment and ink are restated here, and the number never
+     centres itself against the mark. */
+  text-align: left;
+  font: inherit;
+  color: inherit;
 }
-.dash-kpi--hero { background: var(--panel-raised); border-left: none; border-color: var(--line-bright); }
-.dash-kpi__label { font-size: 11px; color: var(--steel); text-transform: uppercase; letter-spacing: 0.07em; }
-.dash-kpi__value { font-size: 28px; font-weight: 700; line-height: 1.1; color: var(--paper); font-variant-numeric: tabular-nums; }
-.dash-kpi--hero .dash-kpi__value { font-size: 36px; color: var(--cyan); }
-.dash-kpi__value--time { font-size: 26px; }
-.dash-kpi__delta { font-size: 12px; color: var(--steel); min-height: 1em; }
-.dash-kpi__delta.is-up { color: var(--green-ok); }
+/* The one card that is a control: the number is a queue, and a queue opens. It
+   reads as a card at rest and lifts under the pointer, which is the difference
+   between "a figure" and "a figure you can press". */
+.dash-kpi--link { cursor: pointer; transition: box-shadow 120ms ease, border-color 120ms ease; }
+.dash-kpi--link:hover { border-color: var(--line-bright); box-shadow: var(--shadow-sm); }
+.dash-kpi--link:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* THE MARK: a tinted circle holding the reading's own drawing. The four families
+   are the ones the rest of the product already uses — the status tints for the
+   workflow readings and the violet the median has always worn — so a colour on
+   this row means what it means everywhere else. */
+.dash-kpi__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+}
+.dash-kpi__glyph { width: 21px; height: 21px; }
+.dash-kpi__mark--blue { background: var(--cyan-bg); color: var(--cyan); }
+.dash-kpi__mark--green { background: var(--green-bg); color: var(--green-ink); }
+.dash-kpi__mark--amber { background: var(--amber-bg); color: var(--amber); }
+.dash-kpi__mark--violet { background: var(--violet-bg); color: var(--violet); }
+
+.dash-kpi__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dash-kpi__label { font-size: 12px; font-weight: 600; color: var(--steel); text-transform: uppercase; letter-spacing: 0.06em; }
+.dash-kpi__value { font-size: 30px; font-weight: 700; line-height: 1.15; color: var(--paper); font-variant-numeric: tabular-nums; }
+.dash-kpi__value--time { font-size: 27px; }
+.dash-kpi__delta,
+.dash-kpi__note { font-size: 12.5px; color: var(--steel); min-height: 1em; }
+.dash-kpi__delta.is-up { color: var(--green-ink); }
 .dash-kpi__delta.is-down { color: var(--red-text); }
+
+/* THE SPARKLINE sits at the card's right edge, behind the number rather than
+   beside it: it is the range's daily series, so it belongs to the card as a
+   whole. `align-self: center` because the card's items are top-aligned. */
+.dash-spark {
+  flex: none;
+  width: 84px;
+  height: 34px;
+  align-self: center;
+  margin-left: auto;
+  overflow: visible;
+}
+.dash-spark__line {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---- The compact strip at the foot -----------------------------------------
+   The same four readings at a smaller size, each with its change against the
+   period before (see Dashboard.jsx). The mark is the card's own, one size down,
+   so the foot of the page reads as the same set of facts as the head. */
+.dash-sum {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.dash-sum__card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-subtle);
+}
+.dash-sum__mark { width: 36px; height: 36px; }
+.dash-sum__mark .dash-kpi__glyph { width: 18px; height: 18px; }
+.dash-sum__body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.dash-sum__value { font-size: 21px; font-weight: 700; line-height: 1.15; color: var(--paper); font-variant-numeric: tabular-nums; }
+.dash-sum__label { font-size: 12.5px; color: var(--steel); }
+.dash-sum .dash-kpi__delta { font-size: 12px; }
 
 /* Panels & grids */
 .dash-panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-subtle);
   padding: 18px 20px;
 }
 .dash-panel__head {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  /* CENTRE, not baseline: the head's left side is now a marked block two lines
+     tall and its right side is a row of small controls, and aligning their
+     baselines hung the controls off the sub-line. */
+  align-items: center;
   gap: 12px;
   margin-bottom: 12px;
 }
-.dash-panel h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--steel); text-transform: uppercase; letter-spacing: 0.05em; }
+/* THE HEAD IS A MARK, A NAME AND A LINE UNDER IT (owner request, 2026-10-12).
+   The name is SENTENCE CASE in the page's own ink rather than the shouting
+   uppercase the dashboards used to have: it is the title of a card a reader
+   arrives at, not a field label, and the mark beside it already says which kind
+   of reading it is. `.dash-panel h2` keeps the element selector so a panel that
+   still wants a bare heading is styled by the same rule. */
+.dash-panel h2,
+.dash-panel__title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--paper);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.dash-panel__title-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.dash-panel__sub { font-size: 12.5px; font-weight: 400; color: var(--steel); }
+/* The mark in a panel head: the accent blue, tinted, at the size a 16px title
+   wants beside it. */
+.dash-panel__mark {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  padding: 7px;
+  border-radius: 9px;
+  background: var(--cyan-bg);
+  color: var(--cyan);
+}
 /* The panel head's right side, which now carries TWO things on several panels: the
    panel's own aside (a count, a flag) and the info control. A row rather than two
    stacked boxes, so the control sits on the same line as the title — and `align-items:
    center` because the control is a 22px circle and the text beside it is 12px. */
 .dash-panel__aside { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; }
+
+/* ---- The split row: the trend, then the newest records ----------------------
+   The reference puts its chart and its activity list side by side, so the row is
+   an explicit two-column grid — wider on the chart's side because a stack of
+   days needs the width and a list of five rows does not.
+
+   `.is-expanded` (the head's corner control) gives the chart the WHOLE row and
+   drops the activity panel under it. A separate grid state rather than a
+   class on the card, because what changes is the row's own template. */
+.dash-grid-main--split { grid-template-columns: minmax(0, 1.75fr) minmax(19rem, 1fr); }
+.dash-grid-main--split.is-expanded { grid-template-columns: minmax(0, 1fr); }
+
+/* The corner control. A control that changes a VIEW, so it carries its state on
+   `aria-pressed` rather than opening anything — and the tint plus the ink say
+   which way it is set without a second icon meaning "on". */
+.dash-expand {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--steel);
+  cursor: pointer;
+}
+.dash-expand svg { width: 16px; height: 16px; }
+.dash-expand:hover { border-color: var(--line-bright); color: var(--paper); }
+.dash-expand[aria-pressed='true'] { background: var(--cyan-bg); border-color: var(--cyan); color: var(--cyan); }
+.dash-expand:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* ---- Recent activity -------------------------------------------------------
+   One row per record: the type's mark, what and where and when, and where the
+   record stands in the workflow. The row is the button — the whole row opens the
+   report, the way a register row does — and nothing inside it is a second
+   control, so there is one target per line and no nested buttons. */
+.dash-activity__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dash-activity__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 4px;
+  /* The rows are separated by the hairline BETWEEN them rather than by a box
+     around each one: a list of five records is one card, not five. */
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dash-activity__list > li:last-child .dash-activity__row { border-bottom: 0; }
+.dash-activity__row:hover { background: var(--panel-sunken); }
+.dash-activity__row:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+
+/* The type's mark, tinted by the SAME hue family the register's own type pill
+   uses (lib/reportFolder.js), so a Traffic Accident is the blue thing here and
+   there. */
+.dash-activity__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--panel-raised);
+  color: var(--steel);
+}
+.dash-activity__mark--blue { background: var(--cyan-bg); color: var(--cyan); }
+.dash-activity__mark--amber { background: var(--amber-bg); color: var(--amber); }
+.dash-activity__mark--violet { background: var(--violet-bg); color: var(--violet); }
+.dash-activity__mark--red { background: var(--red-bg); color: var(--red-text); }
+.dash-activity__glyph { width: 19px; height: 19px; }
+
+.dash-activity__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.dash-activity__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--paper);
+  /* One line per row: a long type name is clipped rather than allowed to push
+     the status chip off the row's right edge. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-activity__meta {
+  font-size: 12.5px;
+  color: var(--steel);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* WHERE THE RECORD STANDS. The three states wear the tints the rest of the
+   product already gives them — draft amber, submitted blue, finalized green —
+   and each one STATES ITS NAME as well as its colour, so the chip is readable
+   without seeing the difference between the three. */
+.dash-status {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dash-status--draft { background: var(--amber-bg); color: var(--amber); }
+.dash-status--submitted { background: var(--cyan-bg); color: var(--cyan); }
+.dash-status--finalized { background: var(--green-bg); color: var(--green-ink); }
+
+/* "View All →" in the activity panel's head: a phrase with an arrow, not a
+   button with a plate — it is the second way into a panel whose first way is a
+   row. */
+.dash-viewall {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--cyan);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dash-viewall:hover { background: var(--cyan-bg); }
+.dash-viewall:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 .dash-grid-main { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-bottom: 16px; }
 /* One column, by choice rather than by narrowness.

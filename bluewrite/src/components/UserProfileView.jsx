@@ -66,6 +66,7 @@ const ACTION_LABEL = {
   'report.finalize': 'Report finalized',
   'report.archive': 'Report archived',
   'report.restore': 'Report restored',
+  'ai.terminology.ask': 'Asked the terminology chatbot',
 };
 
 /** The sentence for one audit entry. The code itself when nothing here knows it. */

@@ -176,6 +176,100 @@ final class EmailOtpTest extends BaseApiTestCase
         $this->assertSame('mfa_code_missing', $missing['body']['code']);
     }
 
+    // --- two signs-in in one browser --------------------------------------------
+
+    /**
+     * THE TRAP, REPRODUCED: two signs-in in one browser.
+     *
+     * One session cookie is shared by every tab of an origin, and `mfa_pending`
+     * is one slot in it — so signing in a second time replaces the pending
+     * sign-in for the WHOLE browser, while the first tab goes on drawing its own
+     * screen: its own countdown, and above all its own "Sent to …" line and the
+     * code that mailbox was emailed. The officer answers the first tab's code
+     * screen with a real, unexpired, correctly typed code, and without the
+     * sign-in id the server can only read that as a guess at the live sign-in's
+     * code. Three times, in the case this test is written from: that is what the
+     * station's own audit trail recorded on 2026-10-12 (a tab naming
+     * k***@gmail.com, three `mfa.verify_failed` events charged to the account the
+     * other sign-in belonged to), and it is why an id exists at all.
+     */
+    public function testACodeFromASupersededSignInIsRefusedWithoutSpendingATry(): void
+    {
+        // The first tab: an Admin, holding a code screen of its own.
+        [, , $firstMfa] = $this->pendingSignIn('t.admin');
+        $firstCode = $this->lastEmailedCode();
+
+        // The second sign-in, anywhere in the same browser (a second tab here: it
+        // is the cookie, not the tab, that the browser shares). Every request now
+        // carries THIS session, whichever screen sent it.
+        [$liveCookie, $liveCsrf, $liveMfa] = $this->pendingSignIn('t.officer');
+
+        $this->assertNotSame('', (string) ($liveMfa['sign_in_id'] ?? ''), 'every payload names the sign-in it describes');
+        $this->assertNotSame(
+            $firstMfa['sign_in_id'] ?? null,
+            $liveMfa['sign_in_id'] ?? null,
+            'and two signs-in are told apart'
+        );
+
+        // The first tab's own code, submitted with the first tab's own id.
+        $stale = $this->request(
+            'POST',
+            '/mfa/verify',
+            ['code' => $firstCode, 'sign_in_id' => $firstMfa['sign_in_id']],
+            $liveCookie,
+            $liveCsrf
+        );
+        $this->assertSame(401, $stale['status'], json_encode($stale['body']));
+        $this->assertSame('mfa_stale_sign_in', $stale['body']['code']);
+        // It is NOT answered as a wrong code, and the answer names the mailbox the
+        // live sign-in will accept a code from — which is what lets the screen
+        // correct itself instead of inviting four more tries at the wrong inbox.
+        $this->assertNotSame('mfa_wrong_code', $stale['body']['code']);
+        $this->assertSame('t***@example.test', $stale['body']['mfa']['email_hint']);
+        // AND NOTHING WAS CHARGED: all five tries are still there for the code
+        // that is actually waiting.
+        $this->assertSame(5, $stale['body']['mfa']['attempts']);
+
+        // AND THE ID IS WHAT MADE THE DIFFERENCE. The same request without one is
+        // the request the endpoint could not tell apart before an id existed — it
+        // is read as a guess at the live sign-in's code (which it is not), and it
+        // spends a try. That is the behaviour a client that cannot send an id
+        // still gets, on purpose: this check is a way to tell two screens apart,
+        // never a credential.
+        $unnamed = $this->request(
+            'POST',
+            '/mfa/verify',
+            ['code' => $firstCode],
+            $liveCookie,
+            $liveCsrf
+        );
+        $this->assertSame(401, $unnamed['status'], json_encode($unnamed['body']));
+        $this->assertSame('mfa_wrong_code', $unnamed['body']['code']);
+        $this->assertSame(4, $unnamed['body']['attempts_remaining']);
+
+        // The live sign-in's own code completes it over the same cookie, which is
+        // the proof that the refusal above cost nothing that matters.
+        $ok = $this->request(
+            'POST',
+            '/mfa/verify',
+            ['code' => $this->lastEmailedCode(), 'sign_in_id' => $liveMfa['sign_in_id']],
+            $liveCookie,
+            $liveCsrf
+        );
+        $this->assertSame(200, $ok['status'], json_encode($ok['body']));
+        $this->assertSame('t.officer', $ok['body']['user']['username']);
+
+        // ...and the superseded submission is in the trail as itself, with no code
+        // in it. (A client that sends NO id is unaffected — every other test in
+        // this file submits exactly that way, which is the backwards compatibility
+        // this endpoint keeps on purpose.)
+        $detail = (string) $this->db()->query(
+            "SELECT detail FROM bluewrite_test.audit_logs WHERE action = 'mfa.stale_sign_in' LIMIT 1"
+        )->fetchColumn();
+        $this->assertStringContainsString('superseded', $detail);
+        $this->assertSame(0, preg_match('/\b\d{6}\b/', $detail), 'the six digits are never written down');
+    }
+
     public function testAMalformedCodeIsAFieldProblemNotAFailedGuess(): void
     {
         [$cookie, $csrf] = $this->pendingSignIn('t.officer');

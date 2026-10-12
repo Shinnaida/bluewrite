@@ -15,15 +15,40 @@
 #  left exactly as it is, so this is safe to run as often as you like, alongside
 #  scripts\serve.cmd and alongside a dev server you started yourself.
 #
+#  THE DATABASE IS THE THIRD PORT IT LOOKS AFTER. The API and the dev server were
+#  the first two; MySQL was only ever written to the log, on the argument that a
+#  database is not a refreshable web server. That argument is true and beside the
+#  point: "Database connection failed. Contact the system administrator" is the
+#  failure a person actually hits, it is the same shape as a refused connection,
+#  and a line in a log only helps whoever opens the log. So MySQL is repaired
+#  too, under exactly the same rule as the servers — ONLY WHEN 3306 IS FREE, so
+#  nothing here can take a running database away. What it starts is the Laragon
+#  instance (the one that holds the BlueWrite schema), hidden, owned by WmiPrvSE
+#  rather than by a window somebody can close, and never when 3306 is already
+#  answering but belongs to the OTHER MySQL on this machine — that case is named
+#  in the log instead of papered over. See Repair-Db, and
+#  docs\DEVELOPMENT_STARTUP.md on the two installations.
+#
 #  WHY A SCHEDULED TASK AND NOT A WINDOW. A process started from a terminal
 #  belongs to that terminal; close it and the process goes with it. Task
 #  Scheduler owns this script instead, so it survives closing windows, closing
 #  editors, logout and reboot.
 #
-#  WHY THE SERVERS ARE SPAWNED THROUGH WMI. A process started normally by a task
-#  is a CHILD of that task, and Task Scheduler may tear the child down when the
-#  task instance ends. WMI's Win32_Process.Create makes the process a child of
-#  WmiPrvSE instead, so the server outlives the check that started it.
+#  WHY THE SERVERS ARE SPAWNED THROUGH WMI, AND HIDDEN. A process started normally
+#  by a task is a CHILD of that task, and Task Scheduler may tear the child down
+#  when the task instance ends. WMI's Win32_Process.Create makes the process a
+#  child of WmiPrvSE instead, so the server outlives the check that started it.
+#
+#  The HIDDEN half matters just as much: Win32_ProcessStartup.ShowWindow = 0
+#  hides each server at creation; the task uses wscript.exe (a windowless host).
+#  Earlier launchers used a hidden PowerShell wrapper, which could still flash.
+#  Background on the original problem: a
+#  console program handed to WMI into an interactive session is given its own
+#  CONSOLE WINDOW, so every repair put a terminal on the desktop. That window is
+#  also the one somebody closes — and closing it kills the dev server, so a minute
+#  later the port was down again, the next check started another one, and another
+#  window appeared. On a machine doing other work that is a window that keeps
+#  coming back. See Start-Detached for creation-time hiding without a wrapper.
 #
 #  THE LOG. Repairs only — a quiet file is a healthy machine.
 #    %LOCALAPPDATA%\BlueWrite\watchdog.log
@@ -48,6 +73,11 @@ param(
   [int[]]  $ApiPort = 8099,
   [int[]]  $DevPort = 5180,
   [int]    $DbPort  = 3306,
+  # WHERE MySQL IS. Laragon's install and its data directory (the one with the
+  # BlueWrite schema) — see docs\DEVELOPMENT_STARTUP.md. Kept as parameters so a
+  # moved install is a one-line change rather than an edit to the code below.
+  [string] $MySqlRoot = 'C:\laragon\bin\mysql',
+  [string] $DbDataDir = 'C:\laragon\data\mysql',
   [string] $LogPath = (Join-Path $env:LOCALAPPDATA 'BlueWrite\watchdog.log'),
   # Register / inspect / remove the scheduled task instead of repairing.
   [switch] $Install,
@@ -99,12 +129,31 @@ function Write-Note {
 }
 
 function Start-Detached {
-  param([string] $CommandLine)
+  param(
+    [Parameter(Mandatory = $true)][string]   $FilePath,
+    [Parameter(Mandatory = $true)][string[]] $ArgumentList
+  )
   # WmiPrvSE owns the process, so nothing about this script's own life can end it.
-  return Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
-    CommandLine      = $CommandLine
-    CurrentDirectory = $root
+  #
+  # Quote arguments containing spaces for the executable's Windows command-line
+  # parser. In particular, the Vite path lives under a user profile with spaces.
+  # There is no intermediate PowerShell or cmd process to flash a console.
+  $argText = ($ArgumentList | ForEach-Object {
+      $s = [string] $_
+      if ($s -match '\s') { '"' + $s + '"' } else { $s }
+    }) -join ' '
+  # Hide the console at CREATION, before any executable code runs. A hidden
+  # PowerShell wrapper can still flash while its console is being allocated.
+  $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{
+    ShowWindow = [uint16] 0
   }
+  $result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+    CommandLine        = ('"{0}" {1}' -f $FilePath, $argText)
+    CurrentDirectory   = $root
+    ProcessStartupInformation = $startup
+  } -ErrorAction Stop
+  if ($null -eq $result) { throw 'WMI did not return a process creation result.' }
+  return $result
 }
 
 function Find-Php {
@@ -121,6 +170,32 @@ function Find-Php {
   return $null
 }
 
+# Node is taken from PATH rather than from a fixed install: it is installed by an
+# installer or a version manager, and both put it in a different place.
+function Find-Node {
+  $onPath = Get-Command node -ErrorAction SilentlyContinue
+  if ($onPath) { return $onPath.Source }
+  return $null
+}
+
+# MySQL, as Find-Php finds PHP: the newest version installed under Laragon's
+# bin\mysql, with PATH as the fallback for an install somewhere else. It is
+# deliberately NOT a search of the whole machine: this machine has a second MySQL
+# under C:\Program Files (its Windows service, with a different data directory
+# and no BlueWrite schema — see docs\DEVELOPMENT_STARTUP.md), and finding that one
+# would repair the database into a server that cannot answer a login.
+function Find-MySql {
+  $found = Get-ChildItem (Join-Path $MySqlRoot '*') -Directory -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending |
+    ForEach-Object { Join-Path $_.FullName 'bin\mysqld.exe' } |
+    Where-Object { Test-Path $_ } |
+    Select-Object -First 1
+  if ($found) { return $found }
+  $onPath = Get-Command mysqld -ErrorAction SilentlyContinue
+  if ($onPath) { return $onPath.Source }
+  return $null
+}
+
 # ---- The API + the built app (http://127.0.0.1:8099/) ------------------------
 # One PHP process, no node anywhere in the path: the origin that has proved
 # durable here, and the one to hand someone with a browser open in front of them.
@@ -132,8 +207,12 @@ function Repair-Api {
       Write-Note "api  $port DOWN - no php.exe found (looked in C:\laragon\bin\php and PATH)"
       continue
     }
-    $res = Start-Detached ('"{0}" -S 127.0.0.1:{1} -t public router.php' -f $php, $port)
-    Write-Note ('api  {0} DOWN -> started {1} (pid {2})' -f $port, $php, $res.ProcessId)
+    $res = Start-Detached -FilePath $php -ArgumentList @('-S', "127.0.0.1:$port", '-t', 'public', 'router.php')
+    if ($res.ReturnValue -eq 0) {
+      Write-Note ('api  {0} DOWN -> started {1} (hidden)' -f $port, $php)
+    } else {
+      Write-Note ('api  {0} DOWN - could not start it (WMI returned {1})' -f $port, $res.ReturnValue)
+    }
   }
 }
 
@@ -146,27 +225,121 @@ function Repair-Dev {
       Write-Note "dev  $port DOWN - no vite at node_modules\vite\bin\vite.js (run npm install)"
       continue
     }
-    # cmd is the launcher: `cd /d` puts node in the repo root, where its config
-    # and index.html are.
-    $res = Start-Detached ('cmd.exe /c cd /d "{0}" && node "{1}" --port {2} --strictPort' -f $root, $vite, $port)
-    Write-Note ('dev  {0} DOWN -> started vite (pid {1})' -f $port, $res.ProcessId)
+    $node = Find-Node
+    if (-not $node) {
+      Write-Note "dev  $port DOWN - node is not on PATH (install Node.js)"
+      continue
+    }
+    # node IS the server, with the repo root handed as its working directory —
+    # which is what the old `cmd.exe /c cd /d ... && node ...` was there for, and
+    # the reason a separate cmd (and the console window that came with it) is no
+    # longer in the picture at all.
+    $res = Start-Detached -FilePath $node -ArgumentList @($vite, '--port', "$port", '--strictPort')
+    if ($res.ReturnValue -eq 0) {
+      Write-Note ('dev  {0} DOWN -> started vite (hidden)' -f $port)
+    } else {
+      Write-Note ('dev  {0} DOWN - could not start it (WMI returned {1})' -f $port, $res.ReturnValue)
+    }
   }
 }
 
-# ---- MySQL: looked at, never started -----------------------------------------
-# The API answering on 8099 while 3306 is closed is the one stack failure this
-# must not paper over: MySQL is a database, not a refreshable web server. Noting
-# it in the log turns "sign-in is unavailable" into a one-line answer.
-function Note-Db {
-  if (-not (Test-Port $DbPort)) {
-    Write-Note "db   $DbPort DOWN - start MySQL (Laragon) before reporting a login problem"
+# ---- MySQL: repaired like the others, and only when the port is free --------
+# WHICH PROGRAM HOLDS 3306, because on this machine that is not a detail. Two
+# MySQL installations answer on the same port with the same protocol, so a TCP
+# connect cannot tell them apart — but only one of them has the BlueWrite schema.
+# netstat names the owning pid and WMI turns that into a path, which is the only
+# honest way to tell them apart; the path is what the log gets to name.
+function Get-DbOwner {
+  $line = netstat -ano | Select-String (':{0}\s' -f $DbPort) |
+    Where-Object { $_.Line -match 'LISTENING' } |
+    Select-Object -First 1
+  if (-not $line) { return $null }
+  # $ownerPid, never $pid: $PID is PowerShell's own read-only variable for THIS
+  # process, and assigning to it is an error rather than a quiet mistake.
+  $ownerPid = ($line.Line -replace '\s+', ' ').Trim().Split(' ')[-1]
+  $proc = Get-CimInstance Win32_Process -Filter ("ProcessId = {0}" -f $ownerPid) -ErrorAction SilentlyContinue
+  if ($proc) { return $proc.ExecutablePath }
+  return $null
+}
+
+# THE DATABASE IS NOT A WEB SERVER, and this function is still the same rule as
+# the two above: ASK FIRST, START ONLY WHAT IS MISSING. Nothing here stops,
+# kills or restarts anything, so a running database — including one Laragon
+# started, or one somebody started by hand — is left exactly as it is.
+#
+# WHAT IT FIXES. The database that is not running at all: 3306 refused, the API
+# answering "Database connection failed", and a person deciding whether to open
+# Laragon. The repair is the documented command (docs\DEVELOPMENT_STARTUP.md),
+# and it is started the same hidden, WmiPrvSE-owned way as the servers — which
+# matters more here than anywhere else, because a MySQL that is a CHILD OF A
+# CONSOLE WINDOW is a MySQL that dies when somebody tidies the desktop.
+function Repair-Db {
+  if (Test-Port $DbPort) {
+    # UP IS NOT THE SAME AS USABLE, and it is worth saying so once in the log: the
+    # other MySQL on this machine answers on 3306 perfectly well and has no
+    # BlueWrite schema, so every login fails while the port looks healthy. This is
+    # a NOTE and never a repair — nothing may take a database, even a wrong one,
+    # away from whoever is using it.
+    $exe = Get-DbOwner
+    if ($exe -and $exe -notlike (Join-Path $MySqlRoot '*')) {
+      Write-Note ('db   {0} up - but held by the OTHER MySQL ({1}), which has no BlueWrite schema; login will fail' -f $DbPort, $exe)
+    }
+    return
   }
+
+  $mysqld = Find-MySql
+  if (-not $mysqld) {
+    Write-Note "db   $DbPort DOWN - no mysqld.exe found (looked in $MySqlRoot and PATH)"
+    return
+  }
+  if (-not (Test-Path $DbDataDir)) {
+    Write-Note "db   $DbPort DOWN - no data directory at $DbDataDir (see docs\DEVELOPMENT_STARTUP.md)"
+    return
+  }
+
+  # The same arguments the documented start uses, and the same ones this machine's
+  # working instance was started with. --no-defaults on purpose: my.ini belongs to
+  # the other installs, and this start names its data directory explicitly.
+  $res = Start-Detached -FilePath $mysqld -ArgumentList @(
+    '--no-defaults',
+    ('--datadir=' + $DbDataDir),
+    ('--port=' + $DbPort)
+  )
+  if ($res.ReturnValue -ne 0) {
+    Write-Note ('db   {0} DOWN - could not start it (WMI returned {1})' -f $DbPort, $res.ReturnValue)
+    return
+  }
+
+  # WAITED FOR, because "started" is not the fact that matters. InnoDB takes a
+  # second or two to open the data directory, and the port answering is the only
+  # proof that the database is actually up — the wrapper above exits at once by
+  # design, so there is nobody else left to ask.
+  for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Milliseconds 500
+    if (Test-Port $DbPort) {
+      Write-Note ('db   {0} DOWN -> started {1} (hidden)' -f $DbPort, $mysqld)
+      return
+    }
+  }
+  Write-Note ('db   {0} DOWN - started {1} but it never answered on the port (read the .err file in {2})' -f $DbPort, $mysqld, $DbDataDir)
 }
 
 function Repair-All {
-  Repair-Api
-  Repair-Dev
-  Note-Db
+  # Startup and the scheduled check may overlap. Never launch two MySQLs (or
+  # two servers) while the first is still opening its listening socket.
+  $mutex = New-Object System.Threading.Mutex($false, 'Local\BlueWrite-stack-repair')
+  $held = $false
+  try {
+    try { $held = $mutex.WaitOne(0) }
+    catch [System.Threading.AbandonedMutexException] { $held = $true }
+    if (-not $held) { return }
+    Repair-Db
+    Repair-Api
+    Repair-Dev
+  } finally {
+    if ($held) { $mutex.ReleaseMutex() }
+    $mutex.Dispose()
+  }
 }
 
 # ---- The scheduled task ------------------------------------------------------
@@ -187,7 +360,9 @@ function Get-TaskXml {
   $start = (Get-Date -Format 'yyyy-MM-ddTHH:mm:00')
   # $taskArgs rather than $args: $args is PowerShell's own automatic variable for
   # unbound arguments, and overwriting it would be a very quiet trap.
-  $taskArgs = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}"' -f $self
+  $hiddenRunner = Join-Path $PSScriptRoot 'run-hidden.vbs'
+  $taskArgs = '//B //NoLogo "{0}" "{1}"' -f $hiddenRunner, $self
+  $taskArgs = [System.Security.SecurityElement]::Escape($taskArgs)
   $description = 'Keeps the BlueWrite API (8099) and dev server (5180) answering: starts whichever is missing, once a minute.'
   @"
 <?xml version="1.0" encoding="UTF-16"?>
@@ -233,7 +408,7 @@ function Get-TaskXml {
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>powershell.exe</Command>
+      <Command>wscript.exe</Command>
       <Arguments>$taskArgs</Arguments>
     </Exec>
   </Actions>
@@ -255,6 +430,7 @@ function Test-TaskStored {
     @{ Name = 'runs on battery';             Pass = ($xml -match '<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>') },
     @{ Name = 'survives switching to battery'; Pass = ($xml -match '<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>') },
     @{ Name = 'catches up after sleep';      Pass = ($xml -match '<StartWhenAvailable>true</StartWhenAvailable>') },
+    @{ Name = 'uses windowless host';           Pass = ($xml -match '<Command>wscript.exe</Command>' -and $xml -match 'run-hidden\.vbs') },
     @{ Name = 'runs this script';            Pass = ($xml -match [regex]::Escape((Split-Path -Leaf $self))) }
   )
   $failed = 0
@@ -292,7 +468,16 @@ function Show-Status {
   foreach ($port in $DevPort) {
     Write-Host ('dev    http://127.0.0.1:{0}/  {1}' -f $port, $(if (Test-Port $port) { 'up' } else { 'DOWN' }))
   }
-  Write-Host ('db     127.0.0.1:{0}  {1}' -f $DbPort, $(if (Test-Port $DbPort) { 'up' } else { 'DOWN' }))
+  # The database line names WHAT is answering, not merely that something is: on
+  # this machine the two installations are indistinguishable by port alone, and
+  # "up" from the wrong one is the failure this is here to stop hiding.
+  if (Test-Port $DbPort) {
+    $exe = Get-DbOwner
+    $who = if (-not $exe) { '' } elseif ($exe -like (Join-Path $MySqlRoot '*')) { '  (Laragon)' } else { "  (NOT Laragon: $exe)" }
+    Write-Host ('db     127.0.0.1:{0}  up{1}' -f $DbPort, $who)
+  } else {
+    Write-Host ('db     127.0.0.1:{0}  DOWN' -f $DbPort)
+  }
   Write-Host ('log    {0}' -f $LogPath)
 }
 

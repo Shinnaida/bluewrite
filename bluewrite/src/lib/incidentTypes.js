@@ -714,6 +714,138 @@ export const GROUP_CONFIG = {
   },
 };
 
+// ===========================================================================
+// One report, more than one type (owner request, 2026-10-13).
+//
+// A single incident is often two offences — a break-in that is also a theft, a
+// traffic accident that is also a physical injury, a domestic dispute that is
+// also malicious mischief. Filing it twice splits the record; filing it under
+// one type drops half the facts the sheet has a place for.
+//
+// SO THE REPORT CARRIES A LIST AND EVERYTHING ELSE KEY ITSELF ON IT. The shape
+// is deliberately additive, because every reader in the product already reads a
+// single type:
+//
+//   - `incident_type` stays the PRIMARY type — the first one chosen. It is what
+//     the folders, the register's type filter, the dashboard bands and the
+//     printed block ordering key on, and it is the column the schema has always
+//     had;
+//   - `incident_types` is the ordered list (primary first), and is what the FORM
+//     reads to decide which per-type sections and which party groups to draw;
+//   - `type_specific` is UNCHANGED — one object holding every selected type's
+//     scalars and the shared group lists. Field keys do not collide across the
+//     types that can be combined today (each type's block is its own vocabulary),
+//     so a key means the same thing whichever type put it there.
+//
+// The helpers below are that list's own rules, and they are the only place it is
+// interpreted. Mirrored in app/rules/report_rules.php (`scalarKeysForTypes`,
+// `groupsForTypes`, `validateTypeSpecificForTypes`).
+// ===========================================================================
+
+/** How many types one report may carry. Four covers the compound incidents the
+ *  station sees (break-in + theft + damage + assault) without turning the type
+ *  into a checklist; the server enforces the same cap. */
+export const MAX_REPORT_TYPES = 4;
+
+/**
+ * The report's types, in order, primary first, blank and duplicate entries gone.
+ *
+ * Reads `incident_types` when it is there and falls back to the single
+ * `incident_type` column — which is every report written before this feature,
+ * every row the API hands back without the list, and every fixture in the test
+ * suite. One type is therefore the ordinary case, not a special case.
+ *
+ * @param {{incident_type?: string, incident_types?: unknown}} report
+ * @returns {string[]}
+ */
+export function incidentTypesOf(report) {
+  const primary = String(report?.incident_type ?? '').trim();
+  const raw = Array.isArray(report?.incident_types) ? report.incident_types : [];
+  const list = [];
+  for (const value of [primary, ...raw]) {
+    const type = String(value ?? '').trim();
+    if (type !== '' && !list.includes(type) && list.length < MAX_REPORT_TYPES) list.push(type);
+  }
+  return list;
+}
+
+/**
+ * The fields of all the report's types, in the order they should be asked:
+ * each type's own block keeps its own order, and a key two types share is asked
+ * once (the first type's label and requirements stand, which is what keeps
+ * "Quantity" from appearing twice with two different asterisks.
+ *
+ * @param {string[]} types
+ * @returns {Array<object>} TYPE_FIELDS-shaped entries, each tagged with `of`
+ *   (the type that put it there) so a caller can head the block per type.
+ */
+export function typeFieldsFor(types) {
+  const list = Array.isArray(types) ? types : [types];
+  const seen = new Set();
+  const fields = [];
+  for (const type of list) {
+    for (const fld of TYPE_FIELDS[type] ?? []) {
+      if (seen.has(fld.key)) continue;
+      seen.add(fld.key);
+      fields.push({ ...fld, of: type });
+    }
+  }
+  return fields;
+}
+
+/**
+ * The repeatable groups of all the report's types, by group key.
+ *
+ * A group key is the ROLE (see GROUP_ROW_RULES), so two selected types naming
+ * `complainant` are asking for one list of victims, not two: the first type's
+ * label is what the officer reads, and the STRICTEST floor wins (Assault needs a
+ * suspect, Theft does not — a report that is both needs one).
+ *
+ * @param {string[]} types
+ * @returns {Record<string, {label: string, minCount: number, itemSchema: object[], softWarnAt?: number}>}
+ */
+export function groupConfigFor(types) {
+  const list = Array.isArray(types) ? types : [types];
+  const merged = {};
+  for (const type of list) {
+    for (const [key, cfg] of Object.entries(GROUP_CONFIG[type] ?? {})) {
+      const existing = merged[key];
+      if (!existing) {
+        merged[key] = { ...cfg };
+        continue;
+      }
+      merged[key] = {
+        ...existing,
+        minCount: Math.max(existing.minCount ?? 0, cfg.minCount ?? 0),
+        softWarnAt: Math.max(existing.softWarnAt ?? DEFAULT_SOFT_WARN_AT, cfg.softWarnAt ?? DEFAULT_SOFT_WARN_AT),
+      };
+    }
+  }
+  return merged;
+}
+
+/**
+ * The specific-details blocks, one per selected type that has fields — the
+ * heading the officer reads over each block, and the fields in it.
+ *
+ * @param {string[]} types
+ * @returns {Array<{type: string, heading: string, fields: object[]}>}
+ */
+export function typeBlocksFor(types) {
+  const list = Array.isArray(types) ? types : [types];
+  const claimed = new Set();
+  const blocks = [];
+  for (const type of list) {
+    // A key two selected types share is asked in the FIRST block that declares
+    // it and not again: "CCTV Available" is one question, not one per offence.
+    const fields = (TYPE_FIELDS[type] ?? []).filter((fld) => !claimed.has(fld.key));
+    for (const fld of fields) claimed.add(fld.key);
+    if (fields.length === 0) continue;
+    blocks.push({ type, heading: BLOCK_HEADINGS[type] ?? 'Incident Details', fields });
+  }
+  return blocks;
+}
+
 // Default soft-warning threshold for person groups (UI-only, non-blocking).
 export const DEFAULT_SOFT_WARN_AT = 8;
 

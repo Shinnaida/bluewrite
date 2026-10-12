@@ -60,6 +60,7 @@ final class AuditsController
         'account.request_submitted', 'account.request_handled', 'account.request_unmatched',
         'report.create', 'report.update', 'report.finalize', 'report.archive', 'report.restore', 'report.print', 'report.export',
         'ai.narrative.generate',
+        'ai.terminology.ask',
     ];
 
     public function index(): void

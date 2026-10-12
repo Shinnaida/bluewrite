@@ -56,8 +56,16 @@ function entry(key) {
 }
 
 test('every chart panel offers its own explanation', () => {
-  // The trend chart's control is the colour key, which is the same panel behind it.
-  assert.match(component, /<Panel title="Reports over time" aside=\{<ChartKey byType=\{chartTypes\} \/>\}>/);
+  // The trend chart's control is the colour key, which is the same panel behind
+  // it — and since 2026-10-12 the head of that panel also carries the range's
+  // own name and a corner control, so what is asserted is that the KEY is still
+  // in the head's `aside` rather than that it is the only thing there.
+  assert.match(component, /title="Reports over time"/);
+  assert.match(
+    component,
+    /aside=\{\s*<>[\s\S]{0,400}?<ChartKey byType=\{chartTypes\} \/>/,
+    'the trend panel’s head no longer carries the colour key',
+  );
   assert.match(component, /function ChartKey\(\{ byType \}\) \{[\s\S]*?<PanelInfo/);
   // The other four are plain copy — and each names ITS OWN entry, so a copy-paste
   // that left one panel explaining another chart is a test failure.

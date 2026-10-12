@@ -158,6 +158,36 @@ final class AuthController
      */
     private function sessionPayload(array $user): array
     {
+        // THE PANEL'S IDENTITY BLOCK, READ HERE rather than taken from $user.
+        // Neither sign-in path SELECTS the columns it needs: the password path
+        // reads the credential and the lock counters, the second-factor path
+        // re-reads the account to check it is still usable — and neither asked
+        // for created_at, photo_path or photo_updated_at, so the profile panel
+        // opened straight after signing in showed "Member since —", "Last signed
+        // in Never", no standing chip, and initials where a saved photograph
+        // was (the photo_url built from a column that was never selected came out
+        // null). A second request for /me was the other way to fix it, and is
+        // exactly what this function exists to avoid — one sign-in response the
+        // client can stand the workspace up on.
+        //
+        // READ AFTER THE UPDATE, which is why it is a query and not a widening of
+        // the caller's SELECT: both paths stamp last_login_at before they get
+        // here, so this row carries the sign-in that is happening now rather than
+        // the one before it, identically in both flows.
+        $pdo = Database::pdo();
+        $stmt = $pdo->prepare(
+            'SELECT status, created_at, last_login_at, email, photo_path, photo_updated_at
+             FROM users WHERE id = :id LIMIT 1'
+        );
+        $stmt->execute([':id' => (int) $user['id']]);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            // The account went away between the UPDATE above and this read. The
+            // caller's own row is the best that is left, and Auth::login has
+            // already run — a 500 here would strand a session with no payload.
+            $row = [];
+        }
+
         return [
             'user' => [
                 'id' => (int) $user['id'],
@@ -165,13 +195,23 @@ final class AuthController
                 'badge_number' => $user['badge_number'],
                 'username' => $user['username'],
                 'role' => $user['role'],
+                // What the DEPARTMENT records about the account — the three lines
+                // the profile panel shows and deliberately does not offer to
+                // change, and the address the second factor is sent to. Sent here
+                // for the same reason /me sends them: they belong to this session's
+                // own row, and an officer reading their own record should not have
+                // to wait for a second request to see it.
+                'status' => $row['status'] ?? $user['status'] ?? null,
+                'created_at' => $row['created_at'] ?? null,
+                'last_login_at' => $row['last_login_at'] ?? null,
+                'email' => ($row['email'] ?? null) === null || $row['email'] === '' ? null : (string) $row['email'],
                 // The same sentence as /me's: the workspace is handed its own face
                 // at sign-in rather than a second request for one image, and null
                 // means there is none to draw.
                 'photo_url' => AvatarPhoto::url(
                     (int) $user['id'],
-                    $user['photo_path'] ?? null,
-                    $user['photo_updated_at'] ?? null
+                    $row['photo_path'] ?? null,
+                    $row['photo_updated_at'] ?? null
                 ),
             ],
             // Phase 6 Stage 5 (Track A, D3) — the registry also rides the
@@ -210,15 +250,21 @@ final class AuthController
      * email the code it will be answered with.
      *
      * THIS IS THE WHOLE POINT OF THE DESIGN, so it is worth being explicit about
-     * what the session is and is not. `$_SESSION['user_id']` is NOT set, and
-     * anything set from a previous session is cleared first — so every endpoint
-     * behind Auth::requireUser (which is every endpoint that touches a report, a
-     * user or a setting) answers 401 to this browser. What the session carries is
-     * one small array saying "the password for account N was accepted at time T".
-     * Nothing is readable with a half-finished sign-in.
+     * what is signed in and what is not. THIS TAB holds no account: its context
+     * — see Session, which keeps one per tab — has its identity cleared first, so
+     * every endpoint behind Auth::requireUser (which is every endpoint that
+     * touches a report, a user or a setting) answers 401 to this tab. What it
+     * carries instead is one small array saying "the password for account N was
+     * accepted at time T". Nothing is readable with a half-finished sign-in.
      *
-     * A fresh session id is issued on the way in, so the pending state cannot be
-     * inherited from anything and nothing from before the sign-in survives.
+     * NO OTHER TAB IS TOUCHED, which is the difference between a half-finished
+     * sign-in and a browser that is half signed out: the tab beside this one
+     * keeps whatever account it was holding, because it has its own context.
+     *
+     * A fresh SESSION id is issued on the way in, so the pending state cannot be
+     * inherited from anything and nothing from before the sign-in survives. The
+     * other tabs survive that too: regenerating moves the session's data to the
+     * new id rather than emptying it (see Auth::login).
      *
      * THREE THINGS ARE CHECKED BEFORE ANY OF THAT, and each has its own sentence:
      * the account needs an address to send to, the factor must not be locked, and
@@ -261,7 +307,12 @@ final class AuthController
                     'locked_until' => $status['locked_until'],
                     // The offline route is untouched by the email lock, so a
                     // locked mailbox does not have to mean a locked account.
-                    'mfa' => $this->secondFactorPayload($userId, $email),
+                    // No sign-in id: this refusal is answered BEFORE the pending
+                    // sign-in exists (see the ordering note above), so there is
+                    // none for the payload to name — and the client treats this
+                    // code as "start again", so it never reaches a code screen
+                    // holding it.
+                    'mfa' => $this->secondFactorPayload($userId, $email, null),
                 ]);
             }
         }
@@ -274,15 +325,45 @@ final class AuthController
         // open.
         Session::start();
         session_regenerate_id(true);
-        unset($_SESSION['user_id'], $_SESSION['role']);
-        $_SESSION['mfa_pending'] = [
+        // THIS TAB holds no account while it owes a factor — and, since the
+        // per-tab change, neither does any other tab: `clearIdentity` and
+        // `setPending` below touch this tab's own context (see Session).
+        Session::clearIdentity();
+
+        // THE SIGN-IN'S OWN NAME, minted fresh with every pending sign-in and
+        // handed to the gate on every payload that describes one.
+        //
+        // WHAT IT IS FOR, now that each tab holds its own pending sign-in. The
+        // trap it was written for is gone: two tabs no longer overwrite each
+        // other, so the officer who signs in twice in one browser gets two code
+        // screens that both work. What is left is the screen that outlives its
+        // own sign-in WITHIN one tab — the tab signed in again (Start over, a
+        // resubmitted form, a back-button re-entry), or the tab was duplicated
+        // and the duplicate typed into the copy it inherited — and there the
+        // old failure is still waiting: a code that is correct, unexpired and
+        // correctly spelled, for a sign-in that is no longer the one this
+        // browser tab is holding, refused as "not right" three times.
+        //
+        // The id is what makes that answerable as itself. It rides back with
+        // every submitted code (see mfaVerify), so a screen from a superseded
+        // sign-in is refused as one — with the live sign-in's state and none of
+        // the five tries spent — rather than blamed on the officer's typing.
+        //
+        // IT IS RANDOM rather than the account id or a timestamp: it is printed
+        // nowhere and read by nobody, it goes out in a response body and comes
+        // back in a request body, and nothing about the account should be
+        // inferable from it. It is NOT a credential either — see mfaVerify for
+        // why a missing one does not refuse.
+        $signInId = bin2hex(random_bytes(16));
+
+        Session::setPending([
             'user_id' => $userId,
+            'sign_in_id' => $signInId,
             'stage' => 'verify',
             'started_at' => time(),
             'expires_at' => time() + self::MFA_PENDING_MINUTES * 60,
             'attempts' => 0,
-        ];
-        $_SESSION['last_activity'] = time();
+        ]);
 
         // Recorded as its own event rather than as a login: the password was
         // accepted and NOTHING was signed in. A trail that showed `login.success`
@@ -294,7 +375,7 @@ final class AuthController
         // no-factor case returned above.)
         if ($email === '') {
             Response::json(200, [
-                'mfa' => $this->secondFactorPayload($userId, $email),
+                'mfa' => $this->secondFactorPayload($userId, $email, $signInId),
                 'csrf_token' => \App\Core\Csrf::token(),
                 'expires_at' => time() + self::MFA_PENDING_MINUTES * 60,
             ]);
@@ -309,7 +390,7 @@ final class AuthController
                 'error' => 'This server cannot send sign-in codes yet. Ask an administrator to finish the mail settings.',
                 'code' => 'mfa_mail_failed',
                 'csrf_token' => \App\Core\Csrf::token(),
-                'mfa' => $this->secondFactorPayload($userId, $email),
+                'mfa' => $this->secondFactorPayload($userId, $email, $signInId),
                 'expires_at' => time() + self::MFA_PENDING_MINUTES * 60,
             ]);
         }
@@ -329,13 +410,13 @@ final class AuthController
                 'error' => $e->getMessage(),
                 'code' => 'mfa_mail_failed',
                 'csrf_token' => \App\Core\Csrf::token(),
-                'mfa' => $this->secondFactorPayload($userId, $email),
+                'mfa' => $this->secondFactorPayload($userId, $email, $signInId),
                 'expires_at' => time() + self::MFA_PENDING_MINUTES * 60,
             ]);
         }
 
         Response::json(200, [
-            'mfa' => $this->secondFactorPayload($userId, $email),
+            'mfa' => $this->secondFactorPayload($userId, $email, $signInId),
             'csrf_token' => \App\Core\Csrf::token(),
             'expires_at' => time() + self::MFA_PENDING_MINUTES * 60,
         ]);
@@ -364,8 +445,16 @@ final class AuthController
      * The gate shows where the code went (`email_hint`), how long it lives, and
      * how long until another may be requested — and it must be handed the same
      * shape whether it asked at sign-in, at a reload, or after a resend.
+     *
+     * `$signInId` is the pending sign-in this payload describes (see
+     * beginSecondFactor), and it is a REQUIRED argument rather than a read of the
+     * session inside here, because the one caller that has no pending sign-in
+     * — the locked-at-sign-in refusal — must be able to say so. A payload that
+     * named an id the session no longer holds would be worse than one naming
+     * none: the gate would send it back with the next code and be told its screen
+     * was superseded when it is in fact the current one.
      */
-    private function secondFactorPayload(int $userId, string $email): array
+    private function secondFactorPayload(int $userId, string $email, ?string $signInId): array
     {
         $status = EmailOtp::status($userId, null, $email);
         $recovery = RecoveryCodes::status($userId);
@@ -373,6 +462,11 @@ final class AuthController
         return [
             'required' => true,
             'stage' => 'verify',
+            // WHICH SIGN-IN THIS IS. Every payload that describes a pending
+            // sign-in carries it, so the gate can hold one and hand it back with
+            // each code it submits — see mfaVerify for what the server does with
+            // it, and beginSecondFactor for the two-tabs case it exists for.
+            'sign_in_id' => $signInId,
             'email_hint' => $status['email_hint'],
             'attempts' => $status['attempts_left'],
             'resend_in' => $status['resend_in'],
@@ -407,7 +501,7 @@ final class AuthController
      */
     private function requirePendingSecondFactor(): array
     {
-        $pending = $_SESSION['mfa_pending'] ?? null;
+        $pending = Session::pending();
         if (!is_array($pending) || !isset($pending['user_id'], $pending['expires_at'])) {
             Response::json(401, ['error' => 'Your sign-in expired. Enter your password again.', 'code' => 'mfa_pending_missing']);
         }
@@ -446,10 +540,10 @@ final class AuthController
         $pdo->prepare('UPDATE users SET last_login_at = NOW() WHERE id = :id')->execute([':id' => $userId]);
 
         // The pending state is destroyed by logging in, which regenerates the
-        // session id and sets the real session keys; the array itself is cleared
-        // explicitly so a later read cannot find it.
+        // session id and writes this tab's account; the pending array itself is
+        // cleared explicitly so a later read cannot find it.
         Auth::login($user);
-        unset($_SESSION['mfa_pending']);
+        Session::clearPending();
 
         Audit::log($userId, $auditAction, 'user', (string) $userId, $auditNote);
         Audit::log($userId, 'login.success', 'user', (string) $userId, 'after second factor');
@@ -492,7 +586,7 @@ final class AuthController
     public function mfaStatus(): void
     {
         Session::start();
-        $pending = $_SESSION['mfa_pending'] ?? null;
+        $pending = Session::pending();
         $expired = is_array($pending) && isset($pending['expires_at']) && (int) $pending['expires_at'] < time();
         if (!is_array($pending) || $expired) {
             if ($expired) {
@@ -507,7 +601,7 @@ final class AuthController
         $email = (string) (EmailOtp::emailFor($userId) ?? '');
 
         Response::json(200, [
-            'mfa' => $this->secondFactorPayload($userId, $email),
+            'mfa' => $this->secondFactorPayload($userId, $email, $pending['sign_in_id'] ?? null),
             'csrf_token' => \App\Core\Csrf::token(),
             'expires_at' => (int) $pending['expires_at'],
         ]);
@@ -590,7 +684,7 @@ final class AuthController
 
         Audit::log($userId, 'mfa.code_resent', 'user', (string) $userId, 'a new sign-in code was requested');
 
-        Response::json(200, ['mfa' => $this->secondFactorPayload($userId, $email)]);
+        Response::json(200, ['mfa' => $this->secondFactorPayload($userId, $email, $pending['sign_in_id'] ?? null)]);
     }
 
     /**
@@ -599,6 +693,14 @@ final class AuthController
      * Every refusal says WHICH kind of refusal it is and how many tries are left,
      * because the one-sentence version of this screen ("invalid code") leaves an
      * officer rereading an old message over and over.
+     *
+     * THE FIRST QUESTION IS NOT ABOUT THE CODE, IT IS ABOUT THE SCREEN: is this
+     * the sign-in the gate was drawn for? Each tab holds its own pending sign-in
+     * (see Session), so the ordinary two-tab case is answered by the tab id
+     * before this endpoint is even reached — but a screen can still outlive its
+     * own sign-in inside ONE tab (a re-sign-in, a duplicated tab). The id answers
+     * that, and it is asked BEFORE the code is looked at, because the answer
+     * decides whether the code is even a guess at anything here.
      */
     public function mfaVerify(): void
     {
@@ -606,7 +708,21 @@ final class AuthController
         Session::start();
         $pending = $this->requirePendingSecondFactor();
         $userId = (int) $pending['user_id'];
-        $code = trim((string) ($this->jsonBody()['code'] ?? ''));
+        $body = $this->jsonBody();
+        $code = trim((string) ($body['code'] ?? ''));
+        $signInId = trim((string) ($body['sign_in_id'] ?? ''));
+
+        $liveSignInId = (string) ($pending['sign_in_id'] ?? '');
+
+        // A MISSING ID IS NOT A REFUSAL, and that is deliberate on both sides of
+        // the wire. This check is a way to tell two screens apart, not a
+        // credential — the code and its own counter are what the factor rests
+        // on — and a request without one is a request that cannot be told apart,
+        // which is exactly how this endpoint behaved before the id existed. So a
+        // bundle from an already-open tab, or any other client, keeps working.
+        if ($signInId !== '' && $liveSignInId !== '' && !hash_equals($liveSignInId, $signInId)) {
+            $this->refuseStaleSignIn($userId, $liveSignInId);
+        }
 
         $result = EmailOtp::verify($userId, $code);
 
@@ -615,6 +731,56 @@ final class AuthController
         }
 
         $this->completeSecondFactor($pending, 'mfa.verified', 'code accepted from the email message');
+    }
+
+    /**
+     * A code sent by a screen that belongs to a sign-in this browser no longer
+     * holds — refused WITHOUT touching the attempt counter.
+     *
+     * WHAT ACTUALLY HAPPENED TO GET HERE, because it is not the officer's
+     * mistake and the sentence has to make that plain: they signed in twice in
+     * the same browser (two tabs, or a second sign-in after walking away from the
+     * first) and then answered the code screen of the FIRST one. The session is
+     * one per browser, so the SECOND sign-in is what every tab now submits to —
+     * while the first tab still names its own mailbox. The digits typed are a
+     * real code, unexpired, from a message the station really sent; they are just
+     * not the code for the sign-in this request is part of.
+     *
+     * WHY IT IS NOT COUNTED. The counter exists to make guessing expensive. This
+     * is not a guess, and the officer may need every one of the five tries on the
+     * screen that matches the mail their code actually came from.
+     *
+     * THE LIVE STATE RIDES ALONG, which is what makes the refusal recoverable
+     * rather than merely truthful: `mfa` describes the sign-in THIS TAB is
+     * holding — the mailbox, the tries left, the resend window — so the gate can
+     * redraw itself as that sign-in, name the inbox the next code has to come
+     * from, and leave the officer one keystroke from signing in.
+     */
+    private function refuseStaleSignIn(int $userId, ?string $signInId): void
+    {
+        // The address is RE-READ rather than taken from the request, for the
+        // reason mfaStatus re-reads it: an Admin can change it between the
+        // password and the code, and the sentence has to name the mailbox the
+        // code will really be sent to.
+        $email = (string) (EmailOtp::emailFor($userId) ?? '');
+        $hint = EmailOtp::maskEmail($email);
+        $where = $hint === '' ? '' : " The sign-in this tab is holding sends its code to {$hint}.";
+
+        Audit::log(
+            $userId,
+            'mfa.stale_sign_in',
+            'user',
+            (string) $userId,
+            'a code arrived from a superseded sign-in'
+        );
+
+        Response::json(401, [
+            'error' => 'This screen was left open from an earlier sign-in, so that code does not belong to it.'
+                . $where
+                . ' Enter the code sent there, or start over.',
+            'code' => 'mfa_stale_sign_in',
+            'mfa' => $this->secondFactorPayload($userId, $email, $signInId),
+        ]);
     }
 
     /**

@@ -7,6 +7,7 @@ use App\Core\Audit;
 use App\Core\Auth;
 use App\Core\Database;
 use App\Core\DraftProgress;
+use App\Core\IncidentTypes;
 use App\Core\LanguageRegistry;
 use App\Core\ReportVerification;
 use App\Core\Response;
@@ -120,6 +121,89 @@ final class ReportsController
      * that says 'ceb' must not quietly become 'en', because the language is
      * what tells a reader the narrative is not English.
      */
+    /**
+     * How many incident types one report may carry. The client states the same
+     * number (MAX_REPORT_TYPES in src/lib/incidentTypes.js) and the form will not
+     * add a fifth; this is the copy that decides.
+     */
+    private const MAX_REPORT_TYPES = 4;
+
+    /**
+     * Does this database have the column? (`incident_types`, migration 020.)
+     *
+     * MIGRATION 020 IS NOT PART OF EVERY DATABASE YET, and every query that names
+     * the column — the register's SELECT, the INSERT, the PATCH builder — answers
+     * "Unknown column" on a deployment that has not applied it. The column is
+     * therefore named only when INFORMATION_SCHEMA says it is there, which is the
+     * same guard scripts/export-offline.php uses for reports.reporter_role.
+     * Without it a station whose database is a migration behind cannot save ANY
+     * report, which is a far worse failure than a compound incident being filed
+     * under its primary type alone.
+     */
+    private function hasReportColumn(PDO $pdo, string $column): bool
+    {
+        try {
+            $probe = $pdo->prepare(
+                "SELECT 1 FROM information_schema.COLUMNS
+                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'reports' AND COLUMN_NAME = :c
+                  LIMIT 1"
+            );
+            $probe->execute([':c' => $column]);
+            return (bool) $probe->fetchColumn();
+        } catch (Throwable $e) {
+            // No rights on information_schema: take the safer half of the bet,
+            // which is the one every deployment before 020 is in.
+            return false;
+        }
+    }
+
+    /**
+     * The incident types off a request body, primary first.
+     *
+     * TWO SHAPES, ONE ANSWER, so no client has to know about the other: a client
+     * that sends `incident_types` (the form) gets that list, and a client that
+     * sends only `incident_type` (every build before this one, and the API driven
+     * by hand) gets a list of one. Order is the client's — the FIRST type is the
+     * primary and is what `incident_type` is set to — blanks and repeats are
+     * dropped rather than refused, and an unknown name is a 422, never a coercion:
+     * a report filed as "Illegal Gambling" would have no field blocks, no groups
+     * and no place on the dashboard.
+     *
+     * @return string[] ready to be validated against allowedTypes()
+     */
+    private function incidentTypesFrom(array $body, Validator $v): array
+    {
+        $raw = $body['incident_types'] ?? null;
+        if (is_array($raw) && array_is_list($raw)) {
+            $candidates = $raw;
+        } elseif (array_key_exists('incident_type', $body)) {
+            $candidates = [$body['incident_type']];
+        } else {
+            return [];
+        }
+
+        $allowed = $this->allowedTypes();
+        $list = [];
+        foreach ($candidates as $value) {
+            if (!is_string($value)) {
+                Response::json(422, ['error' => 'Incident types must be text.']);
+            }
+            $type = trim($value);
+            if ($type === '' || in_array($type, $list, true)) {
+                continue;
+            }
+            if (!in_array($type, $allowed, true)) {
+                $v->add('incident_types', "\"{$type}\" is not an incident type this station records.");
+                continue;
+            }
+            $list[] = $type;
+            if (count($list) >= self::MAX_REPORT_TYPES) {
+                break;
+            }
+        }
+        return $list;
+    }
+
     private function narrativeLanguage(array $body, Validator $v): ?string
     {
         if (!array_key_exists('narrative_language', $body) || $body['narrative_language'] === null) {
@@ -136,7 +220,7 @@ final class ReportsController
      * v3 group arrays (per GroupRules config). Keys snake_case, scalars max
      * 500 chars, group items validated per-instance by ReportRules.
      */
-    private function sanitizeTypeSpecific(mixed $raw, ?string $incidentType = null, bool $finalizing = false): ?string
+    private function sanitizeTypeSpecific(mixed $raw, string|array|null $incidentType = null, bool $finalizing = false): ?string
     {
         if ($raw === null) {
             return null;
@@ -151,10 +235,19 @@ final class ReportsController
             Response::json(422, ['error' => 'type_specific has too many fields.']);
         }
 
+        // ONE REPORT, SEVERAL TYPES: every rule below that used to be asked of
+        // the report's single type is asked of EACH of its types, and the blob
+        // they see is the same one — the types' blocks share one namespace of
+        // keys and one set of group lists, exactly as the client writes them.
+        $types = $incidentType === null ? [] : (array) $incidentType;
+
         // Group keys are claimed by ReportRules; scalar keys handled here.
         $groupKeys = [];
-        if ($incidentType !== null) {
-            foreach ((ReportRules::groupsFor($incidentType) ?? []) as $gk => $ignored) {
+        foreach ($types as $type) {
+            if (!is_string($type) || $type === '') {
+                continue;
+            }
+            foreach ((ReportRules::groupsFor($type) ?? []) as $gk => $ignored) {
                 $groupKeys[$gk] = true;
             }
         }
@@ -206,8 +299,11 @@ final class ReportsController
         // gets validated is exactly what gets stored — and a client that only
         // sends the groups (the form) or only the flat scalars (an older build)
         // both end up with a report the sheet can print. See ReportRules::MIRRORS.
-        if ($incidentType !== null) {
-            $clean = ReportRules::applyMirrors($clean, $incidentType);
+        foreach ($types as $type) {
+            if (!is_string($type) || $type === '') {
+                continue;
+            }
+            $clean = ReportRules::applyMirrors($clean, $type);
             // ...and take off a value the row is no longer SHOWING before it is
             // stored, not only before it is printed: a suspect recorded as
             // unidentified must not keep a name that the sheet, the AI context
@@ -215,12 +311,18 @@ final class ReportsController
             $clean = ReportRules::stripHiddenGroupFields($clean);
         }
 
-        // Gate 2: per-item rule validation for the given type.
-        if ($incidentType !== null) {
-            $errors = ReportRules::validateTypeSpecific($clean, $incidentType, $finalizing);
-            if ($errors !== []) {
-                Response::json(422, ['error' => 'The report has invalid fields.', 'details' => $errors]);
+        // Gate 2: per-item rule validation, ONCE PER TYPE — a break-in that is
+        // also a theft has to satisfy the break-in's rules and the theft's, and
+        // both reports come back in one 422.
+        $errors = [];
+        foreach ($types as $type) {
+            if (!is_string($type) || $type === '') {
+                continue;
             }
+            $errors = array_merge($errors, ReportRules::validateTypeSpecific($clean, $type, $finalizing));
+        }
+        if ($errors !== []) {
+            Response::json(422, ['error' => 'The report has invalid fields.', 'details' => $errors]);
         }
 
         return $clean === [] ? null : json_encode($clean, JSON_UNESCAPED_UNICODE);
@@ -257,7 +359,11 @@ final class ReportsController
         // blob and the narrative are read for the DRAFT PROGRESS read-out and are
         // stripped again below, with the narrative the list has always dropped:
         // what leaves this endpoint is a count, not the officer's own words.
-        $sql = "SELECT r.id, r.incident_type, r.report_date, r.blotter_no, r.blotter_date,
+        // Migration 020's list is named only when the schema has it (see
+        // hasReportColumn), so a database a migration behind still answers the
+        // register instead of "Unknown column".
+        $hasTypes = $this->hasReportColumn($pdo, 'incident_types');
+        $sql = "SELECT r.id, r.incident_type, " . ($hasTypes ? 'r.incident_types, ' : '') . "r.report_date, r.blotter_no, r.blotter_date,
                     r.incident_datetime, r.incident_date, r.incident_time,
                     r.incident_time_approximate, r.location, r.status,
                     r.narrative_language, r.narrative_source_language,
@@ -287,6 +393,14 @@ final class ReportsController
             // half-written report, so the number is only ever interesting on a
             // draft, and the card divides by `total` either way.
             $row['progress'] = DraftProgress::forRow($row);
+            // WHAT THE ROW CALLS ITS INCIDENT, decided HERE because the blob the
+            // name is read out of is stripped on the next line: a report filed
+            // under the catch-all type is listed under the officer's own words
+            // for it ("Illegal Gambling"), and a compound report shows all of
+            // its types. Both rules live in one place — app/core/IncidentTypes.php,
+            // mirrored by src/lib/incidentTypes.js.
+            $row['incident_type_label'] = IncidentTypes::label($row);
+            $row['incident_types'] = IncidentTypes::listFrom($row);
             unset(
                 $row['narrative'],
                 $row['narrative_source_text'],
@@ -467,7 +581,13 @@ final class ReportsController
         $createdBy = (int) ($_GET['created_by'] ?? 0);
         if ($createdBy > 0) {
             if ($user['role'] !== 'Admin') {
-                Response::json(403, ['error' => 'Your account does not have permission to perform this action.']);
+                // A role gate, marked like the one in Auth::requireRole so the
+                // workspace can recognise a session that no longer matches the
+                // tab's own state and reconcile it (see lib/api.js).
+                Response::json(403, [
+                    'error' => 'Your account does not have permission to perform this action.',
+                    'code' => 'forbidden',
+                ]);
             }
             $where[] = 'r.created_by = :created_by';
             $params[':created_by'] = $createdBy;
@@ -675,10 +795,21 @@ final class ReportsController
         // Status filter. `submitted` sits between draft and finalized in
         // the workflow; `attention` is the dashboard's working set (anything
         // not yet finalized). Admin filters the review queue with these.
+        //
+        // `filed` IS THE OFFICER'S OWN ANSWER (owner request, 2026-10-13): the
+        // officer's screens do not offer `submitted` at all — a report that has
+        // left their hands is FINALIZED, one word — so their filter asks for
+        // everything sent, which is the same set the `submitted` BUCKET below
+        // holds. It is stated here rather than reusing that bucket because the
+        // two are asked different questions (a list filter vs a shelf count) and
+        // both run through this same $where, so a report cannot be counted on the
+        // officer's shelf and missing from their filtered list.
         $status = trim((string) ($_GET['status'] ?? ''));
         if ($status !== '') {
             if ($status === 'attention') {
                 $where[] = "r.status != 'finalized'";
+            } elseif ($status === 'filed') {
+                $where[] = "r.status IN ('submitted', 'finalized')";
             } elseif (in_array($status, ['draft', 'submitted', 'finalized'], true)) {
                 $where[] = 'r.status = :status';
                 $params[':status'] = $status;
@@ -746,8 +877,14 @@ final class ReportsController
         $body = $this->jsonBody();
 
         $v = new Validator();
-        $v->require('incident_type', $body['incident_type'] ?? null, 'Incident type', 60);
-        $v->in('incident_type', $body['incident_type'] ?? null, $this->allowedTypes(), 'Incident type');
+        // THE REPORT'S TYPES, PRIMARY FIRST. `incident_types` is the list the
+        // form sends; `incident_type` alone is every caller that predates it,
+        // and the two are one report with one primary type either way. What is
+        // stored in `incident_type` is the primary, so every existing reader
+        // (folders, filters, sort, dashboard bands, the sheet) is untouched.
+        $types = $this->incidentTypesFrom($body, $v);
+        $v->require('incident_type', $types[0] ?? null, 'Incident type', 60);
+        $v->in('incident_type', $types[0] ?? null, $this->allowedTypes(), 'Incident type');
         // The incident date/time may arrive either as the two document fields
         // (spec §1.2) or as the legacy combined incident_datetime.
         $officialFields = $this->officialFields($body, $v);
@@ -771,13 +908,16 @@ final class ReportsController
         $v->optional('ioc_name', $body['ioc_name'] ?? null, 'Investigator-on-case', 120);
         $typeSpecific = $this->sanitizeTypeSpecific(
             $body['type_specific'] ?? null,
-            $body['incident_type'] ?? null,
+            $types,
             ($body['status'] ?? 'draft') === 'finalized',
         );
         $this->fail($v);
 
         $status = 'draft'; // created reports always start as drafts
         $pdo = Database::pdo();
+        // Named only when the column exists (see hasReportColumn): a database a
+        // migration behind still stores the report under its primary type.
+        $hasTypes = $this->hasReportColumn($pdo, 'incident_types');
 
         // Legacy clients send one datetime; the document fields win when both
         // shapes arrive. An unknown time stays NULL rather than defaulting to
@@ -791,7 +931,7 @@ final class ReportsController
         }
 
         $stmt = $pdo->prepare(
-            'INSERT INTO reports (created_by, incident_type, report_date, blotter_no, blotter_date,
+            'INSERT INTO reports (created_by, incident_type' . ($hasTypes ? ', incident_types' : '') . ', report_date, blotter_no, blotter_date,
                                   incident_datetime, incident_date, incident_time, incident_time_approximate,
                                   discovery_date, discovery_time, discovery_time_approximate,
                                   location, complainant, respondent, narrative, narrative_language,
@@ -799,7 +939,7 @@ final class ReportsController
                                   reporter_name, reporter_contact,
                                   reporter_address,
                                   type_specific, status)
-             VALUES (:created_by, :type, :report_date, :blotter_no, :blotter_date,
+             VALUES (:created_by, :type' . ($hasTypes ? ', :types' : '') . ', :report_date, :blotter_no, :blotter_date,
                      :dt, :incident_date, :incident_time, :incident_time_approx,
                      :discovery_date, :discovery_time, :discovery_time_approx,
                      :loc, :comp, :resp, :narr, :narr_lang, :act, :ioc,
@@ -807,9 +947,9 @@ final class ReportsController
                      :reporter_address,
                      :ts, :status)'
         );
-        $stmt->execute([
+        $params = [
             ':created_by' => (int) $user['id'],
-            ':type' => trim((string) $body['incident_type']),
+            ':type' => $types[0],
             ':report_date' => $official['report_date'] ?? date('Y-m-d'),
             ':blotter_no' => $official['blotter_no'],
             ':blotter_date' => $official['blotter_date'],
@@ -832,12 +972,16 @@ final class ReportsController
             ':reporter_address' => $official['reporter_address'],
             ':ts' => $typeSpecific,
             ':status' => $status,
-        ]);
+        ];
+        if ($hasTypes) {
+            $params[':types'] = json_encode($types, JSON_UNESCAPED_UNICODE);
+        }
+        $stmt->execute($params);
         $id = (int) $pdo->lastInsertId();
 
         $this->snapshot($pdo, $id, (int) $user['id'], 'Report created (draft).');
 
-        Audit::log((int) $user['id'], 'report.create', 'report', (string) $id, "type: {$body['incident_type']}");
+        Audit::log((int) $user['id'], 'report.create', 'report', (string) $id, 'type: ' . implode(', ', $types));
         Response::json(201, [
             'report' => ['id' => $id, 'status' => $status],
             'warnings' => $officialFields['warnings'],
@@ -873,8 +1017,15 @@ final class ReportsController
         }
 
         $v = new Validator();
-        if (array_key_exists('incident_type', $body)) {
-            $v->in('incident_type', $body['incident_type'], $this->allowedTypes(), 'Incident type');
+        // THE REPORT'S TYPES AFTER THIS PATCH (see store()): the list when the
+        // body carries one, else the single type, else what the row already has.
+        // `incident_type` is set to the list's first, so the primary stays the
+        // primary however the list is reordered.
+        $types = array_key_exists('incident_types', $body) || array_key_exists('incident_type', $body)
+            ? $this->incidentTypesFrom($body, $v)
+            : (array) ($report['incident_type'] !== null && $report['incident_type'] !== '' ? [$report['incident_type']] : []);
+        if (array_key_exists('incident_type', $body) || array_key_exists('incident_types', $body)) {
+            $v->in('incident_type', $types[0] ?? null, $this->allowedTypes(), 'Incident type');
         }
         if (array_key_exists('incident_datetime', $body)) {
             $v->datetime('incident_datetime', $body['incident_datetime'], 'Date and time of incident');
@@ -973,7 +1124,7 @@ final class ReportsController
         $typeSpecific = array_key_exists('type_specific', $body)
             ? $this->sanitizeTypeSpecific(
                 $body['type_specific'],
-                $body['incident_type'] ?? $report['incident_type'] ?? null,
+                $types,
                 ($body['status'] ?? null) === 'finalized'
                     || (($body['status'] ?? null) === null && ($report['status'] ?? '') === 'finalized'),
             )
@@ -1024,11 +1175,15 @@ final class ReportsController
                 // validated like any other — otherwise a report that never had
                 // a type_specific column value could be finalized with none of
                 // its incident type's fields filled in.
-                $groupErrors = ReportRules::validateTypeSpecific(
-                    is_array($storedBlob) ? $storedBlob : [],
-                    (string) ($body['incident_type'] ?? $report['incident_type']),
-                    true
-                );
+                // …once per type (see sanitizeTypeSpecific): a compound report is
+                // not complete until every one of its types is.
+                $groupErrors = [];
+                foreach ($types as $type) {
+                    $groupErrors = array_merge(
+                        $groupErrors,
+                        ReportRules::validateTypeSpecific(is_array($storedBlob) ? $storedBlob : [], (string) $type, true)
+                    );
+                }
                 if ($groupErrors !== []) {
                     Response::json(422, [
                         'error' => 'The report has invalid fields.',
@@ -1059,6 +1214,16 @@ final class ReportsController
         $sets = [];
         $params = [':id' => $reportId];
 
+        // The list column is written only when the schema has it, and its value
+        // is the types AFTER this patch rather than a list the body happened to
+        // send (see $types above) — a PATCH that changes only the type gets the
+        // column updated with the same one item.
+        $hasTypes = $this->hasReportColumn($pdo, 'incident_types');
+        if ($hasTypes && (array_key_exists('incident_types', $body) || array_key_exists('incident_type', $body))) {
+            $sets[] = 'incident_types = :incident_types';
+            $params[':incident_types'] = json_encode($types, JSON_UNESCAPED_UNICODE);
+        }
+
         $map = [
             'incident_type' => 'incident_type',
             'incident_datetime' => 'incident_datetime',
@@ -1085,6 +1250,11 @@ final class ReportsController
                 $val = $body[$key];
                 if (is_string($val)) {
                     $val = $col === 'incident_datetime' ? $this->normalizeDt($val) : trim($val);
+                }
+                // `incident_type` is the PRIMARY type after this patch, even
+                // when the body sent only a list: the two columns cannot drift.
+                if ($col === 'incident_type' && ($types[0] ?? null) !== null) {
+                    $val = $types[0];
                 }
                 $params[":{$col}"] = $val;
             }

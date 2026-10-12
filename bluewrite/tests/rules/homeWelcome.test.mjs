@@ -257,15 +257,25 @@ test('the reminder card is MY REGISTER: the totals and the type bars', async () 
   assert.match(html, /My register/i, 'the card lost its title');
   assert.ok(!html.includes('ir-remember-title-mark'), 'the reminder heading drew a mark again');
 
-  // THE TWO TILES, from the ONE tally: total reports, then drafts. The
-  // fixture's TALLY holds 7 reports, 3 of them drafts — asserted here so a
+  // THE TWO TILES, from the ONE tally: total reports, then the finalized count.
+  // The fixture's TALLY holds 7 reports, 3 of them drafts — asserted here so a
   // computation that drifted from the tally cannot pass unseen.
+  //
+  // THE SECOND TILE IS THE SENT WORK (owner request, 2026-10-13: "change the
+  // drafts to finalized"): it used to state the drafts, which made the card's
+  // two numbers overlap, and it is now the complement of the total — so 7 and 4
+  // here, and the pair always adds up.
   const statsAt = html.indexOf('ir-remember-stats');
   const stats = html.slice(statsAt, html.indexOf('</dl>', statsAt));
   assert.match(stats, /Total reports/, 'the card lost its total tile');
-  assert.match(stats, /Drafts/, 'the card lost its drafts tile');
+  assert.match(stats, /Finalized/, 'the card lost its finalized tile');
+  assert.doesNotMatch(stats, /Drafts/, 'the card still states the drafts');
   assert.match(stats, /<dd class="ir-remember-stat-num">7<\/dd>/, 'the total is not the tally\'s sum');
-  assert.match(stats, /<dd class="ir-remember-stat-num">3<\/dd>/, 'the draft count is not the tally\'s drafts');
+  assert.match(
+    stats,
+    /<dd class="ir-remember-stat-num">4<\/dd>/,
+    'the finalized count is not the tally\'s remainder (7 written, 3 still drafts)',
+  );
 
   // THE BAR GRAPH: only the three largest types, largest first, each carrying
   // its count as the fact the bar decorates — no scroll, no "Other" row.

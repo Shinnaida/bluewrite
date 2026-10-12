@@ -1,5 +1,71 @@
 export const API = '/api/v1';
 
+// --- Which tab this is ----------------------------------------------------
+//
+// ONE BROWSER, MANY TABS, AND NOW MANY ACCOUNTS. A session cookie is per
+// browser, so every tab of this origin shares one server-side session — which
+// meant the second sign-in replaced the first sign-in's pending state for the
+// whole browser while the first tab went on drawing its own screen, and a
+// correct emailed code came back "not right" (see app/core/Session.php, which
+// keeps one context per tab). This header is how the server is told which tab a
+// request came from.
+//
+// THE ID LIVES IN sessionStorage, deliberately, for the reason the report drafts
+// live there (see lib/offlineCache.js): it is PER TAB. It survives a reload of
+// this tab, copies when the tab is duplicated (a duplicate should continue the
+// account it was cloned from), and is NOT shared with the tab beside it. That
+// last part is the whole point — localStorage would name one tab for the whole
+// browser and hand both tabs the same account again.
+//
+// IT IS NOT A CREDENTIAL. It names a slot inside a session the browser must
+// still hold the cookie for, so a guessed id cannot reach an account (see
+// Session::tabId for what the server does with it, and for the shape it
+// accepts). A browser that will not part with sessionStorage — privacy modes
+// throw on USE rather than on access — still gets a working app: the id is
+// minted in memory, and two tabs of that browser share one sign-in, which is
+// exactly the behaviour before tabs had names.
+const TAB_HEADER = 'X-BlueWrite-Tab';
+const TAB_KEY = 'bluewrite.tab';
+
+let tabId = null;
+
+/** This tab's id: remembered for the life of the page, minted once if needed. */
+function currentTabId() {
+  if (tabId !== null) return tabId;
+  try {
+    const store = globalThis.sessionStorage;
+    const held = store?.getItem(TAB_KEY);
+    if (held) {
+      tabId = held;
+      return tabId;
+    }
+    tabId = mintTabId();
+    store?.setItem(TAB_KEY, tabId);
+  } catch {
+    // No usable storage: one id for this page's lifetime is the honest answer,
+    // and it is the same string the server would have been given by any client
+    // that does not speak this protocol.
+    tabId = mintTabId();
+  }
+  return tabId;
+}
+
+/** A fresh tab id — 32 hex characters, from the platform's own randomness. */
+function mintTabId() {
+  try {
+    const uuid = globalThis.crypto?.randomUUID?.();
+    if (uuid) return uuid.replace(/-/g, '');
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    // No platform randomness at all (an old browser, or an insecure origin with
+    // neither API). The id only has to differ from the tab beside it, and it is
+    // not a secret — see Session::tabId.
+    return `t${Date.now().toString(16)}${Math.random().toString(16).slice(2, 10)}`;
+  }
+}
+
 // --- Error classification -------------------------------------------------
 // The UI renders different states for different failure causes: the login
 // screen shows a "can't reach the server" panel instead of ERR_401-style
@@ -44,8 +110,30 @@ export function getCsrfToken() {
   return csrfToken;
 }
 
+// --- Session mismatch -----------------------------------------------------
+// ONE listener for the two answers that mean "the workspace is holding an
+// account the server is no longer answering as": a 401 (this tab's account is
+// gone — it timed out, it was signed out elsewhere in the same tab, the session
+// ended) and a ROLE refusal the server marks `code: 'forbidden'` (the account's
+// role — not this screen's data — rejected the request outright).
+//
+// Neither is a screen's to draw, which is why it lives here rather than in any
+// one of them. What it is FOR has narrowed with per-tab sessions: two tabs no
+// longer pull the account out from under each other (see the tab id above and
+// Session.php), so the case it still catches is the account itself changing
+// under a live workspace — a role revoked in the directory, an account
+// deactivated, this tab's own 30-minute clock running out. The refusal is
+// CORRECT; the workspace's copy is stale. App installs the reconciler (see
+// App.jsx); everything else carries on rendering its own error exactly as
+// before, because the throw below is still the caller's answer.
+let onSessionMismatch = null;
+
+export function setSessionMismatchHandler(fn) {
+  onSessionMismatch = fn;
+}
+
 export async function api(path, { method = 'GET', body, keepalive = false } = {}) {
-  const headers = {};
+  const headers = { [TAB_HEADER]: currentTabId() };
   if (body) headers['Content-Type'] = 'application/json';
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && csrfToken) {
     headers['X-CSRF-Token'] = csrfToken;
@@ -82,7 +170,9 @@ export async function api(path, { method = 'GET', body, keepalive = false } = {}
  * so the two cannot drift apart about what a failed request means.
  */
 export async function apiUpload(path, formData, { method = 'POST' } = {}) {
-  const headers = {};
+  // The tab id rides this request for the same reason it rides every other one:
+  // an upload is a request in a session that may hold more than one account.
+  const headers = { [TAB_HEADER]: currentTabId() };
   if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
 
   const res = await fetch(`${API}${path}`, {
@@ -131,6 +221,25 @@ async function readResponse(res) {
     err.details = Array.isArray(data?.details) ? data.details : null;
     err.manual_mode = data?.manual_mode === true; // Phase 3: AI unavailable
     err.retryIn = typeof data?.retry_in === 'number' ? data.retry_in : null;
+    // The server's own account of the SECOND FACTOR, when the refusal carries
+    // one. A refused code answers with the state of the sign-in the browser is
+    // really holding — which mailbox it is for, how many tries are left — and
+    // one of those refusals ('mfa_stale_sign_in': the code came from a screen
+    // left open from an EARLIER sign-in) is recovered from by redrawing the
+    // screen as the live sign-in. That redraw needs this block, and it is the
+    // same block /login, /mfa/status and /mfa/send hand back, so the gate reads
+    // one shape whichever way it arrives.
+    err.mfa = data?.mfa ?? null;
+    // An answer that proves the session does not match the workspace: the
+    // session ended (401 — including the ordinary cold-load and wrong-password
+    // cases, which the handler itself filters by whether anyone is signed in),
+    // or its ROLE refused the request outright. Fire-and-forget — the handler
+    // reconciles in the background while the throw below still hands this
+    // caller its own error.
+    if (res.status === 401 || (res.status === 403 && data?.code === 'forbidden')) {
+      onSessionMismatch?.();
+    }
+
     // Separate the three infrastructure causes:
     //   database — the backend itself reported a DB failure (JSON body)
     //   offline  — 5xx with NO JSON body: the dev proxy or a gateway

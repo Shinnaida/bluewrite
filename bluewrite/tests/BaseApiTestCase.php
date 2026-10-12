@@ -175,13 +175,28 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         }
     }
 
-    /** @return array{status:int, body:array, headers:array} */
-    protected function request(string $method, string $path, ?array $body = null, ?string $cookie = null, ?string $csrf = null): array
+    /**
+     * One request to the API.
+     *
+     * $extraHeaders exists for the one header that changes what a request MEANS
+     * rather than what it carries: `X-BlueWrite-Tab`, which names the browser tab
+     * a request came from (see app/core/Session.php). A test that emulates two
+     * tabs of one browser sends the same cookie with two different tab headers —
+     * which is exactly what the browser does — and a test that sends none is the
+     * client that does not speak that protocol, which is curl and most of this
+     * suite.
+     *
+     * @return array{status:int, body:array, headers:array}
+     */
+    protected function request(string $method, string $path, ?array $body = null, ?string $cookie = null, ?string $csrf = null, array $extraHeaders = []): array
     {
         $ch = curl_init(self::BASE . $path);
         $headers = ['Content-Type: application/json'];
         if ($csrf !== null) {
             $headers[] = "X-CSRF-Token: $csrf";
+        }
+        foreach ($extraHeaders as $header) {
+            $headers[] = $header;
         }
         curl_setopt_array($ch, [
             CURLOPT_CUSTOMREQUEST => $method,
@@ -320,16 +335,21 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
      * below), and submits it. Nothing here fakes the verification — if the
      * endpoint is wrong, these tests fail.
      */
-    protected function login(string $username, string $password = 'Passw0rd!23'): array
+    /**
+     * Sign in fully, in one call.
+     *
+     * $cookie is the jar this browser ALREADY holds — the case that matters for
+     * a second tab: the session is the browser's, so a sign-in from a new tab
+     * starts from the cookie the first tab was given, and only the tab header
+     * says which sign-in it is (see TabsTest, and app/core/Session.php). Empty
+     * means "a browser with no session yet", which is every other caller here.
+     */
+    protected function login(string $username, string $password = 'Passw0rd!23', array $headers = [], string $cookie = ''): array
     {
-        $res = $this->request('POST', '/login', ['username' => $username, 'password' => $password]);
+        $res = $this->request('POST', '/login', ['username' => $username, 'password' => $password], $cookie, null, $headers);
         $this->assertSame(200, $res['status'], "login as {$username} failed: " . json_encode($res['body']));
 
-        $cookie = '';
-        foreach ($res['setCookies'] as $c) {
-            $pair = explode(';', $c)[0];
-            $cookie = $cookie === '' ? $pair : $cookie . '; ' . $pair;
-        }
+        $cookie = $this->cookieFrom($res, $cookie);
         $csrf = (string) ($res['body']['csrf_token'] ?? '');
 
         // No second factor for this account (Staff): the old, one-step path.
@@ -337,7 +357,7 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
             return [$cookie, $csrf, $res['body']['user']];
         }
 
-        $verify = $this->request('POST', '/mfa/verify', ['code' => $this->lastEmailedCode()], $cookie, $csrf);
+        $verify = $this->request('POST', '/mfa/verify', ['code' => $this->lastEmailedCode()], $cookie, $csrf, $headers);
         $this->assertSame(200, $verify['status'], "mfa verify for {$username} failed: " . json_encode($verify['body']));
         return [$this->cookieFrom($verify, $cookie), (string) $verify['body']['csrf_token'], $verify['body']['user']];
     }
@@ -385,7 +405,7 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
     }
 
     /** Keep the session cookie a response re-issued, falling back to the old one. */
-    private function cookieFrom(array $res, string $fallback): string
+    protected function cookieFrom(array $res, string $fallback): string
     {
         if (empty($res['setCookies'])) {
             return $fallback;

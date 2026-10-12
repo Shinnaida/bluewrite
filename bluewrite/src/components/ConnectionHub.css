@@ -1,0 +1,316 @@
+/* ConnectionHub — signed-in accounts drawn as beams converging on the hub, plus the
+   toggle that opens them from User Management's toolbar.
+
+   WHY THE TOGGLE LIVES IN THIS FILE. It is the panel's own control — the thing that
+   opens it, states that it is open, and carries the same live dot the count pill does
+   — and the pair has to move together, or the button says one thing while the panel
+   says another. `.conn-hub-toggle` is also named in incident-report.css's button
+   exclusion chain, because `.ir-body button:not(…)` would otherwise paint it with the
+   neutral fill and take the pill apart (see that chain's own note on why every variant
+   has to be listed there).
+
+   EVERY COLOUR HERE IS A THEME TOKEN, for the reason the app's palette note gives:
+   the panel has to survive the theme switch, and a hardcoded tint would be the one
+   thing on the screen that did not. */
+
+/* ---- The toggle ---------------------------------------------------------- */
+
+/* ONE FILTER LINE, and it is this class that says so. `.reports-toolbar-row` is a
+   plain block shared with the audit trail's toolbar, where the search box takes the
+   line and the rest follows — fine there, and wrong here: the presence pill belongs
+   at the END of the filter line it sits on, not under it. Scoped to `users-filters`
+   (the class User Management's own row carries) so the audit trail's chrome is
+   untouched, and wrapping rather than overflowing when the window is narrow. */
+.reports-toolbar-row.users-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.reports-toolbar-row.users-filters .reports-search {
+  display: flex;
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+/* THE BASE FIELD WIDTH IS UNDONE FOR THE CONTROLS THAT SHARE THE LINE. Every input
+   and select in this app is `width: 100%`, which inside a flex row is a control that
+   claims the whole line and pushes everything after it onto the next one — the reason
+   this row used to be three stacked lines of mostly empty space. The search box still
+   takes what is left; the select and the clear control take only what they need. */
+.reports-toolbar-row.users-filters > select,
+.reports-toolbar-row.users-filters > button:not(.conn-hub-toggle) {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.conn-hub-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0.42rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--steel);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
+}
+.conn-hub-toggle:hover {
+  border-color: var(--cyan);
+  color: var(--paper);
+}
+.conn-hub-toggle:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+/* OPEN IS A STATE, NOT A SECOND CONTROL'S LOOK: the words stay, the dot stays, and
+   the pill takes the accent — so the panel below it is visibly attached to the control
+   that opened it. */
+.conn-hub-toggle.is-open {
+  border-color: var(--cyan);
+  background: var(--panel-raised);
+  color: var(--paper);
+}
+.conn-hub-toggle__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cyan);
+  animation: conn-hub-blink 2.4s ease-in-out infinite;
+}
+.conn-hub-toggle__label { white-space: nowrap; }
+
+/* ---- The panel ----------------------------------------------------------- */
+
+.conn-hub {
+  position: relative;
+  margin: 0 0 1rem;
+  padding: 1rem 1.15rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: 0 12px 30px -22px rgba(8, 20, 40, 0.55);
+  overflow: hidden;
+}
+/* A hairline of accent along the top edge: this is a live thing, and that is what says
+   so before any circle in the drawing does. */
+.conn-hub::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  opacity: 0.75;
+}
+
+.conn-hub__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.conn-hub__heading { display: flex; flex-direction: column; gap: 0.15rem; }
+.conn-hub__eyebrow {
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+}
+.conn-hub__head h2 { margin: 0; font-size: 1.02rem; font-weight: 650; letter-spacing: -0.01em; }
+
+.conn-hub__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--cyan);
+  border-radius: 999px;
+  background: var(--panel-raised);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--paper);
+  white-space: nowrap;
+}
+.conn-hub__count-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cyan);
+  animation: conn-hub-blink 2.4s ease-in-out infinite;
+}
+/* NOBODY CONNECTED IS A QUIET STATE, not an alarming one: the pill goes grey and the
+   dot stops, because an empty station at night is not a fault. */
+.conn-hub__count.is-empty {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--steel);
+}
+.conn-hub__count.is-empty .conn-hub__count-dot { background: var(--steel); animation: none; }
+
+.conn-hub__note {
+  margin: 0.55rem 0 0;
+  max-width: 62ch;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--steel);
+}
+.conn-hub__empty {
+  margin: 0.6rem 0 0.15rem;
+  max-width: 62ch;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--steel);
+}
+
+/* ---- The drawing --------------------------------------------------------- */
+
+/* The stage: a capped, centred frame for the drawing, with enough of a wash behind it
+   that the space around the rings reads as the drawing's own ground rather than as a
+   panel that lost its content. The cap is 1.2x the view box, which is as far as the
+   labels and rings can be scaled before the circles start to shout. */
+.conn-hub__stage {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.45rem;
+  padding: 0.35rem 0;
+  border-radius: 14px;
+  background: radial-gradient(58% 120% at 50% 50%, rgba(31, 95, 208, 0.07), rgba(31, 95, 208, 0) 72%);
+}
+.conn-hub__svg {
+  display: block;
+  width: 100%;
+  max-width: 840px;
+  height: auto;
+  overflow: visible;
+}
+/* The rings are the drawing's floor: they say where the centre is before anybody is
+   on it, so the empty state is a hub with room around it rather than a lone circle in
+   a panel. */
+.conn-hub__ring { fill: none; stroke: var(--cyan); stroke-width: 1; opacity: 0.14; }
+.conn-hub__ring:nth-child(2) { opacity: 0.1; }
+.conn-hub__ring:nth-child(3) { opacity: 0.07; }
+
+.conn-hub__node circle { fill: var(--panel-raised); stroke: var(--cyan); stroke-width: 1.6; }
+.conn-hub__node .conn-hub__node-halo {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 1;
+  opacity: 0.3;
+}
+.conn-hub__node text {
+  fill: var(--paper);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-body);
+}
+.conn-hub__node .conn-hub__label { font-size: 11px; font-weight: 500; fill: var(--steel); }
+
+.conn-hub__core circle:not(.conn-hub__pulse) { fill: var(--ir-navy); stroke: var(--cyan); stroke-width: 2; }
+.conn-hub__core text { fill: #fff; font-size: 12px; font-weight: 700; font-family: var(--font-body); }
+.conn-hub__pulse {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 2;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: conn-hub-pulse 2.4s ease-out infinite;
+}
+.conn-hub__beam {
+  stroke: var(--cyan);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-dasharray: 6 10;
+  opacity: 0.7;
+  animation: conn-hub-flow 1.6s linear infinite;
+}
+@keyframes conn-hub-flow { to { stroke-dashoffset: -32; } }
+@keyframes conn-hub-pulse {
+  0% { opacity: 0.8; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.9); }
+}
+@keyframes conn-hub-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* ---- The roster under the drawing ---------------------------------------- */
+
+/* THE LIST IS WHAT MAKES THE DRAWING USABLE, which is the change worth naming: the
+   circles say how many are on, and this says WHO — the role they hold and how recently
+   they were seen, which a first name under a ring cannot carry. It is filled from the
+   same `shown` slice as the drawing, so the two cannot disagree about who is on. */
+.conn-hub__roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.4rem;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.conn-hub__person {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-raised);
+  min-width: 0;
+}
+.conn-hub__avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--ir-navy);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.conn-hub__who { display: flex; flex-direction: column; min-width: 0; }
+.conn-hub__name {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--paper);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.conn-hub__role { font-size: 0.72rem; color: var(--steel); }
+.conn-hub__seen {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--cyan-dim);
+  white-space: nowrap;
+}
+.conn-hub__person--more .conn-hub__avatar {
+  background: transparent;
+  border: 1px dashed var(--line-bright);
+  color: var(--steel);
+}
+.conn-hub__person--more .conn-hub__seen { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .conn-hub__beam, .conn-hub__pulse, .conn-hub__count-dot, .conn-hub-toggle__dot { animation: none; }
+  .conn-hub__pulse { opacity: 0.25; }
+}
+
+@media (max-width: 640px) {
+  .conn-hub__stage { padding: 0; }
+  .conn-hub__seen { display: none; }
+}

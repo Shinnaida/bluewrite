@@ -49,7 +49,7 @@ officer's experience and the station's record, not about how hard the fix is.
 | P-06 | Process / data | Medium | `officer_rank` is always empty — no rank field exists, so signed/printed AI drafts cannot state the officer's rank. |
 | U-01 | UI | **High** | An officer cannot open (read) their own finalized report in the app; the register disables "Open" and offers only Print. |
 | U-02 | UI / a11y | Medium | The only way to a row's actions is a right-click context menu; there is no visible overflow affordance for touch/keyboard. |
-| U-03 | UI | Medium | The "Submitted" filter and dashboard KPI can never have data — they advertise a workflow state the system cannot produce. |
+| U-03 | UI | Medium | The "Submitted" filter and dashboard KPI can never have data — they advertise a workflow state the system cannot produce. **Officer's screens fixed 2026-10-13** (badge, filter, tab, Home tile, offline copy); the Admin's filter, KPI tile and pie wedge remain. |
 | U-04 | UI | Medium | Starting a new message with someone not on the presence rail is buried behind a `+` inside the panel; the top-bar messages button was removed. |
 | U-05 | UI | Medium | Profile shows the MFA address read-only and offers no language/read preference; the officer cannot self-serve either. |
 | U-06 | UI / i18n | Low | The UI chrome is English-only while reports may be Bisaya/Tagalog; officers who think in those languages navigate in a second language. |
@@ -396,7 +396,7 @@ menu; keep right-click as a shortcut.
 
 ---
 
-### U-03 — "Submitted" is offered but can never be true  **(Medium)**
+### U-03 — "Submitted" is offered but can never be true  **(Medium)** — *officer half fixed 2026-10-13*
 
 **Gap.** The register's status filter and the dashboard's status breakdown both
 include `Submitted`, and `src/lib/statusPie.js` maps it, but no flow produces the
@@ -409,6 +409,28 @@ state (see P-01). Users will filter for it and always get nothing.
 filter, chart, legend and KPI.
 
 **Done when.** No surface offers `Submitted` unless the transition exists.
+
+**Fixed in part (owner request, 2026-10-13: "remove submitted — all data in it
+should be in finalized").** The officer's own screens no longer offer the word at
+all, which is every place an officer could meet it:
+
+- the row badge prints `finalized` for both sent statuses, and so does the sheet
+  a row opens — one definition, `statusText` in `src/lib/reportFolder.js`;
+- the Status filter offers Draft / Finalized / Needs attention, where Finalized
+  sends `status=filed` — the server's own name for the set the `submitted`
+  bucket already held, so the tab above the list and the list agree;
+- the shelf tab above them reads **Finalized** (`shelvesFor({ officer })`, same
+  keys and same data), and Home's second tile states the finalized count instead
+  of the drafts;
+- the offline copy (`scripts/export-offline.php`) prints `FINALIZED` for a
+  submitted row, keeping the row's own class for its colour.
+
+**Still open.** The Admin's own surfaces still offer and count the dead state —
+the register's Submit option (kept deliberately: an Admin's queue is the one
+place a legacy `submitted` row is worth being able to single out) and the
+dashboard's Submitted KPI tile and pie wedge, which read
+`SUM(status = 'submitted')`. Those want the P-01 decision (implement supervisory
+review, or delete the state from the chart, legend and KPI).
 
 ---
 

@@ -49,6 +49,11 @@ import {
   DEFAULT_SORT,
   sortOrder,
   UNCLASSIFIED_TYPE,
+  // The officer's word for the end of a report, and the reader that folds the
+  // two server statuses into it — see FINALIZED_LABEL in the module. Read by the
+  // sheet's badge and by the Status filter below it.
+  FINALIZED_LABEL,
+  statusText,
 } from '../lib/reportFolder.js';
 import ReportPrint from './ReportPrint.jsx';
 // The two station seals, for the sheet format's page. The same files the printed
@@ -761,7 +766,13 @@ function TypeSpecificFields({ incidentType, values, onChange, disabled, errors, 
     const cur = values?.[fld.showIf.key] ?? '';
     return fld.showIf.values.includes(cur);
   };
-  const shown = fields.filter(visible);
+  // A mirrored field whose group HOLDS a row is not part of the form at all
+  // (see the mirrored case below): the group is the record. Dropping them here
+  // as well is what lets a card that is nothing but mirrors — Traffic
+  // Accident's vehicle block — stop drawing an empty grid.
+  const shown = fields.filter(
+    (fld) => visible(fld) && !(fld.mirrorOf && hasGroupRows(values, fld.mirrorOf.group)),
+  );
   if (shown.length === 0) return null;
   return (
     <div className="type-specific-grid">
@@ -769,29 +780,23 @@ function TypeSpecificFields({ incidentType, values, onChange, disabled, errors, 
         const id = `${idPrefix}ts-${fld.key}`;
         const val = values?.[fld.key] ?? '';
         const set = (v) => onChange(fld.key, v);
-        // Auto-filled from a group that HOLDS a row (see `mirrorOf`): the
-        // officer types the fact once, in the list above, and this row only
-        // shows what the sheet will carry. With the group empty the field is
-        // asked for directly instead — which is how a single "Item" still
-        // states "None taken — the attempt was interrupted" — so the control
-        // stays exactly as it was and nothing here is a dead end.
+        // NOT ASKED AT ALL while a group already records it (see `mirrorOf`):
+        // the officer typed the fact once, in the list above, and this row used
+        // to be a locked copy of it — one more thing on a form the station asked
+        // to be shorter (owner request, 2026-10-13: "remove the unnecessary
+        // field … only the fields that are necessary"). A read-out is not a
+        // field, and the facts it repeated are on the sheet and in the AI's
+        // copy of the report regardless: deriveMirrors() still fills the scalar
+        // from the group on every edit, and the server fills it again on every
+        // write, so nothing is lost by not DRAWING it.
+        //
+        // With the group EMPTY the field is still asked for, and that is
+        // deliberate: this is where a required fact gets its home when there is
+        // no row to carry it (an attempted theft's "Item" — "None taken, the
+        // attempt was interrupted"), and hiding it would leave a report that
+        // cannot be submitted and cannot say why.
         const mirrored = !!fld.mirrorOf && hasGroupRows(values, fld.mirrorOf.group);
-        if (mirrored) {
-          const source = GROUP_CONFIG[incidentType]?.[fld.mirrorOf.group]?.label
-            ?? 'the list above';
-          return (
-            <div className="field" key={fld.key}>
-              {/* No htmlFor: this is not a control, it is a read-out of the
-                  row above, and pointing a label at it would announce an
-                  editable field that does not exist. */}
-              <label>{fld.label}</label>
-              <div className="ir-readonly" id={id} aria-readonly="true">
-                {String(val).trim() !== '' ? val : '—'}
-              </div>
-              <p className="field-hint">Auto-filled from {source} — edit it there.</p>
-            </div>
-          );
-        }
+        if (mirrored) return null; // unreachable from `shown` above, kept as the belt to its braces
         // Required for THIS incident type (TYPE_FIELDS), including the ones that
         // only become required while their controlling field says so. The rule
         // engine is the authority; this only marks and reports it.
@@ -2039,10 +2044,12 @@ export function ReportWelcome({
   const recent = all.filter((r) => r.status === 'draft').slice(0, 5);
 
   // ---- MY REGISTER, the summary card's numbers (owner request, 2026-10-07)
-  // Everything the card states folds from the ONE tally: the total, the drafts,
-  // and the per-type bars. The same `statusBucket` the register's shelves use
-  // decides what a draft is, so Home's number and the register's shelf cannot
-  // disagree. The bars show only the three largest types — no scroll, no
+  // Everything the card states folds from the ONE tally: the total, the
+  // finalized count, and the per-type bars. The same `statusBucket` the
+  // register's shelves use decides what a draft is, so Home's number and the
+  // register's shelf cannot disagree — and the finalized tile is the remainder
+  // rather than a second reading of the same rows, so the two numbers always add
+  // up to the total. The bars show only the three largest types — no scroll, no
   // "Other" row — and every bar's width is its count against the largest, so
   // the longest bar is always full and the graph reads at any size.
   const tallyRows = Array.isArray(tally) ? tally : [];
@@ -2051,6 +2058,9 @@ export function ReportWelcome({
     (n, row) => n + (statusBucket(row?.status) === 'draft' ? Number(row?.count) || 0 : 0),
     0,
   );
+  // Everything that has left the officer's hands. Derived, not counted again:
+  // `filed` is the bucket the shelves use, and this is its tally.
+  const finalizedReports = totalReports - draftReports;
   const byType = new Map();
   for (const row of tallyRows) {
     const type = String(row?.incident_type ?? '').trim() || UNCLASSIFIED_TYPE;
@@ -2390,11 +2400,19 @@ export function ReportWelcome({
               graph of the incidents by type. Every number folds from the ONE
               tally Shell fetches (`GET /reports/folders`, the register's own
               shelf count), so the card and the register cannot disagree. */}
-          {/* The tiles: the total the officer has written and the drafts still
-              theirs to finish — a definition list, a label and the fact it
-              names. THEY OPEN THE CARD (owner request, 2026-10-08): the two
-              numbers are what the officer came to the card for, so they are its
-              first row and the frequency panel stands under them. */}
+          {/* The tiles: the total the officer has written and how much of it is
+              finished — a definition list, a label and the fact it names. THEY
+              OPEN THE CARD (owner request, 2026-10-08): the two numbers are what
+              the officer came to the card for, so they are its first row and the
+              frequency panel stands under them.
+
+              THE SECOND TILE IS THE SENT WORK, NOT THE DRAFTS (owner request,
+              2026-10-13: "change the drafts to finalized"). It read DRAFTS with
+              the officer's unfinished count, which made the card's two numbers
+              overlap — a draft is counted in both. As FINALIZED it is the
+              complement of the total: everything that has left their hands
+              (submitted + finalized, the same set the register's second shelf
+              holds and the filter's FINALIZED_LABEL names). */}
           <dl className="ir-remember-stats">
             <div className="ir-remember-stat ir-remember-stat--total">
               <span className="ir-remember-stat-icon" aria-hidden="true">
@@ -2405,13 +2423,15 @@ export function ReportWelcome({
                 <dd className="ir-remember-stat-num">{tally === null ? '—' : totalReports}</dd>
               </div>
             </div>
-            <div className="ir-remember-stat ir-remember-stat--draft">
+            <div className="ir-remember-stat ir-remember-stat--finalized">
               <span className="ir-remember-stat-icon" aria-hidden="true">
                 <HomeMark name="clipboardCheck" size={22} stroke={2} />
               </span>
               <div className="ir-remember-stat-copy">
-                <dt className="ir-remember-stat-label">Drafts</dt>
-                <dd className="ir-remember-stat-num">{tally === null ? '—' : draftReports}</dd>
+                <dt className="ir-remember-stat-label">{FINALIZED_LABEL}</dt>
+                <dd className="ir-remember-stat-num">
+                  {tally === null ? '—' : finalizedReports}
+                </dd>
               </div>
             </div>
           </dl>
@@ -4167,10 +4187,10 @@ export function ReportEditor({
           type="button"
           className="ir-submit"
           onClick={finalize}
-          title="Validate and submit this report for the record"
+          title="Validate and finalize this report for the record"
         >
           <LabelIcon name="stamp" />
-          Submit Official Record
+          Finalized
         </button>
       )}
     </>
@@ -5481,11 +5501,26 @@ export function ReportFiles({
   onEdit,
   onMenu,
   onPage,
+  // WHICH VOCABULARY THE ROWS PRINT, handed straight to ReportList: `finalized`
+  // for everything that has left the officer's hands, the raw status for an
+  // Admin's All Reports (see statusText in lib/reportFolder.js). Defaulted to
+  // false — the Admin's reading — so a caller that says nothing gets the raw
+  // status rather than a crash: it is read HERE, and a missing destructured
+  // prop is a ReferenceError that takes the whole screen down with it.
+  officer = false,
 }) {
   return (
     <>
+      {reports !== null && pagination && (
+        <div className="register-results" role="status" aria-live="polite" aria-atomic="true">
+          <span>
+            {pagination.total === 0 ? '0 reports' : `${(pagination.page - 1) * pagination.per_page + 1}-${Math.min(pagination.page * pagination.per_page, pagination.total)} of ${pagination.total} reports`}
+          </span>
+          <span className="register-results__hint">Select a report to view its sheet.</span>
+        </div>
+      )}
       {reports === null ? (
-        <p className="ir-card-empty">
+        <p className="ir-card-empty" role="status">
           {conn ? 'Waiting for the connection to come back…' : 'Loading reports…'}
         </p>
       ) : reports.length === 0 ? (
@@ -5500,19 +5535,17 @@ export function ReportFiles({
           onOpen={onOpen}
           onEdit={onEdit}
           onMenu={onMenu}
+          officer={officer}
         />
       )}
 
       {pagination && pagination.total_pages > 1 && (
-        <div
-          className="reports-pagination"
-          style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginTop: '0.75rem' }}
-        >
+        <nav className="reports-pagination" aria-label="Report pages">
           <button type="button" disabled={pagination.page <= 1} onClick={() => onPage?.(pagination.page - 1)}>
-            Prev
+            Previous
           </button>
-          <span style={{ fontFamily: 'var(--font-hud)', fontSize: '0.75rem', color: 'var(--cyan-dim)' }}>
-            Page {pagination.page} of {pagination.total_pages} — {pagination.total} report(s)
+          <span className="reports-pagination__position">
+            Page {pagination.page} of {pagination.total_pages}
           </span>
           <button
             type="button"
@@ -5521,7 +5554,7 @@ export function ReportFiles({
           >
             Next
           </button>
-        </div>
+        </nav>
       )}
     </>
   );
@@ -5773,6 +5806,7 @@ export function ReportTools({
         onClick={() => onToggleFilters?.()}
       >
         <ToolMark name="filters" />
+        <span className="register-tool__label">Filters</span>
         {filterCount > 0 && (
           <span className="register-tool__count" aria-hidden="true">
             {filterCount}
@@ -5794,6 +5828,7 @@ export function ReportTools({
         onClick={openSortMenu}
       >
         <ToolMark name="sort" />
+        <span className="register-tool__label">Sort</span>
       </button>
 
       {menuAt && (
@@ -6083,13 +6118,17 @@ export function ReportsTable({
   // key: a slug could collide with an element elsewhere on the page. The suffix
   // is the shelf's index, so the ids are stable for the life of the render.
   const groupId = useId();
-  // Whether the filter ROW above the card is showing. It has always been drawn,
-  // and it still is by default: the rail that can fold it away is drawn where the
-  // register draws REPORT ROWS (see ReportTools), and the shelf of folders — where
-  // that rail is not — has no control that could open it again. So the row's
-  // resting state is open, and the funnel narrows the screen only when the officer
-  // asks it to.
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  // Whether the filter ROW above the card is showing — and it rests FOLDED (owner
+  // request, 2026-10-12): the register opens on the list, not on four controls
+  // still holding nothing. What made the old resting-open state necessary is
+  // gone: the rail that folds this row away (ReportTools) is drawn on BOTH views
+  // now — the shelf's own head wears it (see ReportShelf's `tools`), and an
+  // opened folder draws it above its rows — so the funnel is always on screen and
+  // the row can never be folded away with no control left to bring it back. The
+  // attribute is still the state rather than the mount, so the values the officer
+  // last typed into come back as they were, and the funnel's own count says what
+  // the folded row is holding.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   // The filter row's own id, so the funnel can point at what it shows and hides
   // (`aria-controls`). Off the same `useId` as the shelf ids for the same reason.
   const filtersId = `${groupId}-filters`;
@@ -6100,6 +6139,13 @@ export function ReportsTable({
   // The list's own name, for the breadcrumb: the page head shouts it, the trail
   // states it.
   const listTitle = user.role === 'Admin' ? 'All Reports' : 'My Reports';
+  // WHICH VOCABULARY THIS REGISTER PRINTS (owner request, 2026-10-13): the
+  // officer's screens never say "submitted" — a report that has gone forward is
+  // FINALIZED — while All Reports keeps the three statuses apart, because the
+  // Admin's review queue is the difference between them (see FINALIZED_LABEL).
+  // ONE flag, read by the shelf tab, the row badges, the sheet's badge and the
+  // Status filter, so the four cannot disagree.
+  const officer = user.role !== 'Admin';
   // The translation queue is a MODE of this same list, and the register draws it
   // as ONE shelf rather than Draft/Submitted — an archived report was archived
   // whatever it was, and a report awaiting a translation review is waiting on a
@@ -6114,10 +6160,16 @@ export function ReportsTable({
   const shelves = useMemo(
     () =>
       buildShelves(folders, {
-        shelves: shelvesFor({ archived: showArchived, awaiting, sort: query.sort, dir: query.dir }),
+        shelves: shelvesFor({
+          archived: showArchived,
+          awaiting,
+          sort: query.sort,
+          dir: query.dir,
+          officer,
+        }),
         typeOrder: typeOptions,
       }),
-    [folders, showArchived, awaiting, typeOptions, query.sort, query.dir],
+    [folders, showArchived, awaiting, typeOptions, query.sort, query.dir, officer],
   );
   // WHICH SHELF IS ON SCREEN, and whether that shelf is the FILES one. The strip
   // resolves the same rule (shelfInView) for its own drawing, so the register and
@@ -6522,7 +6574,9 @@ export function ReportsTable({
               <span className="ir-sheet-page__type">
                 {sheetReport.incident_type || UNCLASSIFIED_TYPE}
               </span>
-              <span className={`badge ${sheetReport.status}`}>{sheetReport.status}</span>
+              <span className={`badge ${sheetReport.status}`}>
+                {statusText(sheetReport.status, { officer })}
+              </span>
             </h2>
             <div className="ir-sheet-page__actions">
               {/* DRAFTS ONLY (owner request, 2026-10-06): a submitted report
@@ -6605,7 +6659,7 @@ export function ReportsTable({
     <div className="reports-toolbar register-filters" id={filtersId} hidden={!filtersOpen}>
       <div className="reports-filters">
         <label className="reports-filter">
-          <span className="reports-filter__label">Type</span>
+          <span className="reports-filter__label">Incident type</span>
           <select
             aria-label="Filter by incident type"
             value={query.type}
@@ -6634,13 +6688,30 @@ export function ReportsTable({
           >
             <option value="">All statuses</option>
             <option value="draft">Draft</option>
-            <option value="submitted">Submitted</option>
-            <option value="finalized">Finalized</option>
+            {/* THE OFFICER IS OFFERED TWO STATES, NOT THREE (owner request,
+                2026-10-13: "remove submitted — all data in it should be in
+                finalized"). Their `Finalized` sends `filed`, which the server
+                reads as the bucket itself — submitted AND finalized — so the
+                option answers for the set the shelf tab above it holds, and the
+                word `Submitted` is not offered at all. The Admin keeps the
+                three, because a review queue is the difference between them. */}
+            {officer ? (
+              <option value="filed">{FINALIZED_LABEL}</option>
+            ) : (
+              <>
+                <option value="submitted">Submitted</option>
+                <option value="finalized">Finalized</option>
+              </>
+            )}
             {/* Open work is the filter an officer actually needs, and it
                 was Admin-only. The server never restricted it: `attention`
                 is a plain `status != 'finalized'` on the same own-reports
                 scope, so an officer's queue is their own queue. */}
-            <option value="attention">Needs attention (draft + submitted)</option>
+            <option value="attention">
+              {officer
+                ? 'Needs attention (draft + not finalized)'
+                : 'Needs attention (draft + submitted)'}
+            </option>
           </select>
         </label>
         <label className="reports-filter">
@@ -6706,7 +6777,7 @@ export function ReportsTable({
     ) : null;
 
   return (
-    <>
+    <section className="reports-register" aria-label={showArchived ? 'Archived Reports' : listTitle}>
 
       {/* Connection failures are reported to Shell (onConnError) which
           shows one workspace-wide banner; here we only note what it means
@@ -6777,6 +6848,9 @@ export function ReportsTable({
               onEdit={askEdit}
               onMenu={openRowMenu}
               onPage={(page) => setQuery((q) => ({ ...q, page }))}
+              // The register's own vocabulary, the same flag the sheet's badge
+              // and the Status filter read: an officer never sees "submitted".
+              officer={officer}
             />
           </>
         ) : (
@@ -6832,6 +6906,7 @@ export function ReportsTable({
                   onEdit={askEdit}
                   onMenu={openRowMenu}
                   onPage={(page) => setQuery((q) => ({ ...q, page }))}
+                  officer={officer}
                 />
               </ReportShelf>
             )}
@@ -6855,6 +6930,6 @@ export function ReportsTable({
           are the SHARED module's, because Home offers the same actions on the
           same records. Nothing about them is this list's any more. */}
       {actions.dialogs}
-    </>
+    </section>
   );
 }

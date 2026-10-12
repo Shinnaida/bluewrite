@@ -32,17 +32,17 @@ the trade is real and is the reason 012 chose the app in the first place.
 
 1. Username/badge + password, as before.
 2. For Admin and Officer, the password being **correct is not a session**. The
-   server creates a *pending* sign-in: a session that carries no `user_id` at
-   all, expires in **10 minutes**, and can only reach `/mfa/*`. Every other
-   endpoint answers 401 to it.
+   server creates a *pending* sign-in: a tab that carries no account at all,
+   expires in **10 minutes**, and can only reach `/mfa/*`. Every other endpoint
+   answers 401 to it.
 3. The server generates a six-digit code, stores only a bcrypt hash of it, and
    emails it to `users.email`. The code lives as long as the pending sign-in —
    ten minutes.
 4. The officer fills in the **six boxes** on the same screen. The row submits
    itself the moment the sixth digit lands, and `Verify and continue` (or Enter)
    sends a code that is short; if the server refuses it, every box goes red, the
-   digits clear and the caret returns to the first box. Only then does the real
-   session exist.
+   digits clear and the caret returns to the first box. Only then does that tab
+   hold an account.
 5. If the message does not arrive, `Resend code` on the same screen issues a new
    code (replacing the old one) once `EmailOtp::RESEND_SECONDS` (25s) has passed.
    The button counts the wait down. A resend does **not** clear a lock.
@@ -69,6 +69,39 @@ Rules the code enforces:
   officer in front of six boxes that will refuse everything they type. This is
   the same `isSignInOver()` list as an expired pending sign-in.
 
+## Two tabs, two accounts
+
+A sign-in belongs to a **TAB**, not to the browser. That is not decoration: a PHP
+session is per browser (one cookie, one `$_SESSION`), so before this existed a
+second sign-in anywhere replaced the *pending* sign-in under every tab at once
+while the first tab went on drawing its own screen — its own mailbox, its own
+countdown, and the code that mailbox had been emailed. The officer then typed a
+correct, unexpired code for the other sign-in and was told, three times, that it
+was not right. The audit trail of 2026-10-12 is what this section was written
+from.
+
+How it works now (see `app/core/Session.php`):
+
+- The app holds a random id in **`sessionStorage`** — per tab, survives that
+  tab's reload, copies when a tab is duplicated — and sends it as
+  `X-BlueWrite-Tab` on **every** request (`src/lib/api.js`, including uploads).
+- The session keeps **one context per tab**: account, pending sign-in, and the
+  clock it expires on. Signing in, signing out, and the 30-minute idle timeout
+  are all that tab's own; the session itself ends only with the last tab.
+- The id is **not a credential**. It names a slot inside a session the browser
+  must still hold the cookie for, it is shape-checked (`^[A-Za-z0-9_-]{8,64}$`)
+  before it may become a key in a session file, and one session holds at most
+  `Session::MAX_CONTEXTS` (12) of them. A request with no id — curl, or an old
+  bundle in an open tab — gets the `''` context, which is exactly the one account
+  per browser the station had before.
+- Each pending sign-in is also **named** (`sign_in_id`, minted per sign-in and
+  returned in every `mfa` payload). A code submitted by a screen that belongs to
+  a *superseded* sign-in — the same tab signing in again, or a duplicated tab
+  inheriting its parent's screen — is refused as `mfa_stale_sign_in`, **without
+  spending one of the five tries**, and the answer carries the live sign-in's
+  state so the screen can correct itself. Without that check the old failure
+  comes back: a correct code, refused as a wrong guess.
+
 ## The code screen itself
 
 - **It does not name the account, and cannot.** The pending session carries no
@@ -92,14 +125,13 @@ Rules the code enforces:
 - **Server-level problems do not read as typing errors.** A code that could not
   be sent (`mfa_mail_failed`) or a sign-in the server has dropped is shown in a
   band above the field, not in the field's own line.
-- **The backdrop is decoration, and nothing depends on it.** Both sign-in
-  screens sit on the page's own fill and carry the React Bits `GridScan` layer
-  (`GateGridScan.jsx`) over it — token-driven, unlit and rendered
-  unconditionally, including under `prefers-reduced-motion` (a deliberate
-  exception to the app's usual pattern, argued in `GateGridScan.jsx`). It adds no
-  box, takes no pointer, and the code screen works exactly the same with it off.
-  `UI_LIGHT_REDESIGN.md` records its history, including the CDN the face-tracking
-  models used to fetch.
+- **There is no backdrop, and nothing depends on one.** Both sign-in screens sit
+  on the page's own navy fill and the station's photograph. The React Bits
+  `GridScan` layer that used to be drawn over them was removed by request
+  (2026-10-13), and with it the CDN the face-tracking models used to fetch: its
+  files are kept in `.design-backup/revert-gate-backdrop-2026-10-13/` rather
+  than deleted. `UI_LIGHT_REDESIGN.md` §11 records the layer's whole history —
+  added, removed, rebuilt from a newer source, and finally retired.
 
 ## An officer cannot get in
 
@@ -210,6 +242,10 @@ long the inline styles become, and cannot begin a line with a full stop.
   same fact the session timeout and the password-change flow are built around.
 - **No per-account opt-out.** The factor is mandatory for the two roles, or it is
   a preference.
+- **A tab id is not a credential, and is not treated as one.** It says which
+  slot a request reads, never who the requester is, and every slot it could name
+  is already reachable with the session cookie alone. See "Two tabs, two
+  accounts" above for why it exists anyway.
 - **Failed codes do not touch the password lockout.** Different events, different
   remedies, different counters.
 - **Both bodies are always built, and neither is optional.** A message that exists

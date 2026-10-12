@@ -11,3 +11,8 @@ require __DIR__ . '/BaseApiTestCase.php';
 // used to fail with 'Class "App\Core\LanguageRegistry" not found' whenever it
 // happened to run before LanguageRegistryTest.php loaded the file itself.
 require_once __DIR__ . '/../app/core/LanguageRegistry.php';
+
+// Same reason, same place: MaskingGateway::buildMaskedPayload() names a report's
+// incident types through IncidentTypes::label(), and the AI tests reach that in
+// process. One require here keeps the suite order-independent.
+require_once __DIR__ . '/../app/core/IncidentTypes.php';

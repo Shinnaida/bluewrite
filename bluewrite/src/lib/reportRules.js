@@ -15,6 +15,9 @@ import {
   GROUP_ROW_RULES,
   TYPE_FIELDS,
   DEFAULT_SOFT_WARN_AT,
+  incidentTypesOf,
+  typeFieldsFor,
+  groupConfigFor,
 } from './incidentTypes.js';
 // Phase 6 Stage 1 — the DECLARED language of the narrative. Exactly one rule
 // below reads English words, and this is what tells the engine to SKIP it for
@@ -190,9 +193,24 @@ function mirrorValue(spec, rows) {
  *
  * @returns {object} { [scalarKey]: derivedValue } for groups that hold a row
  */
-function derivedValues(ts, incidentType) {
+/**
+ * Either shape a caller may hand the mirror helpers: one type (`'Theft'`), as
+ * every existing call site and the whole test suite pass it, or the report's
+ * list of types. Both are just the ordered list the helpers walk.
+ */
+function asTypes(value) {
+  if (Array.isArray(value)) {
+    return incidentTypesOf({ incident_type: value[0], incident_types: value });
+  }
+  return incidentTypesOf({ incident_type: value });
+}
+
+function derivedValues(ts, types) {
   const out = {};
-  for (const fld of TYPE_FIELDS[incidentType] ?? []) {
+  // Every type the report carries: two selected types can each mirror their own
+  // key out of the SAME group (Theft's Item and Burglary's Property Stolen are
+  // both the first stolen-item row), and both copies have to be filled.
+  for (const fld of typeFieldsFor(asTypes(types))) {
     const spec = fld.mirrorOf;
     if (!spec) continue;
     const rows = meaningfulRows(ts?.[spec.group]);
@@ -228,9 +246,10 @@ export function deriveMirrors(ts, incidentType) {
  * @returns {object} the type_specific to keep in the draft
  */
 export function syncMirrors(prevTs, nextTs, incidentType) {
-  const next = deriveMirrors(nextTs, incidentType);
-  const before = derivedValues(prevTs ?? {}, incidentType);
-  for (const fld of TYPE_FIELDS[incidentType] ?? []) {
+  const types = asTypes(incidentType);
+  const next = deriveMirrors(nextTs, types);
+  const before = derivedValues(prevTs ?? {}, types);
+  for (const fld of typeFieldsFor(types)) {
     if (!fld.mirrorOf) continue;
     if (hasGroupRows(nextTs, fld.mirrorOf.group)) continue; // still held by a row
     const held = String(prevTs?.[fld.key] ?? '');
@@ -246,7 +265,10 @@ function validateTypeFields(draft) {
   if (!draft.incident_type) return problems;
 
   const ts = draft.type_specific ?? {};
-  for (const fld of TYPE_FIELDS[draft.incident_type] ?? []) {
+  // EVERY type the report carries, not just the primary: a break-in that is
+  // also a theft has to satisfy the break-in's rules AND the theft's, and
+  // typeFieldsFor() keeps a key two types share from being reported twice.
+  for (const fld of typeFieldsFor(incidentTypesOf(draft))) {
     if (fld.showIf && !fld.showIf.values.includes(ts?.[fld.showIf.key] ?? '')) continue;
     // Auto-filled from a group that HOLDS a row: the row is the record, and its
     // own rules are the ones that apply (a missing plate is caught on the
@@ -437,7 +459,7 @@ function validateGroups(draft, level) {
   const warnings = [];
   if (level !== 'finalize') return { problems, warnings };
 
-  const config = GROUP_CONFIG[draft.incident_type] ?? {};
+  const config = groupConfigFor(incidentTypesOf(draft));
   const ts = draft.type_specific ?? {};
 
   for (const [groupKey, cfg] of Object.entries(config)) {
@@ -572,8 +594,9 @@ export function validateReport(draft, level = 'draft', language = null) {
     // half-typed email never nags while the draft is being written.
     errors.push(...validateReporterParty(draft));
 
+    const reportTypes = incidentTypesOf(draft);
     for (const check of CROSS_CHECKS) {
-      if (draft.incident_type && check.types.includes(draft.incident_type)) {
+      if (reportTypes.some((t) => check.types.includes(t))) {
         // SKIPPED, not translated, for a narrative that is not in English. The
         // casualty check looks for English medical words; a correct Bisaya
         // narrative saying "gidala sa ospital" contains none of them, so a

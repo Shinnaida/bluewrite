@@ -160,13 +160,22 @@ final class DashboardController
             $prevWhere .= ' AND created_by = :uid';
             $prevParams[':uid'] = (int) $user['id'];
         }
-        $prevStmt = $pdo->prepare("SELECT COUNT(*) AS total FROM reports {$prevWhere}");
+        // The same four counts over the shifted window, in ONE query rather than
+        // one per reading: the three trend figures below ride on them, and a
+        // second round trip for a SUM the first query could carry would be cost
+        // with no answer.
+        $prevStmt = $pdo->prepare(
+            "SELECT COUNT(*) AS total,
+                    SUM(status = 'draft') AS pending,
+                    SUM(status = 'submitted') AS submitted,
+                    SUM(status = 'finalized') AS finalized
+             FROM reports {$prevWhere}"
+        );
         $prevStmt->execute($prevParams);
-        $prevTotal = (int) ($prevStmt->fetch()['total'] ?? 0);
+        $prevKpi = $prevStmt->fetch() ?: ['total' => 0, 'pending' => 0, 'submitted' => 0, 'finalized' => 0];
+        $prevTotal = (int) $prevKpi['total'];
 
-        $delta = $prevTotal > 0
-            ? (int) round((($currentTotal - $prevTotal) / $prevTotal) * 100)
-            : ($currentTotal > 0 ? 100 : 0);
+        $delta = self::periodDelta($currentTotal, $prevTotal);
 
         // ---- Series over time (zero-filled per day) ------------------------
         $stmt = $pdo->prepare(
@@ -351,43 +360,50 @@ final class DashboardController
         );
 
         // ---- Median draft-to-final time (current period) --------------------
-        // MySQL 8 / MariaDB 10.2+ window syntax. Null when nothing was
-        // finalized in range: the UI shows an explicit empty note instead of
+        // MySQL 8 / MariaDB 10.2+ window syntax, in its own method because the
+        // SAME reading is taken over the previous window too — the trend figure
+        // under it has to be measured the way it is, or the percentage would
+        // compare a median against something that is not one. Null when nothing
+        // was finalized in range: the UI shows an explicit empty note instead of
         // a misleading 0.
-        $finalWhere = "WHERE deleted_at IS NULL
-               AND status = 'finalized'
-               AND finalized_at IS NOT NULL
-               AND incident_datetime BETWEEN :ffrom AND :fto";
-        if ($typeFilter !== null) {
-            $finalWhere .= ' AND incident_type = :ftype';
-        }
-        if ($scope === 'mine') {
-            $finalWhere .= ' AND created_by = :fuid';
-        }
-        $finalStmt = $pdo->prepare(
-            "SELECT TIMESTAMPDIFF(MINUTE, incident_datetime, finalized_at) AS mins,
-                    ROW_NUMBER() OVER (ORDER BY TIMESTAMPDIFF(MINUTE, incident_datetime, finalized_at)) AS rn,
-                    COUNT(*) OVER () AS n
-             FROM reports
-             {$finalWhere}"
-        );
-        $finalParams = [':ffrom' => $from, ':fto' => $to . ' 23:59:59'];
-        if ($typeFilter !== null) {
-            $finalParams[':ftype'] = $typeFilter;
-        }
-        if ($scope === 'mine') {
-            $finalParams[':fuid'] = (int) $user['id'];
-        }
-        $finalStmt->execute($finalParams);
-        $finalRows = $finalStmt->fetchAll();
+        $final = $this->finalizeWindow($pdo, $from, $to, $typeFilter, $scope, (int) $user['id']);
+        $finalPrev = $this->finalizeWindow($pdo, $prevFrom, $prevTo, $typeFilter, $scope, (int) $user['id']);
         $finalizeTime = [
-            'medianMinutes' => null,
-            'finalizedCount' => count($finalRows),
+            'medianMinutes' => $final['median'],
+            'finalizedCount' => $final['count'],
         ];
-        if (count($finalRows) > 0) {
-            $rank = (int) floor(((int) $finalRows[0]['n'] + 1) / 2); // lower median, 1-based
-            $finalizeTime['medianMinutes'] = (int) $finalRows[$rank - 1]['mins'];
-        }
+
+        // ---- Recent activity, as RECORDS ------------------------------------
+        // The five newest reports IN THE RANGE BEING READ, which is what the
+        // dashboard's activity panel draws (kind, place, time, and where each
+        // record stands). It reads the same $where/$params as every panel above
+        // it, so the list cannot show a report the rest of the page is not
+        // counting — and `created_at` (not the incident time) is what "newest"
+        // means here: what the station FILED last, not what it suffered last.
+        //
+        // The audit feed (`recentActivity`) is untouched and still served: Audit
+        // Trail reads it, and it answers a different question (who did what)
+        // from this one (what is in the register).
+        $recentStmt = $pdo->prepare(
+            "SELECT r.id, r.incident_type, r.location, r.incident_datetime, r.status
+             FROM reports r
+             WHERE r.deleted_at IS NULL
+               AND r.incident_datetime BETWEEN :from AND :to"
+            . ($typeFilter !== null ? ' AND r.incident_type = :type' : '')
+            . ($scope === 'mine' ? ' AND r.created_by = :uid' : '')
+            . ' ORDER BY r.created_at DESC, r.id DESC LIMIT 5'
+        );
+        $recentStmt->execute($params);
+        $recentReports = array_map(
+            static fn (array $r): array => [
+                'id' => (int) $r['id'],
+                'type' => (string) $r['incident_type'],
+                'location' => (string) ($r['location'] ?? ''),
+                'incident_datetime' => (string) $r['incident_datetime'],
+                'status' => (string) $r['status'],
+            ],
+            $recentStmt->fetchAll()
+        );
 
         Response::json(200, [
             'kpis' => [
@@ -409,6 +425,32 @@ final class DashboardController
             'hourHistogram' => $hourHistogram,
             'officerBreakdown' => $officerBreakdown,
             'finalizeTime' => $finalizeTime,
+            // ---- The period figures, for the dashboard's summary strip ------
+            // WHAT EACH ONE COMPARES. `attentionPct` and `finalizedPct` are the
+            // change in those two readings between this window and the one of the
+            // same length before it; `medianPct` is the change in the median
+            // draft-to-final MINUTES, so a NEGATIVE number is the station getting
+            // faster (the client paints the direction, see DeltaLine).
+            //
+            // They live outside `kpis` deliberately: that object is the four
+            // counts and their single total trend, and it is what every existing
+            // reader of this endpoint already parses. A null median means there
+            // was nothing to compare against — the strip then draws no arrow
+            // rather than a zero, which would read as "no change".
+            'periodDeltas' => [
+                'attentionPct' => self::periodDelta(
+                    (int) ($kpi['pending'] ?? 0) + (int) ($kpi['submitted'] ?? 0),
+                    (int) ($prevKpi['pending'] ?? 0) + (int) ($prevKpi['submitted'] ?? 0)
+                ),
+                'finalizedPct' => self::periodDelta(
+                    (int) ($kpi['finalized'] ?? 0),
+                    (int) ($prevKpi['finalized'] ?? 0)
+                ),
+                'medianPct' => ($final['median'] !== null && $finalPrev['median'] !== null && $finalPrev['median'] > 0)
+                    ? (int) round((($final['median'] - $finalPrev['median']) / $finalPrev['median']) * 100)
+                    : null,
+            ],
+            'recentReports' => $recentReports,
             'recentActivity' => $recentActivity,
             // ---- Sign-in health (S-01 preflight) --------------------------
             // Read so the station can see whether the second factor can
@@ -423,6 +465,71 @@ final class DashboardController
                 'availableTypes' => $availableTypes,
             ],
         ]);
+    }
+
+    /**
+     * Percent change of one reading against the period before it.
+     *
+     * A period with NOTHING in it has no percentage to give (the ratio would
+     * divide by zero), so the reading's own answer is used and it is the answer
+     * this endpoint has always given for the total: something out of nothing is
+     * +100%, and nothing out of nothing is no change at all.
+     */
+    private static function periodDelta(int $current, int $previous): int
+    {
+        return $previous > 0
+            ? (int) round((($current - $previous) / $previous) * 100)
+            : ($current > 0 ? 100 : 0);
+    }
+
+    /**
+     * One window's draft-to-final reading: the LOWER MEDIAN of the minutes
+     * between the incident and the moment it was finalized, with the count of
+     * finalized reports behind it.
+     *
+     * `median` is null when nothing in the window was finalized — the client
+     * shows an explicit empty note rather than a 0 that would read as instant
+     * work. The window is the only thing that varies between the current period
+     * and the previous one, which is why this is a method rather than the inline
+     * block it used to be: the trend figure under the card must be the same
+     * measurement taken twice, not a second approximation of it.
+     */
+    private function finalizeWindow(
+        PDO $pdo,
+        string $from,
+        string $to,
+        ?string $typeFilter,
+        string $scope,
+        int $uid
+    ): array {
+        $where = "WHERE deleted_at IS NULL
+               AND status = 'finalized'
+               AND finalized_at IS NOT NULL
+               AND incident_datetime BETWEEN :ffrom AND :fto";
+        $params = [':ffrom' => $from, ':fto' => $to . ' 23:59:59'];
+        if ($typeFilter !== null) {
+            $where .= ' AND incident_type = :ftype';
+            $params[':ftype'] = $typeFilter;
+        }
+        if ($scope === 'mine') {
+            $where .= ' AND created_by = :fuid';
+            $params[':fuid'] = $uid;
+        }
+        $stmt = $pdo->prepare(
+            "SELECT TIMESTAMPDIFF(MINUTE, incident_datetime, finalized_at) AS mins,
+                    ROW_NUMBER() OVER (ORDER BY TIMESTAMPDIFF(MINUTE, incident_datetime, finalized_at)) AS rn,
+                    COUNT(*) OVER () AS n
+             FROM reports
+             {$where}"
+        );
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+        $out = ['median' => null, 'count' => count($rows)];
+        if (count($rows) > 0) {
+            $rank = (int) floor(((int) $rows[0]['n'] + 1) / 2); // lower median, 1-based
+            $out['median'] = (int) $rows[$rank - 1]['mins'];
+        }
+        return $out;
     }
 
     /**

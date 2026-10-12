@@ -48,6 +48,19 @@ const JUAN = {
 // check that it still compiles.
 const load = () => loadFixture('tests/fixtures/messagesRender.jsx');
 
+test('the workspace replaces staff messaging with a stateless terminology chatbot', async () => {
+  const shell = await readFile(path.join(root, 'src/components/Shell.jsx'), 'utf8');
+  const bot = await readFile(path.join(root, 'src/components/TerminologyChatbot.jsx'), 'utf8');
+  assert.match(shell, /<TerminologyChatbot/);
+  assert.doesNotMatch(shell, /<MessagesPanel|<Chatheads/);
+  assert.match(bot, /api\('\/ai\/terminology', \{ method: 'POST', body: \{ message: text \} \}\)/);
+  assert.match(bot, /maxLength=\{300\}/);
+  assert.match(bot, /role="log"/);
+  assert.match(bot, /role="alert"/);
+  assert.match(bot, /inFlight\.current/);
+  assert.doesNotMatch(bot, /localStorage|sessionStorage|dangerouslySetInnerHTML/);
+});
+
 // ---------------------------------------------------------------------------
 // The thread
 // ---------------------------------------------------------------------------

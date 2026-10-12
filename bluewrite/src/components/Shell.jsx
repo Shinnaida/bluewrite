@@ -5,14 +5,20 @@ import Audits from './Audits.jsx';
 import Dashboard from './Dashboard.jsx';
 import StationSettings from './StationSettings.jsx';
 import AppTopBar from './AppTopBar.jsx';
+// THE ADMIN'S OWN NAVIGATION (owner request, 2026-10-12). An Admin signs in to
+// the reference's left rail — the department's lockup, the five supervisory
+// destinations, and the account at its foot — and an Admin's screens carry NO
+// top bar AT ALL (see the AppTopBar render below). Officers and Staff are
+// untouched: they keep the bar with the rail gone, exactly as it was.
+import AppSidebar from './AppSidebar.jsx';
 import ProfilePanel from './ProfilePanel.jsx';
-// Who is at a desk right now, down the right edge — see the component for why the
-// heartbeat lives there rather than here.
-import Chatheads from './Chatheads.jsx';
-// The messages panel — the third dock on the right edge. Opened from the rail's
-// officer card or from the top bar's messages button, both of which are wired up
-// here because both are surfaces Shell already owns.
-import MessagesPanel from './MessagesPanel.jsx';
+import TerminologyChatbot from './TerminologyChatbot.jsx';
+// The presence beat: the one thing that tells the server somebody is still at a desk.
+// Mounted here, for the life of the signed-in workspace, because it is not a SCREEN —
+// the roster that reads it is User Management's Connected now panel, and every account
+// on the station has to be reporting whether or not any panel is open. See its own note
+// on why the beat used to ride the chathead rail and what its absence broke.
+import PresenceBeat from './PresenceBeat.jsx';
 import { ConnectionBanner } from './ConnectionNotice.jsx';
 import {
   ReportsTable,
@@ -41,9 +47,9 @@ import KeyboardShortcuts from './KeyboardShortcuts.jsx';
 //   form format — here, because only Write Report answers to it (see
 //                 lib/formFormat.js for the three values);
 //   density     — App, with the theme, because the whole workspace re-lays-out;
-//   theme       — App, because the SIGN-IN GATE re-lays-out too, and the gate
-//                 renders outside this component and so cannot reach state kept
-//                 here.
+//   theme       — App, with density, for the same reason. The gate that renders
+//                 outside this component takes no theme at all, so this value
+//                 has exactly one consumer: the workspace.
 //
 // `readFormFormat` is imported rather than written here so the value set has one
 // definition: the menu that sets it, the editor that answers it, and the
@@ -53,10 +59,12 @@ import KeyboardShortcuts from './KeyboardShortcuts.jsx';
 /**
  * Shell — the application frame.
  *
- * One navy top bar (AppTopBar) and one light page (.main.ir-body) for every
- * role and every screen. The old dark sidebar rail is gone: navigation lives
- * in the top bar, the report list lives in My Reports, and sign-out lives in
- * the Profile menu. Removing the rail also removed its resize handle, the
+ * One navy chrome and one light page (.main.ir-body) for every role and every
+ * screen: an officer's chrome is the top bar (AppTopBar) and an Admin's is the
+ * rail beside the workspace (AppSidebar), and both carry the same account
+ * control at their end. The old dark sidebar rail is gone: the report list
+ * lives in My Reports and sign-out lives in the Profile menu; removing that
+ * rail also removed its resize handle, the
  * Ctrl+B collapse toggle and the rail's right-click report menu — every one of
  * those actions came back on the register's own rows: right-click one for Open
  * / History / Print / Archive, or double-click it to open.
@@ -260,39 +268,17 @@ export default function Shell({
   // instant the row is pressed, so anything it rendered would go with it. Same
   // arrangement as the shortcut sheet above, for the same reason.
   const [profileOpen, setProfileOpen] = useState(false);
-
-  // THE MESSAGES PANEL, and it is one piece of state rather than two. `messagesOpen`
-  // is whether the dock is on screen; `messagesPeer` is the conversation inside it
-  // (or null for the list). They live here, not in the panel, because the panel is
-  // MOUNTED BY OPENING IT: a thread has to survive a close-and-reopen — an officer
-  // reading a report and coming back to the reply they were in the middle of — and
-  // state inside a component that unmounts goes with it.
-  //
-  // `messagesPeerHint` is the roster entry the rail or the list handed over, so the
-  // thread can draw the colleague's face on the first frame instead of after a round
-  // trip. The server's own `peer` replaces it as soon as the thread arrives.
-  const [messagesOpen, setMessagesOpen] = useState(false);
-  const [messagesPeer, setMessagesPeer] = useState(null);
-  const [messagesPeerHint, setMessagesPeerHint] = useState(null);
-
-  // (The unread count used to be held here for the top bar's badge, which shared it
-  // with the rail's marks. That badge is gone — the bar's messages icon was removed
-  // by request — and the rail's own marks are computed inside Chatheads from the
-  // roster it already holds, so nothing above needed the total any more. A state
-  // whose only reader is gone is a second source of truth waiting to disagree with
-  // the first.)
-
-  // Opening the panel and opening a conversation are separate because they lead to
-  // different screens of the same dock, and the bar only ever wants the first.
-  const openMessages = useCallback((peerId = null, hint = null) => {
-    setMessagesPeer(peerId === null || peerId === undefined ? null : Number(peerId));
-    setMessagesPeerHint(hint);
-    setMessagesOpen(true);
-    // ONE RIGHT EDGE. The profile panel owns the same edge, so opening messages
-    // closes it: two docks stacked at one edge is the layout the stylesheet
-    // deliberately refuses to draw (see the 1280px rules in styles.css).
-    setProfileOpen(false);
+  // ONE opener for it, because BOTH chromes have a door to this panel: the bar
+  // for an officer and the rail for an Admin (AppChrome draws the control in
+  // each). Two inline copies is how one door stops closing the chatbot.
+  const openProfile = useCallback(() => {
+    setProfileOpen(true);
+    // Whichever dock was opened last is the one on the edge.
+    setChatbotOpen(false);
   }, []);
+
+  // The bot opens only on request, and its local transcript survives closing.
+  const [chatbotOpen, setChatbotOpen] = useState(false);
 
   useEffect(() => {
     const bump = () => {
@@ -461,7 +447,44 @@ export default function Shell({
   }, [bumpList]);
 
   return (
-    <div className="shell">
+    <div className={`shell${isAdmin ? ' shell--admin' : ''}`}>
+      {/* THE RAIL, for an Admin and nobody else. It draws the same five
+          destinations the bar's pills carry for this role (one list, see
+          AppSidebar) and holds no state of its own: navigation goes through the
+          same `navigate` every other chrome in this file asks. */}
+      {isAdmin && (
+        <AppSidebar
+          current={view.kind === 'table' && listReportOpen ? 'report' : view.kind}
+          onNavigate={navigate}
+          // THE ACCOUNT CHROME IS THE RAIL'S (owner request, 2026-10-12): with
+          // the destinations in the rail, the bell and the profile control were
+          // all the bar still held over an Admin's screens — an empty navy strip
+          // for two controls — so they sit at the foot of the rail instead. Same
+          // component the bar draws (AppChrome), same handlers.
+          user={user}
+          onLogout={() => setConfirmLogout(true)}
+          onOpenProfile={openProfile}
+          onShortcuts={() => setShortcutsOpen(true)}
+          // The bell's items name a report, and opening one is the same route as
+          // the register's own rows (“report”, by id) — so the bell hands the id
+          // up to the one place that owns the screen rather than routing itself.
+          onOpenReport={(reportId) => setView({ kind: 'report', id: reportId })}
+        />
+      )}
+
+      {/* THE WORKSPACE COLUMN. One element whether or not the rail is beside it:
+          the bar and the page stack in it, which is the whole of the shell's own
+          layout, so the rail changes the shell's AXIS without changing where
+          anything inside the workspace sits. */}
+      <div className="shell__body">
+      {/* THE BAR IS THE OFFICER'S, AND AN ADMIN'S SCREENS HAVE NONE (owner
+          request, 2026-10-12). It used to be drawn for every role with its
+          destinations hidden for an Admin, which left a strip of navy holding
+          two controls above screens whose navigation is the rail. Everything
+          the bar still carried for that role is in the rail now (AppChrome), so
+          what is left is one chrome per role rather than one chrome and one
+          leftover. */}
+      {!isAdmin && (
       <AppTopBar
         user={user}
         // What the officer is LOOKING AT, which is the route except while the
@@ -474,12 +497,7 @@ export default function Shell({
         // The display preferences no longer pass THROUGH the bar (they are set
         // in the Profile panel below), so the bar no longer receives them. One
         // fewer thing to keep threaded through a component that does not use it.
-        onOpenProfile={() => {
-            setProfileOpen(true);
-            // The same rule in the other direction: whichever dock was opened last
-            // is the one on the edge.
-            setMessagesOpen(false);
-          }}
+        onOpenProfile={openProfile}
         // The sheet has two doorways — this menu row and the `?` key — and they
         // have to be the same sheet, so its state lives here, next to the
         // listener, rather than in the menu that only shows one of them.
@@ -489,43 +507,19 @@ export default function Shell({
         // up to the one place that owns the screen rather than routing itself.
         onOpenReport={(reportId) => setView({ kind: 'report', id: reportId })}
       />
+      )}
 
-      {/* THE PRESENCE RAIL. Rendered by Shell because Shell is the signed-in frame
-          — it exists on every screen an officer can be on, and nowhere else (the
-          gate has no roster to show). It is `position: fixed` at the right edge and
-          shifts clear of the docked panels with the same width variables they use
-          (styles.css), so it is never buried under one. */}
-      {/* THE CORNER: the chatbox and the rail, one flex row, the rail last so it is
-          always the rightmost thing. The container owns the position — see .dash-dock —
-          because two elements each anchoring themselves at the same corner is two
-          answers to one question, and the box has to sit BESIDE the rail rather than
-          on top of it at every width the rail can take. */}
-      <div className="dash-dock">
-        {messagesOpen && (
-          <MessagesPanel
-            peer={messagesPeer}
-            peerHint={messagesPeerHint}
-            onOpenPeer={openMessages}
-            onClose={() => setMessagesOpen(false)}
-            onConnError={reportConn}
-          />
-        )}
+      <TerminologyChatbot
+        open={chatbotOpen}
+        onOpen={() => { setChatbotOpen(true); setProfileOpen(false); }}
+        onClose={() => setChatbotOpen(false)}
+      />
 
-        <Chatheads
-          user={user}
-          onOpen={(person) => openMessages(person.id, person)}
-          // THE COLLEAGUE YOU ARE TALKING TO LEAVES THE RAIL. Not just their unread mark
-          // — their whole circle, and it comes back when the box is closed. The rail
-          // answers "who might I be looking for"; once the conversation is open, that
-          // face has been found, and the press would do nothing the box is not already
-          // doing. It also frees the slot nearest the corner for somebody who has
-          // actually gone unread while you were typing.
-          //
-          // Null while the box is shut, or while it is showing the list rather than a
-          // thread — there is no "the colleague you are talking to" in either case.
-          openPeerId={messagesOpen ? messagesPeer : null}
-        />
-      </div>
+      {/* DRAWS NOTHING, AND THAT IS THE POINT. The beat has to run on every screen an
+          officer can be on, which is exactly what a component rendered once by the
+          signed-in frame gives — and it must not be tied to a panel being open, which
+          is what a beat owned by a panel would do. */}
+      <PresenceBeat />
 
       <main className="main ir-body">
         <ConnectionBanner state={connState} onRetry={retryConn} />
@@ -609,6 +603,16 @@ export default function Shell({
             user={user}
             notify={notify}
             onConnError={reportConn}
+            // The station's own name, for the dashboard's subtitle. Shell already
+            // reads the letterhead once for the whole workspace (see `station`),
+            // so the page reads it from there rather than issuing a second
+            // request for one line — the same arrangement the Profile panel's
+            // identity block uses.
+            stationName={stationHeader ? stationHeader.station_name : null}
+            // Opens ONE report. The dashboard's recent-activity rows name a
+            // record, and a record opens the same way it does from the bell:
+            // Shell owns the route, so the page asks for the screen change.
+            onOpenReport={(reportId) => setView({ kind: 'report', id: reportId })}
             // The dashboard names the filter it wants the register opened with — a
             // status from a KPI tile, or a day (and incident type) from the chart's
             // right-click menu. It is passed through rather than interpreted here:
@@ -658,6 +662,7 @@ export default function Shell({
           <StationSettings notify={notify} onConnError={reportConn} onSaved={bumpStation} />
         )}
       </main>
+      </div>
 
       {/* The Profile panel. Docked beside the workspace, mounted only while it
           is open — so the docking effect inside it can treat mount as "open"

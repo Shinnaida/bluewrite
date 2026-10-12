@@ -61,9 +61,10 @@ test('the config, the launcher and the watchdog all name the same two ports', ()
   );
   // scripts\serve.cmd: both directions — start it there, and only if that exact
   // port is free.
-  assert.match(bat, new RegExp(`-S 127\\.0\\.0\\.1:${apiPort} -t public router\\.php`), 'serve.cmd starts the API somewhere else');
+  assert.match(ps, /@\('-S', "127\.0\.0\.1:\$port", '-t', 'public', 'router\.php'\)/, 'the shared watchdog no longer starts the API on its configured port');
   assert.match(bat, new RegExp(`127\\.0\\.0\\.1:${apiPort} .*LISTENING`), 'serve.cmd checks a different API port');
-  assert.match(bat, new RegExp(`--port ${devPort} --strictPort`), 'serve.cmd starts the dev server somewhere else');
+  assert.match(ps, /@\(\$vite, '--port', "\$port", '--strictPort'\)/, 'the shared watchdog no longer starts Vite on its configured port');
+  assert.match(bat, /-File "%~dp0watch-servers\.ps1"/, 'serve.cmd must delegate startup to the shared watchdog');
   assert.match(bat, new RegExp(`127\\.0\\.0\\.1:${devPort} .*LISTENING`), 'serve.cmd checks a different dev port');
   // The README is what the next person follows; a wrong port in it costs an hour.
   assert.match(
@@ -119,7 +120,22 @@ test('the scheduled task is built to keep healing rather than to stop after a wh
   // It runs THIS script, by path — so a moved checkout is fixed by re-running
   // -Install rather than by editing a task in the Task Scheduler UI.
   assert.match(task, /<Arguments>\$taskArgs<\/Arguments>/, 'the task no longer passes its arguments through');
-  assert.match(ps, /-f \$self/, 'the task no longer points at the script that installs it');
+  assert.match(ps, /-f \$hiddenRunner, \$self/, 'the task no longer points at the script that installs it');
+});
+
+test('background launches hide consoles before startup and serialize repairs', () => {
+  assert.match(ps, /New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly/);
+  assert.match(ps, /ShowWindow = \[uint16\] 0/);
+  assert.match(ps, /ProcessStartupInformation = \$startup/);
+  assert.match(ps, /\$mutex\.WaitOne\(0\)/);
+  assert.match(ps, /\$mutex\.ReleaseMutex\(\)/);
+  assert.match(ps, /<Command>wscript\.exe<\/Command>/);
+  const hidden = read('scripts/run-hidden.vbs');
+  assert.match(hidden, /shell\.Run\(command, 0, True\)/);
+  assert.match(hidden, /WScript\.Quit/);
+  const desktop = readFileSync(new URL('../../../Start BlueWrite.bat', import.meta.url), 'utf8');
+  assert.match(desktop, /call scripts\\serve\.cmd/);
+  assert.doesNotMatch(desktop, /start .*\/min/i);
 });
 
 test('the README says how to install, inspect and remove the watchdog', () => {

@@ -117,7 +117,12 @@ test('the copy reads the database and never writes to it', () => {
   assert.match(SRC, /if \(!\$includeDrafts\)/, 'the draft rule no longer follows its flag');
   assert.match(SRC, /DRAFT — NOT FINALIZED/, 'a draft can be copied without being labelled a draft');
   assert.match(SRC, /'FINALIZED'/, 'the finalized label is gone');
-  assert.match(SRC, /'SUBMITTED'/, 'the submitted label is gone');
+  // THE OFFLINE COPY FOLLOWS THE OFFICER'S VOCABULARY (owner request,
+  // 2026-10-13): a submitted report prints FINALIZED like every other surface in
+  // the app does, and the class that colours the row stays the raw status. No
+  // row of this copy may say SUBMITTED to an officer.
+  assert.match(SRC, /'submitted' => \['FINALIZED', 'submitted'\]/, 'a submitted report no longer prints the officer\'s word');
+  assert.doesNotMatch(SRC, /'SUBMITTED'/, 'the offline copy still prints SUBMITTED');
 
   // The one value that reaches the SQL text is the limit, and it is digits only.
   assert.match(SRC, /\$stmt = \$pdo->prepare\(\$sql\);/, 'the query is no longer prepared');

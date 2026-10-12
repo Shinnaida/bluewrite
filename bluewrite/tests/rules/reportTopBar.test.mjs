@@ -1,10 +1,10 @@
 // BlueWrite — WHERE the report's actions live (Save Draft · History · Archive ·
-// Close · Print Slip · Submit Official Record).
+// Close · Print Slip · Finalized).
 //
 // They used to sit at the FOOT of the document, and — in both deck formats —
 // only on the deck's LAST screen: an officer three sections into a report had to
 // walk to the end of it to save. They are in the case bar at the top now, beside
-// Print Slip and Submit, reachable from every section, every step and the sheet.
+// Print Slip and Finalized, reachable from every section, every step and the sheet.
 //
 // The failure this guards is the copy that comes back: a second Save (or a
 // second print portal) drawn at the foot of the page by a later edit, because
@@ -13,7 +13,7 @@
 //
 // Measured on the built editor in all three formats before these were written
 // (real report loaded, so every guard was open): the case bar rendered Save
-// Draft, History, Archive, Close, Print Slip and Submit Official Record — each
+// Draft, History, Archive, Close, Print Slip and Finalized — each
 // with an icon — and exactly ONE control matching /^print/ in every format. The
 // nav row rendered "← Previous: …" (border and ink both rgb(31,95,208), 5.82:1
 // on its surface) with no Save in it, and the page held no `.ir-actions`,

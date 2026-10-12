@@ -100,7 +100,13 @@ final class MaskingGateway
         // the model's suspect lines.
         $refIndex = [];
         $masked = [
-            'incident_type' => (string) ($report['incident_type'] ?? ''),
+            // THE WORDS THE STATION READS, not the stored column: a report filed
+            // under the catch-all type carries the officer's own name for it
+            // ("Illegal Gambling") and a compound report carries every one of
+            // its types. The narrative is written from this line, so handing the
+            // model "Other Incident" would have it write about a category
+            // instead of the incident (see app/core/IncidentTypes.php).
+            'incident_type' => \App\Core\IncidentTypes::label($report),
             'when' => self::maskWhen($report['incident_datetime'] ?? null),
             'where' => '[LOCATION]',
             'groups' => new \stdClass(),

@@ -44,6 +44,13 @@ import {
 // The same right-click menu the register's rows use, so a day of the chart offers
 // its actions the way the rest of the app does rather than by a second idiom.
 import RowMenu from './RowMenu.jsx';
+// AN ACTIVITY ROW NAMES A RECORD, so the record's own type mark is drawn the way
+// the register draws it — the same twenty-four-unit glyph and the same hue
+// family, read from the same two rules (lib/reportFolder.js). A mark invented
+// here would be a second answer to "what does a Theft look like" on the one
+// screen that also links to the register.
+import ReportTypeIcon from './ReportTypeIcon.jsx';
+import { typeHue, typeIcon } from '../lib/reportFolder.js';
 
 /**
  * Phase 4 — Dashboard monitoring (UC-017). ADMIN-ONLY view: the shell only
@@ -62,9 +69,16 @@ import RowMenu from './RowMenu.jsx';
  *   categoryDeltas{type:{current,previous}} · statusBreakdown{draft,submitted,final}
  *   hourHistogram[{hour,count}]
  *   officerBreakdown[{officer,count}] · recentActivity[{action,entityId,createdAt,actor}]
- *     — both are still served, but no panel on this page reads them any more: the
- *       workload and activity panels were removed on purpose (see the note where
- *       that row used to be). The endpoint was deliberately left alone.
+ *     — the audit feed and the workload tally are still served, but no panel on
+ *       this page reads them any more: the workload panel was removed on purpose,
+ *       and the activity panel draws RECORDS instead (see recentReports below).
+ *       The endpoint was deliberately left alone.
+ *   periodDeltas{attentionPct,finalizedPct,medianPct}
+ *     — the summary strip's three trend figures, each measured against the window
+ *       of the same length before this one (2026-10-12). `medianPct` is null when
+ *       there is no previous median to compare against.
+ *   recentReports[{id,type,location,incident_datetime,status}]
+ *     — the five newest records IN THIS RANGE, for the activity panel.
  *   finalizeTime{medianMinutes,finalizedCount} · meta{from,to,type,scope,availableTypes}
  */
 
@@ -103,16 +117,6 @@ function fmtMinutes(mins) {
 }
 
 // ---- Skeleton bits (shown while the first load is in flight) --------------
-
-function KpiSkeleton() {
-  return (
-    <div className="dash-kpi is-skeleton" aria-hidden="true">
-      <span className="dash-kpi__label sk sk--text" />
-      <span className="dash-kpi__value sk sk--big" />
-      <span className="dash-kpi__delta sk sk--text" />
-    </div>
-  );
-}
 
 function PanelSkeleton({ tall }) {
   return (
@@ -161,11 +165,23 @@ const PANEL_INFO = {
   },
 };
 
-function Panel({ title, aside, info, children }) {
+function Panel({ title, mark = null, sub = null, aside, info, children }) {
   return (
     <section className="dash-panel">
       <div className="dash-panel__head">
-        <h2>{title}</h2>
+        {/* THE TITLE IS A MARK AND A LINE OF TYPE now (owner request,
+            2026-10-12): the reference heads every card with the reading's own
+            drawing, the name in sentence case, and — where there is one — a line
+            under it saying what the chart counts. A `mark` is optional because
+            the three chart panels below still head themselves with a title and
+            their info control only; `sub` is optional for the same reason. */}
+        <h2 className="dash-panel__title">
+          {mark}
+          <span className="dash-panel__title-text">
+            {title}
+            {sub && <span className="dash-panel__sub">{sub}</span>}
+          </span>
+        </h2>
         {(aside || info) && (
           <div className="dash-panel__aside">
             {aside}
@@ -182,8 +198,350 @@ function EmptyNote({ children }) {
   return <p className="dash-empty">{children}</p>;
 }
 
-export default function Dashboard({ user, notify, onConnError, onOpenReports }) {
+// ===========================================================================
+// The reference's own furniture (owner request, 2026-10-12)
+//
+// THE FOUR PIECES BELOW ARE EXPORTED, and for the reason ReportShelf is (see
+// Reports.jsx): a card, a strip of cards and a list of records are drawings, and
+// a drawing is what a source-reading test cannot check — a card that renders as
+// an empty plate, a mark whose path map came back undefined, an arrow pointed
+// the wrong way on a reading where down is the good direction. The page above
+// uses them; tests/fixtures/adminDashboard.jsx renders them with the payload the
+// endpoint really sends, and the test reads the markup.
+//
+// The dashboard was a row of numbers with a coloured edge and a set of panels
+// with uppercase titles. The design the owner sent draws the same facts as
+// CARDS: a tinted circular mark that says which reading it is, the reading
+// itself, and one line of what it means — and, under the two wide panels, a
+// compact strip that repeats the four readings with their change against the
+// period before.
+//
+// EVERY DRAWING IS INLINE, on the app's own 24-unit grid, for the reason the top
+// bar's marks are (see AppTopBar.jsx): the station's LAN has no internet, so a
+// mark is a path in this bundle or it is nothing. Nothing here is fetched and no
+// icon package is used.
+// ===========================================================================
+
+/** The four readings' marks, named for what they measure rather than for the
+ *  picture — the label beside each one is what the card is CALLED. */
+const KPI_MARKS = {
+  // A page with ruled lines: the register itself.
+  reports: [
+    'M14 3.2H7.4a2 2 0 0 0-2 2v13.6a2 2 0 0 0 2 2h9.2a2 2 0 0 0 2-2V8z',
+    'M14 3.2V8h5',
+    'M9.2 12.8h5.6M9.2 16.4h5.6',
+  ],
+  // A clock: the reading that means "waiting".
+  attention: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M12 7.5V12l3.2 2'],
+  // A tick in a ring: signed off.
+  finalized: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'm8.4 12.2 2.5 2.5 4.7-5'],
+  // A stopwatch: how long the work took.
+  timer: ['M12 21a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17z', 'M12 8.6V13l3 1.8', 'M9.4 3.2h5.2'],
+};
+
+function KpiMark({ name }) {
+  return (
+    <svg
+      className="dash-kpi__glyph"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {KPI_MARKS[name].map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  );
+}
+
+/**
+ * ONE READING, as the reference draws it: a tinted circle, the caption, the
+ * number, and one line saying what the number counts.
+ *
+ * `tone` is the card's colour FAMILY (blue, green, amber, violet) and it is a
+ * role rather than a value: the stylesheet owns what each family looks like, and
+ * these four are the families the status chips and the register's own tints
+already use. `spark` is the one optional extra — the daily series behind the
+ * first card — drawn only where a real series exists.
+ *
+ * A card with `to` is a BUTTON: the number is an action (the queue it counts),
+ * and the only card that has one is Needs attention.
+ */
+export function KpiCard({ tone, mark, label, value, note, delta, valueClass = '', spark = null, to = null, title = null, loading = false }) {
+  const body = (
+    <>
+      <span className={`dash-kpi__mark dash-kpi__mark--${tone}`} aria-hidden="true">
+        <KpiMark name={mark} />
+      </span>
+      <span className="dash-kpi__body">
+        <span className="dash-kpi__label">{label}</span>
+        <span className={`dash-kpi__value ${valueClass}`}>{value}</span>
+        {/* The delta line and the note are the same slot: a card says one thing
+            under its number, whichever of the two it has. A card may carry BOTH
+            only in the strip below, which is a different shape (see SummaryCard). */}
+        {delta ?? (note ? <span className="dash-kpi__note">{note}</span> : null)}
+      </span>
+      {spark}
+    </>
+  );
+  if (loading) {
+    return (
+      <div className="dash-kpi is-skeleton" aria-hidden="true">
+        <span className="sk sk--text" />
+        <span className="sk sk--big" />
+        <span className="sk sk--text" />
+      </div>
+    );
+  }
+  return to ? (
+    <button type="button" className="dash-kpi dash-kpi--link" onClick={to} title={title ?? undefined}>
+      {body}
+    </button>
+  ) : (
+    <div className="dash-kpi">{body}</div>
+  );
+}
+
+/**
+ * THE SPARKLINE under the total: the range's own daily counts, as one line.
+ *
+ * It is drawn from `seriesOverTime` — the same series the trend chart draws — so
+ * it cannot disagree with the panel below it. It carries NO axis and no labels
+ * on purpose: it says "busier here than there" at a glance, and the chart under
+ * it is where a reader goes for the numbers.
+ */
+export function Sparkline({ series, label }) {
+  const counts = (series ?? []).map((p) => Number(p.count) || 0);
+  if (counts.length < 2) return null;
+  const max = Math.max(...counts, 1);
+  const W = 100;
+  const H = 34;
+  const step = W / (counts.length - 1);
+  // Baseline to baseline inside the box, so the line never touches the card's
+  // own edge and a flat series sits on the floor rather than through the middle.
+  const y = (n) => H - 3 - (n / max) * (H - 8);
+  const points = counts.map((n, i) => `${(i * step).toFixed(2)},${y(n).toFixed(2)}`).join(' ');
+  return (
+    <svg
+      className="dash-spark"
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      role="img"
+      aria-label={label}
+    >
+      <polyline className="dash-spark__line" points={points} />
+    </svg>
+  );
+}
+
+/** "↑ 12% vs. previous period" — the one wording for a change against the period
+ *  before, used by the cards above and the strip below so the two cannot say it
+ *  two ways. `pct` null/undefined means there was nothing to compare: no line. */
+export function DeltaLine({ pct, good = 'up' }) {
+  if (pct === null || pct === undefined || Number.isNaN(Number(pct))) return null;
+  const n = Number(pct);
+  const up = n >= 0;
+  // WHICH WAY IS GOOD IS THE READING'S OWN FACT, not the arrow's: more reports
+  // and more finalized work are the station doing more, and a SHORTER median is
+  // the work moving faster. So the sign is what is drawn and `good` is what is
+  // painted — the reference's own median card is a green arrow pointing down.
+  const better = (up && good === 'up') || (!up && good === 'down');
+  return (
+    <span className={`dash-kpi__delta ${better ? 'is-up' : 'is-down'}`}>
+      <span aria-hidden="true">{up ? '↑' : '↓'}</span>{' '}
+      {Math.abs(n)}% vs. previous period
+    </span>
+  );
+}
+
+/**
+ * ONE READING OF THE STRIP, in the reference's compact form: the same mark at a
+ * smaller size, the number, what it counts, and the change against the period
+ * before.
+ *
+ * WHY THE READINGS REPEAT. The reference draws its four figures twice — as cards
+ * at the top and as a strip at the foot — and the owner asked for that design.
+ * The top cards carry the QUALITY (a sparkline, the split inside the number, the
+ * share it represents); the strip carries the DIRECTION, one arrow per figure,
+ * which is the thing an Admin scanning the foot of the page wants and the cards
+ * cannot fit. Every arrow is a real measured change (see DashboardController's
+ * period deltas) — a strip that invented one would be worse than no strip.
+ */
+export function SummaryCard({ tone, mark, value, label, pct, good = 'up', valueClass = '' }) {
+  return (
+    <div className="dash-sum__card">
+      <span className={`dash-kpi__mark dash-kpi__mark--${tone} dash-sum__mark`} aria-hidden="true">
+        <KpiMark name={mark} />
+      </span>
+      <span className="dash-sum__body">
+        <span className={`dash-sum__value ${valueClass}`}>{value}</span>
+        <span className="dash-sum__label">{label}</span>
+        <DeltaLine pct={pct} good={good} />
+      </span>
+    </div>
+  );
+}
+
+/** The clock in the activity panel's head, at the size the head's row wants. */
+function ClockMark() {
+  return (
+    <svg
+      className="dash-panel__mark"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {KPI_MARKS.attention.map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  );
+}
+
+/** The bar-chart mark in the trend panel's head. */
+function BarsMark() {
+  return (
+    <svg
+      className="dash-panel__mark"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M4.5 20.5h15" />
+      <path d="M7.5 20.5v-6M12 20.5V6.5M16.5 20.5v-9" />
+    </svg>
+  );
+}
+
+/** How a report's status reads on an activity row. One word for each state of
+ *  the workflow, in the same words the register's shelves use. */
+const ACTIVITY_STATUS = {
+  draft: 'Draft',
+  submitted: 'Awaiting Finalization',
+  finalized: 'Finalized',
+};
+
+/** "12 Oct 2026, 18:42" — the day AND the minute, because a list of what just
+ *  happened is read by the minute. Built from the same `YYYY-MM-DD HH:MM:SS`
+ *  string every endpoint sends. */
+function activityWhen(dbStamp) {
+  if (!dbStamp) return '';
+  const then = new Date(String(dbStamp).replace(' ', 'T'));
+  if (Number.isNaN(then.getTime())) return '';
+  const day = then.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const time = then.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return `${day}, ${time}`;
+}
+
+/**
+ * RECENT ACTIVITY — the newest reports in the range being read, one row each.
+ *
+ * WHY RECORDS RATHER THAN THE AUDIT LOG. The endpoint has always carried
+ * `recentActivity` (audit entries: an action, an actor, an entity), and the page
+ * drew none of it. The reference's panel is a list of REPORTS — what kind, where,
+ * when, and where each one stands in the workflow — which is what an Admin
+ * opening this page is actually looking for, so the panel is fed by the records
+ * themselves (`recentReports`, added to the same response). The audit feed is
+ * still served for the screens that read it (Audit Trail).
+ *
+ * Every row opens its record through the same route the bell uses (Shell owns
+ * the screen change), so a row here is a way into a report and not a dead line.
+ */
+export function RecentActivity({ reports, loading, onOpen, onViewAll }) {
+  const rows = Array.isArray(reports) ? reports : [];
+  return (
+    <section className="dash-panel dash-activity">
+      <div className="dash-panel__head">
+        <h2 className="dash-panel__title">
+          <ClockMark />
+          Recent Activity
+        </h2>
+        <div className="dash-panel__aside">
+          <button type="button" className="dash-viewall" onClick={onViewAll}>
+            View All <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </div>
+      {loading ? (
+        <ul className="dash-activity__list is-skeleton" aria-hidden="true">
+          {Array.from({ length: 5 }, (_, i) => (
+            <li key={i} className="dash-activity__row">
+              <span className="dash-activity__mark sk" />
+              <span className="dash-activity__text">
+                <span className="sk sk--text" style={{ width: 120 }} />
+                <span className="sk sk--text" style={{ width: 170 }} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : rows.length === 0 ? (
+        <EmptyNote>No reports were recorded in this range. Widen the dates, or clear the incident type.</EmptyNote>
+      ) : (
+        <ul className="dash-activity__list">
+          {rows.map((r) => (
+            <li key={r.id}>
+              <button
+                type="button"
+                className="dash-activity__row"
+                onClick={() => onOpen?.(r.id)}
+                title={`Open report BW-${String(r.id).padStart(4, '0')}`}
+              >
+                <span
+                  className={`dash-activity__mark dash-activity__mark--${typeHue(r.type)}`}
+                  aria-hidden="true"
+                >
+                  <ReportTypeIcon name={typeIcon(r.type)} className="dash-activity__glyph" />
+                </span>
+                <span className="dash-activity__text">
+                  <span className="dash-activity__title">{r.type}</span>
+                  <span className="dash-activity__meta">
+                    {r.location ? `${r.location} · ` : ''}
+                    {activityWhen(r.incident_datetime)}
+                  </span>
+                </span>
+                <span className={`dash-status dash-status--${r.status}`}>
+                  {ACTIVITY_STATUS[r.status] ?? r.status}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+export default function Dashboard({
+  user,
+  notify,
+  onConnError,
+  onOpenReports,
+  // The station's own name, for the sub-line under the title. Undefined until
+  // Shell's letterhead read lands, and the line simply omits it until then.
+  stationName = null,
+  // Open ONE record, by id — the route Shell owns (the bell uses the same one).
+  // The activity rows are the only thing on this page that names a single report.
+  onOpenReport,
+}) {
   const [data, setData] = useState(null);
+  // Whether the trend card has been EXPANDED over the whole row (the reference's
+  // corner control). It is a view state, not a query one: nothing is re-read, the
+  // card simply stops sharing its line with the activity panel.
+  const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState(null);
   const [preset, setPreset] = useState(30);
   const [scope, setScope] = useState('all'); // meaningful for Admin/Staff only
@@ -384,17 +742,31 @@ export default function Dashboard({ user, notify, onConnError, onOpenReports }) 
       )}
 
       <header className="dash-topbar">
-        <div>
+        <div className="dash-head__title">
           <h1>Dashboard</h1>
+          {/* The reference's own sub-line: a live dot, the station, what this
+              page reads, and when it was last read. THE STATION'S NAME IS THE
+              DEPLOYMENT'S, read from Shell's letterhead rather than typed here
+              — the same fact the printed sheet and the gate carry — and the line
+              simply omits it in the moment before that read lands. */}
           <p className="dash-sub">
+            <span className="dash-live" aria-hidden="true" />
             {scope === 'mine' ? 'Your reports — ' : ''}
-            Naga City Police Station — incident report overview
+            {stationName ? `${stationName} — ` : ''}
+            Incident report overview
             {updatedAt && (
               <span className="dash-updated"> (updated {relativeTime(updatedAt.toISOString())})</span>
             )}
           </p>
         </div>
 
+        {/* THE RANGE CARD (owner request, 2026-10-12). The three filters the
+            reference draws — from, to, incident type — plus the two strips this
+            dashboard already had: the range presets and the station/mine scope.
+            They are one card at the head of the page, which is where the
+            reference puts them, and the FIELDS come first inside it (see
+            styles.css: the fields' flex order) because "which dates am I
+            reading" is the question the card exists to answer. */}
         <div className="dash-filters">
           <div className="dash-scope" role="group" aria-label="Data scope">
             <button
@@ -485,66 +857,65 @@ export default function Dashboard({ user, notify, onConnError, onOpenReports }) 
         </div>
       )}
 
-      {/* ---- KPI strip ------------------------------------------------- */}
+      {/* ---- KPI strip -------------------------------------------------
+          FOUR CARDS, each saying one thing about the range being read (owner
+          request, 2026-10-12): a tinted mark that says which reading it is,
+          the number, and one line under it. The readings, their order and
+          their sub-lines are the reference's own; the FIRST card additionally
+          carries the range's daily series as a sparkline, and the only card
+          that is also a control is Needs attention (the number is a queue, and
+          a queue opens). */}
       <section className="dash-kpis" aria-busy={loading}>
-        {loading ? (
-          Array.from({ length: 4 }, (_, i) => <KpiSkeleton key={i} />)
-        ) : (
-          <>
-            <div className="dash-kpi dash-kpi--hero">
-              <span className="dash-kpi__label">Total reports</span>
-              <span className="dash-kpi__value">{k ? fmt.format(k.total) : '—'}</span>
-              <span
-                className={`dash-kpi__delta ${k && k.periodDeltaPct > 0 ? 'is-up' : ''} ${k && k.periodDeltaPct < 0 ? 'is-down' : ''}`}
-              >
-                {k
-                  ? k.periodDeltaPct > 0
-                    ? `↑ ${k.periodDeltaPct}% vs. previous period`
-                    : k.periodDeltaPct < 0
-                      ? `↓ ${Math.abs(k.periodDeltaPct)}% vs. previous period`
-                      : 'No change vs. previous period'
-                  : ''}
-              </span>
-            </div>
-            {/* Clickable: the number is an action — jump into the blotter
-                pre-filtered to everything awaiting work. */}
-            <button
-              type="button"
-              className="dash-kpi dash-kpi--link"
-              style={{ '--accent': 'var(--amber)' }}
-              onClick={() => onOpenReports?.({ status: 'attention' })}
-              title="Open the needs-attention queue in All Reports"
-            >
-              <span className="dash-kpi__label">Needs attention</span>
-              <span className="dash-kpi__value">{k ? fmt.format(needsAttention) : '—'}</span>
-              <span className="dash-kpi__delta">
-                {k ? `${fmt.format(k.pending)} draft · ${fmt.format(k.submitted)} awaiting finalization` : ''}
-              </span>
-            </button>
-            <div className="dash-kpi" style={{ '--accent': 'var(--green-ok)' }}>
-              <span className="dash-kpi__label">Finalized</span>
-              <span className="dash-kpi__value">{k ? fmt.format(k.finalized) : '—'}</span>
-              <span className="dash-kpi__delta">
-                {k && finalizePct(k) !== null ? `${finalizePct(k)}% of reports in range` : ''}
-              </span>
-            </div>
-            <div className="dash-kpi" style={{ '--accent': 'var(--cyan)' }}>
-              <span className="dash-kpi__label">Median draft to final</span>
-              <span className="dash-kpi__value dash-kpi__value--time">
-                {data?.finalizeTime?.medianMinutes != null
-                  ? fmtMinutes(data.finalizeTime.medianMinutes)
-                  : '—'}
-              </span>
-              <span className="dash-kpi__delta">
-                {data?.finalizeTime
-                  ? data.finalizeTime.medianMinutes != null
-                    ? `${fmt.format(data.finalizeTime.finalizedCount)} finalized in range`
-                    : 'Nothing was finalized in this range'
-                  : ''}
-              </span>
-            </div>
-          </>
-        )}
+        <KpiCard
+          loading={loading}
+          tone="blue"
+          mark="reports"
+          label="Total reports"
+          value={k ? fmt.format(k.total) : '—'}
+          delta={<DeltaLine pct={k ? k.periodDeltaPct : null} />}
+          spark={<Sparkline series={data?.seriesOverTime} label="Reports per day in this range" />}
+        />
+        <KpiCard
+          loading={loading}
+          tone="green"
+          mark="attention"
+          label="Needs attention"
+          value={k ? fmt.format(needsAttention) : '—'}
+          note={
+            k
+              ? `${fmt.format(k.pending)} draft · ${fmt.format(k.submitted)} awaiting finalization`
+              : ''
+          }
+          to={() => onOpenReports?.({ status: 'attention' })}
+          title="Open the needs-attention queue in All Reports"
+        />
+        <KpiCard
+          loading={loading}
+          tone="amber"
+          mark="finalized"
+          label="Finalized"
+          value={k ? fmt.format(k.finalized) : '—'}
+          note={k && finalizePct(k) !== null ? `${finalizePct(k)}% of reports in range` : ''}
+        />
+        <KpiCard
+          loading={loading}
+          tone="violet"
+          mark="timer"
+          label="Median draft to final"
+          value={
+            data?.finalizeTime?.medianMinutes != null
+              ? fmtMinutes(data.finalizeTime.medianMinutes)
+              : '—'
+          }
+          valueClass="dash-kpi__value--time"
+          note={
+            data?.finalizeTime
+              ? data.finalizeTime.medianMinutes != null
+                ? `${fmt.format(data.finalizeTime.finalizedCount)} finalized in range`
+                : 'Nothing was finalized in this range'
+              : ''
+          }
+        />
       </section>
 
       {/* ---- Trend --------------------------------------------------------
@@ -553,9 +924,52 @@ export default function Dashboard({ user, notify, onConnError, onOpenReports }) 
           days had about 19px — too little for a column to show a composition.
           Full width gives every day real room, and it keeps the wide-case layout
           the same shape as the narrow case. */}
-      <div className="dash-grid-main dash-grid-main--stack">
+      <div
+        className={`dash-grid-main dash-grid-main--split${expanded ? ' is-expanded' : ''}`}
+      >
         {loading ? <PanelSkeleton tall /> : (
-          <Panel title="Reports over time" aside={<ChartKey byType={chartTypes} />}>
+          <Panel
+            title="Reports over time"
+            mark={<BarsMark />}
+            sub="Number of incident reports per day"
+            aside={
+              <>
+                <ChartKey byType={chartTypes} />
+                {/* THE CORNER CONTROL (the reference draws it here). It expands
+                    the trend over the whole row — the activity panel drops
+                    below it — which is what a reader wants when the range is
+                    long and the days are thin. A pressed state, not a dialog:
+                    nothing is hidden, the drawing just gets the width. */}
+                <button
+                  type="button"
+                  className="dash-expand"
+                  aria-pressed={expanded}
+                  onClick={() => setExpanded((v) => !v)}
+                  title={expanded ? 'Share the row with recent activity' : 'Expand the chart across the row'}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    {expanded ? (
+                      <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+                    ) : (
+                      <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />
+                    )}
+                  </svg>
+                  <span className="sr-only">
+                    {expanded ? 'Collapse the chart' : 'Expand the chart'}
+                  </span>
+                </button>
+              </>
+            }
+          >
             <StackedColumns
               series={data?.seriesOverTime ?? []}
               byType={chartTypes}
@@ -572,6 +986,16 @@ export default function Dashboard({ user, notify, onConnError, onOpenReports }) 
             />
           </Panel>
         )}
+
+        {/* THE NEWEST RECORDS, beside the trend rather than under it: the two
+            answer the same question at two resolutions — the shape of the range,
+            then the last few things that actually happened in it. */}
+        <RecentActivity
+          reports={data?.recentReports}
+          loading={loading}
+          onOpen={onOpenReport}
+          onViewAll={() => onOpenReports?.({})}
+        />
       </div>
 
       {/* ---- Status, beside the hour it was filed at ----------------------
@@ -630,6 +1054,54 @@ export default function Dashboard({ user, notify, onConnError, onOpenReports }) 
           </Panel>
         )}
       </div>
+
+      {/* ---- The summary strip -------------------------------------------
+          THE FOUR READINGS AGAIN, at the foot of the page: the reference draws
+          its own figures twice — as cards at the top, and as this compact strip
+          below — and the owner asked for that design. What the strip adds is the
+          one thing the cards have no room for: the measured change against the
+          period before, one arrow each. Every percentage is the server's own
+          count over the same window shifted back (see the period deltas in
+          DashboardController); a figure with nothing to compare against draws no
+          arrow rather than a zero, and the median reads a FALL as the good
+          direction because a faster queue is the improvement. */}
+      {!loading && (
+        <div className="dash-sum">
+          <SummaryCard
+            tone="blue"
+            mark="reports"
+            value={k ? fmt.format(k.total) : '—'}
+            label="Total reports"
+            pct={k ? k.periodDeltaPct : null}
+          />
+          <SummaryCard
+            tone="green"
+            mark="attention"
+            value={k ? fmt.format(needsAttention) : '—'}
+            label="Needs attention"
+            pct={data?.periodDeltas?.attentionPct}
+          />
+          <SummaryCard
+            tone="amber"
+            mark="finalized"
+            value={k ? fmt.format(k.finalized) : '—'}
+            label="Finalized"
+            pct={data?.periodDeltas?.finalizedPct}
+          />
+          <SummaryCard
+            tone="violet"
+            mark="timer"
+            value={
+              data?.finalizeTime?.medianMinutes != null
+                ? fmtMinutes(data.finalizeTime.medianMinutes)
+                : '—'
+            }
+            label="Median draft to final"
+            pct={data?.periodDeltas?.medianPct}
+            good="down"
+          />
+        </div>
+      )}
 
       {/* ---- Workload + activity: REMOVED ---------------------------------
           Both panels were taken off deliberately, so the row is not here. The

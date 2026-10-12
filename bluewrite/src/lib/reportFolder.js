@@ -232,6 +232,42 @@ export const STATUS_BUCKETS = [
 ];
 
 /**
+ * WHAT THE OFFICER'S OWN SCREENS CALL THE END OF A REPORT (owner request,
+ * 2026-10-13: "change the submitted to finalized … remove submitted, all data
+ * in it should be in finalized").
+ *
+ * The database keeps THREE statuses and the officer is shown two. The three are
+ * real and stay: the Admin's review queue IS the difference between a report
+ * awaiting review (`submitted`) and one locked (`finalized`), which is why
+ * neither the status filter nor the shelf bucket for an Admin changes here. But
+ * for the officer who wrote it there is one end state, and the register was
+ * printing two words for it — a row whose status was `submitted` sat beside one
+ * that said `finalized`, while the shelf above them both, and the filter below,
+ * offered the pair again.
+ *
+ * So every officer-facing surface reads its word from here: the row badge and
+ * the sheet's badge (`statusText`), the shelf tab and the Status filter
+ * (`FINALIZED_LABEL`, plus the `filed` value the server accepts for it). One
+ * definition means a report cannot be "finalized" on a row and "submitted" in
+ * the panel it opens.
+ */
+export const FINALIZED_LABEL = 'Finalized';
+
+/**
+ * The word printed for a report's status, per audience.
+ *
+ * Returns the raw status for everyone else — the Admin needs to read `submitted`
+ * and `finalized` apart, and the badge's own class is keyed off the raw value
+ * either way (styles.css declares one per status) so the colour of a folded
+ * `submitted` badge stays the colour that state has always been.
+ */
+export function statusText(status, { officer = false } = {}) {
+  const value = String(status ?? '').trim().toLowerCase();
+  if (!officer) return value;
+  return value === 'submitted' || value === 'finalized' ? 'finalized' : value;
+}
+
+/**
  * The shelf the register OPENS on: every report, as files.
  *
  * `all` is the same flag the archive's shelf carries — fold every status of a
@@ -330,7 +366,7 @@ export function shelfInView(shelves, activeKey) {
  * is one shelf holding everything the filters returned (`all: true`), and
  * splitting them would invent a distinction the view is not making.
  */
-export function shelvesFor({ archived = false, awaiting = false, sort, dir } = {}) {
+export function shelvesFor({ archived = false, awaiting = false, sort, dir, officer = false } = {}) {
   if (archived) return [{ key: 'archived', label: 'Archived', all: true }];
   if (awaiting) return [{ key: 'awaiting', label: 'Awaiting verification', all: true }];
   // ALL REPORTS HEADS THE ORDINARY REGISTER (owner request, 2026-10-07). It is
@@ -343,7 +379,14 @@ export function shelvesFor({ archived = false, awaiting = false, sort, dir } = {
   // default: the officer can sort the register now (see ReportTools), and a tab
   // still reading "Newest first" over a list of the oldest three reports would be
   // the register contradicting the screen beneath it.
-  return [{ ...ALL_SHELF, note: sortNote(sort, dir) }, ...STATUS_BUCKETS];
+  // The second shelf is renamed for the officer, never re-scoped: the bucket
+  // already holds `submitted` AND `finalized` (statusBucket), which is exactly
+  // the set the officer calls finalized, so the tab's own data does not move.
+  return [
+    { ...ALL_SHELF, note: sortNote(sort, dir) },
+    ...STATUS_BUCKETS.map((s) =>
+      officer && s.key === 'submitted' ? { ...s, label: FINALIZED_LABEL } : s),
+  ];
 }
 
 /**

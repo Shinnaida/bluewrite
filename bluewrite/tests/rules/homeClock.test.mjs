@@ -152,7 +152,7 @@ test('Home draws ONE clock, in the band beside the letterhead, and it owns its t
   assert.match(clock, /\{\[\.\.\.clock\.time\]\.map/, 'the time line no longer reads the formatter');
   assert.match(clock, /className="ir-hero-clock-date">\{clock\.date\}/, 'the date line is gone');
   assert.match(clock, /className="ir-hero-clock-zone">\{clock\.label\}/, 'the zone line is gone');
-  assert.doesNotMatch(SRC, /aria-live/, 'a ticking clock is not a live region');
+  assert.doesNotMatch(clock, /aria-live|role="(?:status|alert|log)"/, 'a ticking clock is not a live region');
 });
 
 test('the readout holds still while it ticks, and it is stated for the navy band', () => {

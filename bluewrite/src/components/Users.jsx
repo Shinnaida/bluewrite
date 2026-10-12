@@ -20,6 +20,11 @@ import RowMenu from './RowMenu.jsx';
 // fields plus a paragraph each. One definition, shared with the AI panel — see
 // InfoHint.jsx for the whole of its contract.
 import InfoHint from './InfoHint.jsx';
+// WHO IS AT A DESK RIGHT NOW, opened from this screen's toolbar. It reads the
+// directory itself (see the component) and is mounted only while the toggle is on, so
+// a closed panel costs no polling — and it lives here rather than on the Dashboard
+// because "an account is signed in" is a fact about accounts.
+import ConnectionHub from './ConnectionHub.jsx';
 
 /**
  * The three roles this station has, in the order the account form offers them.
@@ -287,6 +292,10 @@ export default function Users({ notify }) {
   // from. The row is what takes focus back when the menu was opened from the
   // keyboard rather than the mouse (see closeRowMenu).
   const [menu, setMenu] = useState(null);
+  // Whether the Connected now panel is open. CLOSED BY DEFAULT, because the directory
+  // is what this screen is for and the roster is a question an administrator asks
+  // occasionally: it takes the top of the page, and it polls while it is up.
+  const [presenceOpen, setPresenceOpen] = useState(false);
   // The generated recovery-code sheet (migration 018): null, or the codes the
   // server just issued — shown ONCE in a dialog, and printable from there. It is
   // the only moment they exist in readable form; the server keeps hashes.
@@ -1306,7 +1315,12 @@ export default function Users({ notify }) {
           </button>
 
           <form className="reports-toolbar" role="search" onSubmit={(e) => e.preventDefault()}>
-            <div className="reports-toolbar-row">
+            {/* `users-filters` IS WHY THIS ROW IS ONE LINE. `.reports-toolbar-row` is a plain
+                block shared with the audit trail's toolbar, and this is the one screen with
+                something that belongs at the END of the filter line rather than on the line
+                after it — the presence pill (see ConnectionHub.css, where the row's own rule
+                is scoped to this class). */}
+            <div className="reports-toolbar-row users-filters">
               {/* The box IS the filter: there is nothing to submit and nothing to
                   wait for, so there is no Search button beside it. Escape clears
                   it, which is the one key a search field is expected to answer. */}
@@ -1343,8 +1357,38 @@ export default function Users({ notify }) {
                   Clear filters
                 </button>
               )}
+
+              {/* THE ROSTER'S DOORWAY, and it is a pill rather than a panel because the
+                  panel is the top of the page: a toggle says whether it is open (the
+                  words change, `aria-expanded` states it, and the accent lights), and
+                  the live dot says the thing the panel is about — that this is a live
+                  reading rather than a report. It floats to the right end of the row
+                  (see .conn-hub-toggle), so the filter controls stay where they were. */}
+              <button
+                type="button"
+                className={`conn-hub-toggle${presenceOpen ? ' is-open' : ''}`}
+                aria-expanded={presenceOpen}
+                aria-controls="users-presence"
+                onClick={() => setPresenceOpen((v) => !v)}
+              >
+                <span className="conn-hub-toggle__dot" aria-hidden="true" />
+                <span className="conn-hub-toggle__label">
+                  {presenceOpen ? 'Hide who’s connected' : 'Who’s connected now'}
+                </span>
+              </button>
             </div>
           </form>
+
+          {/* THE ELEMENT `aria-controls` NAMES IS ALWAYS HERE, and the panel is mounted
+              INSIDE it only while it is open: an `aria-controls` pointing at an id that
+              does not exist is a broken reference for a screen reader, and the panel it
+              would point at fetches the directory every thirty seconds — which a closed
+              panel must not do. */}
+          <div id="users-presence">
+            {presenceOpen && (
+              <ConnectionHub />
+            )}
+          </div>
 
           {users === null ? (
             // The read failed. The alert above carries the server's own sentence;

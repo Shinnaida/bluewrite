@@ -33,10 +33,12 @@ import './HomeGrid.css';
  *    guard was traced to a Home that looked broken rather than deliberately
  *    still on a workstation whose OS animations are switched off: the preference
  *    is invisible, the missing grid is not, and the two read as "the background
- *    disappeared". Home's grid is now unconditional — the same call, for the
- *    same reason, as the gate's backdrop (see GateGridScan.jsx). The rest of the
- *    app still honours the preference; the exception is scoped to the two
- *    landing surfaces.
+ *    disappeared". Home's grid is now unconditional. It was the second surface
+ *    to make that call rather than the only one: the sign-in gate's own backdrop
+ *    ran on the same terms until the whole layer was removed from that screen
+ *    (2026-10-13 — see docs/UI_LIGHT_REDESIGN.md §11, which keeps the files).
+ *    The rest of the app still honours the preference; the exception is this
+ *    surface.
  *
  *    There is no half-measure available here: `updateAnimation` floors the speed
  *    at 0.1, so `speed={0}` still moves, and the component has no static mode.

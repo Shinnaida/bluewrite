@@ -16,7 +16,9 @@
 // officer actually sees.
 //
 // WHY PLAIN THREE AND NOT @react-three/fiber. R3F is not a dependency of this
-// project and `three` is (see GridScan.jsx), and the prompt's source is one
+// project and `three` is — this component is where it is used, now that the
+// gate's vendored GridScan has been retired to .design-backup — and the
+// prompt's source is one
 // fullscreen triangle: a renderer, a scene, an orthographic camera and a
 // ShaderMaterial. The port below is the same shader on the same triangle with
 // the same uniforms, which is what the prompt's component is underneath its
@@ -47,7 +49,7 @@
 //      square, the centring and the clamp against a narrow card are CSS's (see
 //      AiOrbBackdrop.css). The renderer's drawing buffer follows that box while
 //      the canvas itself is stretched by CSS, so a resize never changes the
-//      layout. The DPR is capped at 2, the house cap (GridScan.jsx).
+//      layout. The DPR is capped at 2, the house cap for this app's canvases.
 //
 //   4. IT PAUSES. The source runs on R3F's frame loop even when the card is
 //      scrolled away. This one starts and stops on an IntersectionObserver and
@@ -347,7 +349,8 @@ export default function AiOrbBackdrop({
 
     const frame = (now) => {
       raf = requestAnimationFrame(frame);
-      // Clamped the way GridScan clamps: a tab that was hidden long enough to
+      // Clamped the way GridScan clamps (that file is retired to
+      // `.design-backup/revert-gate-backdrop-2026-10-13/`): a tab hidden long enough to
       // hand back a huge delta must not jump the rotation a whole turn.
       const dt = Math.min(0.1, Math.max(0, (now - (last || now)) / 1000));
       last = now;

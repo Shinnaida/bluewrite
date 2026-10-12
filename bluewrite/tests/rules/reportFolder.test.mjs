@@ -19,6 +19,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { loadFixture } from './renderHarness.mjs';
 import { INCIDENT_TYPES } from '../../src/lib/incidentTypes.js';
 import {
   TYPE_ICON,
@@ -28,6 +29,8 @@ import {
   typeHue,
   UNCLASSIFIED_TYPE,
   STATUS_BUCKETS,
+  FINALIZED_LABEL,
+  statusText,
   typeIcon,
   reportNumber,
   statusBucket,
@@ -72,6 +75,12 @@ const controller = readFileSync(
   new URL('../../app/controllers/ReportsController.php', import.meta.url),
   'utf8',
 );
+
+// The register's FILE panel, as a DRAWING rather than as text (see the fixture):
+// every test below that names ReportFiles reads its source, and text cannot see a
+// component that throws — which is what the panel did the day a prop was named in
+// its JSX and never destructured.
+const loadRegisterFiles = () => loadFixture('tests/fixtures/registerFiles.jsx');
 
 /** The keys the icon component can actually draw. */
 const glyphKeys = [...component.matchAll(/\n  '?([a-z][a-z-]*)'?: \(/g)].map((m) => m[1]);
@@ -191,6 +200,62 @@ test('the shelf is the stage of the work, not the exact status', () => {
 
   assert.deepEqual(STATUS_BUCKETS.map((s) => s.key), ['draft', 'submitted']);
   assert.deepEqual(STATUS_BUCKETS.map((s) => s.label), ['Draft', 'Submitted']);
+
+  // ...AND THE OFFICER'S OWN WORD FOR THAT SHELF (owner request, 2026-10-13):
+  // the TAB is renamed, the bucket it holds is not — same keys, same data, so a
+  // rename can never move a report. An Admin's All Reports keeps the three
+  // statuses, because a review queue IS the difference between them.
+  assert.deepEqual(shelvesFor({ officer: true }).map((s) => s.label), ['All Reports', 'Draft', 'Finalized']);
+  assert.deepEqual(shelvesFor({ officer: true }).map((s) => s.key), ['all', 'draft', 'submitted']);
+  assert.deepEqual(shelvesFor({}).map((s) => s.label), ['All Reports', 'Draft', 'Submitted']);
+});
+
+test('the officer reads two words for a status, and the Admin reads three', () => {
+  // THE OFFICER NEVER READS "SUBMITTED" (owner request, 2026-10-13: "remove
+  // submitted — all data in it should be in finalized"). The word itself is
+  // decided in ONE place, which is what keeps a row, the sheet it opens, the tab
+  // above them and the filter under them from disagreeing.
+  assert.equal(statusText('submitted', { officer: true }), 'finalized');
+  assert.equal(statusText('finalized', { officer: true }), 'finalized');
+  assert.equal(statusText('draft', { officer: true }), 'draft');
+  // Only the two SENT states fold: a status this build has never heard of is
+  // shown as it arrived rather than being called finalized.
+  assert.equal(statusText('ESCALATED', { officer: true }), 'escalated');
+  assert.equal(statusText('', { officer: true }), '');
+  assert.equal(statusText(undefined, { officer: true }), '');
+  // The Admin — whose queue is the difference — reads the raw status.
+  assert.equal(statusText('submitted'), 'submitted');
+  assert.equal(statusText('FINALIZED'), 'finalized');
+  assert.equal(FINALIZED_LABEL, 'Finalized');
+});
+
+test('the officer’s filtered list asks for the set its shelf holds', () => {
+  // `filed` is the value the officer's Status filter sends. It has to be the
+  // BUCKET's own set, or a report could sit on the officer's shelf and be missing
+  // from the list under it — so the two are stated together here and in the
+  // controller's own pipeline
+  assert.match(
+    controller,
+    /\$status === 'filed'[\s\S]{0,120}r\.status IN \('submitted', 'finalized'\)/,
+    'the server no longer reads the officer\'s `filed` as the sent set',
+  );
+  // The option offers the officer's word and no third one, while All Reports
+  // keeps both statuses for the Admin.
+  assert.match(reports, /<option value="filed">\{FINALIZED_LABEL\}<\/option>/);
+  assert.match(
+    reports,
+    /<option value="submitted">Submitted<\/option>[\s\S]{0,90}<option value="finalized">Finalized<\/option>/,
+    'the Admin lost the two statuses they review apart',
+  );
+  assert.match(reports, /Needs attention \(draft \+ not finalized\)/);
+  assert.match(reports, /Needs attention \(draft \+ submitted\)/);
+  // The row badge and the sheet's badge both read the one word — the officer's
+  // register and the panel a row opens cannot say different things.
+  assert.match(list, /statusText\(report\.status, \{ officer \}\)/);
+  assert.match(reports, /statusText\(sheetReport\.status, \{ officer \}\)/);
+  // The badge's CLASS stays the raw status, so the colour of a state does not
+  // move when its word does (styles.css declares one per status).
+  assert.match(list, /className=\{`badge \$\{report\.status\}`\}/);
 });
 
 test('the mode decides the shelves: three for the register, one for the archive', () => {
@@ -531,10 +596,13 @@ test('the register draws a shelf, and a folder opens into its own list', () => {
   assert.match(reports, /<GlassFolder/);
   assert.match(reports, /buildShelves\(folders, \{/);
   // ...and the ORDER goes in with the mode, because the ALL shelf's own note is
-  // the order the list under it is in (see the orders test).
+  // the order the list under it is in (see the orders test). The register's role
+  // travels with them too: it is what renames the second tab for the officer
+  // (see the shelf test) without touching the bucket it holds.
   assert.match(
     reports,
-    /shelvesFor\(\{ archived: showArchived, awaiting, sort: query\.sort, dir: query\.dir \}\)/,
+    /shelvesFor\(\{[\s\S]{0,120}sort: query\.sort,[\s\S]{0,60}dir: query\.dir,[\s\S]{0,40}officer,[\s\S]{0,20}\}\)/,
+    'the shelves no longer get the order and the role together',
   );
   assert.match(reports, /active\.folders\.map\(\(folder\) => \(/);
   // Folders sit directly on the page — no card wrapper — in an even grid of
@@ -634,6 +702,18 @@ test('ALL REPORTS draws the register as files, newest first, and asks for them',
   assert.match(reports, /emptyText="No reports in this folder\."/);
   assert.match(reports, /emptyText=\{emptyAllNote\(\{ q: query\.q, filtered: filterCount > 0 \}\)\}/);
   assert.match(reports, /onPage=\{\(page\) => setQuery\(\(q\) => \(\{ \.\.\.q, page \}\)\)\}/);
+  // ...AND THE VOCABULARY REACHES IT FROM THE REGISTER'S OWN FLAG, THREE TIMES:
+  // once by the panel, forwarding to the rows it draws, and once at each of the
+  // register's two doors (the opened folder and the ALL shelf). A panel that READS
+  // `officer` while its caller forgets to pass it is a ReferenceError waiting to
+  // blank the screen — see the render test at the end of this file for the crash
+  // itself, which this count is the wiring half of.
+  assert.equal(
+    reports.match(/officer=\{officer\}/g)?.length,
+    3,
+    'the register no longer hands the officer/Admin vocabulary to both of its report lists',
+  );
+  assert.match(reports, /const officer = user\.role !== 'Admin';/);
 
   // NEWEST FIRST is the register's own order, unstated by the shelf because the
   // query already carries it: the newest incident at the top (see the query state
@@ -828,7 +908,14 @@ test('the rail above a list of reports narrows it, orders it, and folds away', (
     /<div className="reports-toolbar register-filters" id=\{filtersId\} hidden=\{!filtersOpen\}>/,
     'the filter line lost the register’s own class, its id or its `hidden` state',
   );
-  assert.match(reports, /const \[filtersOpen, setFiltersOpen\] = useState\(true\)/);
+  // ...and it RESTS FOLDED (owner request, 2026-10-12): the register opens on
+  // the list, and the funnel — drawn on both views — opens the row when the
+  // officer asks for it.
+  assert.match(
+    reports,
+    /const \[filtersOpen, setFiltersOpen\] = useState\(false\)/,
+    'the filter row is drawn open again instead of waiting for the funnel',
+  );
   assert.match(reports, /const filtersId = `\$\{groupId\}-filters`;/);
   // The count it wears is the ROW's own filters — the term has a control of its
   // own sitting beside it — and it is what the row is holding while folded away.
@@ -883,6 +970,17 @@ test('the rail above a list of reports narrows it, orders it, and folds away', (
     /\.reports-toolbar\.register-filters \{[^}]*padding: 0\.7rem 1rem 0\.9rem/,
     'the filter line does not pad itself to the strip’s own edge',
   );
+  // ...AND ITS FIELDS ARE SOFTLY ROUNDED (owner request, 2026-10-12): the line
+  // stands under the search capsule, and the document grammar's own 3px corner
+  // read as a bare box beside it. The radius is stated on the register's own
+  // rule (two classes), so it out-specifies `.ir-body input` without an
+  // `!important` — and it is 10px, the rail's own key, so the fields and the
+  // keys a pointer meets on this screen are one shape.
+  assert.match(
+    styles,
+    /\.reports-register \.reports-filter input,[\s\S]{0,160}border-radius: 10px/,
+    'the filter fields kept the bare 3px corner',
+  );
   // THE ADMIN'S ARCHIVE SWITCH went with the card that held it, so it stands in
   // that same head: a word-shaped key (a mark cannot say "Show Archived"), kept
   // out of the fold — a mode that folds away with the filters is a mode an Admin
@@ -904,6 +1002,21 @@ test('the rail above a list of reports narrows it, orders it, and folds away', (
   // words then name the same report.
   assert.match(controller, /elseif \(preg_match\('\/\^bw-\?\$\/i', \$word\) === 1\) \{/);
   assert.match(controller, /if \(preg_match\('\/\^0\*\(\\d\{1,9\}\)\$\/', \$next, \$n\) === 1\) \{/);
+});
+
+test('the register explains its controls and shows a labelled result range', () => {
+  assert.match(reports, /className="reports-register" aria-label=\{showArchived \? 'Archived Reports' : listTitle\}/);
+  assert.doesNotMatch(reports, /className="register-heading"|Your report register|Find incident records, review report sheets/);
+  assert.match(reports, /className="register-tool__label">Filters<\/span>/);
+  assert.match(reports, /className="register-tool__label">Sort<\/span>/);
+  assert.match(reports, /className="register-results" role="status" aria-live="polite"/);
+  assert.match(reports, /pagination\.per_page/);
+  assert.match(reports, /Math\.min\(pagination\.page \* pagination\.per_page, pagination\.total\)/);
+  assert.match(reports, /<nav className="reports-pagination" aria-label="Report pages">/);
+  assert.match(list, /<span>Edit<\/span>/);
+  assert.match(list, /<span>More<\/span>/);
+  assert.match(styles, /\.reports-register \.register-tool \{[^}]*min-height: 44px/);
+  assert.match(styles, /\.reports-register \.report-row__cell-text \{[^}]*white-space: normal/);
 });
 
 test('the tabs state their own surface, and the folders came down a size', () => {
@@ -1077,4 +1190,45 @@ test('hovering a folder fans it open and draws nothing around it', () => {
   // the hover chrome must not cost the officer who tabs to a folder the one
   // thing that says which folder they are on.
   assert.match(styles, /\.glass-folder__open:focus-visible \{[^}]*outline:\s*2px/);
+});
+
+test('the register paints its file panel, and the officer reads two words', async () => {
+  // THE ASSERTION THAT MATTERS IS THAT THIS RENDER RETURNS AT ALL. `officer` was
+  // named in ReportFiles' JSX and never destructured from its props, and a missed
+  // prop in JavaScript is not a warning — it is a ReferenceError thrown during
+  // render, and this app has no error boundary, so React unmounts the workspace and
+  // the officer gets a WHITE SCREEN the moment the register draws its rows. Every
+  // text test in this file passed while that was true. Rendering the panel is what
+  // makes the prop list real.
+  const { render, REPORTS } = await loadRegisterFiles();
+  const officerView = render({ officer: true });
+
+  // The rows are the register's own records, numbered the register's way.
+  assert.match(officerView, /BW-0318/);
+  assert.match(officerView, /BW-0312/);
+  assert.match(officerView, /Rape \/ Sexual Assault/);
+  // The count line and the pager come off `pagination`, and both are read by the
+  // officer rather than asserted about: "6-10 of 12 reports" is page two of five.
+  assert.match(officerView, /6-10 of 12 reports/);
+  assert.match(officerView, /Page 2 of 3/);
+
+  // ONE VOCABULARY PER READER (see statusText in lib/reportFolder.js): everything
+  // that has left the officer's hands is FINALIZED to them — the word is folded,
+  // and the badge's own class stays the raw status so the colour does not move —
+  // while All Reports keeps `submitted` and `finalized` apart, because the Admin's
+  // review queue is the difference between them.
+  assert.match(officerView, /<span class="badge submitted">finalized<\/span>/);
+  assert.match(render({ officer: false }), /<span class="badge submitted">submitted<\/span>/);
+  // A DRAFT wears no badge for either reader: the resting state is not news.
+  assert.equal(officerView.match(/class="badge draft"/g), null);
+
+  // The empty and loading states are the caller's sentence, not the panel's...
+  assert.match(render({ reports: [] }), /No reports in this folder\./);
+  assert.match(render({ reports: null }), /Loading reports…/);
+  // ...and their own wording comes back once the connection drops.
+  assert.match(render({ reports: null, conn: 'offline' }), /Waiting for the connection to come back/);
+
+  // A single page draws no pager at all: a Prev/Next pair over one page of one is
+  // two controls that can only do nothing.
+  assert.equal(render({ pagination: { page: 1, per_page: 5, total: REPORTS.length, total_pages: 1 } }).includes('reports-pagination'), false);
 });

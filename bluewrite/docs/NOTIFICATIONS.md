@@ -218,7 +218,8 @@ applying a new one — so it can never produce `(3) (3) Title`.
 | `api/index.php` | `GET /notifications`, `POST /notifications/seen` (after the auth gate, so CSRF applies to the POST) |
 | `src/lib/notifications.js` | **new** — every sentence the bell says, the age arithmetic, and `documentTitle()`; kept pure so the wording can be tested |
 | `src/components/NotificationBell.jsx` | **new** — the trigger, the badge, the panel, the polling, and the tab title |
-| `src/components/AppTopBar.jsx` | renders the bell beside the profile control |
+| `src/components/AppChrome.jsx` | draws the bell beside the profile control — the account chrome, placed by the bar (officer) or at the foot of the Admin's rail (owner request, 2026-10-12) |
+| `src/components/AppTopBar.jsx`, `src/components/AppSidebar.jsx` | the two places it is placed: the end of the bar's row, the foot of the rail |
 | `src/components/Shell.jsx` | hands the bell the route to open a report |
 | `src/incident-report.css` | section **7b**, the bell and its panel |
 | `tests/NotificationsTest.php` | **new** — the feed's rules and the watermark over HTTP |

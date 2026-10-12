@@ -1,6 +1,9 @@
-// BlueWrite — the application's ONE top bar (spec §1: "Official Incident
-// Reporting System"). Every screen renders it, so the navy bar is chrome the
-// app owns rather than a private component of the report editor.
+// BlueWrite — the application's top bar (spec §1: "Official Incident Reporting
+// System"): the OFFICER's chrome. Every officer and staff screen renders it, so
+// the navy bar is chrome the app owns rather than a private component of the
+// report editor. AN ADMIN'S SCREENS DO NOT: an Admin's chrome is the rail beside
+// the workspace, which carries the same lockup, the same destinations and the
+// same account chrome at its foot (see AppSidebar and AppChrome).
 //
 // Left: the department lockup, in THREE LINES — the Republic above the
 // department, the department above the system's own name. It is the shape of an
@@ -11,19 +14,20 @@
 // stopped naming. The lockup doubles as Home.
 //
 // Right: the role's destinations — each an ICON AND A LABEL, drawn as one pill —
-// then the PROFILE control. Sign-out used to sit in the nav as "Logout"; it now
-// lives inside the profile menu so the nav stays purely navigational and a
-// stray click can't end a session.
+// then the ACCOUNT CHROME (the bell and the profile control, see AppChrome.jsx).
+// Sign-out used to sit in the nav as "Logout"; it now lives inside the profile
+// menu so the nav stays purely navigational and a stray click can't end a
+// session.
 //
-// Destinations are role-aware:
-//   Officer / Staff — Home · Write Report · My Reports
-//   Admin           — Dashboard · All Reports · User Management · Audit Trail ·
-//                     Station Settings
-// (Admins supervise; they reach individual reports through All Reports, which
-// mirrors the old sidebar where "+ New Report" was hidden for them.)
+// The destinations are the OFFICER's working loop — Home · Write Report · My
+// Reports, in that order: start at Home, write the report, then read it back in
+// the register. The Admin's five (Dashboard · All Reports · User Management ·
+// Audit Trail · Station Settings) are declared in this same file because the
+// rail draws them from here, and the account chrome closes the bar.
 //
-// Order is the officer's working loop: start at Home, write the report, then
-// read it back in the register. The Profile control closes the bar.
+// It was one bar for BOTH roles until the rail arrived (owner request,
+// 2026-10-12), which is why the Admin's list still lives below: the two chromes
+// are two arrangements of one nav, not two navs.
 //
 // WHERE THE ICONS COME FROM, and why they are written out here. They are
 // lucide.dev's own 24×24 drawings (ISC licence), INLINED: the station's LAN has
@@ -38,26 +42,17 @@
 // component below draws `path` elements from a string array — the same
 // conversion HOME_MARK_PATHS does for its person mark.
 
-import React, { useEffect, useRef, useState } from 'react';
-// The display preferences that used to be a fold in this menu are NOT here any
-// more — they moved to the Profile panel (ProfilePanel.jsx), which is now their
-// only home. Nothing in this file reads the theme, the density or the form
-// format; it reads the idle limit, because the menu still states the rule that
-// sits directly above Log out.
-import { IDLE_LIMIT_MIN } from '../lib/session.js';
+import React from 'react';
+// THE ACCOUNT CHROME — the bell and the profile control, with the menu the
+// latter opens — is a component of its own, because the SAME two controls sit at
+// the foot of an Admin's rail (owner request, 2026-10-12). This file places it;
+// it does not own it. See AppChrome.jsx.
+import AppChrome from './AppChrome.jsx';
 // The two lines of the lockup that are NOT this file's to word: the department
 // the deployment is for and the system's own name. lib/appInfo.js is where the
 // gate, the printed sheet and About read them from, so the bar reads them there
 // too — see the file's own note on why these are not literals at the call site.
 import { DEPARTMENT, SYSTEM_TITLE } from '../lib/appInfo.js';
-// The avatar's two letters. Read from lib/profile.js rather than recomputed
-// here, because the panel draws the same avatar for the same person and two
-// copies of a rule eventually disagree about a one-word name.
-// The face in the bar: the photograph when the account has one, initials when it
-// does not — the same component the presence rail and the profile panel draw.
-import Avatar from './Avatar.jsx';
-import AboutSystem from './AboutSystem.jsx';
-import NotificationBell from './NotificationBell.jsx';
 // NO APP MARK IN THE BAR, by request — and the artwork is not gone from the
 // product: the sign-in gate still sets the knockout (white-ink) shield over its
 // own lockup, the app icon beside this file is the full-colour navy one, and
@@ -82,7 +77,11 @@ import pnpSeal from '../assets/pnp-logo.png';
 
 // One drawing per destination, named for what the officer is going TO rather
 // than for the picture (see the file's own note on their source and licence).
-const NAV_ICONS = {
+// EXPORTED TOGETHER WITH THE MARK AND THE LISTS BELOW, because an Admin's nav is
+// drawn by the sidebar (AppSidebar.jsx) and there is one drawing set and one
+// destination list in this product: the bar's pills and the sidebar's rows are
+// the same destinations, worded once. Nothing else about this file is shared.
+export const NAV_ICONS = {
   // A house: the screen the officer starts on, and the way back to it.
   home: [
     'M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8',
@@ -130,7 +129,7 @@ const NAV_ICONS = {
 /** One destination's mark. Decoration, like every other drawing in the app:
  *  the label beside it is what the button is CALLED, so the glyph is hidden
  *  from a screen reader rather than repeated to it. */
-function NavIcon({ name }) {
+export function NavIcon({ name }) {
   return (
     <svg
       className="ir-nav-icon"
@@ -157,7 +156,7 @@ const OFFICER_LINKS = [
   { kind: 'table', label: 'My Reports', icon: 'register' },
 ];
 
-const ADMIN_LINKS = [
+export const ADMIN_LINKS = [
   { kind: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
   { kind: 'table', label: 'All Reports', icon: 'register' },
   { kind: 'users', label: 'User Management', icon: 'users' },
@@ -173,7 +172,7 @@ const ADMIN_LINKS = [
 // writing. Both entry paths report it as 'report': Home's recent rows, and the
 // reports list, whose editor panel Shell reports up for exactly this reason
 // (see Shell's `current`).
-function activeFor(current, isAdmin) {
+export function activeFor(current, isAdmin) {
   if (current === 'report') return isAdmin ? 'table' : 'new';
   return current;
 }
@@ -196,31 +195,15 @@ export default function AppTopBar({
   // the same contract every nav link above it uses.
   onOpenReport,
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  // The About panel is a dialog, not another fold: it says things, it does not
-  // set them, and it is the one menu entry that opens something.
-  const [aboutOpen, setAboutOpen] = useState(false);
-  const wrapRef = useRef(null);
-  const isAdmin = user.role === 'Admin';
-  const links = isAdmin ? ADMIN_LINKS : OFFICER_LINKS;
-  const active = activeFor(current, isAdmin);
-
-  // Close the profile menu on outside click or Escape.
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDown = (e) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setMenuOpen(false);
-    };
-    const onKey = (e) => {
-      if (e.key === 'Escape') setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [menuOpen]);
+  // NO ROLE BRANCH HERE ANY MORE, and its absence is the point: an Admin never
+  // reaches this component (Shell draws the rail instead, see Shell.jsx), so the
+  // bar draws the officer's loop and only that. The Admin's five destinations
+  // are still declared in this file — the rail imports them from here, so there
+  // is one list and one icon set for both chromes (see AppSidebar).
+  const links = OFFICER_LINKS;
+  // Resolved for the officer, which is the same answer `activeFor` gives the
+  // shell's `current` for this role: an open report reads as Write Report.
+  const active = activeFor(current, false);
 
   return (
     // The bar's bottom seam follows the screen: on the write-report editor the
@@ -228,12 +211,16 @@ export default function AppTopBar({
     // the band's own flag and submit plate wear (see .ir-nav--report). The
     // editor is on screen under TWO kinds — a fresh unsaved draft ('new') and
     // an opened one ('report') — so both turn the seam.
-    <header className={`ir-nav${current === 'report' || current === 'new' ? ' ir-nav--report' : ''}`}>
+    <header
+      className={`ir-nav${current === 'report' || current === 'new' ? ' ir-nav--report' : ''}`}
+    >
+      {/* THE LOCKUP IS THIS BAR'S, and the rail carries its own copy of it for
+          the role this bar never serves — see AppSidebar. */}
       <button
         type="button"
         className="ir-brand ir-brand-home"
-        onClick={() => onNavigate(isAdmin ? 'dashboard' : 'welcome')}
-        title={isAdmin ? 'Back to dashboard' : 'Back to home'}
+        onClick={() => onNavigate('welcome')}
+        title="Back to home"
       >
         {/* The agency's seal, AT THE HEAD of the words it belongs to — the order
             the printed sheet's head already uses (seal, then letterhead), so the
@@ -271,13 +258,6 @@ export default function AppTopBar({
           </button>
         ))}
 
-        {/* ---- Notifications: what happened to the officer's own reports ----
-            Beside the Profile control and outside its wrapper on purpose: it is
-            its own click-outside region, and it is shown for EVERY role (the
-            feed is scoped to the session's own reports, so an admin reads their
-            own here too). */}
-        <NotificationBell onOpenReport={onOpenReport} />
-
         {/* ---- Messages: REMOVED BY REQUEST ----
             The bar used to carry a second icon here, beside the bell — the
             officers rather than the reports. The request was to take it off the
@@ -291,138 +271,19 @@ export default function AppTopBar({
             circles it has room for) reaches for the `+` inside the window,
             which searches the roster by name, badge or role. */}
 
-        {/* ---- Profile: identity + the single sign-out action ---- */}
-        <div className="ir-profile-wrap" ref={wrapRef}>
-          {menuOpen && (
-            <div className="ir-profile-menu" role="menu" aria-label="Account">
-              {/* The identity row is the door to the Profile panel. It used to
-                  be a static header — a name and a role, saying nothing you
-                  could not already read in the bar behind it — which made the
-                  one thing an officer looks for (their own account) the one
-                  thing the menu would not open. It is a button now, and the
-                  whole row is the target.
-
-                  It closes the menu on the way: the panel is docked beside the
-                  workspace, so leaving a menu open above it would put two
-                  surfaces over the same click. */}
-              <button
-                type="button"
-                className="ir-profile-head ir-profile-head--link"
-                role="menuitem"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onOpenProfile();
-                }}
-              >
-                <Avatar user={user} className="ir-profile-avatar" />
-                <span className="ir-profile-id">
-                  <span className="ir-profile-name">{user.full_name}</span>
-                  <span className="ir-profile-meta">
-                    Badge {user.badge_number} · {user.role}
-                  </span>
-                </span>
-                <svg className="ir-profile-head-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                  <path d="m9 6 6 6-6 6" />
-                </svg>
-              </button>
-              <div className="ir-profile-sep" aria-hidden="true" />
-
-              {/* Preferences USED to be a disclosure here — three display rows,
-                  collapsed, because left open they stood the menu up as tall as
-                  the screen it drops over. They now live in the Profile panel
-                  (ProfilePanel.jsx), which has the room to state them properly
-                  and is where an officer looks for their own account anyway.
-                  Nothing was left behind on purpose: a preference that is set in
-                  two places is a preference with two answers. */}
-
-              {/* What ending a session means, stated once, immediately above
-                  the action that ends one. There is deliberately no countdown
-                  here: the deadline slides with every click, including the
-                  click that opens this menu, so a number would read 30:00 every
-                  time it was looked at. The RUNNING warning lives where it is
-                  needed and can be seen — see Shell's idle banner. */}
-              <p className="ir-menu-note">
-                Signs out after {IDLE_LIMIT_MIN} minutes without activity. An open draft is
-                saved first.
-              </p>
-
-              <div className="ir-profile-sep" aria-hidden="true" />
-              {/* The two entries below the fold answer questions rather than
-                  set anything, so they sit with Log out instead: the fold is
-                  for things the officer CHANGES. The key cap on this one is not
-                  decoration — it is how the sheet gets found by somebody who
-                  has never opened this menu, which is the only reason a
-                  shortcut sheet earns its place. */}
-              <button
-                type="button"
-                className="ir-profile-item"
-                role="menuitem"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onShortcuts();
-                }}
-              >
-                <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="2.5" y="6" width="19" height="12" rx="2" />
-                  <path d="M6.5 10h.01M10.5 10h.01M14.5 10h.01M18 10h.01M7.5 14h9" />
-                </svg>
-                Keyboard shortcuts
-                <span className="ir-item-keys" aria-hidden="true">?</span>
-              </button>
-              <button
-                type="button"
-                className="ir-profile-item"
-                role="menuitem"
-                onClick={() => {
-                  setMenuOpen(false);
-                  setAboutOpen(true);
-                }}
-              >
-                <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9.5" />
-                  <path d="M12 16.5v-5M12 7.8h.01" />
-                </svg>
-                About this system
-              </button>
-              <button
-                type="button"
-                className="ir-profile-item"
-                role="menuitem"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onLogout();
-                }}
-              >
-                <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-                </svg>
-                Log out
-              </button>
-            </div>
-          )}
-          <button
-            type="button"
-            className="ir-profile-trigger"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            aria-current={undefined}
-            onClick={() => setMenuOpen((v) => !v)}
-            title={`${user.full_name} — Badge ${user.badge_number} · ${user.role}`}
-          >
-            <Avatar user={user} className="ir-profile-avatar" />
-            <span className="ir-profile-trigger-name">{user.full_name}</span>
-            <svg className="ir-profile-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </button>
-        </div>
+        {/* ---- The account chrome: the bell, the profile control and the
+            menu it opens, in ONE component ----
+            It is drawn here for an officer and at the foot of an Admin's rail
+            (AppSidebar), so the bell, the account menu and Log out cannot come
+            out different in the two places. See AppChrome.jsx. */}
+        <AppChrome
+          user={user}
+          onOpenProfile={onOpenProfile}
+          onLogout={onLogout}
+          onShortcuts={onShortcuts}
+          onOpenReport={onOpenReport}
+        />
       </nav>
-
-      {/* Rendered by the bar because the bar is what opens it — the same reason
-          Shell renders its own logout confirmation. It sits outside the profile
-          wrapper on purpose: that wrapper is the menu's click-outside region,
-          and the panel must not be part of it. */}
-      {aboutOpen && <AboutSystem user={user} onClose={() => setAboutOpen(false)} />}
     </header>
   );
 }

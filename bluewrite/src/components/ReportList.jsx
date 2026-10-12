@@ -10,6 +10,9 @@ import {
   // about what a Traffic Accident looks like.
   typeIcon,
   typeHue,
+  // The word a row prints for its status: `finalized` for the officer, the raw
+  // status for an Admin — see the constant in the module for why.
+  statusText,
 } from '../lib/reportFolder.js';
 import { statusClass, statusLabel } from '../lib/reportVerification.js';
 // The PDF file card: one report drawn as the document it is. Ported from the
@@ -146,7 +149,7 @@ function FileLogo({ className }) {
   );
 }
 
-function ReportRow({ report, meta, flash, onOpen, onEdit, onMenu }) {
+function ReportRow({ report, meta, flash, onOpen, onEdit, onMenu, officer = false }) {
   const num = reportNumber(report.id);
   const translation =
     report.verification_status && report.verification_status !== 'english_original'
@@ -225,12 +228,20 @@ function ReportRow({ report, meta, flash, onOpen, onEdit, onMenu }) {
                 2026-10-07: "remove the draft word"): a draft is the register's
                 resting state — the rows an officer came here to work on — and
                 saying DRAFT on every one of them was noise, not information.
-                The states that EXCEED it keep their badges, because submitted
-                and finalized are facts worth seeing at a glance. */}
+                The states that EXCEED it keep their badges, because a report
+                that has been sent is a fact worth seeing at a glance.
+
+                AND THE OFFICER READS ONE WORD FOR IT (owner request,
+                2026-10-13): `statusText` folds `submitted` into `finalized` for
+                them, while the badge's own class stays the raw status, so the
+                colour that state has always worn does not move. The Admin — who
+                reviews the two apart — still reads the raw value. */}
             {(report.status !== 'draft' || translation) && (
               <span className="report-row__badges">
                 {report.status !== 'draft' && (
-                  <span className={`badge ${report.status}`}>{report.status}</span>
+                  <span className={`badge ${report.status}`}>
+                    {statusText(report.status, { officer })}
+                  </span>
                 )}
                 {translation && (
                   <span
@@ -287,6 +298,7 @@ function ReportRow({ report, meta, flash, onOpen, onEdit, onMenu }) {
             onClick={() => onEdit?.(report)}
           >
             <RowMark name="pencil" size={15} />
+            <span>Edit</span>
           </button>
         )}
         {meta.hasMenu && (
@@ -302,6 +314,7 @@ function ReportRow({ report, meta, flash, onOpen, onEdit, onMenu }) {
             }}
           >
             <RowMark name="dots" size={15} stroke={2.6} />
+            <span>More</span>
             <RowMark name="chevron" size={12} className="report-row__menu-caret" />
           </button>
         )}
@@ -310,7 +323,20 @@ function ReportRow({ report, meta, flash, onOpen, onEdit, onMenu }) {
   );
 }
 
-export default function ReportList({ reports, rowMeta, flashId, onOpen, onEdit, onMenu }) {
+export default function ReportList({
+  reports,
+  rowMeta,
+  flashId,
+  onOpen,
+  onEdit,
+  onMenu,
+  // Which vocabulary the rows print: `finalized` for everything that has left
+  // the officer's hands (they never see the word "submitted" — see statusText),
+  // the raw status for an Admin's All Reports, whose review queue turns on the
+  // difference. Passed in rather than read off the account here, so the list
+  // stays a drawing of the reports it is handed.
+  officer = false,
+}) {
   return (
     <ul className="report-list">
       {reports.map((r) => (
@@ -322,6 +348,7 @@ export default function ReportList({ reports, rowMeta, flashId, onOpen, onEdit, 
           onOpen={onOpen}
           onEdit={onEdit}
           onMenu={onMenu}
+          officer={officer}
         />
       ))}
     </ul>

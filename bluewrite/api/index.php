@@ -49,6 +49,13 @@ require __DIR__ . '/../app/core/PasswordPolicy.php';
 // /me/photo, UsersController's /users/:id/photo, PresenceController's roster).
 require __DIR__ . '/../app/core/AvatarPhoto.php';
 require __DIR__ . '/../app/core/LegacyNormalizer.php';
+// Migration 020 — a report's incident types, and the name the station calls
+// them by (the officer's own words when the report was filed under the
+// catch-all type). Required here for this project's usual reason: no
+// autoloader, so every class the request path can reach is required by hand.
+// Three surfaces read it: the register's rows, the offline copy and the AI
+// context (via MaskingGateway).
+require __DIR__ . '/../app/core/IncidentTypes.php';
 require __DIR__ . '/../app/core/Station.php';
 require __DIR__ . '/../app/core/ReportVerification.php';
 // How far along each draft is: the tally Home's draft cards wear, derived from
@@ -73,6 +80,8 @@ require __DIR__ . '/../app/ai/CachedInstructionStore.php';
 require __DIR__ . '/../app/ai/NarrativeEconomy.php';
 require __DIR__ . '/../app/ai/NarrativeService.php';
 require __DIR__ . '/../app/controllers/NarrativeController.php';
+require __DIR__ . '/../app/ai/TerminologyAssistant.php';
+require __DIR__ . '/../app/controllers/TerminologyController.php';
 require __DIR__ . '/../app/controllers/NotificationsController.php';
 require __DIR__ . '/../app/controllers/AuthController.php';
 require __DIR__ . '/../app/controllers/AccountRequestsController.php';
@@ -307,6 +316,10 @@ try {
         if ($seg1 !== null && ($parts[2] ?? null) === 'recovery-codes' && !isset($parts[3]) && $method === 'POST') {
             $c->generateRecoveryCodes((string) $seg1);
         }
+    }
+
+    if ($seg0 === 'ai' && $seg1 === 'terminology' && !isset($parts[2]) && $method === 'POST') {
+        (new \App\Controllers\TerminologyController())->answer();
     }
 
     if ($seg0 === 'ai' && $seg1 === 'health' && $method === 'GET') {

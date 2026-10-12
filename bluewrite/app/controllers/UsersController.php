@@ -605,7 +605,10 @@ final class UsersController
         header('Cache-Control: private, max-age=300');
         if ($ifNoneMatch !== '' && str_contains($ifNoneMatch, $etag)) {
             http_response_code(304);
-            return;
+            // END HERE, and see the note on readfile() below for why a bare
+            // `return` is not enough. A 304 carrying a body is the same broken
+            // response as a 200 carrying two of them.
+            exit;
         }
 
         // Replaces the JSON Content-Type and the no-store set by the front
@@ -615,6 +618,24 @@ final class UsersController
         header('Content-Type: ' . AvatarPhoto::mimeFor($name));
         header('Content-Length: ' . (string) filesize($path));
         readfile($path);
+
+        // THE ROUTE ENDS HERE, and that is a correction rather than a formality.
+        // This is the one handler in the API that answers with BYTES, and the
+        // front controller's last line — `Response::json(404, …)`, which every
+        // JSON route reaches only when nothing matched — does not know a route
+        // already answered. Returning from here therefore ran it: the status was
+        // still free to be overwritten (PHP buffers a small response), so the
+        // picture went out as `404, Content-Type: application/json` with the
+        // JPEG bytes in the body, the JSON error APPENDED after them, and
+        // Content-Length naming only the first half.
+        //
+        // What that looked like from the browser: the dev proxy read a response
+        // longer than its own length and died with "Parse Error: Data after
+        // 'Connection: close'", the <img> never loaded, and Avatar drew the
+        // officer's initials instead — a photograph that had been uploaded
+        // perfectly well, showing as no photograph at all. See exportCsv for the
+        // same rule on the API's other byte route.
+        exit;
     }
 
     /**

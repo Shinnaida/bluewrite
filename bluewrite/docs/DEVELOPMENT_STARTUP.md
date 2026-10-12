@@ -77,6 +77,45 @@ npm run dev -- --port 5180 --strictPort
 
 Browse to **http://localhost:5180**.
 
+### The one-step way — `BlueWrite.exe`
+
+**`BlueWrite.exe` sits in the checkout root, beside `Start BlueWrite.bat`** and does
+what the three steps above do in that order: it reports each port, starts whatever is
+missing, and opens the app. Double-click it.
+
+It is a **front door, not a second house.** The starting itself is `scripts\serve.cmd`
+and `scripts\watch-servers.ps1` — the same two files the `.bat` calls — so the two
+launchers cannot drift about which port the API is on or which MySQL is correct. What
+the `.exe` adds is only what a station workstation needs: the report is **read** rather
+than flashed past (a failure waits for a keypress, where the `.bat`'s window closes),
+the reason a start failed is named instead of a cmd.exe path message, and it takes two
+flags:
+
+```bash
+BlueWrite.exe --no-open   # bring the stack up, leave the browser alone
+BlueWrite.exe --help      # what it does
+```
+
+**Keep it beside the `bluewrite` folder** — it finds the application from its own
+location, and says so plainly if it has been moved away from it.
+
+**Rebuilding it** (after editing `scripts\launcher\BlueWrite.cs`):
+
+```bash
+bluewrite\scripts\launcher\build.cmd
+```
+
+That uses the C# compiler already inside Windows — no SDK download, nothing to
+install on the station:
+
+```text
+%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
+```
+
+The compiler is C# 5, so the launcher's source stays inside that language version.
+The built `BlueWrite.exe` is committed (it is a few KB), so a workstation that has
+only cloned the repository can double-click it without compiling anything.
+
 ---
 
 ## Testing with more than one account (two officers, one laptop)
@@ -148,11 +187,26 @@ in a second `localhost:5180` tab silently replaces the session under the *first*
 while that tab still holds `m.santos` in its own React state, with an Admin's menus
 already drawn. Its next request is the new session's, `requireRole('Admin')` refuses it,
 and the dashboard keeps the last good numbers on screen while hanging the refusal above
-them. Reload every tab after a switch and the state and the session agree again.
+them.
 
-**The way out is not to switch inside one origin.** Either reload after switching, or
-give each officer their own hostname (`localhost` / `127.0.0.1`) or a window that does
-not share cookies at all: InPrivate, a second browser, or a second Chrome profile.
+**As of 2026-10-11 the workspace reconciles itself, so this no longer needs a manual
+reload.** The role refusal now carries a machine-readable `code: "forbidden"` (see
+`Auth::requireRole`, and the register's `created_by` gate), and `src/lib/api.js` raises one
+session-mismatch listener for that code or for any 401. `App.jsx` answers it by reading
+`/me` again: a DIFFERENT account is adopted — the workspace is keyed on the account, so it
+remounts on the new role's own home with no Admin menu left over — a session that is gone
+returns to the gate, and a refusal from the SAME account is left for the screen's own
+banner (a finalized report, somebody else's draft) because nothing about the session
+changed. The refused request still renders its own message; the workspace simply stops
+being stale a moment later. The listener is unit-tested against a stubbed fetch in
+`tests/rules/sessionRecovery.test.mjs`.
+
+**Switching two accounts inside one origin is still worth avoiding.** Two officers still
+share one cookie jar, so the first tab still loses its session the moment the second signs
+in — the reconciliation just means the screen catches up on its own instead of waiting for
+a human to reload it. Keeping each officer on their own hostname (`localhost` /
+`127.0.0.1`) or a window that does not share cookies at all (InPrivate, a second browser,
+a second Chrome profile) avoids the refusal altogether.
 
 ---
 

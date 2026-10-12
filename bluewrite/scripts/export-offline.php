@@ -388,12 +388,26 @@ function clockTime(?string $value, bool $approximate = false): string
     return $approximate ? $text . ' (approximate)' : $text;
 }
 
-/** The record's own words for a status, and the class that colours it. */
+/**
+ * The record's own words for a status, and the class that colours it.
+ *
+ * A SUBMITTED REPORT PRINTS FINALIZED (owner request, 2026-10-13: "remove
+ * submitted — all data in it should be in finalized"). This copy is the
+ * officer's own register, read with no server, so it follows the officer's
+ * vocabulary: the two states that have left their hands are one word here, the
+ * same as the row badge, the sheet and the Status filter in the application
+ * itself (see FINALIZED_LABEL in src/lib/reportFolder.js).
+ *
+ * THE CLASS IS STILL THE RAW STATUS, on purpose: it is what the printed sheet's
+ * stylesheet colours a row by, and a state whose word changed has no business
+ * changing colour with it. A draft keeps its warning either way — an unfinalized
+ * report must never read as a filed one.
+ */
 function statusLabel(string $status): array
 {
     return match ($status) {
         'finalized' => ['FINALIZED', 'finalized'],
-        'submitted' => ['SUBMITTED', 'submitted'],
+        'submitted' => ['FINALIZED', 'submitted'],
         default => ['DRAFT — NOT FINALIZED', 'draft'],
     };
 }

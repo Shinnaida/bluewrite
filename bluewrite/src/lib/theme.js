@@ -1,7 +1,11 @@
-// BlueWrite — the display preference behind the appearance switch: the
-// sun/moon button in the sign-in gate's bottom-right corner, and the same
-// switch in Profile ▸ Preferences. (It used to be a three-way Light / Dark /
-// Auto segmented control in that menu; see the note on 'system' below.)
+// BlueWrite — the display preference behind the appearance switch: the sun/moon
+// button in Profile ▸ Preferences, which is now the only one there is. The
+// sign-in gate used to carry the same switch in its bottom-right corner, and it
+// went with the gate's theme-following: the gate is one fixed branded design in
+// both themes (owner request, 2026-10-12 — see Login.jsx), so a switch there
+// would repaint nothing. The PREFERENCE is unchanged, and index.html still
+// applies it before the bundle loads. (It used to be a three-way Light / Dark /
+// Auto segmented control in that menu too; see the note on 'system' below.)
 //
 // Stored per BROWSER, not per account, for the same reason as the form format
 // (see Shell.jsx): the station PCs are workstations one officer uses at a time,
@@ -106,8 +110,10 @@ export function applyTheme(pref) {
 }
 
 /**
- * The animation half of an appearance switch, wherever one lives — the gate's
- * circular button and the menu row in Profile ▸ Preferences use the same one.
+ * The animation half of an appearance switch. It has one home now — the row in
+ * Profile ▸ Preferences, since the gate's button went with the gate's
+ * theme-following (see Login.jsx) — and it stays a shared hook so a second
+ * control would spread the same way rather than inventing its own reveal.
  *
  * Returns [originRef, commit]. Attach the ref to the control itself, and call
  * `commit('light' | 'dark')` from its press. `commit` NEVER passes 'system':
@@ -267,8 +273,9 @@ export function useTheme() {
  *
  * useTheme deliberately hands out the PREFERENCE, because a control that shows
  * three choices has to show which one is on, and 'system' is a real answer.
- * The gate's sun/moon switch is the one control that cannot: it draws an icon
- * of the mode the officer is in, and there is no third icon for "whatever the
+ * The sun/moon switch in Profile ▸ Preferences is the one control that cannot:
+ * it draws an icon of the mode the officer is in, and there is no third icon
+ * for "whatever the
  * workstation says". So it resolves here instead — and subscribes while the
  * preference IS 'system', so a PC that flips to dark on a schedule turns the
  * icon over with it rather than leaving it stale behind the palette.

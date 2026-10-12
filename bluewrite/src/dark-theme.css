@@ -317,21 +317,14 @@
    The bar still has to be delimited here, and the line does it better than this
    hairline did: #2F63A3 is 2.2:1 against the lifted navy and brighter still
    against the near-black page under it, where the hairline was 1px of
-   --line-bright. The gate's bar is a different element that has no such line of
-   its own, and keeps its hairline. */
-:root[data-theme='dark'] .la-topbar {
-  border-bottom: 1px solid var(--line-bright);
-}
+   --line-bright.
 
-/* THE GATE'S OWN NAVY, IN DARK. login-theme.css declares the pair on .la-page so
-   the document layer can never repaint the sign-in screen; a value declared on
-   that element is not something the :root block above can override, so the dark
-   step is stated at the same place the pair is set. Same lift, same reason: the
-   light navy is 1.35:1 against this page. */
-:root[data-theme='dark'] .la-page {
-  --la-navy: #1E2E50;
-  --la-navy-hi: #22355C;
-}
+   THE SIGN-IN GATE IS NOT RESTYLED HERE ANY MORE, and its overrides are gone
+   with the theme-following they served: the gate is one fixed design in both
+   themes (owner request, 2026-10-12 — deep navy, the station's photograph, the
+   department's gold), so there is no dark step for it to take. The workspace's
+   own bar above still lifts its navy, and that is the only difference this file
+   has to state about a bar. */
 
 /* The register's row hover is `--panel-sunken`, which is only one step off the
    card in dark; the left-edge signal is what carries the row, so keep the rule

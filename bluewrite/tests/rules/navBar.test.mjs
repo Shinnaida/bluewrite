@@ -32,8 +32,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { loadFixture } from './renderHarness.mjs';
+
+/** The two nav chromes, bundled once per test that needs them. */
+const loadChrome = () => loadFixture('tests/fixtures/appChrome.jsx');
 
 const BAR = readFileSync(new URL('../../src/components/AppTopBar.jsx', import.meta.url), 'utf8');
+const SHELL = readFileSync(new URL('../../src/components/Shell.jsx', import.meta.url), 'utf8');
+const RAIL = readFileSync(new URL('../../src/components/AppSidebar.jsx', import.meta.url), 'utf8');
 const CSS = readFileSync(new URL('../../src/incident-report.css', import.meta.url), 'utf8');
 const PKG = readFileSync(new URL('../../package.json', import.meta.url), 'utf8');
 const DARK = readFileSync(new URL('../../src/dark-theme.css', import.meta.url), 'utf8');
@@ -189,6 +195,115 @@ test('the agency’s seal stands at the head of the letterhead, and is not read 
   assert.ok(!value(box, 'width') || value(box, 'width') === 'auto', 'the seal is being forced square');
   assert.ok(!value(box, 'background') && !value(box, 'background-color'), 'the seal grew a backing plate');
   assert.equal(value(rule(code(CSS), '.ir-brand-seal img'), 'object-fit'), 'contain', 'the seal can be stretched');
+});
+
+test('an Admin’s destinations move to the rail, and the bar keeps the officer’s pills', () => {
+  // THE ADMIN'S RAIL (owner request, 2026-10-12). The five supervisory
+  // destinations are still declared ONCE, in this file, and the two chromes draw
+  // them from there — the bar as pills for the officer's three, the rail as rows
+  // for the admin's five. What this asserts is the wiring that keeps two drawings
+  // of one nav in step: the rail imports this module's list and mark, and the
+  // shell draws ONE chrome per role — the rail instead of the bar, never both.
+  const rail = RAIL;
+
+  // The list and the mark are IMPORTED, not retyped: a rail with its own five
+  // labels is a second nav that can drift from the first.
+  assert.match(
+    rail,
+    /import \{ ADMIN_LINKS, NavIcon, activeFor \} from '\.\/AppTopBar\.jsx'/,
+    'the rail stopped reading the bar’s destinations',
+  );
+  assert.match(rail, /ADMIN_LINKS\.map\(\(l\) => \(/);
+  assert.match(rail, /<NavIcon name=\{l\.icon\} \/>/);
+  assert.ok(
+    rail.indexOf('<NavIcon name={l.icon} />') < rail.indexOf('{l.label}'),
+    'the rail draws its labels before its marks',
+  );
+  // The same rule for "where am I", and it resolves for an ADMIN — the role the
+  // rail is drawn for.
+  assert.match(rail, /activeFor\(current, true\)/);
+  assert.match(rail, /aria-current=\{active === l\.kind \? 'page' : undefined\}/);
+
+  // …AND ONLY AN ADMIN GETS IT. The rail and the bar are two chromes for two
+  // roles; rendering both, or the rail for an officer, would put two navs on one
+  // screen.
+  assert.match(SHELL, /\{isAdmin && \(\s*\n\s*<AppSidebar/, 'the rail is not gated on the Admin role');
+  assert.match(SHELL, /className=\{`shell\$\{isAdmin \? ' shell--admin' : ''\}`\}/, 'the shell never turns on its side');
+
+  // THE ADMIN'S SCREENS HAVE NO BAR AT ALL (owner request, 2026-10-12). With the
+  // destinations in the rail and the account moved to its foot, the bar over an
+  // Admin's screens held nothing — so there is no `chromeOnly` mode left to get
+  // wrong, and the render itself is gated on the officer's half of the role.
+  assert.match(SHELL, /\{!isAdmin && \(\s*\n\s*<AppTopBar/, 'the shell still draws a bar for an Admin');
+  assert.doesNotMatch(code(BAR), /chromeOnly/, 'the bar still carries a chrome-only mode');
+  assert.doesNotMatch(code(CSS), /\.ir-nav--chrome/, 'the retired chrome-only bar rule is still in the sheet');
+});
+
+test('the two chromes render: one nav per role, and one account chrome between them', async () => {
+  // RENDERED, not read, because the failure is what comes OUT: the bar is gated on
+  // the role and the rail is a second component, so an Admin who is handed both
+  // navs (or an officer whose letterhead fell out of the conditional) is a failure
+  // that every source assertion above passes through.
+  const { renderBar, renderRail } = await loadChrome();
+
+  // ---- The officer's bar: the lockup, then the three pills. ---------------
+  const officer = renderBar();
+  assert.ok(officer.includes('ir-brand-home'), 'the bar lost its letterhead');
+  assert.ok(officer.includes('Republic of the Philippines'), 'the bar lost the country line');
+  assert.ok(officer.includes('ir-brand-seal'), 'the bar lost the agency’s seal');
+  for (const label of ['Home', 'Write Report', 'My Reports']) {
+    assert.ok(officer.includes(`>${label}</button>`), `the officer’s bar lost ${label}`);
+  }
+  assert.ok(!officer.includes('Dashboard'), 'an officer’s bar is offering an admin destination');
+  assert.ok(officer.includes('ir-profile-trigger'), 'the bar lost the profile control');
+  assert.ok(officer.includes('ir-bell-trigger'), 'the bar lost the notification bell');
+  assert.ok(officer.includes('ir-chrome--bar'), 'the bar no longer states its chrome variant');
+
+  // ---- The rail: the same letterhead, the Admin's five, and one current. ---
+  const rail = renderRail();
+  assert.ok(rail.includes('ir-sidebar__brand'), 'the rail lost its lockup');
+  assert.ok(rail.includes('ir-brand-seal'), 'the rail lost the agency’s seal');
+  assert.match(rail, /aria-label="Admin"/, 'the rail is not a landmark of its own');
+  for (const label of [
+    'Dashboard',
+    'All Reports',
+    'User Management',
+    'Audit Trail',
+    'Station Settings',
+  ]) {
+    assert.ok(rail.includes(`${label}</button>`), `the rail lost ${label}`);
+  }
+  assert.equal((rail.match(/class="ir-side-link"/g) ?? []).length, 5, 'the rail is not five rows');
+  // Which destination is lit: the Dashboard on the Dashboard, and All Reports
+  // while a report is open over the list (the same answer the bar gives).
+  assert.equal((rail.match(/aria-current="page"/g) ?? []).length, 1, 'the rail lights more than one row');
+  assert.match(rail, /<button type="button" class="ir-side-link" aria-current="page"/);
+  assert.match(renderRail({ current: 'report' }), /aria-current="page"/);
+  const onReport = renderRail({ current: 'report' });
+  const lit = onReport.slice(onReport.indexOf('aria-current="page"'));
+  assert.ok(lit.includes('All Reports'), 'an open report does not read as All Reports');
+
+  // ---- And the rail carries what the bar used to: the account chrome -------
+  // THE BELL AND THE PROFILE CONTROL ARE THE RAIL'S now (owner request,
+  // 2026-10-12). They are the same AppChrome the bar draws, so both homes are
+  // read here: the rail must state its variant, carry both controls, and the
+  // bar's own account must not have gone missing in the move.
+  assert.ok(rail.includes('ir-chrome--rail'), 'the rail does not carry the account chrome');
+  assert.ok(rail.includes('ir-bell-trigger'), 'the rail lost the notification bell');
+  assert.ok(rail.includes('ir-profile-trigger'), 'the rail lost the profile control');
+  assert.ok(!rail.includes('ir-nav-link'), 'the rail is drawing the bar\u2019s pills');
+  // …and the account is OUTSIDE the rail's nav landmark: a bell and an account
+  // menu are not destinations, and a screen reader listing the rail's links
+  // should not have to walk past them.
+  const railNav = rail.slice(rail.indexOf('aria-label="Admin"'), rail.indexOf('</nav>'));
+  assert.ok(rail.indexOf('ir-chrome--rail') > rail.indexOf('</nav>'), 'the account chrome is inside the rail\u2019s nav');
+  assert.ok(!railNav.includes('ir-bell-trigger'), 'the bell was put in the rail\u2019s nav');
+
+  // ---- And the bar an Admin is never handed is the officer's. --------------
+  // Shell gates it on the role (asserted above); what is read here is that the
+  // bar itself no longer knows how to be an Admin's, so a stray render cannot
+  // quietly bring the strip back.
+  assert.doesNotMatch(code(BAR), /ADMIN_LINKS \?|\.role === 'Admin'/, 'the bar still branches on the Admin role');
 });
 
 test('a destination is a pill, and the current one wears the bar’s own accent', () => {

@@ -147,6 +147,55 @@ test('the codes that mean "sign in again" are told apart from a wrong code', () 
   assert.equal(isSignInOver('mfa_recovery_locked'), false);
   assert.equal(isSignInOver('mfa_recovery_none'), false);
   assert.equal(isSignInOver('mfa_resend_no_address'), false);
+  // Nor must a code that came from a SUPERSEDED sign-in end anything: the
+  // sign-in this browser is holding is alive and well, and only the screen the
+  // digits were typed on was stale. Sending the officer back to the password
+  // form would cost them a password they had already given.
+  assert.equal(isSignInOver('mfa_stale_sign_in'), false);
+});
+
+// --- which sign-in a screen belongs to ------------------------------------------
+//
+// One session cookie is shared by every tab of an origin, and `mfa_pending` is
+// one slot in it — so a second sign-in replaces the pending sign-in for all of
+// them while the first tab goes on drawing its own mailbox. This is the wiring
+// that keeps that from being read as a wrong code: the screen holds the id the
+// server minted, hands it back with every code it submits, and answers a refusal
+// that names a superseded sign-in by redrawing itself as the live one.
+
+test('the server names each pending sign-in and refuses a superseded one as itself', () => {
+  const php = readFileSync(
+    join(here, '..', '..', 'app', 'controllers', 'AuthController.php'),
+    'utf8'
+  );
+  // Minted per pending sign-in, stored beside it, and handed back on every
+  // payload that describes one (null only where no pending sign-in exists yet —
+  // the locked-at-sign-in refusal).
+  assert.match(php, /\$signInId = bin2hex\(random_bytes\(16\)\);/);
+  assert.match(php, /'sign_in_id' => \$signInId,/);
+  // Asked BEFORE the code is looked at, so a stale submission cannot be charged
+  // to the attempt counter, and answered with its own code.
+  assert.match(php, /if \(\$signInId !== '' && \$liveSignInId !== '' && !hash_equals\(\$liveSignInId, \$signInId\)\)/);
+  assert.match(php, /'code' => 'mfa_stale_sign_in'/);
+});
+
+test('the gate holds the sign-in id, sends it with the code, and recovers from the refusal', () => {
+  const src = flat(readSrc('components/Login.jsx'));
+  // `mfa` and the id are set together, so a screen cannot be drawn with one
+  // sign-in's mailbox and another's id.
+  assert.match(src, /function applyMfa\(m\) \{ setMfa\(m \?\? null\); setSignInId\(String\(m\?\.sign_in_id \?\? ''\)\); \}/);
+  // The id rides back with the code...
+  assert.match(src, /body: \{ code: typed, sign_in_id: signInId \}/);
+  // ...and the refusal redraws the screen as the sign-in the browser is really
+  // holding, clears the digits (nothing is wrong with them — they just belong to
+  // another sign-in) and puts the caret back for the code that will work.
+  assert.match(src, /if \(err\?\.code === 'mfa_stale_sign_in'\) \{/);
+  assert.match(src, /if \(err\.mfa\) applyMfa\(err\.mfa\);/);
+  assert.match(src, /if \(!submitting && \(codeMarking === 'all' \|\| signInReplaced\)\) focusFirstBox\(\);/);
+  // The refusal's own payload has to survive the trip through the API client,
+  // which is where the live state is carried (see lib/api.js).
+  const api = flat(readSrc('lib/api.js'));
+  assert.match(api, /err\.mfa = data\?\.mfa \?\? null;/);
 });
 
 // --- the offline route (migration 018) -----------------------------------------

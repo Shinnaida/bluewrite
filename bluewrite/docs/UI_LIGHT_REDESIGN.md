@@ -346,6 +346,28 @@ the skew never runs.
 > `GateGridScan.jsx`; Home's grid, the report sheet and the appearance switch
 > still honour the preference.
 
+> **Later change (2026-10-13): the grid came off the sign-in screen.** The owner
+> asked for the animated square grid to go. It is the layer the two notes above
+> argue over, and this time it is neither switched off nor hidden — it is out of
+> the tree: `GateGridScan.jsx`, `GateGridScan.css` and the vendored
+> `GridScan.jsx` / `GridScan.css` now live in
+> `.design-backup/revert-gate-backdrop-2026-10-13/`, the arrangement the first
+> removal used, so a third opinion on this layer costs a `mv` rather than a
+> re-derivation. What sits behind the gate's words now is the page's own navy
+> fill and the photograph.
+>
+> **Measured on the build rather than estimated:** the main chunk goes from
+> 1,925.88 kB to 1,203.35 kB — **−722 kB minified, −179 kB gzipped** (527.05 →
+> 348.04 kB gzipped). `postprocessing` and `face-api.js` leave with the layer,
+> which is the weight this section's opening paragraph priced at ~700 kB.
+> `three` stays: `AiOrbBackdrop.jsx`, the AI assistant's aura, imports it
+> directly, and that is now the only reason the project depends on it. The
+> `.la-page` `isolation: isolate` the light-mode blend needed went with the
+> layer, and the reduced-motion exception described above is down to one
+> surface — Home's grid. Both sign-in screens were re-rendered and probed after
+> the removal: zero `<canvas>` elements, zero `.gate-gridscan` nodes, the same
+> box geometry to the percent, and the same pixels in both themes.
+
 **What was kept deliberately:** the two-column arrangement, the PHT clock, the
 `SYS_STATUS` / `ENC_LEVEL` readout (an officer should see a connection problem
 before typing credentials that cannot be checked), and the wordmark's
@@ -378,3 +400,90 @@ desktop is untouched.
 * ~~`LetterGlitch` logs a `getBoundingClientRect` exception mid-unmount on the
   login screen — pre-existing, unrelated to this work.~~ **Moot** — the login no
   longer mounts `LetterGlitch` (see §11).
+
+---
+
+## 12. The gate became the department's front door (2026-10-12)
+
+§11 brought the sign-in screen into the workspace's light document language. That
+is **superseded by owner request**, from a reference the owner supplied: the gate
+is a design of its own now, and it no longer follows the theme at all.
+
+* **One fixed design, in both themes.** Deep navy (the `--la-*` pair on
+  `.la-page`, plus the deeper plate under it), the station's photograph across
+  the right of the page — the deployment's own `src/assets/home-hero.jpg`, the
+  file Home's band shows — cut on a diagonal, with the office's mark and the
+  wordmark in white and the department's gold over it, and the access card
+  floating on the picture. `dark-theme.css` no longer restyles the gate: its two
+  `:root[data-theme='dark'] .la-*` overrides are gone with the theme-following
+  they served.
+* **The appearance switch left the gate** with that theme-following. The choice
+  still lives in Profile ▸ Preferences, and `index.html` still applies a stored
+  preference before the bundle loads, so the workspace an officer signs into is
+  the one they chose. `App.jsx` no longer passes `theme`/`onTheme` to `Login`.
+* **The bar is the station's two seals** (PNP + City of Naga) with the readout at
+  the other end: the PHT clock, the system status as a lit green/amber dot, and
+  `v{APP_VERSION}`. `ENC_LEVEL` went — the second step states the encrypted
+  connection anyway (`la-session-pill` and the verify card's facts).
+* **The three feature cards are the reference's copy** — AI assistance, secure &
+  reliable, safer communities. The writing-assistance advisory stayed on the page
+  (spec §5 names this screen) as the column's fine print rather than as a fourth
+  card.
+* **The backdrop is gone** (owner request, 2026-10-13 — §11's last note): the
+  arrangement, the copy and the geometry below are untouched, and what is behind
+  them is the page's navy fill and the photograph. The token-reading wrapper
+  this bullet used to describe (`GateGridScan`, which read its inks off the page
+  that hosted it and ran the dark pass at half strength) and the vendored
+  `GridScan` it wrapped are in
+  `.design-backup/revert-gate-backdrop-2026-10-13/`.
+* **The picture is a band across the top right, not a wall** (owner request,
+  2026-10-13 — three readings of the comp in one day: "make the photo … small in
+  the picture", then "… the size of the police station picture"). TWO NUMBERS
+  decide it, and both were wrong the first two times:
+  * **WHERE IT IS CUT.** 45% head / 3% foot, then 51% / 12%, now **46% at the
+    head and 36% at the foot**. The first two fanned the picture out across the
+    page's LOWER-LEFT, which is what put it under the signature, the third
+    feature card and the corner wedge. Measured on the render, in the air the
+    brand column keeps to the right of its own copy (x 300–660, y 110–430 of
+    1500x850): the picture covered **20.3%** of it at 51/12 and covers **6.0%**
+    at 46/36.
+  * **WHERE IT ENDS.** The layer was `inset: 0`, and with a three-to-one frame
+    (2172x724) in a page taller than one third of its width, `cover` scaled the
+    picture to the page's HEIGHT — every pixel of the frame's height on one of
+    the page's. The officer was shown the building blown up to the window and
+    never the station. The layer is **55% of the page's height** now (the stacked
+    page gives it the height back), which makes the box WIDER than the frame at
+    every size the gate is used at, so the frame is scaled to the box's width and
+    cropped top and bottom: the picture is drawn **0.59 of the page's height at
+    the comp's 1674x940** and **0.73 at a 1366x623 workstation**, against 1.0
+    before. The third wash gradient closes the band's own foot into the page's
+    navy, which is what the picture's new bottom edge needs.
+
+  Not a guess at the scale: rendering the gate at the comp's size and scoring the
+  two edge maps over the region the comp leaves to the photograph (x 800–1660,
+  y 60–290) puts the band **22% closer** to the comp than the full-height layer
+  was — the frame's features only line up at the smaller scale. Pinned by
+  `tests/rules/loginGate.test.mjs`, which holds the band's height, the three
+  sides that must stay at 0 (an `inset` shorthand would silently make it the
+  whole page again), both ends of the cut, the diagonal, the vertical lead and
+  the wash that closes the foot.
+* **The card comes first when the page stacks** (`display: contents` inside the
+  `max-width: 1023px` query), and `.la-content` centres its child with an auto
+  margin rather than `align-items: center` — the latter clipped the top of the
+  brand column above the scroll origin on a 500x749 window.
+* **The frame is the comp's, measured rather than approximated.** Read off the
+  reference at 1500x850 and pinned by probes in headless Chrome: 63px of navy at
+  each edge (4.2vw, capped), the card's column a **fixed 570px** (38rem at this
+  app's 15px root) against whatever the brand column can take, the card's foot
+  **on the signature's own line** (`align-items: end` — in the comp the plate and
+  the underline share y=760) and a **bottom-weighted** vertical frame: 9vh above
+  against 2vh below, because equal padding centres the spread 31px too high and
+  the card's bottom edge shows it. The type scale came up with it — wordmark to
+  86px against a 90px mark, the cards' titles and sentences to ~15px, which is
+  what fills the comp's 210px cards. Two things had to change to make the numbers
+  land: `.la-content-inner`'s `max-width` was 84rem (1260px, so the whole spread
+  sat 57px in from each side) and the horizontal padding is now the comp's own.
+* **The writing-assistance advisory moved above the signature.** It stays on the
+  screen (spec §5) but the comp ends this column with the slogan and its swoosh,
+  so the notice is now the last thing read *before* it rather than the last thing
+  on the page.

@@ -39,6 +39,7 @@ const ACTION_LABELS = {
   'report.print': 'Printed a report',
   'report.export': 'Exported reports',
   'ai.narrative.generate': 'Generated AI narrative',
+  'ai.terminology.ask': 'Asked terminology chatbot',
 };
 
 // Actions that deserve a visual flag in the trail.
@@ -66,6 +67,10 @@ function actionClass(action) {
 }
 
 const EMPTY_FILTERS = { user_id: '', action: '', q: '', date_from: '', date_to: '' };
+
+// The chatbot's own view of the trail: the same table, narrowed to the questions
+// staff asked the police terminology assistant.
+const CHAT_FILTERS = { ...EMPTY_FILTERS, action: 'ai.terminology.ask' };
 
 // Columns in the table, and therefore the span of a day's heading rule: the
 // entry-number margin, then Time, Who, Action, On, Details, IP. Named rather
@@ -123,6 +128,13 @@ export default function Audits({ notify, onConnError }) {
   }
 
   const hasFilters = Object.values(filters).some((v) => v !== '' && v !== 0);
+  const onChatView = filters.action === CHAT_FILTERS.action;
+
+  function showChatView() {
+    setDraftFilters(CHAT_FILTERS);
+    setFilters(CHAT_FILTERS);
+    setPage(1);
+  }
 
   return (
     <div className="audits-page">
@@ -133,6 +145,15 @@ export default function Audits({ notify, onConnError }) {
           <div>{pagination ? `${pagination.total} ENTRIES` : 'LOADING…'}</div>
           <div>APPEND-ONLY RECORD</div>
         </div>
+      </div>
+
+      <div className="audit-views">
+        <button type="button" aria-pressed={!onChatView} className={!onChatView ? 'primary' : ''} onClick={clearFilters}>
+          All activity
+        </button>
+        <button type="button" aria-pressed={onChatView} className={onChatView ? 'primary' : ''} onClick={showChatView}>
+          AI chatbot questions
+        </button>
       </div>
 
       <form className="reports-toolbar" onSubmit={applyFilters}>

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { api, classifyError, isUnreachable } from './lib/api.js';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { api, classifyError, isUnreachable, setSessionMismatchHandler } from './lib/api.js';
 import { useTheme } from './lib/theme.js';
 import { useDensity } from './lib/density.js';
 import { setLanguageRegistry } from './lib/languageRegistry.js';
@@ -13,12 +13,11 @@ export default function App() {
   // Display preference, owned here for the same reason the form format is
   // owned by Shell: ONE source of truth, so the control that sets it and the
   // screens that live under it can never disagree. App holds it because
-  // `useTheme` applies it to <html> for the whole document — the gate included,
-  // which renders outside the Shell and so cannot reach this state any other
-  // way. Two controls CHANGE it: the sun/moon switch in the gate's bottom-right
-  // corner (binary — light or dark), and Profile ▸ Preferences inside the
-  // workspace (three-way, including 'system'). They write the same key, so
-  // whichever is used last is what the next load opens in.
+  // `useTheme` applies it to <html> for the whole document. The one control
+  // that CHANGES it is the sun/moon switch in Profile ▸ Preferences, inside the
+  // workspace; the gate is handed to Login with no theme at all (it is one
+  // fixed branded design — see Login.jsx) and this value goes on to Shell, so
+  // the workspace always opens in the mode the officer last chose.
   const [theme, setTheme] = useTheme();
   // The second display preference, owned here for the same reason: the control
   // that sets density lives in the workspace's profile menu, and the workspace
@@ -66,6 +65,66 @@ export default function App() {
         setUser(null);
       });
   }, []);
+
+  // THE SESSION'S OWN RECONCILIATION. api.js reports the two answers that prove
+  // the workspace is holding an account the server is no longer answering as
+  // (see its session-mismatch listener): a 401, and a role refusal the server
+  // marks `code: 'forbidden'`. The refusal itself is correct — what is stale is
+  // this tab's copy of the session, which is what a second sign-in on the SAME
+  // origin leaves behind, because every tab shares the cookie jar. Reading /me
+  // again is what closes the gap:
+  //
+  //   a DIFFERENT account  → adopt it. `Shell` is keyed on `user.id` below, so
+  //                          adopting a new one remounts the workspace as that
+  //                          account, landing on ITS home with no menu left over
+  //                          from the role this tab started as.
+  //   a session that is gone → the gate, the same way a logout ends it.
+  //
+  // A refused request from the SAME account changes nothing: that refusal is a
+  // data rule (a finalized report, somebody else's draft), it is the screen's own
+  // banner to draw, and reconciling would only add a round trip per refusal.
+  const signedIn = useRef(null);
+  useEffect(() => {
+    signedIn.current = user ?? null;
+  }, [user]);
+  // Re-entry guard, and not a nicety: the reconciling read of /me goes through
+  // the same response reader that raised this, so its own 401 would raise it
+  // again — one session ending would become an unbroken chain of /me calls.
+  const reconciling = useRef(false);
+  useEffect(() => {
+    setSessionMismatchHandler(async () => {
+      // A 401 while signed OUT is an ANSWER, not a fault: the ordinary cold load,
+      // and a wrong password are both this. There is nothing to reconcile.
+      const current = signedIn.current;
+      if (!current || reconciling.current) return;
+      reconciling.current = true;
+      try {
+        const me = await api('/me');
+        if (me.id !== current.id || me.role !== current.role) {
+          // The previous account's cached register dies with it, exactly as it
+          // would on a sign-out: a session change IS a sign-out of the account
+          // this tab began as, and the officer who is signed in now must not open
+          // a list the last one was reading (see lib/offlineCache.js).
+          if (current.id) clearFor(current.id);
+          setLanguageRegistry(me.languages);
+          setUser(me);
+          notify('The session on this computer changed to a different account, so the workspace was refreshed.');
+        }
+      } catch (err) {
+        // A session that is genuinely over ends the visit; a server that merely
+        // cannot be reached is the connection banner's to explain, and signing
+        // the officer out over a dropped connection would be the wrong answer.
+        if (!isUnreachable(err)) {
+          if (current.id) clearFor(current.id);
+          setBoot(null);
+          setUser(null);
+        }
+      } finally {
+        reconciling.current = false;
+      }
+    });
+    return () => setSessionMismatchHandler(null);
+  }, [notify]);
 
   const onLogout = useCallback(() => {
     // FORGET WHAT THIS SESSION KEPT ON THIS COMPUTER (see
@@ -127,8 +186,6 @@ export default function App() {
       <Login
         onLogin={onLogin}
         notify={notify}
-        theme={theme}
-        onTheme={setTheme}
         boot={boot}
         notice={gateNotice}
       />
@@ -138,6 +195,11 @@ export default function App() {
   return (
     <>
       <Shell
+        // KEYED BY THE ACCOUNT, so adopting a different session (above) remounts
+        // the workspace rather than leaving a view behind that the new role has
+        // no business on. A patch to the SAME account (the profile photo) keeps
+        // the id and so keeps the workspace as it is.
+        key={user.id}
         user={user}
         onLogout={onLogout}
         onPasswordChanged={onPasswordChanged}

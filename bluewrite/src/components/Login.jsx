@@ -1,16 +1,29 @@
 // BLUEWRITE — LoginPage
 //
-// The gate wears the workspace's own document language (see login-theme.css):
-// the navy bar with the department lockup, the light page, white cards, the
-// blue primary action, League Spartan throughout. The dark console — tactical
-// grid, CRT scanlines, LetterGlitch backdrop, HUD mono type and the neon
-// clock scramble — was removed so signing in and then working in the app read
-// as one product. What stays is the fact an officer wants BEFORE typing a
-// passcode: the PHT clock and the SYS_STATUS / ENC_LEVEL readout.
+// THE GATE IS ITS OWN SCREEN, AND IT NO LONGER FOLLOWS THE THEME (owner
+// request, 2026-10-12, from the reference the owner sent). It is the officer's
+// first view of the system and it is the department's front door: a deep navy
+// page, the station's own photograph across the right, the office's mark and
+// the wordmark, the gold the printed sheet's head already pairs with its navy,
+// and the access card floating on the picture.
 //
-// The wordmark is plain type on both this screen and Home: BLUE in the page's
-// heading ink (navy on the light page, near-white on the dark one), WRITE in
-// the brand blue. No animation touches it.
+// WHY IT STOPPED FOLLOWING THE THEME. The gate used to be the workspace's own
+// document language — a light page with white cards, so that signing in and
+// then working read as one product — and it wore the sun/moon switch in its
+// corner because of it. The reference is one fixed design: navy, gold and the
+// photograph, in both themes. An appearance switch that repainted nothing would
+// be a control that lies, so the switch is gone from the gate (Profile ▸
+// Preferences is still where the choice lives, and index.html still applies a
+// stored preference before the bundle loads, so the workspace an officer signs
+// into is the one they chose).
+//
+// The wordmark is the SAME LOCKUP AS HOME, to the letter: the office's shield
+// with the pen laid in it, then BLUE in white and WRITE in gold, over the same
+// gold rule. Two screens that name this product draw its name the same way.
+//
+// The advisor/version line is the one place the two things an officer wants
+// BEFORE typing a passcode are stated: the PHT clock (the time a sign-on is
+// recorded at) and whether the server is actually there.
 //
 // TWO SCREENS. The password screen is the spread described above. The second
 // step is a screen of its own (see the isStep2 branch in the renderer, and
@@ -28,15 +41,14 @@
 // code field, where the code went, and a way to ask for another one — which is
 // the whole of what an officer has to do here.
 //
-// The appearance control is the sun/moon switch in the page's bottom-right
-// corner (ThemeToggle below) — one button, one binary question, in the corner
-// every OS puts it in. The full choice lives in Profile ▸ Preferences once
-// signed in, and the stored preference is applied before the bundle loads
-// (index.html), so a dark workstation stays dark at the gate.
+// THE GATE TAKES NO THEME AT ALL. It reads no theme state and renders no
+// appearance control: the choice lives in Profile ▸ Preferences once signed in,
+// and index.html still applies a stored preference before the bundle loads, so
+// the workspace an officer signs into is the one they chose. The gate itself is
+// the same navy spread on every workstation, in both themes.
 
 import React, { useEffect, useRef, useState } from 'react';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
-import { useResolvedTheme, useThemeSpread } from '../lib/theme.js';
 import { AI_ADVISORY, APP_VERSION } from '../lib/appInfo.js';
 // The self-service recovery REQUEST (Phase 1, S-04): an officer who cannot sign
 // in can ASK an administrator, from this screen, without a session. It changes
@@ -64,18 +76,23 @@ import {
 // arithmetic (advance, backspace, paste, arrows) is in lib/codeBoxes.js.
 import CodeBoxes from './CodeBoxes.jsx';
 import { codeOf, emptyValues, emptyIndexes, allIndexes } from '../lib/codeBoxes.js';
-import { MoonIcon, SunIcon } from './ThemeIcons.jsx';
-// The navy master artwork, not the knockout: this screen is light, so the mark
-// is navy ink on the page. The navy bar above it shows the knockout variant,
-// exactly as the workspace's top bar does.
-import logoNavy from '../assets/bluewrite-logo.png';
-import logoKnockout from '../assets/bluewrite-logo-light.png';
+// THE ARTWORKS THE GATE IS BUILT FROM, all three of them files rather than icon
+// drawings, for the reason every seal in this product is a file: the station's
+// LAN has no internet, and an agency's badge is not something an icon set can
+// draw. The mark is the office's own — the shield with the pen laid in it,
+// which Home's band wears beside this same wordmark — and the two seals are the
+// PNP badge and the City of Naga seal, set in the gate's bar exactly as the
+// printed sheet sets them at the head of its letterhead.
+import brandMark from '../assets/bluewrite-mark.png';
+import pnpSeal from '../assets/pnp-logo.png';
+import citySeal from '../assets/city-of-naga-seal.png';
+// …and the station's own photograph — the deployment's file, the same one
+// Home's band shows (see HOME_HERO_PHOTO in Reports.jsx). Imported rather than
+// looked up because the gate's composition IS the picture: the right half of
+// this page is the building, and a station that has not supplied one gets the
+// navy field the layer falls back to by simply not being there.
+import stationPhoto from '../assets/home-hero.jpg';
 import ConnectionNotice from './ConnectionNotice.jsx';
-// THE BACKDROP. The React Bits GridScan, fitted to this screen by the wrapper in
-// GateGridScan.jsx — token-driven, unlit, and rendered unconditionally, including
-// when the OS asks for less motion (a deliberate exception scoped to this
-// screen; see that file for why).
-import GateGridScan from './GateGridScan.jsx';
 
 /**
  * The second factor's server-side problems that are NOT connection failures.
@@ -113,14 +130,18 @@ const PHT_TIME_FORMAT = new Intl.DateTimeFormat('en-PH', {
 });
 const getPhilippineTime = () => PHT_TIME_FORMAT.format(new Date());
 
-// TopStatusBar — the navy bar, carrying the SAME department lockup the
-// workspace's top bar shows, plus the two readouts that belong to a login
-// screen: the PHT clock (the time an officer signs on, which is what the audit
-// trail records) and SYS_STATUS, which probes /me so a connection problem is
-// visible BEFORE credentials are typed that cannot be checked.
+// TopStatusBar — the gate's own bar: the station's two seals at the head of it,
+// and the readout at the other end.
+//
+// THE SEALS RATHER THAN A DEPARTMENT LOCKUP (the reference's own head). They are
+// the pair the printed sheet carries — the PNP badge and the City of Naga seal —
+// separated by a hairline, and they say which force and which station this door
+// belongs to before a word is read. Decorative here and stated as such: the
+// photograph behind them is the station these seals belong to, and the system's
+// own name is the wordmark on the page.
 //
 // TWO SHAPES, one bar. On the password screen it keeps the clock and the system
-// readout — an officer about to type a passcode wants to know what time it is and
+// status — an officer about to type a passcode wants to know what time it is and
 // whether the server is there. On the SECOND step neither belongs: the password
 // has already been accepted, the session is already open, and the readout's job
 // is done. What that screen needs to know instead is that the connection it just
@@ -144,15 +165,12 @@ function TopStatusBar({ connState, step2 = false }) {
 
   return (
     <header className={step2 ? 'la-topbar la-topbar--step2' : 'la-topbar'}>
-      <div className="la-brand">
-        <span className="la-brand-mark" aria-hidden="true">
-          <img src={logoKnockout} alt="" />
-        </span>
-        <span className="la-brand-text">
-          <span className="la-brand-line1">Public Safety Department</span>
-          <span className="la-brand-line2">Official Incident Reporting System</span>
-        </span>
-      </div>      {step2 ? (
+      <div className="la-seals" aria-hidden="true">
+        <img className="la-seal" src={pnpSeal} alt="" />
+        <span className="la-seal-rule" />
+        <img className="la-seal la-seal--city" src={citySeal} alt="" />
+      </div>
+      {step2 ? (
         /* The second step's right-hand end. It states a FACT rather than a
            measurement: the form below it is being sent over the same TLS
            connection the sign-in used. The dot is the drawing's whole job, so it
@@ -168,21 +186,21 @@ function TopStatusBar({ connState, step2 = false }) {
             <span>{time}</span>
           </p>
 
-          {/* The bar's right-hand end is the system readout, and nothing else:
-              the gate's one control — the appearance switch — deliberately lives
-              in the page's bottom-right corner instead, so the bar keeps its
-              three-part shape at every width. `title` is the one place a
-              connection problem is explained before a submit attempt — the
-              notice inside the panel follows. */}
+          {/* The bar's right-hand end: whether the server is actually there,
+              and which build this is. `title` is the one place a connection
+              problem is explained before a submit attempt — the notice inside
+              the card follows. The version is the fact every support call
+              starts with, read out of lib/appInfo.js rather than typed here. */}
           <div className="la-topmeta">
-            <span title={down ? CONNECTION_MESSAGES[connState] : undefined}>
-              SYS_STATUS:{' '}
-              <span className={down ? 'warn' : 'ok'}>{down ? 'OFFLINE' : 'OPTIMAL'}</span>
+            <span className="la-status" title={down ? CONNECTION_MESSAGES[connState] : undefined}>
+              <span
+                className={down ? 'la-status-dot is-down' : 'la-status-dot'}
+                aria-hidden="true"
+              />
+              {down ? 'SYSTEM OFFLINE' : 'SYSTEM ONLINE'}
             </span>
             <span className="pipe" aria-hidden="true">|</span>
-            <span>
-              ENC_LEVEL: <span className="accent">AES-256</span>
-            </span>
+            <span className="la-version">v{APP_VERSION}</span>
           </div>
         </>
       )}
@@ -190,45 +208,56 @@ function TopStatusBar({ connState, step2 = false }) {
   );
 }
 
-// ThemeToggle — the gate's appearance switch, floating in the page's
-// bottom-right corner.
+// ---------------------------------------------------------------------------
+// The three things this system is for, as the gate states them.
 //
-// Almost none of it is the gate's own. The drawings are the shared pair
-// (SunIcon/MoonIcon) and the behaviour is the shared hook (useThemeSpread):
-// light is the sun, dark is the crescent, the icon shows the mode the officer
-// is IN, and a press spreads the new mode out of the button across the page.
-// What belongs to this screen is the position — the corner every OS puts such
-// a switch in — and the `theme-control` marker class, which is how the icons'
-// own swap survives the cross-fade a press starts.
-function ThemeToggle({ mode, onToggle }) {
-  const dark = mode === 'dark';
-  const [originRef, commit] = useThemeSpread(onToggle);
-
-  return (
-    <button
-      ref={originRef}
-      type="button"
-      className="la-theme-toggle theme-control"
-      onClick={() => commit(dark ? 'light' : 'dark')}
-      aria-pressed={dark}
-      aria-label="Dark mode"
-      title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-    >
-      <span className="theme-icons">
-        <SunIcon />
-        <MoonIcon />
-      </span>
-    </button>
-  );
-}
+// Written out here rather than fetched: they are copy about the product, they
+// change when the department changes how it describes the system, and they are
+// the same three sentences an officer reads on the door every morning. Each one
+// wears a drawn mark (the same 24-unit, stroked, no-fill house style every other
+// glyph in this product uses — no icon dependency; see AppTopBar's note).
+// ---------------------------------------------------------------------------
+const FEATURES = [
+  {
+    title: 'AI Assistance',
+    body: 'Get help with accurate, professional, and complete incident reports.',
+    mark: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 16.5s4-2.2 4-5.5V7.6l-4-1.6-4 1.6V11c0 3.3 4 5.5 4 5.5z" />
+      </>
+    ),
+  },
+  {
+    title: 'Secure & Reliable',
+    body: 'Your data is protected with advanced security and encryption.',
+    mark: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9.2 6.8h4.3l2.5 2.5v7.9H9.2z" />
+        <path d="M13.5 6.8v2.5h2.5M11 12.6h2.6M11 15h2.6" />
+      </>
+    ),
+  },
+  {
+    title: 'Safer Communities',
+    body: 'Better reports today, safer neighborhoods tomorrow.',
+    mark: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 9.6a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+        <path d="M8.4 17.4v-.7a3.6 3.6 0 0 1 7.2 0v.7" />
+        <path d="M6.4 12.6a1.7 1.7 0 1 0 0-3.4M5.4 16.9v-.6a3 3 0 0 1 2-2.8" />
+        <path d="M17.6 12.6a1.7 1.7 0 1 1 0-3.4M18.6 16.9v-.6a3 3 0 0 0-2-2.8" />
+      </>
+    ),
+  },
+];
 
 // ---------------------------------------------------------------------------
 // LoginPage
 // ---------------------------------------------------------------------------
-export default function Login({ onLogin, theme, onTheme, boot, notice = null }) {
-  // The switch draws the mode in force, not the stored preference — 'system'
-  // has no icon of its own, so it resolves to whichever of the two is on.
-  const mode = useResolvedTheme(theme);
+export default function Login({ onLogin, boot, notice = null }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -259,6 +288,22 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
   // expires on its own after ten minutes.
   const [step, setStep] = useState('credentials');
   const [mfa, setMfa] = useState(null);
+  // WHICH SIGN-IN THIS SCREEN BELONGS TO. Each tab holds its own pending sign-in
+  // (see app/core/Session.php — one context per tab, and lib/api.js for the id
+  // that says which tab a request came from), so two tabs can sign in as two
+  // accounts and both work. What the sign-in id guards is the screen that
+  // outlives its OWN sign-in inside one tab: the tab signed in again, or was
+  // duplicated and the duplicate typed into the screen it inherited. The server
+  // mints the id per pending sign-in (see AuthController::beginSecondFactor) and
+  // it rides back with every code submitted, so such a screen is answered as
+  // itself — with the live sign-in's state and none of the five tries spent —
+  // rather than as a wrong code.
+  const [signInId, setSignInId] = useState('');
+  // The same fact as a thing that HAPPENED, which is what the caret needs: a
+  // superseded sign-in has its boxes cleared and must get the cursor back, and
+  // the boxes are disabled while the request is in flight, so the focus has to
+  // wait for the re-render that re-enables them (see the effect below).
+  const [signInReplaced, setSignInReplaced] = useState(false);
   // THE CODE IS SIX BOXES AND ONE STRING. The boxes are the truth — an officer
   // can fill them in any order and can paste a code into the middle of the row —
   // and the string the server is sent is derived from them, once, in verifyCode.
@@ -341,6 +386,18 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
    * cleared with the rest — it is not needed again, and it should not be sitting
    * in this component while somebody checks their mail.
    */
+  /**
+   * The server's own account of the pending sign-in, applied in ONE place.
+   *
+   * `mfa` and the sign-in id are always handed over together — every payload that
+   * carries one carries the other — so they are set together, and a screen can
+   * never end up drawn with one sign-in's mailbox and another's id.
+   */
+  function applyMfa(m) {
+    setMfa(m ?? null);
+    setSignInId(String(m?.sign_in_id ?? ''));
+  }
+
   function resetSecondFactor() {
     // An accepted code is on a timer to the workspace (see verifyCode), and the
     // two ways out of this screen can both happen inside it — Start over, or a
@@ -349,6 +406,8 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
     window.clearTimeout(verifiedTimer.current);
     setStep('credentials');
     setMfa(null);
+    setSignInId('');
+    setSignInReplaced(false);
     setCodeValues(emptyValues(MFA_DIGITS));
     setCodeError('');
     setCodeSuccess('');
@@ -387,6 +446,12 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
     setCodeError('');
     setCodeSuccess('');
     setCodeMarking('none');
+    // A keystroke is the officer answering the last attempt's verdict, whatever
+    // it was — including "this screen is from an earlier sign-in". The sentence
+    // in the band stays until the next submit; the caret has already been given
+    // back by then, and claiming it again on a later re-render would be
+    // snatching it away from the box they are typing in.
+    setSignInReplaced(false);
   }
 
   /**
@@ -441,7 +506,7 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
   function enterSecondFactor(res) {
     const stage = stageFrom(res);
     if (stage === null) return false;
-    setMfa(res.mfa);
+    applyMfa(res.mfa);
     setStep(stage);
     // A step that arrives holding digits from a previous one would be showing a
     // code nothing knows about. `emptyValues` rather than a blank string: the
@@ -478,7 +543,7 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
     try {
       const res = await api('/mfa/status');
       if (!res?.mfa?.required) return false;
-      setMfa(res.mfa);
+      applyMfa(res.mfa);
       setStep('verify');
       setCodeValues(emptyValues(MFA_DIGITS));
       setMfaError(message || '');
@@ -648,7 +713,13 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
     setMfaError('');
     setConn('ok');
     try {
-      const res = await api('/mfa/verify', { method: 'POST', body: { code: typed } });
+      // The sign-in id goes with the code, so an answer can tell this screen from
+      // one left over from an earlier sign-in — and refuse it as that rather than
+      // as a wrong code.
+      const res = await api('/mfa/verify', {
+        method: 'POST',
+        body: { code: typed, sign_in_id: signInId },
+      });
       // The line says yes before the screen goes. The pause it needs is the one
       // the animation used to take, and the reason is the same: a code that
       // vanishes without a mark reads as "did that work?". The timer is held on a
@@ -656,6 +727,27 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
       setCodeSuccess('Code accepted. Opening your workspace…');
       verifiedTimer.current = window.setTimeout(() => finishSignIn(res), VERIFIED_PAUSE_MS);
     } catch (err) {
+      // A SCREEN FROM A SUPERSEDED SIGN-IN, which is neither the digits' fault
+      // nor the end of this sign-in: this tab signed in again (or was duplicated)
+      // under the screen, so the code just sent — correct, unexpired, and for the
+      // mailbox this screen still names — is not the code that sign-in holds. It
+      // costs nothing (the server does not count it; see
+      // AuthController::refuseStaleSignIn) and the answer CARRIES the live state,
+      // so the screen becomes the sign-in it is really part of: the mailbox line
+      // stops naming the wrong inbox, the boxes are cleared, and the band says
+      // what happened instead of blaming six perfectly good digits.
+      if (err?.code === 'mfa_stale_sign_in') {
+        if (err.mfa) applyMfa(err.mfa);
+        setResendIn(Number.isFinite(err.mfa?.resend_in) ? err.mfa.resend_in : 0);
+        setCodeValues(emptyValues(MFA_DIGITS));
+        setCodeError('');
+        setCodeSuccess('');
+        setCodeMarking('none');
+        setSignInReplaced(true);
+        setMfaError(err.message || 'This screen was left open from an earlier sign-in. Start over to sign in again.');
+        setSubmitting(false);
+        return;
+      }
       // WHICH REFUSALS THE FIELD ANSWERS FOR. A code that could not be used —
       // wrong, aged out — is the six digits' problem, and the row says so: every
       // box goes red, the code is cleared, and the caret goes back to the first
@@ -698,7 +790,7 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
     setMfaError('');
     try {
       const res = await api('/mfa/send', { method: 'POST' });
-      setMfa(res.mfa);
+      applyMfa(res.mfa);
       // A new code replaces the old one, so the boxes are emptied rather than
       // left holding digits the server has already thrown away.
       setCodeValues(emptyValues(MFA_DIGITS));
@@ -743,7 +835,7 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
     api('/mfa/status')
       .then((res) => {
         if (!alive || !res?.mfa?.required) return;
-        setMfa(res.mfa);
+        applyMfa(res.mfa);
         // One stage exists now; the server's own answer is still what puts the
         // screen here, so a future second stage would arrive through this line.
         setStep('verify');
@@ -789,9 +881,12 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
   // This fires on the re-render that re-enables them. Scoped to the 'all' marking,
   // which is only ever a refused code: a refusal that ended the sign-in has
   // already put the password screen back, and a mail problem is not the field's.
+  // ...and a superseded sign-in needs it for the same reason and by the same
+  // route, with none of the marking: nothing is wrong with those six digits,
+  // they simply belong to a sign-in this browser is no longer holding.
   useEffect(() => {
-    if (!submitting && codeMarking === 'all') focusFirstBox();
-  }, [submitting, codeMarking]);
+    if (!submitting && (codeMarking === 'all' || signInReplaced)) focusFirstBox();
+  }, [submitting, codeMarking, signInReplaced]);
 
   /**
    * The second step is its OWN SCREEN, not a panel swap on the password screen.
@@ -807,15 +902,39 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
 
   return (
     <main className={`la-page${isStep2 ? ' la-page--step2' : ''}`}>
-      {/* THE BACKDROP, on both screens, at the bottom layer. It adds no box and
-          takes no pointer (see GateGridScan.css): the page's own fill is still
-          the base the panels sit on, and the grid is drawn over it. It renders
-          unconditionally — it does NOT stand down under prefers-reduced-motion,
-          which is a deliberate exception to this project's usual pattern and is
-          argued in GateGridScan.jsx. */}
-      <GateGridScan />
+      {/* NO BACKDROP, ON EITHER SCREEN (owner request, 2026-10-13). The gate
+          used to carry the React Bits GridScan behind everything — an animated
+          wireframe ruling with a sweep across it. It is gone, and with it the
+          layer that took no box and no pointer: what is left under the words is
+          the page's own navy fill and the photograph. The files are kept in
+          `.design-backup/revert-gate-backdrop-2026-10-13/` rather than deleted,
+          the way the first removal kept them (see docs/UI_LIGHT_REDESIGN.md
+          §11), because this screen has now asked for that layer twice and then
+          asked it away twice. */}
+
+      {/* THE STATION ITSELF, IN A BAND ACROSS THE TOP RIGHT OF THE PAGE (the
+          reference's own composition, made a band on the owner's request: the
+          layer's height and its cut are the two numbers that make the station
+          small rather than magnified, and both are stated with their reasons in
+          login-theme.css). A layer rather than a CSS background, for the reason
+          Home's band gives: the scrim has to sit BETWEEN the picture and the
+          words, and the shape is cut on a diagonal rather than by a box. The
+          picture is the deployment's own file — `src/assets/home-hero.jpg`,
+          the same photograph Home's band shows — so a station that swaps it
+          swaps both screens. Decorative, and stated as such: nothing here is
+          text, and a screen reader should be told about the door, not the
+          building. */}
+      <div className="la-photo" aria-hidden="true">
+        <img src={stationPhoto} alt="" />
+        <span className="la-photo-wash" />
+      </div>
+
+      {/* The reference's two corner accents: the striped diagonals that close
+          the navy at the top-right and the foot. Decoration, no content. */}
+      <span className="la-stripes la-stripes--top" aria-hidden="true" />
+      <span className="la-stripes la-stripes--foot" aria-hidden="true" />
+
       <TopStatusBar connState={conn} step2={isStep2} />
-      <ThemeToggle mode={mode} onToggle={onTheme} />
 
       <div className="la-content">
         <div className={isStep2 ? 'la-step2' : 'la-content-inner'}>
@@ -828,45 +947,66 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
                 mail — so the column is dropped and the room goes to the task. */}
             {!isStep2 && (
             <section className="la-left">
-              <div>
-                <div className="la-doc-icon" aria-hidden="true">
-                  <img src={logoNavy} alt="" />
+              {/* THE LOCKUP, drawn exactly as Home's band draws it: the office's
+                  own mark, then the wordmark in the two inks the sheet's head
+                  already pairs — BLUE in white, WRITE in the department's gold.
+                  Two screens that name this product name it the same way. */}
+              <div className="la-intro">
+                <div className="la-lockup">
+                  <img className="la-mark" src={brandMark} alt="" aria-hidden="true" />
+                  <h1 className="la-hero">
+                    BLUE<em>WRITE</em>
+                  </h1>
                 </div>
-
-                {/* The wordmark is the workspace's, to the letter: BLUE in navy,
-                    WRITE in the brand blue. Home's hero is the same treatment. */}
-                <h1 className="la-hero">
-                  BLUE<em>WRITE</em>
-                </h1>
-                <div className="la-tagline">AI-Assisted Police Incident Reporting</div>
-                <p className="la-version">
-                  Secure Incident Documentation System v{APP_VERSION}
+                <p className="la-tagline">AI-Assisted Police Incident Reporting</p>
+                {/* The short gold rule under the tagline: the reference's own
+                    divider, and the same accent the feature cards are drawn
+                    with, so the column reads as one block. */}
+                <span className="la-rule" aria-hidden="true" />
+                <p className="la-lede">
+                  Smarter reporting. Stronger communities.
+                  <br />
+                  Powered by AI, built for law enforcement.
                 </p>
               </div>
 
-              <div className="la-cards">
-                <div className="la-card">
-                  <div className="la-card-head">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                    </svg>
-                    <h3>Professional. Secure. Responsible.</h3>
-                  </div>
-                  <p>Supporting officers in accurate and efficient incident documentation.</p>
-                </div>
+              {/* THE THREE THINGS THIS SYSTEM IS FOR, each with a drawn mark in
+                  a gold ring. A list, because it is a list of three facts about
+                  one product rather than three sections of a page. */}
+              <ul className="la-features">
+                {FEATURES.map((f) => (
+                  <li className="la-feature" key={f.title}>
+                    <span className="la-feature-mark" aria-hidden="true">
+                      <svg
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        {f.mark}
+                      </svg>
+                    </span>
+                    <h3 className="la-feature-title">{f.title}</h3>
+                    <p className="la-feature-body">{f.body}</p>
+                  </li>
+                ))}
+              </ul>
 
-                <div className="la-card advisory">
-                  <div className="la-card-head">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
-                      <path d="M12 9v4M12 17h.01" />
-                    </svg>
-                    <h3>System Advisory</h3>
-                  </div>
-                  {/* The one wording of the writing-assistance advisory, shared with
-                      the report footer and About — see lib/appInfo.js. */}
-                  <p>{AI_ADVISORY}</p>
-                </div>
+              <div className="la-foot">
+                {/* The one wording of the writing-assistance advisory, shared
+                    with the report footer and About — see lib/appInfo.js. It
+                    stays on the gate (spec §5 names this screen) but as the
+                    column's fine print rather than as a fourth card competing
+                    with the three above it, and it sits ABOVE the signature:
+                    the reference ends this column with the slogan and its
+                    swoosh, so the notice is the last thing read BEFORE it
+                    rather than the last thing on the page. */}
+                <p className="la-advisory">{AI_ADVISORY}</p>
+                <p className="la-script">Report. Protect. Serve.</p>
               </div>
             </section>
             )}
@@ -1139,13 +1279,18 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
             <section className="la-right">
               <div className="la-panel">
                 <div className="la-panel-head">
-                  <div className="la-lock" aria-hidden="true">
-                    <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                      <rect x="3" y="11" width="18" height="11" rx="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                    </svg>
-                  </div>
-                  <h2>RESTRICTED ACCESS</h2>
+                  {/* The office's own mark rather than a padlock drawing: this
+                      is the department's door, and the shield with the pen in
+                      it is what the photograph on this page shows on its own
+                      banner. */}
+                  <span className="la-panel-mark" aria-hidden="true">
+                    <img src={brandMark} alt="" />
+                  </span>
+                  <h2 className="la-panel-title">
+                    <span className="la-panel-tick" aria-hidden="true" />
+                    RESTRICTED ACCESS
+                    <span className="la-panel-tick" aria-hidden="true" />
+                  </h2>
                   <p className="la-panel-sub">Authenticate to access system</p>
                 </div>
 
@@ -1267,7 +1412,8 @@ export default function Login({ onLogin, theme, onTheme, boot, notice = null }) 
                     className="la-help-open"
                     onClick={() => { setHelpOpen(true); setHelpError(''); }}
                   >
-                    Can&rsquo;t sign in? Request help
+                    Can&rsquo;t sign in?{' '}
+                    <span className="la-help-link">Request help</span>
                   </button>
                 ) : (
                   <form className="la-help" onSubmit={submitAccountRequest} noValidate>

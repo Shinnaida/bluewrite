@@ -266,6 +266,26 @@ final class ReportsListTest extends BaseApiTestCase
         $res = $this->request('GET', '/reports?status=draft', null, $officerCookie);
         $this->assertSame(2, $res['body']['pagination']['total']);
 
+        // `filed` is the officer's own filter (owner request, 2026-10-13): the
+        // officer's screens offer no `submitted`, so their FINALIZED option asks
+        // for everything that has left their hands — submitted AND finalized,
+        // the same set the `submitted` bucketed shelf holds, and never a draft.
+        // Asserted against the two statuses it folds, not against a number, so
+        // this keeps testing the union if the seed ever grows a submitted row.
+        $submitted = $this->request('GET', '/reports?status=submitted', null, $officerCookie);
+        $filed = $this->request('GET', '/reports?status=filed', null, $officerCookie);
+        $this->assertSame(
+            $submitted['body']['pagination']['total'] + 1,
+            $filed['body']['pagination']['total'],
+        );
+        $this->assertSame(1, $filed['body']['pagination']['total']);
+        $this->assertSame('finalized', $filed['body']['reports'][0]['status']);
+
+        // ...and the bucket the officer's own shelf counts carries that set too,
+        // so the tab and the filter can never disagree about a report.
+        $bucketed = $this->request('GET', '/reports?bucket=submitted', null, $officerCookie);
+        $this->assertSame($filed['body']['pagination']['total'], $bucketed['body']['pagination']['total']);
+
         $res = $this->request('GET', '/reports?status=bogus', null, $officerCookie);
         $this->assertSame(422, $res['status']);
     }

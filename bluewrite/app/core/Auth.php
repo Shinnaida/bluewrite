@@ -14,11 +14,13 @@ final class Auth
         Session::start();
         $id = Session::userId();
         if ($id === null) {
-            // A session that is mid-second-factor lands here, which is exactly
-            // right: it holds no user_id, so every endpoint behind this gate is
-            // out of reach until a factor is proved. The one thing it needs is
-            // GET /mfa/status, which is registered before this gate for that
-            // reason.
+            // A tab that is mid-second-factor lands here, which is exactly
+            // right: its own context holds no account yet, so every endpoint
+            // behind this gate is out of reach until a factor is proved. The one
+            // thing it needs is GET /mfa/status, which is registered before this
+            // gate for that reason. (So does a tab whose 30-minute idle clock
+            // has run out, or one that never signed in at all — three states,
+            // one honest answer, and the client's job is the same for each.)
             Response::json(401, ['error' => 'Your session has expired. Sign in again to continue.']);
         }
         $user = self::fetchUser($id);
@@ -56,7 +58,24 @@ final class Auth
     {
         $user = self::requireUser();
         if (!in_array($user['role'], $roles, true)) {
-            Response::json(403, ['error' => 'Your account does not have permission to perform this action.']);
+            // THE ROLE GATE, MARKED AS ONE. This is the refusal that means "the
+            // request never reached the data at all" — the account's ROLE, not
+            // its ownership of a row, is what the server rejected. The client
+            // needs to tell that apart from the data refusals every screen has
+            // its own reading for (a finalized report, somebody else's draft),
+            // because a role refusal is also what a STALE ACCOUNT looks like:
+            // an account whose role changed under a live workspace, which keeps
+            // drawing menus the server now refuses. (Tabs hold their own
+            // accounts since the per-tab change — see Session — so this is no
+            // longer the two-tabs story it once was, but a role revoked in the
+            // directory still reads exactly like this.) `code` is
+            // what lets the workspace recognise that and reconcile itself (see
+            // lib/api.js's session-mismatch listener). The message itself is
+            // unchanged; the code is for the client, not the officer.
+            Response::json(403, [
+                'error' => 'Your account does not have permission to perform this action.',
+                'code' => 'forbidden',
+            ]);
         }
         return $user;
     }
@@ -87,18 +106,28 @@ final class Auth
         return $row === false ? null : $row;
     }
 
+    /**
+     * Sign in THIS TAB — see Session::signIn.
+     *
+     * The id is regenerated first, which is a defense against fixation and costs
+     * the tabs beside this one nothing: `session_regenerate_id(true)` moves the
+     * session's DATA to the new id rather than emptying it, so every other tab's
+     * context travels with the cookie the browser hands them next.
+     */
     public static function login(array $user): void
     {
         Session::start();
         session_regenerate_id(true);
-        $_SESSION['user_id'] = (int) $user['id'];
-        $_SESSION['role'] = $user['role'];
-        $_SESSION['last_activity'] = time();
+        Session::signIn((int) $user['id'], (string) $user['role']);
     }
 
+    /**
+     * Sign this tab out, which ends the session only when it was the last one
+     * holding anything — see Session::signOut.
+     */
     public static function logout(): void
     {
-        Session::destroy();
+        Session::signOut();
     }
 
     /** Require a valid CSRF token header for state-changing requests. */
