@@ -19,7 +19,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../lib/api.js';
-import { AI_ADVISORY, APP_VERSION, DEPARTMENT, SYSTEM_TITLE } from '../lib/appInfo.js';
+import { AI_ADVISORY, DEPARTMENT, SYSTEM_TITLE } from '../lib/appInfo.js';
 
 /** The station's letterhead fields, in the order the panel prints them. */
 const HEADER_ROWS = [
@@ -91,7 +91,7 @@ export default function AboutSystem({ user, onClose }) {
       >
         <h2 id="about-title">About this system</h2>
         <p className="about-lead">
-          BLUE<em>WRITE</em> — {SYSTEM_TITLE}, version {APP_VERSION}.
+          BLUE<em>WRITE</em> — {SYSTEM_TITLE}.
         </p>
 
         <dl className="about-facts">

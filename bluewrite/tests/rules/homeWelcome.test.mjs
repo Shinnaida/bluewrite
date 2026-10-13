@@ -27,7 +27,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadFixture } from './renderHarness.mjs';
-import { APP_VERSION, STATION } from '../../src/lib/appInfo.js';
+import { STATION } from '../../src/lib/appInfo.js';
 
 const load = () => loadFixture('tests/fixtures/homeWelcome.jsx');
 
@@ -329,10 +329,9 @@ test('the page closes on the signature band, and the grid backdrop is gone', asy
   assert.equal(html.split('class="ir-home-footer-seal"').length - 1, 2, 'the band lost a seal');
   assert.match(html, /alt="PNP seal"/, 'the PNP seal has no alt text');
   assert.match(html, /alt="City of Naga Police Station seal"/, 'the city seal has no alt text');
-  // Both facts are read from their one home, so the band cannot advertise a
-  // version the system no longer is.
+  // The station is read from its one home, so the band cannot drift from it.
   assert.ok(
-    html.includes(`${STATION} · BlueWrite v${APP_VERSION}`),
+    html.includes(`${STATION} · BlueWrite`),
     'the signature line changed shape',
   );
 

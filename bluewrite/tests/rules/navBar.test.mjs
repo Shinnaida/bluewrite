@@ -262,7 +262,10 @@ test('the two chromes render: one nav per role, and one account chrome between t
   // ---- The rail: the same letterhead, the Admin's five, and one current. ---
   const rail = renderRail();
   assert.ok(rail.includes('ir-sidebar__brand'), 'the rail lost its lockup');
-  assert.ok(rail.includes('ir-brand-seal'), 'the rail lost the agency’s seal');
+  // The rail's lockup is the BlueWrite logo, with the PNP and Naga seals beneath
+  // it (owner request: the seals moved off the words and into the Admin part).
+  assert.ok(rail.includes('ir-sidebar__logo'), 'the rail lost the BlueWrite logo');
+  assert.ok(rail.includes('ir-sidebar__seals'), 'the rail lost the seals under the logo');
   assert.match(rail, /aria-label="Admin"/, 'the rail is not a landmark of its own');
   for (const label of [
     'Dashboard',

@@ -276,22 +276,13 @@ test('the readout holds still while it ticks, and it is stated for the navy band
   // photograph pasted on its right end.
   const scrim = SHEET.match(/\.ir-home-hero-scrim\s*\{[^}]*\}/);
   assert.ok(scrim, '.ir-home-hero-scrim is gone from the stylesheet');
-  // THE VEIL RUNS 30% LIGHTER (owner request, 2026-10-06): every stop was cut
-  // to 70% of its drawn value — 0.92→0.64, 0.86→0.60, 0.76→0.53, 0.58→0.41,
-  // 0.5→0.35 — so the station shows through more while the navy stays a
-  // surface on it. The assertions track the new stops.
-  assert.match(scrim[0], /rgba\(11, 37, 69, 0\.64\) 0%/, 'the scrim no longer holds the wordmark');
-  assert.match(scrim[0], /rgba\(11, 37, 69, 0\.53\) 52%/, 'the scrim no longer holds the clock\u2019s column');
-  assert.match(scrim[0], /rgba\(11, 37, 69, 0\.35\) 100%/, 'the veil lifts at the far edge');
-  assert.doesNotMatch(scrim[0], /rgba\(11, 37, 69, 0\.0\d\)/, 'the scrim clears the picture again');
-  // AND IT IS STILL A VEIL, not a wash — the floor is 0.3: the owner asked for
-  // 30% off every stop, so the ramp may reach 0.35 at the far edge but never
-  // clears to a tint. A ramp under the floor is the full-bleed design coming
-  // back, where the picture was the page.
-  for (const stop of scrim[0].matchAll(/rgba\(11, 37, 69, (0\.\d+)\)/g)) {
-    const alpha = Number(stop[1]);
-    assert.ok(alpha >= 0.3, `the veil drops to ${alpha} — the photograph is showing past the navy again`);
-  }
+  // OWNER REQUEST (2026-10-13): the station photograph is shown at full opacity,
+  // so the veil is gone. The element stays (the markup still carries it), but it
+  // paints nothing over the picture — no gradient, no navy stop. The rules that
+  // follow were the veil's ramp; they now guard against it coming back.
+  assert.doesNotMatch(scrim[0], /linear-gradient/, 'the veil is back over the photograph');
+  assert.doesNotMatch(scrim[0], /rgba\(11, 37, 69/, 'the navy wash is back over the photograph');
+  assert.match(scrim[0], /background:\s*none/, 'the scrim paints over the photograph again');
 
   // The zone is its own line, in sentence case: the band's kicker already carries
   // the uppercase register, and a second shouted line under the time would read as

@@ -91,7 +91,7 @@ import reportBanner from '../assets/Navy Police Incident Report Banner.png';
 // once, in lib/appInfo, because the gate and About state the version too — a
 // second typed-out copy is how a footer ends up advertising a version the
 // system no longer is.
-import { APP_VERSION, STATION } from '../lib/appInfo.js';
+import { STATION } from '../lib/appInfo.js';
 // What the workspace keeps on THIS computer for the session, so a dropped
 // connection does not take the register with it (see the module's header).
 import { readReports, reportListKey, saveReports } from '../lib/offlineCache.js';
@@ -2495,7 +2495,7 @@ export function ReportWelcome({
         <div className="ir-home-footer-inner">
           <img className="ir-home-footer-seal" src={pnpSeal} alt="PNP seal" />
           <p className="ir-home-footer-line">
-            {STATION} · BlueWrite v{APP_VERSION}
+            {STATION} · BlueWrite
           </p>
           <img
             className="ir-home-footer-seal"
@@ -6092,6 +6092,9 @@ export function ReportsTable({
     dir: 'desc',
     page: 1,
     verification: '',
+    // Officers: '' = every station report, '1' = only the ones they recorded
+    // (sent to the server as `mine=1`). Admin's list never sets it.
+    mine: '',
   });
   const [pagination, setPagination] = useState(null);
   const [flashId, setFlashId] = useState(null);
@@ -6138,7 +6141,7 @@ export function ReportsTable({
   // ---- What the register is showing ----------------------------------------
   // The list's own name, for the breadcrumb: the page head shouts it, the trail
   // states it.
-  const listTitle = user.role === 'Admin' ? 'All Reports' : 'My Reports';
+  const listTitle = user.role === 'Admin' ? 'All Reports' : 'Reports';
   // WHICH VOCABULARY THIS REGISTER PRINTS (owner request, 2026-10-13): the
   // officer's screens never say "submitted" — a report that has gone forward is
   // FINALIZED — while All Reports keeps the three statuses apart, because the
@@ -6402,7 +6405,12 @@ export function ReportsTable({
       hasMenu: showArchived ? user.role === 'Admin' : true,
       // Edit is the DRAFT's own action: a submitted report has already gone to
       // the station, and an archived draft is restore-only.
-      canEdit: !showArchived && statusBucket(r.status) === 'draft',
+      // Officers can read every report now, but only their own drafts are
+      // theirs to edit (the server enforces the same rule on update).
+      canEdit:
+        !showArchived &&
+        statusBucket(r.status) === 'draft' &&
+        (user.role === 'Admin' || Number(r.created_by) === Number(user.id)),
     };
   }
 
@@ -6658,6 +6666,19 @@ export function ReportsTable({
   const filterBar = (
     <div className="reports-toolbar register-filters" id={filtersId} hidden={!filtersOpen}>
       <div className="reports-filters">
+        {officer && (
+          <label className="reports-filter">
+            <span className="reports-filter__label">Recorded by</span>
+            <select
+              aria-label="Show all reports or only yours"
+              value={query.mine}
+              onChange={(e) => setQuery((q) => ({ ...q, mine: e.target.value, page: 1 }))}
+            >
+              <option value="">All reports</option>
+              <option value="1">Only mine</option>
+            </select>
+          </label>
+        )}
         <label className="reports-filter">
           <span className="reports-filter__label">Incident type</span>
           <select

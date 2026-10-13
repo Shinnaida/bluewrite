@@ -51,6 +51,8 @@ import RowMenu from './RowMenu.jsx';
 // screen that also links to the register.
 import ReportTypeIcon from './ReportTypeIcon.jsx';
 import { typeHue, typeIcon } from '../lib/reportFolder.js';
+// The "Search the news" panel: a search of the open web through the server's news
+// proxy, so the API token never reaches the browser (see NewsController.php).
 
 /**
  * Phase 4 — Dashboard monitoring (UC-017). ADMIN-ONLY view: the shell only
@@ -742,110 +744,7 @@ export default function Dashboard({
       )}
 
       <header className="dash-topbar">
-        <div className="dash-head__title">
-          <h1>Dashboard</h1>
-          {/* The reference's own sub-line: a live dot, the station, what this
-              page reads, and when it was last read. THE STATION'S NAME IS THE
-              DEPLOYMENT'S, read from Shell's letterhead rather than typed here
-              — the same fact the printed sheet and the gate carry — and the line
-              simply omits it in the moment before that read lands. */}
-          <p className="dash-sub">
-            <span className="dash-live" aria-hidden="true" />
-            {scope === 'mine' ? 'Your reports — ' : ''}
-            {stationName ? `${stationName} — ` : ''}
-            Incident report overview
-            {updatedAt && (
-              <span className="dash-updated"> (updated {relativeTime(updatedAt.toISOString())})</span>
-            )}
-          </p>
-        </div>
 
-        {/* THE RANGE CARD (owner request, 2026-10-12). The three filters the
-            reference draws — from, to, incident type — plus the two strips this
-            dashboard already had: the range presets and the station/mine scope.
-            They are one card at the head of the page, which is where the
-            reference puts them, and the FIELDS come first inside it (see
-            styles.css: the fields' flex order) because "which dates am I
-            reading" is the question the card exists to answer. */}
-        <div className="dash-filters">
-          <div className="dash-scope" role="group" aria-label="Data scope">
-            <button
-              type="button"
-              className={`dash-chip ${scope === 'all' ? 'is-active' : ''}`}
-              onClick={() => setScope('all')}
-            >
-              Station
-            </button>
-            <button
-              type="button"
-              className={`dash-chip ${scope === 'mine' ? 'is-active' : ''}`}
-              onClick={() => setScope('mine')}
-            >
-              My reports
-            </button>
-          </div>
-
-          <div className="dash-presets" role="group" aria-label="Date range presets">
-            {[7, 30, 90].map((d) => (
-              <button
-                key={d}
-                type="button"
-                // `dash-chip` on both groups, because the two strips are ONE
-                // control: `.dash-scope button`/`.dash-presets button` draw the
-                // segments, and the class is what tells `.ir-body`'s
-                // `button:not(…)` treatment to leave them alone — without it
-                // every chip grew its own fill and its own border on all four
-                // sides, and the joined strip read as four loose buttons.
-                className={`dash-chip ${preset === d ? 'is-active' : ''}`}
-                onClick={() => applyPreset(d)}
-              >
-                {d}d
-              </button>
-            ))}
-          </div>
-
-          <label className="dash-field">
-            <span>From</span>
-            <input
-              type="date"
-              value={from}
-              max={to}
-              onChange={(e) => {
-                clearPreset();
-                setDates((p) => ({ ...p, from: e.target.value }));
-              }}
-            />
-          </label>
-          <label className="dash-field">
-            <span>To</span>
-            <input
-              type="date"
-              value={to}
-              min={from}
-              onChange={(e) => {
-                clearPreset();
-                setDates((p) => ({ ...p, to: e.target.value }));
-              }}
-            />
-          </label>
-          <label className="dash-field">
-            <span>Incident type</span>
-            <select
-              value={type}
-              onChange={(e) => {
-                clearPreset();
-                setType(e.target.value);
-              }}
-            >
-              <option value="">All types</option>
-              {(data?.meta?.availableTypes ?? []).map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
       </header>
 
       {error && (

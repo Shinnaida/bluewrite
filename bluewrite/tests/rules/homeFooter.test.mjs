@@ -34,7 +34,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { APP_VERSION, STATION } from '../../src/lib/appInfo.js';
+import { STATION } from '../../src/lib/appInfo.js';
 
 const REPORTS = readFileSync(new URL('../../src/components/Reports.jsx', import.meta.url), 'utf8');
 const CSS = readFileSync(new URL('../../src/incident-report.css', import.meta.url), 'utf8');
@@ -55,15 +55,14 @@ const footer = () => {
 test('the office and the build are read from their one home, not typed out again', () => {
   assert.match(
     SRC,
-    /import \{ APP_VERSION, STATION \} from '\.\.\/lib\/appInfo\.js'/,
-    'Home does not read the version and the station from lib/appInfo',
+    /import \{ STATION \} from '\.\.\/lib\/appInfo\.js'/,
+    'Home does not read the station from lib/appInfo',
   );
   assert.equal(STATION, 'City of Naga Police Station');
-  assert.equal(APP_VERSION, '2.4.1');
 
-  // ...and the line interpolates them, so the band cannot drift from About.
+  // ...and the line interpolates it, so the band cannot drift from the bar.
   const block = footer();
-  assert.match(block, /\{STATION\} · BlueWrite v\{APP_VERSION\}/, 'the signature line changed shape');
+  assert.match(block, /\{STATION\} · BlueWrite/, 'the signature line changed shape');
 
   // A typed-out version or station name in the band is the failure this test
   // exists for: it would keep saying v1.0 after the build moved on.

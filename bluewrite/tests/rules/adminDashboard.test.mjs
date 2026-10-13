@@ -30,30 +30,24 @@ test('the page mounts, and paints its head, its range card and its skeletons', a
   const { renderDashboard } = await load();
   const html = renderDashboard();
 
-  // The title and the reference's sub-line: a live dot, the station's own name
-  // and the time it was last read.
-  assert.match(html, /<h1>Dashboard<\/h1>/);
-  assert.ok(html.includes('dash-live'), 'the sub-line lost its live dot');
-  assert.ok(html.includes('Naga City Police Station'), 'the station’s own name is not in the sub-line');
-  assert.ok(html.includes('Incident report overview'), 'the sub-line lost what the page reads');
+  // The title is removed (owner request, 2026-10-13), and so is the sub-line. Neither
+  // must render.
+  assert.ok(!html.includes('<h1>Dashboard</h1>'), 'the Dashboard title is back on the page');
+  assert.ok(!html.includes('dash-sub'), 'the removed sub-line is still rendered');
+  assert.ok(!html.includes('Incident report overview'), 'the removed sub-line text is still rendered');
 
-  // …and the sub-line simply omits the station while Shell's letterhead read is
-  // still in flight, rather than drawing a placeholder for it.
   const bare = renderDashboard({ stationName: null });
-  assert.ok(!bare.includes('Naga City Police Station'));
-  assert.ok(bare.includes('Incident report overview'));
+  assert.ok(!bare.includes('Incident report overview'));
 
-  // THE RANGE CARD: the three fields the reference draws, each under its own
-  // caption, inside the card the head carries.
-  assert.ok(html.includes('dash-filters'), 'the range card is gone from the head');
+  // THE RANGE CARD IS REMOVED (owner request, 2026-10-13): the From, To, Incident
+  // type, presets and Station/My reports controls are no longer drawn on the
+  // dashboard. The page still reads its default range; only the controls are gone.
+  assert.ok(!html.includes('dash-filters'), 'the range card is back on the dashboard');
+  assert.ok(!html.includes('dash-presets'), 'the range presets are back on the dashboard');
+  assert.ok(!html.includes('dash-scope'), 'the station/mine scope is back on the dashboard');
   for (const label of ['>From<', '>To<', '>Incident type<']) {
-    assert.ok(html.includes(label), `the range card lost the ${label} field`);
+    assert.ok(!html.includes(label), `the ${label} filter is back on the dashboard`);
   }
-  // And the two strips this dashboard already had are still in it — the presets
-  // and the station/mine scope — because the card holds the page's whole range,
-  // not only the reference's three fields.
-  assert.ok(html.includes('dash-presets'), 'the range presets left the range card');
-  assert.ok(html.includes('dash-scope'), 'the station/mine scope left the range card');
 
   // The first load draws SKELETONS rather than four empty cards: one per reading,
   // the trend panel's and the activity list's.

@@ -162,7 +162,8 @@ final class ReportVerification
      */
     public static function mayViewForVerification(array $user, array $report): bool
     {
-        if (($user['role'] ?? '') === 'Admin') {
+        // Officers may view every report (see ReportsController::listQueryFilters).
+        if (in_array($user['role'] ?? '', ['Admin', 'Officer'], true)) {
             return true;
         }
         if ((int) ($report['created_by'] ?? 0) === (int) ($user['id'] ?? 0)) {

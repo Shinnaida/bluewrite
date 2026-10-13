@@ -118,18 +118,10 @@ test('the two button groups keep their own surface, and the workspace button fac
   // only in that rule's reach because Shell wraps every page in `.ir-body`.
   assert.match(chrome, /className="main ir-body"/, 'the pages are no longer wrapped in .ir-body');
 
-  // Both groups carry the class the list names. The presets went without it, which
-  // is why the fix named a class rather than the two groups' own selectors.
-  assert.match(
-    dashboard,
-    /className=\{`dash-chip \$\{scope === 'all' \? 'is-active' : ''\}`\}/,
-    'the scope chips lost the class the exclusion list names',
-  );
-  assert.match(
-    dashboard,
-    /className=\{`dash-chip \$\{preset === d \? 'is-active' : ''\}`\}/,
-    'the range presets lost the class the exclusion list names',
-  );
+  // OWNER REQUEST (2026-10-13): the range card (scope and presets) is removed from
+  // the dashboard, so the chips no longer render and need no class. The exclusion
+  // list below still guards the chip rule in the stylesheet.
+  assert.doesNotMatch(dashboard, /dash-chip/, 'a range chip is back on the dashboard');
 
   // …and BOTH chains name it — the base rule and its :hover twin, which is what
   // would otherwise put a blue border back on a control that has none.

@@ -35,8 +35,10 @@
 // they are imported rather than typed out.
 
 import React from 'react';
-import { DEPARTMENT, SYSTEM_TITLE } from '../lib/appInfo.js';
+import { DEPARTMENT, STATION, SYSTEM_TITLE } from '../lib/appInfo.js';
 import pnpSeal from '../assets/pnp-logo.png';
+import citySeal from '../assets/city-of-naga-seal.png';
+import brandMark from '../assets/bluewrite-mark.png';
 // The destinations, their drawings and the current-tab rule live in the top bar's
 // module: one list, one icon set, one answer to "where am I" for both chromes.
 import { ADMIN_LINKS, NavIcon, activeFor } from './AppTopBar.jsx';
@@ -77,13 +79,18 @@ export default function AppSidebar({
         onClick={() => onNavigate('dashboard')}
         title="Back to dashboard"
       >
-        <span className="ir-brand-seal" aria-hidden="true">
-          <img src={pnpSeal} alt="" />
-        </span>
-        <span className="ir-brand-text">
-          <span className="ir-brand-eyebrow">Republic of the Philippines</span>
-          <span className="ir-brand-dept">{DEPARTMENT}</span>
-          <span className="ir-brand-system">{SYSTEM_TITLE}</span>
+        {/* The same lockup the login and Home draw: the office's mark, then the
+            wordmark in the two inks the sheet's head pairs, then the tagline. */}
+        <span className="ir-sidebar__logo">
+          <img className="ir-sidebar__mark" src={brandMark} alt="" aria-hidden="true" />
+          <span className="ir-sidebar__word">
+            <span className="ir-sidebar__wordmark">
+              BLUE<em>WRITE</em>
+            </span>
+            <span className="ir-sidebar__tagline">
+              <span className="ir-sidebar__tagline-accent">AI-Assisted</span> Police Incident Reporting
+            </span>
+          </span>
         </span>
       </button>
 
@@ -108,14 +115,27 @@ export default function AppSidebar({
           `margin-top: auto`). Outside the nav landmark on purpose: a bell and an
           account menu are not navigation, and a screen reader listing this
           rail's destinations should not hear them twice. */}
-      <AppChrome
-        variant="rail"
-        user={user}
-        onOpenProfile={onOpenProfile}
-        onLogout={onLogout}
-        onShortcuts={onShortcuts}
-        onOpenReport={onOpenReport}
-      />
+      <div className="ir-sidebar__foot">
+        {/* The station's two seals, above the profile, with the station and the
+            build between them. Decoration: the line is also said in full, so the
+            images are hidden from a screen reader. */}
+        <div className="ir-sidebar__seals" aria-hidden="true">
+          <img src={pnpSeal} alt="" />
+          <span className="ir-sidebar__seals-text">
+            {STATION} · BlueWrite
+          </span>
+          <img src={citySeal} alt="" />
+        </div>
+
+        <AppChrome
+          variant="rail"
+          user={user}
+          onOpenProfile={onOpenProfile}
+          onLogout={onLogout}
+          onShortcuts={onShortcuts}
+          onOpenReport={onOpenReport}
+        />
+      </div>
     </aside>
   );
 }

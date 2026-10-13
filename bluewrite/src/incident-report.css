@@ -483,6 +483,72 @@
   text-align: left;
 }
 .ir-sidebar__brand:hover { background: rgba(255, 255, 255, 0.08); }
+.ir-sidebar__logo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.ir-sidebar__mark {
+  flex: none;
+  height: 3.2rem;
+  width: auto;
+  object-fit: contain;
+}
+.ir-sidebar__word {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* The login's wordmark, drawn small: BLUE in white, WRITE in the department's gold. */
+.ir-sidebar__wordmark {
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: #ffffff;
+}
+.ir-sidebar__wordmark em {
+  font-style: normal;
+  color: #f0b429;
+}
+.ir-sidebar__tagline {
+  margin-top: 0.3rem;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #ffffff;
+}
+.ir-sidebar__tagline-accent {
+  color: #f0b429;
+}
+/* The foot of the rail: the profile, then the seal line beneath it. The margin
+   pushes the whole block to the bottom of the column. */
+.ir-sidebar__foot {
+  margin-top: auto;
+}
+.ir-sidebar__seals {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.35rem 0.5rem;
+}
+.ir-sidebar__seals img {
+  height: 1.6rem;
+  width: auto;
+  object-fit: contain;
+  flex: none;
+}
+.ir-sidebar__seals-text {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-align: center;
+  color: #ffffff;
+}
 .ir-sidebar__brand:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 
 .ir-sidebar__nav {
@@ -6082,17 +6148,14 @@
    AND IT NEVER CLEARS. Even 0.5 is a wash of the band's own navy, so the picture
    is still set INTO the band rather than pasted on it — which is why there is no
    stop near zero anywhere in this ramp. */
+/* NO VEIL (owner request, 2026-10-13): the station photograph shows at full
+   opacity. The element stays in the markup, so the band's structure is unchanged;
+   it simply paints nothing over the picture. The left-edge mask on
+   .ir-home-hero-photo still fades the seam into the navy. */
 .ir-home-hero-scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    96deg,
-    rgba(11, 37, 69, 0.64) 0%,
-    rgba(11, 37, 69, 0.6) 28%,
-    rgba(11, 37, 69, 0.53) 52%,
-    rgba(11, 37, 69, 0.41) 72%,
-    rgba(11, 37, 69, 0.35) 100%
-  );
+  background: none;
   pointer-events: none;
 }
 
@@ -8801,7 +8864,13 @@
 
 /* Report register: formal records, explicit controls, and readable small screens.
    Scoped so the report editor, printed sheets, and Home cards stay unchanged. */
-.reports-register { min-width: 0; }
+.reports-register {
+  min-width: 0;
+  /* 0.02cm from the top bar to the strip. The page's own top gutter is fluid,
+     so the margin is 0.02cm MINUS that same gutter: the two add up to 0.02cm at
+     every width. */
+  margin-top: calc(0.02cm - var(--ir-gutter-top));
+}
 .reports-register .folder-head { gap: 0.65rem 1rem; padding-top: 1rem; }
 .reports-register .folder-tabs { flex-basis: 100%; }
 .reports-register .folder-tab { min-height: 44px; font-family: var(--font-body); font-size: 0.88rem; }
@@ -8859,9 +8928,9 @@
 .register-results__hint { font-weight: 400; color: var(--ir-muted); }
 .reports-register .file-card__paper {
   grid-template-columns: 2rem minmax(11rem, 14rem) minmax(0, 1fr);
-  min-height: 100px;
+  min-height: 50px;
   gap: 1rem;
-  padding: 1rem 11.5rem 1rem 1rem;
+  padding: 0.5rem 11.5rem 0.5rem 1rem;
 }
 .reports-register .report-row__folder { width: 2rem; }
 .reports-register .report-row__head { gap: 0.4rem; }

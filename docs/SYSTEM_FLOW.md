@@ -219,3 +219,49 @@ Idle timeout   ──> no activity for the configured limit → warning → sign
 | Archived | Row menu (owner for drafts, Admin for any); restorable |
 | Account locked | 5 failed sign-ins / 5 wrong codes / 5 wrong recovery codes |
 | Account request pending | Locked-out officer's unauthenticated ask; Admin answers |
+
+---
+
+## 10. Framework and tools used to build the system
+
+The stack that the flows above run on, and the tools used to build and test it.
+Detail for each area is in `docs/SYSTEM_TOOLS_AND_AI.md`.
+
+### 10.1 Application framework
+
+| Layer | Framework / language | Role in the flow |
+|---|---|---|
+| Frontend | React 18.3 | Every screen in §2–§7 |
+| Frontend build | Vite 5.4 with `@vitejs/plugin-react` 4.3 | `npm run build` produces `public/` |
+| Backend | PHP (`strict_types=1`), single entry `api/index.php` | Every API route the flows call |
+| Database | MySQL / MariaDB through PDO (prepared statements) | Users, reports, audit, AI queue and cache |
+| Web server | Apache-style `.htaccess` on the station LAN | Routes requests to `api/index.php` |
+
+### 10.2 Libraries
+
+| Library | Version | Used for |
+|---|---|---|
+| GSAP | 3.15 | Text animation (`TextType.jsx`) |
+| three | 0.186 | 3D backdrop (`AiOrbBackdrop.jsx`) |
+| ogl | 1.0 | WebGL effect (`SpecularButton.jsx`) |
+| postprocessing | 6.39 | Declared for WebGL effects |
+| face-api.js | 0.22 | Declared, but no import was found in `src/`; can be removed |
+| Plain CSS | — | `incident-report.css`, `login-theme.css`, `styles.css` (fonts bundled for the LAN) |
+
+### 10.3 Testing and delivery tools
+
+| Tool | Role |
+|---|---|
+| npm | Installs and runs the frontend scripts (`package-lock.json`) |
+| Node.js `node --test` | Frontend rule tests in `tests/rules/*.test.mjs` |
+| PHPUnit 11 | Backend tests in `tests/*Test.php`, run against the `bluewrite_test` database |
+| GitHub Actions | `.github/workflows/ci.yml` at the repo root runs the suites |
+| Git / GitHub | Source control |
+| SQL migrations | Numbered files in `migrations/`, with `.down.sql` rollbacks where written |
+
+### 10.4 AI used to build the system
+
+| Item | Detail |
+|---|---|
+| AI coding assistants | Not recorded in the repository. Fill in the tools used here. |
+| AI inside the product | Google Gemini (`gemini-3.6-flash`) for narrative drafting and translation; see §4 of `docs/SYSTEM_TOOLS_AND_AI.md` |

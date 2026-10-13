@@ -10,9 +10,6 @@
 // a version number ends up wrong in one file and right in another, and how an
 // advisory acquires a second wording nobody meant to write.
 
-/** The build's version. Shown at the gate and in About; keep them the same. */
-export const APP_VERSION = '2.4.1';
-
 /** The system's own names, as they appear in the bar and on the gate. */
 export const DEPARTMENT = 'Public Safety Department';
 export const SYSTEM_TITLE = 'Official Incident Reporting System';

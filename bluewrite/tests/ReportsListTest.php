@@ -374,8 +374,8 @@ final class ReportsListTest extends BaseApiTestCase
         $this->assertSame(200, $res['status']);
         $this->assertSame(0, $res['body']['pagination']['total']);
 
-        // REFUSED RATHER THAN IGNORED for everyone else. An Officer is already scoped to
-        // their own reports, so intersecting the two clauses would answer 200 with an
+        // REFUSED RATHER THAN IGNORED for everyone else. A Staff account is already scoped
+        // to its own reports, so intersecting the two clauses would answer 200 with an
         // empty blotter — which reads as "that colleague has never recorded anything"
         // rather than as "you may not ask that".
         $res = $this->request('GET', '/reports?created_by=' . $staffId, null, $officerCookie);

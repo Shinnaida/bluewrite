@@ -39,7 +39,11 @@
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
-  background: var(--la-navy-deep);
+  /* The neon tech frame from the owner's file, under a navy wash so the card
+     and its text stay readable over the lines. */
+  background:
+    linear-gradient(135deg, rgba(5, 26, 69, 0.45) 0%, rgba(10, 42, 107, 0.45) 100%),
+    var(--la-frame) center / cover no-repeat;
   color: var(--la-ink);
 
   /* ---- the gate's own inks ---- */
@@ -119,18 +123,32 @@
   /* THE TOP OF THE PAGE, AND ONLY THE TOP: the three sides are the page's own
      edges (which is why they are stated as 0 rather than as `inset`, whose
      fourth value would have made the layer full height again). */
-  top: 0;
+  /* 5% down from the top of the page (owner request). */
+  top: 5%;
   right: 0;
-  left: 0;
-  height: 55%;
+  width: 70%;
+  height: 50%;
   z-index: 0;
   overflow: hidden;
-  clip-path: polygon(46% 0%, 100% 0%, 100% 100%, 36% 100%);
+  /* THE WHOLE PHOTOGRAPH, BLENDED IN: no diagonal cut. The picture's left and
+     foot are faded into the navy by a mask, so it dissolves into the page rather
+     than ending on an edge. */
+  -webkit-mask-image:
+    linear-gradient(90deg, transparent 0%, #000 34%),
+    linear-gradient(180deg, #000 66%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(90deg, transparent 0%, #000 34%),
+    linear-gradient(180deg, #000 66%, transparent 100%);
+  mask-composite: intersect;
 }
 .la-photo img {
   display: block;
   width: 100%;
-  height: 100%;
+  /* The photo at its own 3:1 proportion, so the crop below is exactly 10% of
+     the picture. The top 10% is cut off (owner request). */
+  height: auto;
+  clip-path: inset(10% 0 0 0);
   /* COVER, and the position is the framing: the frame supplied is 2172x724 —
      three to one — and this box is a window on it. It is WIDER than the frame is
      tall at every size the gate is used at, so the frame is scaled to the box's
@@ -138,12 +156,13 @@
    the vertical lead (8%) is what keeps the roof, the banner and the flag in the
    band rather than the sky alone. Home's band shows the whole frame (see
    HOME_HERO_PHOTO); this screen shows the top of it. */
-  object-fit: cover;
-  object-position: 62% 8%;
+  object-fit: contain;
+  object-position: 100% 0%;
+  opacity: 1;
 }
 /* The wash: the navy closing over the picture's inner edge so the words on the
-   left have a ground, and a blue cast over the whole of it — the reference's
-   photograph is lit like the inside of a screen rather than like a photograph.
+   left have a ground. The fades are the page's own navy, with no blue cast over
+   the photograph.
 
    THREE GRADIENTS, ONE PER EDGE THE PAGE SHOWS. The horizontal one is the band's
    inner edge. The second closes the band's TOP, under the bar. The third is the
@@ -154,17 +173,7 @@
 .la-photo-wash {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(
-      90deg,
-      rgba(5, 15, 34, 0.99) 0%,
-      rgba(5, 15, 34, 0.92) 24%,
-      rgba(6, 20, 44, 0.5) 45%,
-      rgba(8, 26, 56, 0.28) 70%,
-      rgba(5, 15, 34, 0.42) 100%
-    ),
-    linear-gradient(180deg, rgba(5, 15, 34, 0.35) 0%, rgba(5, 15, 34, 0) 30%),
-    linear-gradient(0deg, rgba(5, 15, 34, 0.95) 0%, rgba(5, 15, 34, 0) 35%);
+  background: none;
 }
 
 /* THE CORNER ACCENTS. Two striped wedges, the reference's own decoration: the
@@ -194,10 +203,11 @@
 }
 .la-stripes--foot {
   bottom: 0;
-  right: 0;
+  left: 0;
+  right: auto;
   width: clamp(6rem, 12vw, 11rem);
   height: 2.4rem;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 26% 100%);
+  clip-path: polygon(0 0, 100% 0, 74% 100%, 0 100%);
 }
 
 /* ============================================================
@@ -212,12 +222,12 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.6rem 1rem;
-  padding: 0.75rem clamp(1rem, 3vw, 2.25rem);
-  background: var(--la-navy);
+  padding: 0.6rem clamp(1rem, 3vw, 2.25rem);
+  /* Applied from the owner's reference: a navy-to-blue sweep across the bar. */
+  background: linear-gradient(90deg, var(--la-navy) 0%, #0d2f6e 100%);
   color: var(--la-ink);
-  /* The one seam on the page, and it is a whisper: the bar and the page are the
-     same navy, so without it the head of the page floats. */
-  border-bottom: 1px solid var(--la-line);
+  /* The one seam on the page, drawn in the same blue as the card's border. */
+  border-bottom: 2px solid rgba(40, 120, 255, 0.85);
 }
 .la-topbar--step2 { justify-content: space-between; }
 
@@ -232,15 +242,15 @@
 }
 .la-seal {
   flex: none;
-  height: clamp(2rem, 3.4vw, 2.6rem);
+  height: clamp(2rem, 3.2vw, 2.6rem);
   width: auto;
   object-fit: contain;
 }
 .la-seal-rule {
   flex: none;
   width: 1px;
-  height: clamp(1.7rem, 3vw, 2.3rem);
-  background: rgba(255, 255, 255, 0.32);
+  height: clamp(1.6rem, 2.6vw, 2rem);
+  background: rgba(255, 255, 255, 0.4);
 }
 
 /* The bar's right end: the clock, whether the server is there, and the build.
@@ -257,7 +267,9 @@
   letter-spacing: 0.06em;
 }
 .la-clock {
-  display: inline-flex;
+  /* Hidden to match the reference bar, which shows the seals, the status and
+     the version only. The clock still runs in Login.jsx. */
+  display: none;
   align-items: baseline;
   gap: 0.4rem;
   margin: 0;
@@ -279,7 +291,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -388,7 +400,13 @@
      very wide desks, where an unbounded composition would stretch the three
      cards into ribbons. */
   max-width: 118rem;
-  margin: auto;
+  /* Centred vertically only while it fits. `margin: auto` centred it even when
+     the Request help form made it taller than the viewport, which pushed its
+     top edge above the scroll area where nothing could reach it. `safe center`
+     keeps it centred when it fits and top-aligned (scrollable) when it does not. */
+  margin-inline: auto;
+  margin-block: 0;
+  align-self: safe center;
 }
 .la-columns {
   display: grid;
@@ -398,7 +416,7 @@
      to 55.6% for the brand, 57.8% to 95.8% for the card. An fr here instead
      would thin the card as the window widened and it would stop reading as the
      fixed plate the design is built around. */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 38rem);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 26.6rem);
   /* THE CARD'S FOOT IS THE COLUMN'S FOOT. The reference draws them level — the
      plate's bottom edge and the signature's underline are the same line, 310 to
      760 against a brand column of 210 to 762 — so the card is END-aligned
@@ -459,6 +477,9 @@
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
+  color: #ffffff;
+}
+.la-tagline-accent {
   color: var(--la-gold);
 }
 
@@ -496,7 +517,7 @@
 .la-feature {
   padding: clamp(1rem, 1.9vh, 1.7rem) clamp(0.95rem, 1.3vw, 1.4rem)
     clamp(1.1rem, 2vh, 1.8rem);
-  border: 1px solid rgba(240, 180, 41, 0.45);
+  border: 1.5px solid rgba(40, 120, 255, 0.85);
   border-radius: 12px;
   background: linear-gradient(180deg, rgba(10, 30, 58, 0.72), rgba(6, 18, 38, 0.78));
   text-align: left;
@@ -518,7 +539,8 @@
   margin: 0;
   font-size: clamp(0.9rem, 0.86rem + 0.14vw, 1rem);
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
   text-transform: uppercase;
   color: var(--la-gold);
 }
@@ -564,9 +586,12 @@
 .la-advisory {
   margin: 0;
   max-width: 34rem;
-  font-size: 0.66rem;
+  /* Readable at a desk, and clear of the HUD line that runs along the foot of
+     the page: the advisory was set at 10px and sat on that line. */
+  font-size: clamp(0.72rem, 0.68rem + 0.2vw, 0.85rem);
   line-height: 1.55;
   color: var(--la-ink-3);
+  padding-bottom: 0.4rem;
 }
 
 /* ============================================================
@@ -586,10 +611,10 @@
   width: 100%;
   /* The card's column, so the plate fills the column the grid gives it (570px
      at the comp's proportions). */
-  max-width: 38rem;
-  padding: clamp(1.3rem, 2.4vw, 1.9rem) clamp(1.2rem, 2.2vw, 1.75rem)
+  max-width: 26.6rem;
+  padding: clamp(0.845rem, 1.56vw, 1.235rem) clamp(1.2rem, 2.2vw, 1.75rem)
     clamp(1.25rem, 2.2vw, 1.6rem);
-  border: 1px solid var(--la-line-strong);
+  border: 2px solid rgba(40, 120, 255, 0.85);
   border-radius: 14px;
   background: linear-gradient(180deg, var(--la-panel-hi), var(--la-panel));
   box-shadow:
@@ -604,15 +629,26 @@
   border-bottom: 1px solid var(--la-line);
   text-align: center;
 }
+.la-panel-emblem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  position: relative;
+  /* Net 0.5rem down: raised 20% of the logo's height, then lowered 30% of it
+     (the logo is 5rem, so 20% is 1rem up and 30% is 1.5rem down). */
+  top: 0.5rem;
+  margin: 0 auto 0.75rem;
+}
 .la-panel-mark {
   display: grid;
   place-items: center;
-  width: 3.4rem;
-  height: 3.4rem;
-  margin: 0 auto 0.75rem;
-  border: 1px solid var(--la-line-strong);
-  border-radius: 12px;
-  background: rgba(6, 20, 42, 0.85);
+  width: 7.14rem;
+  height: 7.14rem;
+  flex: none;
+  border: 0;
+  border-radius: 0;
+  background: none;
 }
 .la-panel-mark img {
   width: 70%;
@@ -621,6 +657,17 @@
 }
 /* The title with a gold tick either side of it — the reference's own rule, and
    the same divider the brand column draws, one size down. */
+.la-panel::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  width: 1.75rem;
+  height: 3px;
+  transform: translateX(-50%);
+  background: var(--la-gold);
+  border-radius: 0 0 3px 3px;
+}
 .la-panel-title {
   display: flex;
   align-items: center;
@@ -633,8 +680,8 @@
   color: var(--la-ink);
 }
 .la-panel-tick {
-  flex: 1 1 auto;
-  max-width: 3rem;
+  flex: 0 0 auto;
+  width: 3rem;
   height: 1px;
   background: var(--la-gold);
   opacity: 0.9;
@@ -719,7 +766,8 @@
   padding: 0.85rem 1rem;
   border: 0;
   border-radius: 8px;
-  background: var(--la-gold);
+  background: linear-gradient(180deg, #ffd23a, #f0b429);
+  box-shadow: 0 0 22px rgba(240, 180, 41, 0.35);
   color: #0a1a33;
   font: inherit;
   font-size: 0.82rem;
@@ -1182,7 +1230,7 @@
    order be stated here without moving a line of the markup (the arrangement the
    gate used before this redesign, kept for the same reason). */
 @media (max-width: 1023px) {
-  .la-photo { clip-path: none; height: 100%; }
+  .la-photo { clip-path: none; top: 0; width: 100%; height: 100%; }
   .la-photo-wash {
     background: linear-gradient(180deg, rgba(5, 15, 34, 0.94), rgba(5, 15, 34, 0.88));
   }

@@ -559,10 +559,12 @@ final class ReportsController
         $params = [];
         $where = ['r.deleted_at ' . ($showArchived ? 'IS NOT NULL' : 'IS NULL')];
 
-        // Officers and Staff see only the reports they recorded — they are
-        // the ones who create them. Admin sees the whole station blotter.
-        // Enforced HERE, in the query, not just hidden in the UI.
-        if ($user['role'] !== 'Admin') {
+        // Staff see only the reports they recorded. Officers and Admin see the
+        // whole station blotter (owner request: an officer can view every report,
+        // and each row names the officer who recorded it). Editing stays
+        // owner-only for everyone but Admin — see update(). Enforced HERE, in the
+        // query, not just hidden in the UI.
+        if (!in_array($user['role'], ['Admin', 'Officer'], true)) {
             $where[] = 'r.created_by = :uid';
             $params[':uid'] = (int) $user['id'];
         }
@@ -1466,15 +1468,15 @@ n     * view. Officers and Staff may print only their own reports; Admin may
         $user = Auth::requireUser();
         $pdo = Database::pdo();
 
-        // Visibility rule: non-Admin may inspect history only for reports
-        // they recorded.
+        // Visibility rule: Staff may inspect history only for reports they
+        // recorded; Officers and Admin may inspect any report's history.
         $ownerStmt = $pdo->prepare('SELECT created_by FROM reports WHERE id = :id');
         $ownerStmt->execute([':id' => (int) $id]);
         $owner = $ownerStmt->fetchColumn();
         if ($owner === false) {
             Response::json(404, ['error' => 'Report not found.']);
         }
-        if ($user['role'] !== 'Admin' && (int) $owner !== (int) $user['id']) {
+        if (!in_array($user['role'], ['Admin', 'Officer'], true) && (int) $owner !== (int) $user['id']) {
             Response::json(403, ['error' => 'You can only view history for reports you recorded.']);
         }
 

@@ -95,6 +95,7 @@ require __DIR__ . '/../app/controllers/MessagesController.php';
 require __DIR__ . '/../app/controllers/UsersController.php';
 require __DIR__ . '/../app/controllers/ReportsController.php';
 require __DIR__ . '/../app/controllers/DashboardController.php';
+require __DIR__ . '/../app/controllers/NewsController.php';
 require __DIR__ . '/../app/controllers/AuditsController.php';
 require __DIR__ . '/../app/controllers/StationController.php';
 require __DIR__ . '/../app/controllers/VerificationController.php';
@@ -105,6 +106,7 @@ use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\MessagesController;
 use App\Controllers\NarrativeController;
+use App\Controllers\NewsController;
 use App\Controllers\NotificationsController;
 use App\Controllers\PresenceController;
 use App\Controllers\ReportsController;
@@ -346,6 +348,12 @@ try {
 
     if ($seg0 === 'dashboard' && $seg1 === 'stats' && $method === 'GET') {
         (new DashboardController())->stats();
+    }
+
+    // The dashboard's "Search the news" panel: a proxy to the news API, so the
+    // API token stays on the server. Admin-only (see NewsController).
+    if ($seg0 === 'news' && $seg1 === 'search' && $method === 'GET') {
+        (new NewsController())->search();
     }
 
     // The bell in the top bar: what has happened to the reports THIS account

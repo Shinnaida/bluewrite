@@ -49,7 +49,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { api, classifyError, isUnreachable, CONNECTION_MESSAGES } from '../lib/api.js';
-import { AI_ADVISORY, APP_VERSION } from '../lib/appInfo.js';
+import { AI_ADVISORY } from '../lib/appInfo.js';
 // The self-service recovery REQUEST (Phase 1, S-04): an officer who cannot sign
 // in can ASK an administrator, from this screen, without a session. It changes
 // nothing on its own — it records a request an Admin acts on.
@@ -91,7 +91,8 @@ import citySeal from '../assets/city-of-naga-seal.png';
 // looked up because the gate's composition IS the picture: the right half of
 // this page is the building, and a station that has not supplied one gets the
 // navy field the layer falls back to by simply not being there.
-import stationPhoto from '../assets/home-hero.jpg';
+import stationPhoto from '../assets/Modern Philippine Police Station at Dusk.png';
+import neonFrame from '../assets/Futuristic Blue Neon Tech Frame.png';
 import ConnectionNotice from './ConnectionNotice.jsx';
 
 /**
@@ -199,8 +200,6 @@ function TopStatusBar({ connState, step2 = false }) {
               />
               {down ? 'SYSTEM OFFLINE' : 'SYSTEM ONLINE'}
             </span>
-            <span className="pipe" aria-hidden="true">|</span>
-            <span className="la-version">v{APP_VERSION}</span>
           </div>
         </>
       )}
@@ -901,7 +900,11 @@ export default function Login({ onLogin, boot, notice = null }) {
   const isStep2 = step === 'verify';
 
   return (
-    <main className={`la-page${isStep2 ? ' la-page--step2' : ''}`}>
+    <main
+      className={`la-page${isStep2 ? ' la-page--step2' : ''}`}
+      style={{ '--la-frame': `url("${neonFrame}")` }}
+    >
+      <TopStatusBar connState={conn} step2={isStep2} />
       {/* NO BACKDROP, ON EITHER SCREEN (owner request, 2026-10-13). The gate
           used to carry the React Bits GridScan behind everything — an animated
           wireframe ruling with a sweep across it. It is gone, and with it the
@@ -919,22 +922,14 @@ export default function Login({ onLogin, boot, notice = null }) {
           login-theme.css). A layer rather than a CSS background, for the reason
           Home's band gives: the scrim has to sit BETWEEN the picture and the
           words, and the shape is cut on a diagonal rather than by a box. The
-          picture is the deployment's own file — `src/assets/home-hero.jpg`,
-          the same photograph Home's band shows — so a station that swaps it
-          swaps both screens. Decorative, and stated as such: nothing here is
+          picture is `src/assets/Modern Philippine Police Station at Dusk.png`,
+          the station's own photograph for this screen. Decorative, and stated as such: nothing here is
           text, and a screen reader should be told about the door, not the
           building. */}
       <div className="la-photo" aria-hidden="true">
         <img src={stationPhoto} alt="" />
         <span className="la-photo-wash" />
       </div>
-
-      {/* The reference's two corner accents: the striped diagonals that close
-          the navy at the top-right and the foot. Decoration, no content. */}
-      <span className="la-stripes la-stripes--top" aria-hidden="true" />
-      <span className="la-stripes la-stripes--foot" aria-hidden="true" />
-
-      <TopStatusBar connState={conn} step2={isStep2} />
 
       <div className="la-content">
         <div className={isStep2 ? 'la-step2' : 'la-content-inner'}>
@@ -958,7 +953,7 @@ export default function Login({ onLogin, boot, notice = null }) {
                     BLUE<em>WRITE</em>
                   </h1>
                 </div>
-                <p className="la-tagline">AI-Assisted Police Incident Reporting</p>
+                <p className="la-tagline"><span className="la-tagline-accent">AI-Assisted</span> Police Incident Reporting</p>
                 {/* The short gold rule under the tagline: the reference's own
                     divider, and the same accent the feature cards are drawn
                     with, so the column reads as one block. */}
@@ -1278,18 +1273,21 @@ export default function Login({ onLogin, boot, notice = null }) {
             {!isStep2 && (
             <section className="la-right">
               <div className="la-panel">
+                {!helpOpen && (<>
                 <div className="la-panel-head">
                   {/* The office's own mark rather than a padlock drawing: this
                       is the department's door, and the shield with the pen in
                       it is what the photograph on this page shows on its own
                       banner. */}
-                  <span className="la-panel-mark" aria-hidden="true">
-                    <img src={brandMark} alt="" />
-                  </span>
+                  <div className="la-panel-emblem">
+                    <span className="la-panel-tick" aria-hidden="true" />
+                    <span className="la-panel-mark" aria-hidden="true">
+                      <img src={brandMark} alt="" />
+                    </span>
+                    <span className="la-panel-tick" aria-hidden="true" />
+                  </div>
                   <h2 className="la-panel-title">
-                    <span className="la-panel-tick" aria-hidden="true" />
                     RESTRICTED ACCESS
-                    <span className="la-panel-tick" aria-hidden="true" />
                   </h2>
                   <p className="la-panel-sub">Authenticate to access system</p>
                 </div>
@@ -1399,6 +1397,8 @@ export default function Login({ onLogin, boot, notice = null }) {
                     </svg>
                   </button>
                 </form>
+
+                </>)}
 
                 {/* THE LOCKED-OUT WAY TO ASK (Phase 1, S-04). Below the password
                     form because it is what is used when that form does not work:
