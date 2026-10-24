@@ -9,7 +9,6 @@
 // in both callers.
 
 import { suspectLine } from './suspectLine.js';
-import { richTextToPlain } from './richText.js';
 
 // “August 06, 2026” — the format the PNP template uses for dates.
 const LONG_DATE = new Intl.DateTimeFormat('en-PH', {
@@ -99,6 +98,19 @@ function personLine(p) {
   return join(p.name, p.age, p.sex);
 }
 
+// “DOB 2-25-1990” when recorded, otherwise nothing — one spelling shared by
+// the vehicle driver fragment and the Injuries line below.
+function dobPart(p) {
+  return has(p?.dob) ? `DOB ${N(p.dob)}` : '';
+}
+
+// The driver’s demographics live on the person row, not the vehicle row —
+// matched by name against the Parties/Injured rows the caller passes in.
+function findPersonByName(people, name) {
+  if (!has(name) || !Array.isArray(people)) return null;
+  return people.find((p) => p && N(p.name).toLowerCase() === N(name).toLowerCase()) ?? null;
+}
+
 // Blotter-style vehicle line: “YAMAHA NMAX, plate G7185R, OR 0716-819041,
 // CR 0716-25-250349, owned and driven by Joseph ..., license G04-16-000471
 // valid until 2-25-2029, damage ...”. Every fragment only when recorded —
@@ -118,22 +130,15 @@ export function vehicleLine(v, people = []) {
   else if (owner && driver) ownership = `owned by ${owner}, driven by ${driver}`;
   else if (driver) ownership = `driven by ${driver}`;
   else if (owner) ownership = `owned by ${owner}`;
-  // Driver demographics from the Parties/Injured rows matched by name — the
-  // blotter states age/DOB/sex/address beside the driver, and the record
-  // keeps those on the person row, not the vehicle row.
-  if (driver) {
-    const match = (Array.isArray(people) ? people : []).find(
-      (p) => p && N(p.name).toLowerCase() === driver.toLowerCase(),
+  const match = findPersonByName(people, driver);
+  if (match) {
+    const demo = join(
+      N(match.age),
+      dobPart(match),
+      N(match.sex),
+      N(match.address) ? `resident of ${N(match.address)}` : '',
     );
-    if (match) {
-      const demo = join(
-        N(match.age),
-        has(match.dob) ? `DOB ${N(match.dob)}` : '',
-        N(match.sex),
-        N(match.address) ? `resident of ${N(match.address)}` : '',
-      );
-      if (demo) ownership += `, ${demo}`;
-    }
+    if (demo) ownership += `, ${demo}`;
   }
   const licence = has(v.driver_license_no)
     ? `license ${N(v.driver_license_no)}${has(v.driver_license_validity) ? ` valid until ${N(v.driver_license_validity)}` : ''}`
@@ -325,7 +330,7 @@ export function buildTypeFacts(type, ctx) {
         : [];
       const injured = Array.isArray(ts.injured_persons)
         ? ts.injured_persons
-            .map((p) => join(p.name, p.age, has(p.dob) ? `DOB ${N(p.dob)}` : '', p.injury_status, p.address))
+            .map((p) => join(p.name, p.age, dobPart(p), p.injury_status, p.address))
             .filter(Boolean)
         : [N(ts.injured_persons)].filter(Boolean);
       if (has(ts.fatalities)) injured.push(`Fatalities: ${N(ts.fatalities)}`);
@@ -504,26 +509,13 @@ export function buildTypeFacts(type, ctx) {
 // NOTABLE FINDINGS — the officer's own free-text observations come FIRST
 // (one printed line per typed line), then genuinely recorded evidence-type
 // observations from the structured fields.
-//
-// Word-like ink (owner request): the officer's field may carry the allowlisted
-// subset, so its lines are read through the PLAIN text — a tag never becomes
-// a printed line and never reaches the casing. Plain values read exactly as
-// before, so legacy rows are untouched.
 export function buildFindings(ts) {
-  return [...officerFindings(ts), ...buildStructuredFindings(ts)];
-}
-
-/** The officer's own findings lines, tag-stripped when the field is rich. */
-export function officerFindings(ts) {
-  return richTextToPlain(String(ts.notable_findings || ''))
+  const findings = [];
+  const officerLines = String(ts.notable_findings || '')
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
-}
-
-/** The genuinely recorded evidence-type observations from the structured fields. */
-export function buildStructuredFindings(ts) {
-  const findings = [];
+  findings.push(...officerLines);
   if (ts.cctv_available === 'Yes') {
     findings.push(`CCTV footage is available${has(ts.cctv_description) ? ` — ${N(ts.cctv_description)}` : ''}.`);
   } else if (ts.cctv_available === 'No') {

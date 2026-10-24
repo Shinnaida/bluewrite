@@ -1202,25 +1202,3 @@ test('a casualty count is a count of people, never a number typed twice', () => 
   assert.deepEqual(validateReport(fire, 'finalize').errors, []);
 });
 
-test('the prose minimums measure words, never tags', () => {
-  // Ink is not text: a narrative of 115 words in bold is still 115 words,
-  // and a disposition padded with list markup is still short.
-  const taggedShort = '<b>' + 'x'.repeat(115) + '</b>'; // 122 chars raw, 115 words
-  assert.ok(taggedShort.length >= 120, 'test setup: the raw string clears the minimum');
-  const { errors: shortErrors } = validateReport(validBase('Theft', { narrative: taggedShort }), 'finalize');
-  assert.ok(
-    shortErrors.some((e) => e.path === 'narrative'),
-    'a tag-padded narrative cleared the minimum',
-  );
-  const taggedLong = '<ul><li><b>' + 'y '.repeat(61) + '</b></li></ul>'; // 121 chars of words with ink
-  const { errors: longErrors } = validateReport(validBase('Theft', { narrative: taggedLong }), 'finalize');
-  assert.ok(
-    !longErrors.some((e) => e.path === 'narrative'),
-    'a formatted narrative that says enough was flagged: ' + JSON.stringify(longErrors.map((e) => e.path)),
-  );
-  const { errors: actErrors } = validateReport(
-    validBase('Theft', { action_taken: '<p><i>Referred</i></p>' }),
-    'finalize',
-  );
-  assert.ok(actErrors.some((e) => e.path === 'action_taken'), 'a tag-padded disposition cleared the minimum');
-});
