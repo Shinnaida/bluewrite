@@ -83,7 +83,13 @@ export async function loadFixture(relativePath) {
     format: 'esm',
     platform: 'node',
     jsx: 'automatic',
-    external: ['react', 'react-dom', 'react-dom/server'],
+    // tesseract.js stays external for the same reason as React: the bundle runs
+    // on NODE (platform above), and the package's node entry requires node
+    // builtins the ESM bundle cannot carry. The browser build — the one Vite
+    // ships, via the package's `browser` field — never enters a fixture, and
+    // effects do not run under renderToString, so no fixture can start a
+    // worker anyway.
+    external: ['react', 'react-dom', 'react-dom/server', 'tesseract.js'],
     logLevel: 'silent',
     inject: [path.join(here, 'stubViteGlob.js')],
     // A fixture that imports a real SCREEN imports what that screen imports,

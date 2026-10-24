@@ -8167,3 +8167,26 @@ body.users-fab-open .main {
   }
   body.recovery-sheet-open .recovery-print-foot { margin-top: 1.25rem; font-size: 10pt; }
 }
+/* Word-like surface (owner request): a small quiet toolbar for the editable
+   narrative, on the form and on the letter alike. The narrative carries its
+   own strip, with the blotter Upload riding it (see BlotterCapture). */
+.rt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  margin: 0 0 0.3rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px dashed rgba(17, 17, 17, 0.25);
+}
+/* Blotter capture review: the recognized text, editable before it lands in
+   the narrative. A plain box in the dialog own measure - this is a
+   checkpoint, not a second editor, so it borrows no prose chrome. */
+.blotter-review-text {
+  width: 100%;
+  min-height: 12rem;
+  box-sizing: border-box;
+  font: inherit;
+  line-height: 1.5;
+  padding: 0.5rem 0.6rem;
+  resize: vertical;
+}
