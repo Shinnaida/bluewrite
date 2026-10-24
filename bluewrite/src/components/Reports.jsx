@@ -1797,6 +1797,13 @@ function ReportReview({ draft, user, complete, onGoToSection, edit }) {
             required
             {...editable('ioc_name')}
           />
+          {/* Read-back only: edited in Panel IV beside the IOC (see above) —
+              ReviewFieldEditor only handles report-level fields, and a second
+              editing path for one ts key is not worth it. */}
+          <ReviewRow
+            label="Recorded by"
+            value={draft.type_specific?.recorded_by}
+          />
           {/* A derived read-out, deliberately NOT editable: the badge line comes
               from the account. A path here would offer an edit that has nowhere
               to be written. The signature rows that used to close this section
@@ -3158,10 +3165,19 @@ export function ReportEditor({
   }
 
   // Switching incident type resets the specific fields (they belong to the
-  // old type) and keeps common fields intact.
+  // old type) and keeps common fields intact. The offense caption and the
+  // recorder travel with the REPORT, not the type: neither is ever silently
+  // discarded by a type switch.
   function changeType(value) {
     dirtyRef.current = true;
-    setDraft((d) => ({ ...d, incident_type: value, type_specific: {} }));
+    setDraft((d) => {
+      const keep = {};
+      for (const k of ['offense_caption', 'recorded_by']) {
+        const v = d.type_specific?.[k];
+        if (typeof v === 'string' && v.trim() !== '') keep[k] = v;
+      }
+      return { ...d, incident_type: value, type_specific: keep };
+    });
     setErrors((e) => (e.incident_type ? { ...e, incident_type: undefined } : e));
   }
 
@@ -4057,7 +4073,6 @@ export function ReportEditor({
         report: { ...(draft || {}), id: draft?.id ?? editingId },
         ts: inlineTs,
         stationHeader,
-        recordedBy: { name: user?.full_name || user?.name || draft?.created_by_name },
       }}
       // Phase 6 Stage 5 (Track C) — step 1 of the guided "Translate & tighten"
       // flow: apply AND save the reviewed draft, so step 2 can run against a
@@ -4508,6 +4523,21 @@ export function ReportEditor({
                   optionIcon={<LabelIcon name="hash" />}
                 />
                 {errors.incident_type && <div className="error">{errors.incident_type}</div>}
+              </div>
+              {/* The quoted title, exactly as the blotter book words it. The
+                  sheet prints THIS in quotes; until the officer types it, the
+                  type name above stands in. Universal to every incident type —
+                  a lost-wallet report carries a quoted title the same way a
+                  traffic accident does. */}
+              <div className="ir-field ir-span-2">
+                <IrLabel htmlFor="r-offense-caption" icon="lines">Offense as written</IrLabel>
+                <input
+                  id="r-offense-caption"
+                  value={draft.type_specific?.offense_caption || ''}
+                  onChange={(e) => setTypeSpecific('offense_caption', e.target.value)}
+                  disabled={!canEdit}
+                  placeholder="As worded in the blotter, e.g. Reckless imprudence resulting in…"
+                />
               </div>
               {/* SPANS the panel's two columns, and that is what lets the pair sit
                   on ONE row at the same size. Half a column is ~235px here; a
@@ -4975,6 +5005,22 @@ export function ReportEditor({
               />
               {errors.ioc_name && <div className="error">{errors.ioc_name}</div>}
             </div>
+            <div className="field">
+              {/* Who recorded the blotter entry, as the book names them (rank
+                  + name). Typed by hand — never the signed-in account and never
+                  AI-filled. Blank until typed, and the sheet's "Recorded by:"
+                  line stays blank with it. */}
+              <label htmlFor="r-recorded-by">
+                Recorded by
+              </label>
+              <input
+                id="r-recorded-by"
+                value={draft.type_specific?.recorded_by || ''}
+                onChange={(e) => setTypeSpecific('recorded_by', e.target.value)}
+                disabled={!canEdit}
+                placeholder="Name of the officer who recorded the entry"
+              />
+            </div>
           </IrCard>
         </div>
 
@@ -5264,7 +5310,6 @@ export function ReportEditor({
         <ReportPrint
           reportId={draft.id}
           onClose={() => setPrinting(false)}
-          recordedBy={{ name: user.full_name, badge: user.badge_number }}
         />
       )}
 
@@ -5277,7 +5322,6 @@ export function ReportEditor({
         <ReportPrint
           report={draft}
           autoPrint={false}
-          recordedBy={{ name: user.full_name, badge: user.badge_number }}
           onClose={() => setFinalizePreview(false)}
           footer={
             <div className="finalize-bar no-print" role="alertdialog" aria-label="Confirm finalize">
@@ -6610,7 +6654,6 @@ export function ReportsTable({
             variant="page"
             autoPrint={false}
             onClose={closeSheet}
-            recordedBy={{ name: user.full_name, badge: user.badge_number }}
             onLoaded={(filed) =>
               setSheetReport((cur) => (cur ? { ...cur, ...filed } : cur))
             }

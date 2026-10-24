@@ -411,7 +411,7 @@ export default function AiNarrativePanel({
   narrativeLanguage = 'en',
   // TASK 9 — the bondpaper, typed into IN THIS CARD. The editor hands over
   // everything the sheet needs to draw the letter for the report on screen
-  // ({ report, ts, stationHeader, recordedBy }), and a generated draft then
+  // ({ report, ts, stationHeader }), and a generated draft then
   // TYPES ITSELF INTO THE LETTER inside this panel: the static chrome (header,
   // date, title, certification boilerplate, every bold label) is on screen from
   // the first frame and only the AI's own values are revealed, one character
@@ -1864,7 +1864,6 @@ export default function AiNarrativePanel({
                   report={sheet.report}
                   ts={sheet.ts}
                   stationHeader={sheet.stationHeader}
-                  recordedBy={sheet.recordedBy}
                   pending={sheetPending}
                   // A draft restored in this tab arrives WHOLE: the officer has
                   // already watched it land once, and a replay would have the
@@ -2501,8 +2500,8 @@ export default function AiNarrativePanel({
               this screen. */}
           <div className="sheet-fullscreen-desk" ref={sheetFullRef}>
             {/* The paper takes the DRAFT's chrome and values from the host's
-                own payload (`sheet`), the same three things the card hands over
-                — report, letterhead and recording officer — so a preview can
+                own payload (`sheet`), the same things the card hands over
+                — report, letterhead and type-specific values — so a preview can
                 never be a preview of something else. A click on the paper is
                 not a dismissal: the document is the one thing here that is not
                 a way out. */}
@@ -2511,7 +2510,6 @@ export default function AiNarrativePanel({
                 report={sheet.report}
                 ts={sheet.ts}
                 stationHeader={sheet.stationHeader}
-                recordedBy={sheet.recordedBy}
                 pending={sheetPending}
                 revealPending={false}
               />

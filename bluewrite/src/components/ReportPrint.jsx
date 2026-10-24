@@ -26,7 +26,6 @@ import ReportSheetBody from './ReportSheetBody.jsx';
  * data directly instead of re-fetching the saved copy.
  * footer: optional React node rendered at the bottom of the sheet INSTEAD of the
  * default Print/Close row — used for the finalize confirmation bar.
- * recordedBy: the officer USING the system right now ({ name }).
  *
  * variant: which frame the paper stands in.
  *
@@ -56,7 +55,6 @@ export default function ReportPrint({
   autoPrint = true,
   footer = null,
   report: initialReport = null,
-  recordedBy = null,
   variant = 'overlay',
   bar = null,
   onLoaded = null,
@@ -195,7 +193,6 @@ export default function ReportPrint({
         stationHeader={stationHeader}
         verifications={verifications}
         verificationStatus={verificationStatus}
-        recordedBy={recordedBy}
       />
 
       {/* Screen-only trail line — the paper stays exactly on template. */}
