@@ -3551,7 +3551,10 @@ export function ReportEditor({
 
       return {
         ok: true,
-        filled: [...fill.filled, ...(details?.filled ?? [])],
+        // One line per field: the two reads overlap (a group label and the
+        // scalar it derives can share words), and a doubled line reads as
+        // two findings rather than one receipt.
+        filled: [...new Set([...fill.filled, ...(details?.filled ?? [])])],
         stillNeeded,
         // Both halves answer about the SAME account, so the lines are joined
         // rather than one list replacing the other — and deduplicated, because
