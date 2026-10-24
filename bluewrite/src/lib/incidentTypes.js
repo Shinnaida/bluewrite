@@ -453,6 +453,7 @@ export const BLOCK_HEADINGS = {
 export const PERSON_ITEM_FIELDS = [
   f('name', 'Full Name', { type: 'name' }),
   f('age', 'Age', { type: 'number', min: 0, max: 120 }),
+  f('dob', 'Date of Birth'),
   f('sex', 'Sex', { select: ['Male', 'Female', 'Unknown'] }),
   f('address', 'Address'),
   f('injury_status', 'Injury Status', {
@@ -560,7 +561,10 @@ export const VEHICLE_ITEM_FIELDS = [
   f('plate_number', 'Plate Number', { type: 'plate' }),
   f('driver_name', 'Driver', { type: 'name' }),
   f('driver_license_no', 'Driver\u2019s License No.'),
+  f('driver_license_validity', 'License Valid Until'),
   f('make_model', 'Make/Model'),
+  f('or_number', 'OR Number'),
+  f('cr_number', 'CR Number'),
   f('owner_name', 'Vehicle Owner', { type: 'name' }),
   f('damage_description', 'Damage', { textarea: true }),
 ];
