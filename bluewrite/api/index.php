@@ -99,6 +99,10 @@ require __DIR__ . '/../app/controllers/NewsController.php';
 require __DIR__ . '/../app/controllers/AuditsController.php';
 require __DIR__ . '/../app/controllers/StationController.php';
 require __DIR__ . '/../app/controllers/VerificationController.php';
+// The online photo reader (POST /ocr/read): a server-side proxy to the
+// imagetotext.info image-to-text API, so the API key stays on the server.
+// Required here for this project's usual reason: no autoloader.
+require __DIR__ . '/../app/controllers/OcrController.php';
 
 use App\Controllers\AccountRequestsController;
 use App\Controllers\AuditsController;
@@ -108,6 +112,7 @@ use App\Controllers\MessagesController;
 use App\Controllers\NarrativeController;
 use App\Controllers\NewsController;
 use App\Controllers\NotificationsController;
+use App\Controllers\OcrController;
 use App\Controllers\PresenceController;
 use App\Controllers\ReportsController;
 use App\Controllers\StationController;
@@ -334,6 +339,16 @@ try {
     // id, and a report does not have to exist for the officer to use it.
     if ($seg0 === 'ai' && $seg1 === 'classify' && !isset($parts[2]) && $method === 'POST') {
         (new NarrativeController())->classify();
+    }
+
+    // POST /ocr/read — the online photo reader (owner request). Online-first
+    // with local fallback: with no key the controller answers
+    // `configured: false` and the client reads on-device; on any upstream
+    // failure it answers 502/503 and the client falls back the same way.
+    // Per-photo (no id in the route) because the reading arrives before any
+    // report exists — like /ai/classify, it cannot take an id.
+    if ($seg0 === 'ocr' && $seg1 === 'read' && !isset($parts[2]) && $method === 'POST') {
+        (new OcrController())->read();
     }
 
     // Phase 7 — POST /ai/classify/details: the SECOND half of the same read,

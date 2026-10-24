@@ -4,11 +4,14 @@
 //
 // The button lives in the narrative's own top strip (see RichTextArea's
 // `toolbarExtra`): the blotter IS the account the narrative holds, so the
-// capture sits where the account is written. Recognition runs on this
-// computer (see ocrBlotter.js) — no photo leaves the station — and the
-// ribbon stays out of it: formatting has nothing to do with this press.
+// capture sits where the account is written. The photo is offered to the
+// online reader first (see ocrOnline.js — owner request, off-station data
+// consent recorded in OcrController) and read on this computer when that
+// misses — and the ribbon stays out of it: formatting has nothing to do
+// with this press.
 import React, { useRef, useState } from 'react';
 import { recognizeBlotterImage } from '../../lib/ocrBlotter.js';
+import { recognizeWithFallback } from '../../lib/ocrOnline.js';
 
 export default function BlotterCapture({ onInsert = null, disabled = false }) {
   const inputRef = useRef(null);
@@ -33,7 +36,10 @@ export default function BlotterCapture({ onInsert = null, disabled = false }) {
     setPhase('reading');
     setProgress(0);
     try {
-      const text = await recognizeBlotterImage(file, (m) => {
+      // Online first, on-device on any miss (see ocrOnline.js): the local
+      // recognizer below is the fallback, never a second opinion — one
+      // reading reaches the review, whichever engine produced it.
+      const { text } = await recognizeWithFallback(file, recognizeBlotterImage, (m) => {
         if (m && typeof m.progress === 'number') setProgress(Math.round(m.progress * 100));
       });
       if (String(text).trim() === '') {

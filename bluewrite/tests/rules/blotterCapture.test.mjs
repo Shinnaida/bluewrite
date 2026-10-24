@@ -31,6 +31,10 @@ const RT = readFileSync(
   new URL('../../src/components/reports/RichTextArea.jsx', import.meta.url),
   'utf8',
 );
+const ONLINE = readFileSync(new URL('../../src/lib/ocrOnline.js', import.meta.url), 'utf8');
+const CTRL = readFileSync(new URL('../../app/controllers/OcrController.php', import.meta.url), 'utf8');
+const ROUTES = readFileSync(new URL('../../api/index.php', import.meta.url), 'utf8');
+const SAMPLE = readFileSync(new URL('../../app/config/ai.sample.php', import.meta.url), 'utf8');
 
 test('plain blotter text becomes the record html, safely', () => {
   // Markup in the recognized text is ink, not structure.
@@ -130,4 +134,43 @@ test("the sheet's narrative carries its own strip, and nothing else does", () =>
   // The component touches recognition only through the vendored offline
   // module — never a direct (or remote) engine import of its own.
   assert.doesNotMatch(COMP, /tesseract/, 'the review bypasses the offline module');
+});
+
+test('the online reader is tried first, the local engine carries every miss', () => {
+  // Owner request: imagetotext.info reads first when reachable and keyed;
+  // anything short of usable text falls back to the on-device engine.
+  // The key stays on the server — the browser only ever talks to /ocr/read.
+  // The offline module stays pure-local, so the vendored-offline rule above
+  // keeps holding for ocrBlotter.js untouched.
+  assert.match(ONLINE, /api\('\/ocr\/read'/, 'the online read bypasses the server proxy');
+  assert.match(ONLINE, /out\.configured === false/, 'a keyless server reads as a failure instead of a local read');
+  assert.match(ONLINE, /return text === '' \? null : text;/, 'an empty online answer reaches the review instead of the local engine');
+  assert.match(ONLINE, /catch \{\s*\n\s*return null;\s*\n\s*\}/, 'an unreachable online reader fails the capture instead of falling back');
+  assert.match(
+    ONLINE,
+    /const online = await readOnlinePhoto\(file\);\s*\n\s*if \(online !== null\) return \{ text: online, engine: 'online' \};/,
+    'the online read is not tried before the local engine',
+  );
+  assert.match(ONLINE, /await localRecognize\(file, onProgress\)/, 'a local fallback never runs');
+  // The capture reads through the fallback wrapper, never around it — and
+  // the review gate still stands between every reading and the narrative.
+  assert.match(COMP, /recognizeWithFallback/, 'the capture bypasses the online-first read');
+  assert.doesNotMatch(COMP, /await recognizeBlotterImage\(file,/, 'the capture reads around the fallback');
+  // The proxy keeps the secret: env key, never echoed, never forwarded to
+  // the client. Keyless is a local-read signal, not an error.
+  assert.match(CTRL, /getenv\('IMAGETOTEXT_API_KEY'\)/, 'the key is not read from the environment');
+  assert.doesNotMatch(CTRL, /\$_POST\['key'\]|\$body\['key'\]/, 'a client-supplied key reaches the proxy');
+  assert.match(CTRL, /'configured' => false/, 'a keyless station gets an error instead of a local read');
+  assert.match(CTRL, /MAX_IMAGE_BYTES/, 'an oversized photo reaches the upstream reader');
+  assert.match(CTRL, /ALLOWED_MIME/, 'a non-photo reaches the upstream reader');
+  assert.match(CTRL, /Authorization: Bearer ' \. \$key/, 'the upstream call carries no key');
+  assert.match(CTRL, /imageToText/, 'the proxy points at the wrong upstream endpoint');
+  assert.match(CTRL, /Audit::log\(\(int\) \$user\['id'\], 'ocr\.read'/, 'an online read leaves no audit trail');
+  // The route is registered where every other controller route lives, with
+  // its class required by hand like all the rest (no autoloader).
+  assert.match(ROUTES, /require __DIR__ \. '\/\.\.\/app\/controllers\/OcrController\.php';/, 'the controller is not required — the route would 500');
+  assert.match(ROUTES, /\$seg0 === 'ocr' && \$seg1 === 'read'/, 'POST /ocr/read is not routed');
+  assert.match(ROUTES, /\(new OcrController\(\)\)->read\(\)/, 'the route does not reach the reader');
+  // The key is documented env-only, never given a committed value.
+  assert.match(SAMPLE, /IMAGETOTEXT_API_KEY/, 'the key setup is undocumented');
 });
