@@ -492,7 +492,10 @@ test('the draft Edit affordance says what it will do, and that it asks first', (
   assert.equal(draftEditLabel(319), 'Edit draft report BW-0319');
   // The row only offers it for a draft (see ReportsTable's rowMeta) — asserted
   // here so the button and the rule cannot drift.
-  assert.match(reports, /canEdit:\s*!showArchived &&\s*statusBucket\(r\.status\) === 'draft'/);
+  assert.match(
+    reports,
+    /canEdit:\s*!showArchived &&\s*statusBucket\(r\.status\) === 'draft' &&\s*\(user\.role === 'Admin' \|\| Number\(r\.created_by\) === Number\(user\.id\)\)/,
+  );
   assert.match(list, /meta\.canEdit && \(/);
 });
 
