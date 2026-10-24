@@ -222,7 +222,6 @@ export function useReportRowActions({
         <ReportPrint
           reportId={printingId}
           onClose={() => setPrintingId(null)}
-          recordedBy={{ name: user.full_name, badge: user.badge_number }}
         />
       )}
 

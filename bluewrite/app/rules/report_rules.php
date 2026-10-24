@@ -24,6 +24,7 @@ final class ReportRules
     private const PERSON_ITEM = [
         'name' => ['name', false, null, null],
         'age' => ['number', false, 0, 120],
+        'dob' => ['text', false, null, null],
         'sex' => ['select', false, null, null],
         'address' => ['text', false, null, null],
         'injury_status' => ['select', false, null, null],
@@ -40,7 +41,10 @@ final class ReportRules
         'plate_number' => ['plate', false, null, null],
         'driver_name' => ['name', false, null, null],
         'driver_license_no' => ['text', false, null, null],
+        'driver_license_validity' => ['text', false, null, null],
         'make_model' => ['text', false, null, null],
+        'or_number' => ['text', false, null, null],
+        'cr_number' => ['text', false, null, null],
         'owner_name' => ['name', false, null, null],
         'damage_description' => ['text', false, null, null],
     ];

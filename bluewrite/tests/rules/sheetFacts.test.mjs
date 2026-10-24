@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTypeFacts, properNounsFor } from '../../src/lib/sheetFacts.js';
+import { buildTypeFacts, properNounsFor, reportTitle } from '../../src/lib/sheetFacts.js';
 
 const labels = (type, ts, report = {}) =>
   buildTypeFacts(type, { report, ts }).map((e) => e.label);
@@ -102,4 +102,72 @@ test('a line with no row, a blank line or a non-row key is ignored', () => {
   assert.equal(suspectValue(ts, [{ row: 4, line: FORMAL_LINE }]), raw);
   assert.equal(suspectValue(ts, [{ row: 0, line: '   ' }]), raw);
   assert.equal(suspectValue(ts, [{ nope: true }, { row: 'x', line: FORMAL_LINE }]), raw);
+});
+
+test('traffic accident vehicle prints blotter sentence with OR/CR/owner/licence', () => {
+  // Blotter reference: V1 YAMAHA NMAX plate G7185R OR/CR, owned and driven
+  // by Joseph with licence + validity; missing parts leave no gap.
+  const ts = {
+    complainant: [{ name: 'Joseph Contayao Poroc', age: '36', dob: '2-25-1990', sex: 'male', address: 'Purok Sambag, Inoburan, City of Naga' }],
+    vehicles: [{
+      make_model: 'YAMAHA NMAX',
+      plate_number: 'G7185R',
+      or_number: '0716-819041',
+      cr_number: '0716-25-250349',
+      owner_name: 'Joseph Contayao Poroc',
+      driver_name: 'Joseph Contayao Poroc',
+      driver_license_no: 'G04-16-000471',
+      driver_license_validity: '2-25-2029',
+      damage_description: 'rear portion dented',
+    }],
+  };
+  const entry = buildTypeFacts('Traffic Accident', { report: {}, ts }).find((e) => e.label === 'Vehicle 1');
+  const line = entry.values[0];
+  for (const bit of ['YAMAHA NMAX', 'plate G7185R', 'OR 0716-819041', 'CR 0716-25-250349', 'owned and driven by Joseph Contayao Poroc', '36', 'DOB 2-25-1990', 'license G04-16-000471 valid until 2-25-2029', 'damage: rear portion dented']) {
+    assert.ok(line.includes(bit), `missing "${bit}" in: ${line}`);
+  }
+});
+
+test('traffic accident vehicle omits unrecorded OR/CR/licence (never invented)', () => {
+  const ts = { vehicles: [{ make_model: 'HONDA XRM', plate_number: 'GF39113', driver_name: 'Hero Sanoria Canque' }] };
+  const entry = buildTypeFacts('Traffic Accident', { report: {}, ts }).find((e) => e.label === 'Vehicle 1');
+  assert.equal(entry.values[0], 'HONDA XRM, plate GF39113, driven by Hero Sanoria Canque');
+});
+
+
+// ---- The sheet's quoted title: the blotter's wording, not the dropdown -----
+// The officer types the offense exactly as the blotter book words it
+// (`ts.offense_caption`); until they do, the title falls back to the incident
+// type. The sheet upper-cases the result, so this returns it as recorded.
+test('reportTitle prefers the offense caption over the incident type', () => {
+  assert.equal(
+    reportTitle(
+      { incident_type: 'Traffic Accident' },
+      { offense_caption: 'Reckless imprudence resulting in damage to property and physical injury' },
+    ),
+    'Reckless imprudence resulting in damage to property and physical injury',
+  );
+});
+
+test('reportTitle falls back to the incident type when no caption is recorded', () => {
+  assert.equal(reportTitle({ incident_type: 'Traffic Accident' }, {}), 'Traffic Accident');
+  assert.equal(reportTitle({ incident_type: 'Theft' }, { offense_caption: '   ' }), 'Theft');
+});
+
+test('reportTitle returns blank when neither caption nor type exists (never invented)', () => {
+  assert.equal(reportTitle({}, {}), '');
+  assert.equal(reportTitle({ incident_type: '' }, { offense_caption: '' }), '');
+});
+
+test('buildTypeFacts never prints the caption or the recorder as fact rows', () => {
+  // The caption is the sheet's quoted TITLE and recorded_by its signature
+  // line; neither belongs in the labeled-facts block for any type.
+  for (const type of ['Traffic Accident', 'Theft', 'Physical Injury']) {
+    const flat = JSON.stringify(buildTypeFacts(type, {
+      report: {},
+      ts: { offense_caption: 'Some offense', recorded_by: 'PSSg Caballero' },
+    }));
+    assert.ok(!flat.includes('Some offense'), `${type} leaks the caption into facts`);
+    assert.ok(!flat.includes('PSSg Caballero'), `${type} leaks the recorder into facts`);
+  }
 });

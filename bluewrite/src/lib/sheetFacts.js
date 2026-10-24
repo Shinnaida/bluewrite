@@ -75,6 +75,20 @@ export function properNounsFor(report = {}, ts = {}) {
   return names;
 }
 
+/**
+ * The sheet's quoted title. The officer types the offense exactly as the
+ * blotter book words it (`ts.offense_caption`); until they do, the title
+ * falls back to the incident type. The sheet upper-cases the result through
+ * its normal casing pass, so this returns it as recorded.
+ *
+ * @returns {string}
+ */
+export function reportTitle(report = {}, ts = {}) {
+  const caption = N(ts?.offense_caption);
+  if (caption !== '') return caption;
+  return N(report?.incident_type);
+}
+
 // “P8,500.00” if the stored value is a bare number; leave typed text alone.
 function fmtValue(v) {
   const s = N(v);
@@ -98,10 +112,53 @@ function personLine(p) {
   return join(p.name, p.age, p.sex);
 }
 
-// A vehicle line per the template: “Plate No., Make/Model, Driver's Name”.
-function vehicleLine(v) {
+// “DOB 2-25-1990” when recorded, otherwise nothing — one spelling shared by
+// the vehicle driver fragment and the Injuries line below.
+function dobPart(p) {
+  return has(p?.dob) ? `DOB ${N(p.dob)}` : '';
+}
+
+// The driver’s demographics live on the person row, not the vehicle row —
+// matched by name against the Parties/Injured rows the caller passes in.
+function findPersonByName(people, name) {
+  if (!has(name) || !Array.isArray(people)) return null;
+  return people.find((p) => p && N(p.name).toLowerCase() === N(name).toLowerCase()) ?? null;
+}
+
+// Blotter-style vehicle line: “YAMAHA NMAX, plate G7185R, OR 0716-819041,
+// CR 0716-25-250349, owned and driven by Joseph ..., license G04-16-000471
+// valid until 2-25-2029, damage ...”. Every fragment only when recorded —
+// a missing OR/CR/licence leaves no gap, never an invented value.
+// Exported for tests; the sheet's Traffic Accident block maps it per row.
+export function vehicleLine(v, people = []) {
   if (!v) return '';
-  return join(v.plate_number, v.make_model, v.driver_name);
+  const head = join(N(v.make_model), has(v.plate_number) ? `plate ${N(v.plate_number)}` : '');
+  const docs = join(
+    has(v.or_number) ? `OR ${N(v.or_number)}` : '',
+    has(v.cr_number) ? `CR ${N(v.cr_number)}` : '',
+  );
+  const owner = N(v.owner_name);
+  const driver = N(v.driver_name);
+  let ownership = '';
+  if (owner && driver && owner.toLowerCase() === driver.toLowerCase()) ownership = `owned and driven by ${driver}`;
+  else if (owner && driver) ownership = `owned by ${owner}, driven by ${driver}`;
+  else if (driver) ownership = `driven by ${driver}`;
+  else if (owner) ownership = `owned by ${owner}`;
+  const match = findPersonByName(people, driver);
+  if (match) {
+    const demo = join(
+      N(match.age),
+      dobPart(match),
+      N(match.sex),
+      N(match.address) ? `resident of ${N(match.address)}` : '',
+    );
+    if (demo) ownership += `, ${demo}`;
+  }
+  const licence = has(v.driver_license_no)
+    ? `license ${N(v.driver_license_no)}${has(v.driver_license_validity) ? ` valid until ${N(v.driver_license_validity)}` : ''}`
+    : '';
+  const damage = has(v.damage_description) ? `damage: ${N(v.damage_description)}` : '';
+  return join(head, docs, ownership, licence, damage);
 }
 
 // Time “H:MM A.M./P.M.” from a date-ish or raw time string. A bare "HH:MM"
@@ -275,12 +332,19 @@ export function buildTypeFacts(type, ctx) {
       ].filter(Boolean);
 
     case 'Traffic Accident': {
+      // Blotter order: Place, Time and Date, Vehicle Involved (V1/V2...),
+      // then the conditions + cause, then Injuries. Each advisory line only
+      // when recorded — a missing weather/road/cause leaves no line.
+      const people = [
+        ...(Array.isArray(ts.complainant) ? ts.complainant : []),
+        ...(Array.isArray(ts.injured_persons) ? ts.injured_persons : []),
+      ];
       const vehicles = Array.isArray(ts.vehicles)
-        ? ts.vehicles.map(vehicleLine).filter(Boolean)
+        ? ts.vehicles.map((v) => vehicleLine(v, people)).filter(Boolean)
         : [];
       const injured = Array.isArray(ts.injured_persons)
         ? ts.injured_persons
-            .map((p) => join(p.name, p.injury_status))
+            .map((p) => join(p.name, p.age, dobPart(p), p.injury_status, p.address))
             .filter(Boolean)
         : [N(ts.injured_persons)].filter(Boolean);
       if (has(ts.fatalities)) injured.push(`Fatalities: ${N(ts.fatalities)}`);
@@ -292,9 +356,16 @@ export function buildTypeFacts(type, ctx) {
       return [
         place(),
         when(),
+        has(ts.accident_type) ? { label: 'Accident Type', values: [N(ts.accident_type)] } : null,
+        has(ts.weather_condition) || has(ts.road_condition)
+          ? { label: 'Road / Weather', values: [join(ts.road_condition, ts.weather_condition)] }
+          : null,
         ...vehicleEntries,
+        has(ts.suspected_cause) ? { label: 'Suspected Cause', values: [N(ts.suspected_cause)] } : null,
+        has(ts.traffic_violation) ? { label: 'Traffic Violation', values: [N(ts.traffic_violation)] } : null,
+        has(ts.insurance_information) ? { label: 'Insurance Information', values: [N(ts.insurance_information)] } : null,
         { label: 'Injuries', values: injured.length > 0 ? injured : ['None'] },
-      ];
+      ].filter(Boolean);
     }
 
     case 'Rape / Sexual Assault':

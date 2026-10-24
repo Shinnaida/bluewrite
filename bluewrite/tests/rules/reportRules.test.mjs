@@ -482,10 +482,15 @@ test('a traffic-accident vehicle row carries the driver\u2019s licence and the o
   // reporter (a borrowed car, a company vehicle).
   const vehicles = keysOf('Traffic Accident', 'vehicles');
   assert.ok(vehicles.includes('driver_license_no'));
+  assert.ok(vehicles.includes('driver_license_validity'));
+  assert.ok(vehicles.includes('or_number'));
+  assert.ok(vehicles.includes('cr_number'));
   assert.ok(vehicles.includes('owner_name'));
   // The pair the vehicle_completeness cross-check enforces stays intact.
   assert.ok(vehicles.includes('plate_number'));
   assert.ok(vehicles.includes('driver_name'));
+  // Blotter DOB lives on the person row the driver is matched from.
+  assert.ok(keysOf('Traffic Accident', 'complainant').includes('dob'));
   // The same row schema serves a drug-related seizure's vehicle, so it carries
   // them there too — one row shape, one set of rules to keep in step with PHP.
   assert.deepEqual(keysOf('Drug-Related Incident', 'vehicles'), vehicles);
@@ -1196,3 +1201,4 @@ test('a casualty count is a count of people, never a number typed twice', () => 
   assert.equal(ts.fatalities, '1');
   assert.deepEqual(validateReport(fire, 'finalize').errors, []);
 });
+
