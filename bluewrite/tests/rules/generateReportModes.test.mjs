@@ -43,8 +43,8 @@ test('a filled-then-unsaved read names the save, not missing basics', () => {
   // three-fields line. Panel state from an earlier press must not answer.
   assert.ok(PANEL.includes('const saveBlockedMessage = (read, tail)'), 'save message helper missing');
   assert.ok(PANEL.includes('return done;'), 'the reader keeps its receipt to itself instead of handing it back');
-  assert.ok(PANEL.includes("saveBlockedMessage(typeof generateRead !== 'undefined' ? generateRead : null, 'the AI can work on it')"), 'generate ignores what its own read filled');
-  assert.ok(PANEL.includes("saveBlockedMessage(typeof arrangeRead !== 'undefined' ? arrangeRead : null, 'it can be arranged')"), 'arrange ignores what its own read filled');
+  assert.ok(PANEL.includes("saveBlockedMessage(generateRead, 'the AI can work on it')"), 'generate ignores what its own read filled');
+  assert.ok(PANEL.includes("saveBlockedMessage(arrangeRead, 'it can be arranged')"), 'arrange ignores what its own read filled');
   assert.ok(PANEL.includes('The draft could not be saved with those details'), 'refused-write line missing');
   assert.ok(!PANEL.includes("setMessage(\n        'This report is not saved yet"), 'a hard-coded three-fields line bypasses the helper');
 });

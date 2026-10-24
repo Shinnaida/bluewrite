@@ -909,9 +909,8 @@ export default function AiNarrativePanel({
     setMode('loading');
     setPanelOpen(true);
     setFillNote(null);
-    // What THIS press filled, handed back so the save-failure message below
-    // can tell a refused write apart from still-missing basics. Stale panel
-    // state (fillNote from an earlier press) must not answer that question.
+    // Hand this press's receipt back: stale panel state from an earlier
+    // press must not decide what the save-failure message says.
     let done = null;
     try {
       let receipt = await onReadAccount(accountText);
@@ -933,12 +932,9 @@ export default function AiNarrativePanel({
     return done;
   };
 
-  // The save behind the id can fail AFTER the read just filled the fields
-  // (a refused write, not missing basics) — in that case the three-fields
-  // line is a lie the officer cannot act on. The editor banner already
-  // carries the real reason (see ensureAiReportId), so point at it instead.
-  // The argument is this press's receipt (not panel state), so a stale
-  // earlier read can never mislabel the failure.
+  // A save that fails AFTER the read filled the fields is a refused write,
+  // not missing basics: point at the editor banner (see ensureAiReportId).
+  // Takes this press's receipt, never panel state.
   const saveBlockedMessage = (read, tail) => (
     read && read.ok && (read.filled ?? []).length > 0
       ? 'The draft could not be saved with those details — read the message above the form for the reason, then try again.'
@@ -1021,8 +1017,9 @@ export default function AiNarrativePanel({
     // own words. Gating first would refuse the very press that makes the report
     // completable. A read that fails changes nothing and does not stop the
     // press.
+    let generateRead = null;
     if (onReadAccount) {
-      var generateRead = await runAccountRead(accountText);
+      generateRead = await runAccountRead(accountText);
     }
 
     // Gate: a blocked generate flags the problems and never opens the loading
@@ -1048,7 +1045,7 @@ export default function AiNarrativePanel({
       // this, and on the sheet it is the case the account read did not manage
       // to name a type for — the officer picks one from the dropdown and the
       // press works.
-      setMessage(saveBlockedMessage(typeof generateRead !== 'undefined' ? generateRead : null, 'the AI can work on it'));
+      setMessage(saveBlockedMessage(generateRead, 'the AI can work on it'));
       setMode('error');
       setPanelOpen(true);
       if (asGuidedStep) moveGuided('cancel');
@@ -1202,8 +1199,9 @@ export default function AiNarrativePanel({
       if (restoredRun.narrative !== undefined) accountText = richTextToPlain(String(restoredRun.narrative));
       const runFindings = String(restoredRun.findings ?? notableFindings ?? '');
       const runActionTaken = String(restoredRun.actionTaken ?? actionTaken ?? '');
+      let arrangeRead = null;
       if (onReadAccount) {
-        var arrangeRead = await runAccountRead(accountText);
+        arrangeRead = await runAccountRead(accountText);
       }
       if (onBeforeGenerate && !onBeforeGenerate()) {
         return;
@@ -1211,7 +1209,7 @@ export default function AiNarrativePanel({
       setMessage('Preparing the report so it can be arranged...');
       const rid = await resolveReportId();
       if (rid == null) {
-        setMessage(saveBlockedMessage(typeof arrangeRead !== 'undefined' ? arrangeRead : null, 'it can be arranged'));
+        setMessage(saveBlockedMessage(arrangeRead, 'it can be arranged'));
         setMode('error');
         setPanelOpen(true);
         return;
