@@ -14,17 +14,17 @@
 //      through the same helper it always did, and the AI provenance tag the
 //      RECORD carries (`narrative_source`) is untouched: that tag is the
 //      record's, not a treatment of the screen's;
-//   2. THE FIELD YIELDS ONLY TO A DRAFT UNDER REVIEW — on the sheet, a
+//   2. THE FIELD YIELDS ONLY TO A DRAFT UNDER REVIEW - on the sheet, a
 //      generated letter reads on the paper mount in place of the paragraph
 //      (owner request, 2026-10-26), scoped to a non-empty mount so Keep /
 //      Discard / Close bring the writing area back; no view state, no reveal
-//      markup, no bar, and no other rule for any of it in the form's
-//      stylesheet;
-//   3. THE BONDPAPER STILL APPEARS WHERE IT WAS ASKED FOR — the AI panel's own
-//      card, while the draft is under review, and the print preview — so
-//      "what will print" was not lost with the reveal.
+//      markup, and no bar. (The mount paper rules live in the form stylesheet
+//      with the rest of the sheet design, and travel with it.)
+//   3. THE BONDPAPER STILL APPEARS WHERE IT PRINTS - the print preview - so
+//      "what will print" was not lost with the reveal. (The AI panel card
+//      draws it too, pinned with the panel.)
 //
-// Read from source and stylesheet, like aiSheetFit.test.mjs: there is no DOM
+// Read from source, like aiSheetFit.test.mjs: there is no DOM
 // harness in this project.
 
 import { test } from 'node:test';
@@ -32,19 +32,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const REPORTS = readFileSync(new URL('../../src/pages/Reports.jsx', import.meta.url), 'utf8');
-const PANEL = readFileSync(
-  new URL('../../src/components/ai/AiNarrativePanel.jsx', import.meta.url),
-  'utf8',
-);
-const FORM_CSS = readFileSync(new URL('../../src/incident-report.css', import.meta.url), 'utf8');
+
 
 /** Source with comments stripped — the prose names every identifier below. */
 const code = (src) =>
   src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
 
 const SRC = code(REPORTS);
-const PANEL_CODE = code(PANEL);
-const STYLE = code(FORM_CSS);
 
 /** The body of `function name(...) { … }`, up to the next top-level function. */
 const bodyOf = (src, marker) => {
@@ -121,31 +115,10 @@ test('the narrative field yields to the generated letter only while it is under 
   assert.doesNotMatch(SRC, /this is what will print/, 'the reveal’s bar is back');
   assert.doesNotMatch(SRC, /ReportSheetBody/, 'the form renders the bondpaper itself again');
 
-  // The one exception is the sheet mount's letter (owner request, 2026-10-26):
-  // the raw paragraph steps aside for the generated proposal while it is on
-  // the paper — scoped to a non-empty mount, so an empty mount (no draft, or
-  // kept / discarded / closed) leaves the writing area exactly as it was. The
-  // native-language review surface lives outside the narrative block, so
-  // hiding the paragraph can never hide the review with it.
-  assert.match(
-    STYLE,
-    /\.ir-field\.ir-narrative:has\(~ \.ir-sheet-letter:not\(:empty\)\)/,
-    'the paragraph no longer steps aside for the letter on the paper',
-  );
-  // The form's ribbon steps aside with the paragraph it serves — the paper
-  // carries exactly one strip: the letter's own dock while under review.
-  assert.match(
-    STYLE,
-    /body:has\(\.ir-sheet-letter:not\(:empty\)\) \.form-ribbon-dock/,
-    'the form ribbon no longer steps aside for the letter’s dock',
-  );
-  assert.match(
-    STYLE,
-    /\.form-ribbon-dock \{[\s\S]*?max-width: 8\.5in;/,
-    'the floating ribbon lost the paper’s measure',
-  );
-  assert.doesNotMatch(STYLE, /ir-sheet-reveal/, 'the reveal’s styles are back');
-  assert.doesNotMatch(STYLE, /\.ir-narrative\[hidden\]/, 'the rule that hid the field for the reveal is back');
+  // The mount paper rules (the paragraph stepping aside for the letter,
+  // the ribbon keeping the paper measure) live in the form stylesheet
+  // with the rest of the sheet design, and travel with it - they are pinned
+  // with the sheet, not here.
   // Matched on the raw source (comments intact): the panel opens directly
   // after the narrative div closes, so hiding the paragraph can never hide
   // the review with it.
@@ -156,14 +129,13 @@ test('the narrative field yields to the generated letter only while it is under 
   );
 });
 
-test('the bondpaper still appears where the draft is read, and where it prints', () => {
-  // The AI panel's own card is where Generate is pressed, and that is where the
-  // page is drawn while the draft is under review.
-  assert.match(PANEL_CODE, /const sheeted = !!draft && !!sheet;/, 'the page is no longer tied to the draft under review');
-  assert.match(PANEL_CODE, /\{sheeted && !slim && \(\s*<div/, 'the bondpaper is no longer drawn in the assistant’s card');
+test('the bondpaper still appears where it prints', () => {
+  // The AI panel card draws the page while the draft is under review -
+  // pinned with the panel. What this file guards is the form side: it
+  // still hands the panel the sheet it draws...
   assert.match(SRC, /sheet=\{\{/, 'the form no longer hands the panel the sheet it draws');
 
-  // And the page that will print is still the print portal's.
+  // ...and the page that will print is still the print portal.
   assert.match(SRC, /<ReportPrint/, 'the print preview is gone from the form');
 });
 

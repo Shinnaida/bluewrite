@@ -60,7 +60,10 @@ test('the row click views the sheet, whatever the report’s status', () => {
   assert.match(ROW, /if \(meta\.canOpen\) onOpen\?\.\(report\)/);
   // Edit is still the DRAFT's own action, and the archive is still restore-only:
   // viewing changed, editing did not.
-  assert.match(SRC, /canEdit: !showArchived && statusBucket\(r\.status\) === 'draft'/);
+  assert.match(
+    SRC,
+    /canEdit:\s*!showArchived &&\s*statusBucket\(r\.status\) === 'draft' &&\s*\(user\.role === 'Admin' \|\| Number\(r\.created_by\) === Number\(user\.id\)\)/,
+  );
   assert.match(SRC, /canRestore: showArchived && user\.role === 'Admin'/);
 });
 

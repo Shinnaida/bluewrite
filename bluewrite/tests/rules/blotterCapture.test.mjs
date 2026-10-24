@@ -23,6 +23,14 @@ const COMP = readFileSync(
   new URL('../../src/components/reports/BlotterCapture.jsx', import.meta.url),
   'utf8',
 );
+const LEAF = readFileSync(
+  new URL('../../src/components/reports/ReportSheetBody.jsx', import.meta.url),
+  'utf8',
+);
+const RT = readFileSync(
+  new URL('../../src/components/reports/RichTextArea.jsx', import.meta.url),
+  'utf8',
+);
 
 test('plain blotter text becomes the record html, safely', () => {
   // Markup in the recognized text is ink, not structure.
@@ -91,4 +99,35 @@ test('nothing reaches the narrative before review', () => {
   // An empty read is an error with a way back, not an empty insert.
   assert.match(COMP, /no readable text/, 'an empty read is not explained');
   assert.match(COMP, /disabled=\{reviewText\.trim\(\) === ''\}/, 'an emptied review can still insert');
+});
+
+test("the sheet's narrative carries its own strip, and nothing else does", () => {
+  // On the letter the narrative edits through the same Word-like box, with
+  // its strip on top and the Upload riding it — the capture lands through
+  // the safe merge, never around it.
+  assert.equal(
+    (LEAF.match(/toolbar="top"/g) || []).length,
+    1,
+    'more than the narrative carries its own strip on the sheet',
+  );
+  assert.equal(
+    (LEAF.match(/toolbar="none"/g) || []).length,
+    3,
+    'findings, action taken or the free canvas lost their chrome-free rule',
+  );
+  assert.match(
+    LEAF,
+    /toolbar="top"[\s\S]*?toolbarExtra=\{\([\s\S]*?<BlotterCapture[\s\S]*?onInsert=\{\(text\) => onEditNarrative\(mergeBlotterText\(narrativeRaw, text\)\)\}/,
+    'the Upload stopped riding the narrative strip through the safe merge',
+  );
+  // The box renders the riding extra on the strip, and no strip at all for
+  // the chrome-free sections.
+  assert.match(RT, /toolbarExtra = null,/, 'the box lost the riding slot');
+  assert.match(RT, /\{toolbarExtra && \(/, 'the box stopped drawing the riding slot');
+  // No docked ribbon on the sheet: the strip above the narrative is the
+  // only chrome the letter carries.
+  assert.doesNotMatch(LEAF, /[Rr]ibbon/, 'a ribbon crept back onto the sheet');
+  // The component touches recognition only through the vendored offline
+  // module — never a direct (or remote) engine import of its own.
+  assert.doesNotMatch(COMP, /tesseract/, 'the review bypasses the offline module');
 });

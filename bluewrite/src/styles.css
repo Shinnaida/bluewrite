@@ -1551,61 +1551,8 @@ td.num { text-align: left; letter-spacing: 0.02em; }
    each of them used to cost the panel a button PLUS a hint paragraph under it.
    The paragraphs are on the ⓘ marker now (see .info-mark), so the row that is
    left is what the officer actually reads: a control, and the control beside
-   it. In the sheet format this panel is the slim bar on the desk beside the
-   reveal control (see the desk block in Reports.jsx). */
-/* SHEET FORMAT - Generate Report modes (2026-10-23). */
-.ai-generate-modes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-  margin: 0.1rem 0 0.55rem;
-}
-@media (max-width: 560px) {
-  .ai-generate-modes { grid-template-columns: 1fr; }
-}
-.ai-generate-mode {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 0.5rem;
-  align-items: start;
-  padding: 0.55rem 0.65rem;
-  border: 1px solid var(--ir-border);
-  border-radius: 10px;
-  background: var(--input-bg, #FFFFFF);
-  cursor: pointer;
-}
-.ai-generate-mode.is-selected {
-  border-color: var(--ir-navy);
-  box-shadow: inset 0 0 0 1px var(--ir-navy);
-}
-.ai-generate-mode input {
-  margin-top: 0.2rem;
-  accent-color: var(--ir-navy);
-}
-.ai-generate-mode__title {
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: inherit;
-}
-.ai-generate-mode__hint {
-  grid-column: 2;
-  font-size: 0.78rem;
-  color: var(--steel);
-}
-.ai-arranged-note {
-  margin: 0 0 0.5rem;
-  padding: 0.35rem 0.55rem;
-  border-left: 2px solid var(--green-line);
-  background: var(--green-bg);
-  border-radius: 0 3px 3px 0;
-  font-size: 0.76rem;
-  line-height: 1.45;
-  color: var(--steel);
-}
-.ai-generate-mode:focus-within {
-  outline: 2px solid var(--ir-navy);
-  outline-offset: 2px;
-}
+   it. In the sheet format this panel sits on the desk under the page, where
+   every line it takes is a line of the report pushed off the screen. */
 .ai-toolbar {
   display: flex;
   /* CENTRED, on the orb's axis. The block is one column of centred things — the
@@ -3024,7 +2971,7 @@ body.profile-panel-open {
 }
 
 /* ---- User management: the second factor's state ----------------------------
-   Three states, and the ink is what separates them because they are three or four
+   Four states, and the ink is what separates them because they are three or four
    words in a table cell. Every colour is a token that already exists and already
    answers for both themes:
 
@@ -3033,9 +2980,7 @@ body.profile-panel-open {
      thin    — --amber: a factor currently LOCKED after too many wrong codes
      off     — --red-text: an account that OWES a factor and has nowhere to
                send one (no email address on file)
-
-   (A fourth, `na`, died with the Staff role in migration 021 — every remaining
-   role signs in with a code.)
+     na      — --steel: not a statement about anything, just Staff
 
    NOT badges, deliberately. `.badge` is the report-status vocabulary (draft,
    pending, finalized) and its colours mean workflow position; borrowing it here
@@ -3048,6 +2993,7 @@ body.profile-panel-open {
 .user-mfa--on { color: var(--green-ink); }
 .user-mfa--thin { color: var(--amber); }
 .user-mfa--off { color: var(--red-text); }
+.user-mfa--na { color: var(--steel); font-weight: 500; }
 
 /* ---- User management: the directory itself --------------------------------
 
@@ -3086,121 +3032,6 @@ body.profile-panel-open {
    address a sign-in code needs there is no room for that guess. Muted ink rather
    than a lighter grey, so \"there is nothing here\" is still readable. */
 .users-none { color: var(--cyan-dim); }
-
-/* THE DIRECTORY'S LOOK, matched to the station's user-management reference: an
-   uppercase header row, a face beside each name, the role as a quiet tag, and the
-   status as a dotted chip. Every rule restates a token, not a colour. */
-/* THE SCREEN'S PAGE: white, as All Reports is, with the station's gold as the accent.
-   Scoped to `body.users-fab-open`, the class the screen publishes for its whole lifetime
-   (Users.jsx), so the page is white on the directory, the account page and the form alike,
-   and no other screen is touched. */
-body.users-fab-open .main.ir-body { background: #ffffff; }
-/* THE BLUE: the title band paints its own navy veil (.ir-page-head::after) over a tinted
-   card, which is the gradient the screen showed. On this screen the band is white and the
-   veil is off, so the head reads like All Reports' white surface. */
-/* NO BAND AROUND THE HEAD (owner request): the title and the count field now sit
-   directly on the white page. The card's own fill, hairline and corner were the
-   rectangle drawn around them. */
-body.users-fab-open .ir-page-head {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-body.users-fab-open .ir-page-head::after { background: none; }
-body.users-fab-open .users-table thead th { border-bottom: 2px solid var(--ir-gold); }
-body.users-fab-open .main .users-add.primary { background: var(--ir-gold); border-color: var(--ir-gold); color: var(--ir-navy); }
-body.users-fab-open .main .users-add.primary:hover { background: var(--ir-gold-hi); border-color: var(--ir-gold-hi); }
-body.users-fab-open .users-pager__page { background: var(--ir-gold); color: var(--ir-navy); }
-/* ARRANGED HEAD: the count and the toolbar share ONE row (owner request) — the
-   pill sits beside the controls instead of floating above them. No navy paint
-   (owner request): the head stays transparent on the white page, and the count
-   keeps its own light field. */
-body.users-fab-open .ir-page-head.users-head {
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.75rem;
-}
-.users-lede { margin: 0; color: var(--steel); font-size: 0.9rem; }
-.users-head .reports-toolbar {
-  flex: 1 1 30rem;
-  min-width: min(100%, 24rem);
-  margin: 0;
-}
-.users-alert { margin: 0 0 1rem; }
-
-.users-table th {
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 0.72rem;
-}
-.users-name { display: inline-flex; align-items: center; gap: 0.6rem; }
-.users-role {
-  display: inline-block;
-  padding: 0.15rem 0.55rem;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel-raised);
-  color: var(--steel);
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-/* The status chip keeps the directory's own `.badge` colours and gains a dot, the
-   way the reference reads a status at a glance. */
-.users-table .badge {
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.7rem;
-}
-.users-table .badge.active::before,
-.users-table .badge.inactive::before {
-  content: '';
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 0.4rem;
-  border-radius: 50%;
-  background: currentColor;
-  vertical-align: middle;
-}
-/* THE FOOTER: the count on the left, rows-per-page and the pager on the right. */
-.users-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin-top: 0.75rem;
-  color: var(--steel);
-  font-size: 0.84rem;
-}
-.users-footer__pager { display: flex; align-items: center; gap: 0.6rem; }
-.users-footer__size { display: inline-flex; align-items: center; gap: 0.5rem; }
-.users-footer__size select { width: auto; }
-/* The pager's buttons are their own controls. They are excluded from the workspace's
-   neutral button rule (incident-report.css), so these ink and border rules stand. */
-.users-pager__btn {
-  min-width: 2rem;
-  height: 2rem;
-  padding: 0 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel);
-  color: var(--paper);
-  cursor: pointer;
-}
-.users-pager__btn:disabled { opacity: 0.4; cursor: default; }
-.users-pager__page {
-  min-width: 2rem;
-  height: 2rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  background: var(--ir-blue);
-  color: #fff;
-  font-weight: 600;
-}
 /* ---- The account form: one column of sections, each one a card ------------
 
    IT USED TO BE FIVE BARE FIELDS AND A LOT OF SILENCE. They ran across the top of an
@@ -3908,7 +3739,51 @@ body.users-fab-open .ir-page-head.users-head {
 /* THE SCREEN'S ONE PRIMARY ACTION IS A CIRCLE IN THE CORNER, held over the table
    rather than parked under the page head.
 
-*/
+   IT IS EXCLUDED FROM THE NEUTRAL-BUTTON RULE RATHER THAN FIGHTING IT. That chain
+   in incident-report.css (`:not(.ir-submit):not(...):not(.primary):not(.danger)`)
+   is what made every variant in the workspace render as the same ghost button once
+   already, because a specificity collision is invisible until somebody looks; the
+   way out of it here is not to enter it, so the chain also carries
+   `:not(.users-fab)`.
+
+   56px AGAINST THE RAIL'S 44px, deliberately. The corner now holds two kinds of
+   thing — a colleague, and the way to add one — and the control that creates
+   something should not be the same size as the one that reports a desk is
+   occupied.
+
+   `--fab-size` IS NOT DECLARED HERE. It is set on the body class that publishes
+   this button (see `body.users-fab-open`, beside the dock rules) because the
+   chathead dock has to read the same number and live in a different box; the
+   fallback here is what the button is if that class is ever missing. */
+.users-fab {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  /* Inside `.main`, which is its own stacking context, so this competes only with
+     the page's own chrome — above the content and its sticky heading row, below the
+     dialogs at 40, so a confirmation is never under a create button. */
+  z-index: 30;
+  width: var(--fab-size, 56px);
+  height: var(--fab-size, 56px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ir-blue);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+.users-fab:hover { background: var(--ir-blue-hi); }
+/* THE PRESS. This circle has no label under the finger to confirm it was hit, so the
+   press is the whole of the feedback: the same 1px travel the chatheads use. Without
+   motion it is still a state — it simply arrives instantly. */
+.users-fab:active { transform: translateY(1px); }
+/* The transition for both states lives with the corner's other transitions, in the
+   `no-preference` block beside the chatheads — which is where this file keeps every
+   fade, and the only place it can go: three of this suite's tests read the FIRST such
+   block in the sheet as the dashboard charts' own. */
 
 @media (prefers-reduced-motion: reduce) {
   .profile-side-panel { animation: none; }
@@ -4225,10 +4100,10 @@ body.users-fab-open .ir-page-head.users-head {
    the page from jumping sideways the moment the bar appears. */
 .ai-sheet-preview {
   margin-top: 0.6rem;
-  /* BOTH BARS, because the page is drawn at its true size and this frame does
-     not own it (see `.ai-sheet-preview .print-sheet` below): a full leaf is
-     8.5in wide and at least 11in tall, which is wider than a narrow column and
-     taller than any card, so reaching the whole sheet is this frame's job. */
+  /* BOTH BARS, because the page has a fixed size and this frame does not own it
+     (see `.ai-sheet-preview .print-sheet` below): a 50% leaf is 408px wide and
+     528px tall, which is wider than a narrow column and taller than any card,
+     so reaching the whole sheet is this frame's job. */
   overflow-x: auto;
   /* THE CARD IS THE VIEWER, SO THE FRAME DRAWS NOTHING (owner request,
      2026-10-04): no border, no surface, no rounding, no inner box. It exists
@@ -4279,23 +4154,25 @@ body.users-fab-open .ir-page-head.users-head {
 
    SCOPED TO THE PANEL, deliberately — the print portal and the inline reveal
    keep the sheet's own behaviour, which is the very thing this now matches. */
-/* THE CARD'S PAGE IS TRUE SIZE, AND THE FRAME SCROLLS TO THE REST.
+/* THE CARD'S PAGE IS A FLAT 50%, AND THE FRAME SCROLLS TO THE REST.
 
-   The leaf is drawn at its own size — 8.5 × 11in, the station's paper, at full
-   scale (owner request: the sheet reads as the bondpaper it is, never as a
-   shrunken copy). It used to be drawn at a flat 50% with the same frame doing
-   the scrolling; the scale is gone, the scrolling stays. One size means the
-   page reads the same in every format and every window — the assistant's card
-   is a column in one format and a wide block in another, and a page that
-   changed size with the column was a different page each time.
+   The leaf is drawn at its own size — 8.5 × 11in, the station's paper — and
+   scaled by ONE FIXED factor, stated right here. It used to be MEASURED to fit
+   the whole leaf inside whatever room the card had, and to have steppers beside
+   it; both are gone (owner request, 2026-10-05). A single size means the page
+   reads the same in every format and every window — the assistant's card is a
+   column in one format and a wide block in another, and a page that changed
+   size with the column was a different page each time. The one control the card
+   keeps, Preview, is what answers a page too small to read.
 
-   NO JAVASCRIPT SIZES THIS. A full leaf is wider and taller than most frames,
-   so the FRAME owns both scrollbars and the page keeps its measure — the
-   ResizeObserver that used to re-fit the page on every box change stays gone,
-   rather than left to fight this rule.
+   NO JAVASCRIPT SIZES THIS ANY MORE. A fixed size can be wider or taller than
+   the frame, so the FRAME owns both scrollbars and the page keeps its scale —
+   the ResizeObserver that used to re-fit the page on every box change is gone
+   with the fit, rather than left to fight this rule.
 
-   `width: 8.5in`, not `min(100%, 8.5in)`: the page is the paper, so it keeps
-   the paper's own width and the frame scrolls to whatever does not fit. */
+   `width: 8.5in`, not `min(100%, 8.5in)`: a percentage and the zoom would each
+   take a bite of the same scaling, and the page would come out at a fraction of
+   the 50% it is supposed to be. */
 .ai-sheet-preview .print-sheet {
   flex: 0 0 auto;
   width: 8.5in;
@@ -4304,6 +4181,7 @@ body.users-fab-open .ir-page-head.users-head {
   min-height: 11in;
   border: 1px solid rgba(0, 0, 0, 0.14);
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
+  zoom: 0.5;
   /* Centred like a print preview, not edge-flush — and it is the PAPER that
      centres itself, so an overflowing page keeps its left edge reachable (see
      the frame's note above). */
@@ -4503,9 +4381,6 @@ body.users-fab-open .ir-page-head.users-head {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  /* A reserved gutter: a scrollbar that appears or disappears as the fit changes
-     would otherwise narrow the desk and re-fit the sheet, which is a shake. */
-  scrollbar-gutter: stable;
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -5197,36 +5072,14 @@ body.users-fab-open .ir-page-head.users-head {
 }
 
 /* ---- Audit trail browser (admin) ---- */
-/* CENTERED COLUMN (owner request): the page reads as one organized stack —
-   views, filters, table — capped at 76rem and centred, instead of running to
-   the window edges. The leftover width still lands in the Details column (see
-   below), so narrowing the page buys the details room rather than empty gaps. */
-.audits-page { max-width: 76rem; margin-inline: auto; }
-/* WHITE PAGE like User Management and All Reports (owner request): no blue
-   gradient anywhere on this screen, scoped to the class Audits.jsx publishes
-   for its lifetime so no other screen is touched. */
-body.audits-white .main.ir-body { background: #ffffff; }
-body.audits-white .audits-table thead th { border-bottom: 2px solid var(--ir-gold); }
-/* THE REGISTER'S OWN HEAD (owner request): the shelf strip and the search rail
-   share one row over the strip's own hairline, and the labelled filter grid
-   stands on the line under it — the same classes All Reports draws from
-   (folder-head, folder-tabs, register-tools, register-filters), so the tab
-   rule, the pill field and the filter captions cannot drift apart. The page
-   keeps its centred column; the head inside it runs the page width. */
-/* A TIGHT 0.1CM between the view tabs and the table head (owner request):
-   the TIME / WHO / ACTION / ON / DETAILS line sits just under the strip.
-   Scoped to this head so the register's own spacing is untouched. */
-.audits-head { margin-bottom: 0.1cm; transform: translateY(-10%); }
-.audits-filterbar { margin-bottom: 1rem; }
-/* HEAD READABILITY (owner request, 2026-10-21): the audit tabs read one step up
-   from the register's shelf, the search rail takes a longer field, and the
-   Filters key's caption steps down so the key stays compact. Scoped to the page
-   Audits.jsx publishes, so All Reports keeps its own measures. */
-.audits-page .folder-tab { font-size: 0.935rem; }
-.audits-page .folder-tab__note { font-size: 0.814rem; }
-.audits-page .register-tools__search { flex-basis: 20rem; max-width: 27rem; }
-.audits-page .register-tools__search input { font-size: 0.935rem; }
-.audits-page .register-tool__label { font-size: 0.77rem; }
+/* No width cap, deliberately — unlike the report register and the settings page.
+   A six-column trail stops around 300px short of the right edge of a 1363px
+   window at 76rem, and a ruled table that ends in mid-air reads as a gap rather
+   than as a margin. It fills the panel instead: the slack lands in the Details
+   column (see below), so the width buys the details room rather than empty
+   page. */
+.audits-page { max-width: none; }
+.audit-views { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
 .audits-table {
   width: 100%;
   border-collapse: collapse;
@@ -5239,11 +5092,11 @@ body.audits-white .audits-table thead th { border-bottom: 2px solid var(--ir-gol
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--cyan-dim);
-  padding: 0.5rem 0.3cm;
+  padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--line-bright);
 }
 .audits-table td {
-  padding: 0.5rem 0.3cm;
+  padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
   /* One line per cell. Not cosmetic: this is what stops the absorbing Details
@@ -5283,7 +5136,7 @@ body.audits-white .audits-table thead th { border-bottom: 2px solid var(--ir-gol
 .audit-entry {
   width: 1%;
   text-align: right;
-  padding-right: 0.3cm;
+  padding-right: 0.75rem;
   border-right: 1px solid var(--line);
   font-family: var(--font-stamp);
   font-size: 0.72rem;
@@ -5299,10 +5152,7 @@ body.audits-white .audits-table thead th { border-bottom: 2px solid var(--ir-gol
    would tie with it, leaving the winner to import order. */
 .audits-table .blotter-date th {
   text-align: left;
-  padding: 0.5rem 0.3cm;
-  /* No side spine by default (owner request): the navy bar is gone. Hover
-     paints a gold inset instead, so the day band still answers the pointer. */
-  box-shadow: none;
+  padding: 0.5rem 0.75rem;
   /* No rule ABOVE the band. A table with `border-collapse: collapse` settles two
      equal 1px borders by cell precedence, not by which colour is brighter, so a
      top rule here would lose to the previous row's bottom hairline and the day
@@ -5316,10 +5166,6 @@ body.audits-white .audits-table thead th { border-bottom: 2px solid var(--ir-gol
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--steel);
-}
-.audits-table .blotter-date:hover th {
-  box-shadow: inset 3px 0 0 var(--ir-gold);
-  background: var(--amber-bg);
 }
 .audit-when { font-family: var(--font-stamp); font-size: 0.78rem; white-space: nowrap; color: var(--paper); }
 .audit-system { color: var(--cyan-dim); font-style: italic; }
@@ -5499,24 +5345,21 @@ button.dash-kpi--link:focus-visible {
      The same rule serves the print portal, the inline reveal and the AI draft
      preview — there is one sheet class and this is it. */
   min-height: 11in;
-  padding: 1in; /* One-inch station margin on every side (owner request, 2026-10-24). */
+  padding: clamp(0.75in, 4vw, 1in);
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
   border-radius: 2px;
   /* The real station sheets are Verdana-style sans, not Times (see the
      scanned reference report). */
   font-family: Verdana, 'DejaVu Sans', 'Segoe UI', Tahoma, sans-serif;
-  font-size: 9.9pt; /* 10% under the Word default it mirrors, so a full
-     report holds its one leaf. tabular-nums keeps case numbers and amounts
-     columnar at the smaller size. */
-  font-variant-numeric: tabular-nums;
+  font-size: 11.5pt;
   /* ONE LEAF (owner request, 2026-10-08). The sheet's rhythm is stated for
      PAPER: a record that fits one short bond page must PRINT on one, and the
      letter below was 9px taller than the printable page — so an ordinary report
      came out as two sheets of paper with the signature block alone on the
      second. Every vertical length from here to `.pr-noted` is the tightened
-     set; the type reads at 11pt (owner request — the sheet's own size, like
-     the Word default it mirrors). `line-height` is the largest of those
-     lengths and it is still a document's leading, not a spreadsheet's. */
+     set; the type size is untouched, because 11.5pt is what the paper is read
+     at. `line-height` is the largest of those lengths and it is still a
+     document's leading, not a spreadsheet's. */
   line-height: 1.4;
 }
 
@@ -5602,34 +5445,20 @@ button.dash-kpi--link:focus-visible {
 .pr-facts { margin: 0 0 0.7rem; }
 /* Facts hang: wrapped value lines align under the FIRST value character
    (see "Degollacion" on the scanned sheet), so label + value are flex
-   siblings and multi-values live in one wrapping value span. Nothing escapes
-   the 8.5in paper (owner request): long values wrap to the measure, and
-   unbreakable tokens (IMEIs, long names) break anywhere rather than pushing
-   past the edge. */
+   siblings and multi-values live in one wrapping value span. */
 .pr-fact {
   display: flex;
   gap: 0.35rem;
   margin-bottom: 0.2rem;
-  min-width: 0;
 }
-.pr-fact-label { font-weight: 700; white-space: nowrap; flex: 0 0 auto; }
-/* Narrow paper (owner report, 2026-10-24): the label never wraps, so on a
-   narrow measure it holds its width while the value has nowhere to go and
-   the two collide. Under half a leaf the fact stacks instead — label on its
-   own line, value beneath it, each with the full measure. Desktop is
-   untouched: the rule only fires where the row cannot fit side by side. */
-@media (max-width: 560px) {
-  .print-sheet .pr-fact { flex-wrap: wrap; }
-  .print-sheet .pr-fact-label { white-space: normal; flex: 1 1 100%; }
-  .print-sheet .pr-fact-value { flex: 1 1 100%; }
-}
-.pr-fact-value { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pr-fact-label { font-weight: 700; white-space: nowrap; }
+.pr-fact-value { flex: 1; min-width: 0; }
 
 /* ---- Stolen/Damaged Items block (deep indent, regular-weight TOTAL,
    matching the scan: "TOTAL, - - - 460,120.00") ---- */
 .pr-items { margin: 0.2rem 0 0.3rem; }
-.pr-item { margin: 0 0 0.1rem 0.75in; overflow-wrap: anywhere; }
-.pr-item-total { margin: 0.15rem 0 0.1rem 1.05in; font-weight: 400; overflow-wrap: anywhere; }
+.pr-item { margin: 0 0 0.1rem 0.75in; }
+.pr-item-total { margin: 0.15rem 0 0.1rem 1.05in; font-weight: 400; }
 
 /* ---- NOTABLE FINDINGS / ACTION TAKEN sections ---- */
 .pr-section { margin: 0.7rem 0; }
@@ -5659,429 +5488,6 @@ button.dash-kpi--link:focus-visible {
   text-indent: 0;
   margin: 0.85rem 0 0.9rem;
 }
-
-/* Type directly on the letter (owner request): the editable letter's values
-   ARE the document's text at all times — no boxes, no dotted outlines, ever.
-   Focus shows only the native caret/selection; there is no other affordance. */
-.pr-edit {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  font: inherit;
-  line-height: inherit;
-  color: inherit;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 0.15rem 0.3rem;
-  margin: 0.15rem 0;
-  resize: vertical;
-}
-.pr-edit:hover { border: none; }
-.pr-edit:focus {
-  outline: none;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-}
-.pr-narrative-edit { text-align: justify; }
-/* Word-like surface (owner request): a small quiet toolbar for the editable
-   narrative, on the form and on the letter alike. Findings, action and the
-   free canvas stay chrome-free under the one docked ribbon (see
-   .sheet-toolbox); the narrative carries its own strip, with the blotter
-   Upload riding it (see BlotterCapture). */
-.rt-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.15rem;
-  margin: 0 0 0.3rem;
-  padding-bottom: 0.3rem;
-  border-bottom: 1px dashed rgba(17, 17, 17, 0.25);
-}
-/* Blotter capture review: the recognized text, editable before it lands in
-   the narrative. A plain box in the dialog's own measure — this is a
-   checkpoint, not a second editor, so it borrows no prose chrome. */
-.blotter-review-text {
-  width: 100%;
-  min-height: 12rem;
-  box-sizing: border-box;
-  font: inherit;
-  line-height: 1.5;
-  padding: 0.5rem 0.6rem;
-  resize: vertical;
-}
-/* Word Home-tab ribbon (reference: MS Word ribbon). Tab strip + Quick Access
-   Toolbar above three groups - Clipboard, Font, Paragraph - directly above
-   the paper. Sticky, so the strip stays in reach on a long page. Groups
-   carry Word's own captions underneath; separators divide them. Never
-   printed (see the no-print on the box). */
-.sheet-ribbon-dock {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  min-width: 0;
-}
-.sheet-toolbox {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
-  padding: 0;
-  border: 1px solid #d4d4d4;
-  border-bottom: 1px solid #a6a6a6;
-  border-radius: 0.4rem 0.4rem 0 0;
-  background: #ffffff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  width: auto;
-  max-width: 100%;
-  font-family: Segoe UI, system-ui, sans-serif;
-}
-.word-ribbon .wr-qat {
-  display: flex;
-  align-items: center;
-  gap: 0.1rem;
-  padding: 0.15rem 0.4rem;
-  background: #f3f2f1;
-  border-bottom: 1px solid #edebe9;
-}
-.word-ribbon .wr-qat-btn {
-  min-width: 1.9rem;
-  min-height: 1.6rem;
-  font-size: 0.95rem;
-}
-.word-ribbon .wr-tabs {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  overflow-x: auto;
-  background: #faf9f8;
-  border-bottom: 1px solid #edebe9;
-  scrollbar-width: none;
-}
-.word-ribbon .wr-tab {
-  padding: 0.3rem 0.7rem;
-  font-size: 0.82rem;
-  line-height: 1.3;
-  white-space: nowrap;
-  color: #323130;
-  cursor: default;
-  border-bottom: 2px solid transparent;
-  user-select: none;
-}
-.word-ribbon .wr-taboff {
-  color: #a19f9d;
-}
-.word-ribbon .wr-tab--file {
-  color: #a19f9d;
-}
-.word-ribbon .wr-tab--active {
-  font-weight: 600;
-  color: #1b1a19;
-  border-bottom-color: #1F5FD0;
-  background: #ffffff;
-}
-.word-ribbon .wr-groups {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 0.35rem 0.5rem;
-  padding: 0.35rem 0.5rem 0.3rem;
-  overflow-x: auto;
-}
-.word-ribbon .wr-group {
-  align-items: center;
-}
-.word-ribbon .wr-tools {
-  align-items: center;
-}
-.word-ribbon .wr-paste {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.1rem;
-  padding: 0.3rem 0.6rem;
-  font-size: 0.78rem;
-}
-.word-ribbon .wr-paste-icon {
-  font-size: 1.3rem;
-  line-height: 1;
-}
-.word-ribbon .wr-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-.word-ribbon .wr-font-btn {
-  min-width: 2rem;
-  min-height: 1.9rem;
-  font-size: 1.05rem;
-}
-.word-ribbon .wr-para {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.15rem;
-}
-.word-ribbon .wr-row {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.1rem;
-}
-.sheet-toolbox[data-active="false"] {
-  opacity: 0.72;
-}
-.st-group {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.15rem;
-  min-width: 0;
-}
-.st-tools {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.1rem;
-}
-.st-tools .rt-tool {
-  text-align: center;
-  white-space: nowrap;
-}
-.st-label {
-  font-size: 0.62rem;
-  line-height: 1.2;
-  text-align: center;
-  color: #605e5c;
-  user-select: none;
-}
-.st-div {
-  width: 1px;
-  align-self: stretch;
-  margin: 0.1rem 0;
-  background: #edebe9;
-}
-.sheet-toolbox[data-active="false"] .rt-tool {
-  opacity: 0.45;
-}
-.sheet-toolbox[data-active="false"] .rt-tool:hover { border-color: transparent; }
-.rt-tool:focus-visible {
-  outline: 2px solid #1F5FD0;
-  outline-offset: 1px;
-}
-.rt-tool {
-  padding: 0.1rem 0.45rem;
-  border: 1px solid transparent;
-  border-radius: 0.25rem;
-  background: transparent;
-  font: inherit;
-  font-size: 0.9em;
-  line-height: 1.4;
-  color: inherit;
-  cursor: pointer;
-}
-.rt-tool:hover { border-color: #8a8886; background: #f3f2f1; }
-.rt-sep {
-  width: 1px;
-  align-self: stretch;
-  margin: 0.2rem 0.25rem;
-  background: #edebe9;
-}
-
-
-.rt-edit {
-  min-height: 8rem;
-  outline: none;
-}
-.rt-edit:empty::before {
-  content: attr(data-placeholder);
-  color: var(--ir-placeholder, #6E7787);
-  pointer-events: none;
-}
-/* Empty prose editors ON THE LETTER (owner request, 2026-10-26): an empty
-   findings/action box prints its instructional placeholder onto the official
-   paper. Like empty WordFields, the hint shows only while the box is engaged
-   — hover, focus, or keyboard arrival — and the untouched letter stays clean.
-   Editors outside the paper (the form's own narrative box) keep their
-   always-on hint, exactly as before. */
-.print-sheet .rt-edit:not(:hover):not(:focus):empty::before { content: ''; }
-/* Rendered ink on the read-only letter: the subset’s own blocks, kept inside
-   the sheet’s measure — no margins that would double the letter’s rhythm.
-   The findings and disposition blocks read the same ink as the narrative. */
-.pr-narrative-html p, .pr-narrative-html ul, .pr-narrative-html ol,
-.pr-findings-html p, .pr-findings-html ul, .pr-findings-html ol,
-.pr-actions-html p, .pr-actions-html ul, .pr-actions-html ol {
-  margin: 0 0 0.5rem;
-}
-.pr-narrative-html ul, .pr-narrative-html ol,
-.pr-findings-html ul, .pr-findings-html ol,
-.pr-actions-html ul, .pr-actions-html ol {
-  padding-left: 1.4rem;
-}
-.pr-narrative-html li, .pr-findings-html li, .pr-actions-html li { margin: 0.1rem 0; }
-/* The ribbon's alignment (owner request — see richText.js): align="…" is the
-   one attribute the record keeps, so the read-only letter honors it. The
-   editable boxes render the live DOM and align themselves. */
-.pr-narrative-html p[align="center"], .pr-narrative-html div[align="center"],
-.pr-findings-html p[align="center"], .pr-findings-html div[align="center"],
-.pr-actions-html p[align="center"], .pr-actions-html div[align="center"] { text-align: center; }
-.pr-narrative-html p[align="right"], .pr-narrative-html div[align="right"],
-.pr-findings-html p[align="right"], .pr-findings-html div[align="right"],
-.pr-actions-html p[align="right"], .pr-actions-html div[align="right"] { text-align: right; }
-.pr-narrative-html p[align="justify"], .pr-narrative-html div[align="justify"],
-.pr-findings-html p[align="justify"], .pr-findings-html div[align="justify"],
-.pr-actions-html p[align="justify"], .pr-actions-html div[align="justify"] { text-align: justify; }
-.pr-narrative-html p[align="left"], .pr-narrative-html div[align="left"],
-.pr-findings-html p[align="left"], .pr-findings-html div[align="left"],
-.pr-actions-html p[align="left"], .pr-actions-html div[align="left"] { text-align: left; }
-/* The editable boxes keep the same mapping: emit() sanitizes the live DOM's
-   style="text-align: …" into align="…", so the re-rendered editor needs the
-   explicit rule print gets rather than relying on the deprecated UA hint. */
-.rt-edit p[align="left"], .rt-edit div[align="left"] { text-align: left; }
-.rt-edit p[align="center"], .rt-edit div[align="center"] { text-align: center; }
-.rt-edit p[align="right"], .rt-edit div[align="right"] { text-align: right; }
-.rt-edit p[align="justify"], .rt-edit div[align="justify"] { text-align: justify; }
-/* A typed date the sheet could not read back: quiet, under the line it
-   belongs to, announced politely — the stored value stands until a readable
-   line replaces it. */
-.pr-date-hint {
-  display: block;
-  font-size: 0.72rem;
-  color: #6B7488;
-}
-.pr-narrative-html > :last-child, .pr-findings-html > :last-child, .pr-actions-html > :last-child { margin-bottom: 0; }
-
-/* Fact-line editing on the letter: values read as the sheet's own text at all
-   times — no boxes, no dotted outlines, ever. Inputs inherit the letter's
-   serif so the page never reads as a form wearing a costume. Date and time
-   pickers keep their native indicators. */
-.pr-edit--inline {
-  display: inline-block;
-  width: auto;
-  max-width: 100%;
-  margin: 0 0.15rem;
-  padding: 0 0.2rem;
-}
-.pr-edit--grow { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.pr-edit--age { width: 3.2rem; flex: 0 0 auto; }
-.pr-edit--qty { width: 4.2rem; flex: 0 0 auto; }
-/* Long values clip in the fixed boxes (owner report, 2026-10-24): an amount
-   like 18000.00 needs more than the 4.2rem the value box allows, so its tail
-   is cut off on the sheet. Where the engine sizes a field to its own value
-   the boxes grow with what the officer typed instead of clipping it —
-   elsewhere the fixed widths stand, exactly as before. */
-@supports (field-sizing: content) {
-  .pr-edit--age,
-  .pr-edit--qty {
-    field-sizing: content;
-    width: auto;
-    min-width: 3.2rem;
-    flex: 0 0 auto;
-  }
-  .pr-edit--qty { min-width: 4.2rem; }
-}
-/* WordField (owner request): a wrapping click-to-type span for the sheet's
-   free-text facts, so long values flow onto the next line inside the paper
-   the way they do in Word. Plain text only — facts carry no formatting — and
-   the placeholder shows only on hover/focus when empty, so a blank is
-   findable without ever drawing a box. Tab moves on (form convention, not
-   Word's tab-indent); Enter commits, Escape reverts. */
-.pr-word {
-  display: inline;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-  outline: none;
-  cursor: text;
-}
-.pr-word:empty::before {
-  content: attr(data-placeholder);
-  color: var(--ir-placeholder, #6E7787);
-  pointer-events: none;
-}
-.pr-word:not(:hover):not(:focus):empty::before {
-  content: '';
-}
-select.pr-edit--inline { padding-right: 0.1rem; }
-.pr-datetime-edit {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.15rem;
-}
-.pr-person-edit {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.15rem;
-  margin: 0.1rem 0;
-}
-/* Victim/suspect boxes (owner report, 2026-10-24): the name, age and sex
-   controls share one row and must never collide. The name keeps a usable
-   floor and wraps its words; the boxes never shrink into each other — on a
-   narrow measure they drop to the next line instead of overlapping. */
-.pr-person-edit { gap: 0.35rem; }
-.pr-person-edit > .pr-word { min-width: 6rem; }
-.pr-person-edit > input,
-.pr-person-edit > select { flex-shrink: 0; }
-/* Empty person boxes (owner request, 2026-10-26): an unfilled age box or an
-   unchosen sex/identity reads as stray words on the official paper. Empties
-   hold their place but hide their words until the row is engaged — hover,
-   focus, or keyboard arrival — the same convention empty WordFields already
-   follow. A filled box is untouched, and the options in an opened menu always
-   read normally. */
-.pr-person-edit input.pr-edit--empty::placeholder { color: transparent; }
-.pr-person-edit input.pr-edit--empty:hover::placeholder,
-.pr-person-edit input.pr-edit--empty:focus::placeholder { color: var(--ir-placeholder, #6E7787); }
-.pr-person-edit select.pr-edit--empty { color: transparent; }
-.pr-person-edit select.pr-edit--empty option { color: #111; }
-.pr-person-edit:hover select.pr-edit--empty,
-.pr-person-edit:focus-within select.pr-edit--empty,
-.pr-person-edit select.pr-edit--empty:focus { color: inherit; }
-.pr-person-edit--suspect { row-gap: 0.3rem; }
-.pr-fact--people > .pr-fact-value { flex: 1 1 auto; min-width: 0; }
-.pr-item-edit {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.3rem;
-  margin: 0 0 0.15rem 0.75in;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.pr-item-num { flex: 0 0 auto; }
-/* The sheet's own Add/Remove: text buttons, not chrome — the page stays a
-   page, and the controls read as part of its lines. */
-.pr-add {
-  display: inline-block;
-  margin: 0.2rem 0 0.1rem;
-  padding: 0;
-  border: none;
-  background: none;
-  font: inherit;
-  color: #1d4ed8;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
-}
-.pr-add:hover { color: #1e40af; }
-.pr-remove {
-  flex: 0 0 auto;
-  padding: 0 0.3rem;
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: 1.1em;
-  line-height: 1;
-  color: #991b1b;
-  cursor: pointer;
-}
-.pr-remove:hover { color: #dc2626; }
 
 /* Phase 6 Stage 4 (D2) — the appendix page: the officer's original text.
    Rendered ONLY when a stored source exists (see ReportPrint), so a report
@@ -6137,14 +5543,16 @@ select.pr-edit--inline { padding-right: 0.1rem; }
 /* "Noted by:" sits immediately above its signature rule and the printed
    name — no blank space left for a signature. The block holds the RIGHT margin
    of the page: the noting official signs the side the letter closes on, so the
-   name shuts to the right edge (the label itself is centered — see below).
+   label and the name share one right edge.
 
    BOTH properties, deliberately. `align-items` aligns the two BOXES, but the
    text INSIDE a box follows `text-align`, and this sheet is full of centered
-   ancestors — the header band, the title, the appendix headings — so stating
-   `text-align` on the block settles the name (the wider box) against the right
-   edge in the same breath, and no ancestor can pull it back to the middle.
-   The label carries its own centering (see below). */
+   ancestors — the header band, the title, the appendix headings — so `center`
+   is what a bare label inherits. `flex-end` alone therefore moves the name (the
+   wider box, whose own `text-align` is stated below) and leaves the short label
+   reading as centred above it. Stating `text-align` on the block settles the
+   label against the same edge in the same breath, and no ancestor can pull
+   either line back to the middle. */
 .pr-noted {
   display: flex;
   flex-direction: column;
@@ -6153,12 +5561,10 @@ select.pr-edit--inline { padding-right: 0.1rem; }
   gap: 0;
   margin-top: 1.4rem;
 }
-/* The label alone is CENTERED (owner request): it spans the block and reads
-   from the middle, while the name below it stays shut to the right edge. */
-.pr-noted-label { font-weight: 700; align-self: stretch; text-align: center; }
+.pr-noted-label { font-weight: 700; }
 /* The noting official's name prints straight under "Noted by:" — no
-   signature rule above it and no reserved blank space — shut to the right
-   edge of the block. */
+   signature rule above it and no reserved blank space — shut to the same right
+   edge as the label above it. */
 .pr-noted-name {
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -6230,11 +5636,10 @@ select.pr-edit--inline { padding-right: 0.1rem; }
 @media print {
   /* The station's paper, stated to the print engine, so a report is laid out on
      SHORT BOND (8.5 × 11 in / Letter) rather than on whatever the workstation's
-     default happened to be. One-inch station margins are stated on @page: the
-     sheet's own padding is removed in print (below), so the page reads its margins there. */
+     default happened to be. Margins are deliberately left to the browser: the
+     sheet's own padding is removed in print (below), so the page needs them. */
   @page {
     size: letter;
-    margin: 1in;
   }
 
   /* The sheet is portaled to document.body (body.print-sheet-open is set
@@ -6286,36 +5691,6 @@ select.pr-edit--inline { padding-right: 0.1rem; }
      desk at the time. Ctrl+P with the preview up therefore prints the app
      exactly as it always did, instead of a draft posing as the filed report. */
   .sheet-fullscreen { display: none !important; }
-  /* ONE LEAF (owner request): the printed letter holds 9 inches of paper
-     (Letter minus the 1in @page margins), and a full ordinary report was
-     landing ~130px past it — a second sheet for a Noted-by line. Print keeps
-     the screen's type sizes but spends less air: a tighter header, smaller
-     seals, and block rhythm trimmed by a third, so the same ink fits the
-     leaf it was written for. Screen and desk are untouched. */
-  .print-sheet .pr-head > .pr-seal,
-  .print-sheet .pr-code-logo { height: 0.72in; width: 0.72in; }
-  .print-sheet .pr-code-date { margin-top: 0.2rem; }
-  .print-sheet .pr-title { margin: 0.4rem 0 0.3rem; }
-  .print-sheet .pr-salutation { margin-bottom: 0.3rem; }
-  .print-sheet .pr-certify { margin-bottom: 0.35rem; }
-  .print-sheet .pr-incident-type { margin: 0.4rem 0; }
-  .print-sheet .pr-facts { margin-bottom: 0.4rem; }
-  .print-sheet .pr-fact { margin-bottom: 0.12rem; }
-  .print-sheet .pr-items { margin: 0.1rem 0 0.15rem; }
-  .print-sheet .pr-item-total { margin: 0.1rem 0 0.05rem 1.05in; }
-  .print-sheet .pr-narrative { margin: 0.45rem 0; }
-  .print-sheet .pr-section { margin: 0.4rem 0; }
-  .print-sheet .pr-entry { margin-top: 0.1rem; margin-bottom: 0.1rem; }
-  .print-sheet .pr-footer-block { margin-top: 0.6rem; }
-  .print-sheet .pr-noted { margin-top: 0.35rem; }
-  /* The long poles set tighter leading: body ink is single-spaced on the
-     official page, and the org block drops a step with it. */
-  .print-sheet .pr-org { font-size: 9pt; line-height: 1.25; }
-  .print-sheet .pr-facts,
-  .print-sheet .pr-narrative,
-  .print-sheet .pr-entry,
-  .print-sheet .pr-recorded,
-  .print-sheet .pr-noted { line-height: 1.3; }
 }
 
 /* Screen: the portaled sheet sits above everything, including the AI panel */
@@ -6374,128 +5749,30 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   max-width: 1320px;
   margin: 0 auto;
   padding: 24px 28px 48px;
-  /* GRADIENT BLUE BACKDROP WITH STYLISH YELLOW (owner request): the whole
-     dashboard sits on a deep-blue gradient with soft gold glows — the same
-     navy + gold pairing as the situation boards — so the white panels read as
-     cards on an official surface. Scoped to .dash so no other screen moves. */
-  position: relative;
-  overflow: hidden;
-  border-radius: 18px;
-  background:
-    radial-gradient(520px 260px at 88% -60px, rgba(230, 168, 23, 0.28), transparent 65%),
-    radial-gradient(640px 320px at -80px 240px, rgba(230, 168, 23, 0.14), transparent 60%),
-    linear-gradient(160deg, #143063 0%, #10294f 48%, #0b1f42 100%);
-  box-shadow: var(--shadow-sm);
 }
-.dash::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(115deg, transparent 62%, rgba(230, 168, 23, 0.16) 62.2%, rgba(230, 168, 23, 0.16) 64%, transparent 64.2%),
-    linear-gradient(115deg, transparent 68%, rgba(230, 168, 23, 0.10) 68.2%, rgba(230, 168, 23, 0.10) 69%, transparent 69.2%);
-}
-.dash::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, var(--ir-gold) 22%, var(--ir-gold) 78%, transparent);
-  pointer-events: none;
-}
-.dash > * { position: relative; z-index: 1; }
 
-/* ONE ROW FOR THE READINGS AND THE CLOCK (owner request): the three cards take
-   the row and the clock keeps its right end; narrow windows stack them, cards
-   first. The row carries the spacing the strip and the bar used to bring on
-   their own, so neither keeps a bottom margin inside it. */
-.dash-head {
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 22px;
-  /* THE SITUATION BOARD (owner request, 2026-10-21): the readings ride a navy
-     band — the department's own chrome (--ir-navy states its own value per
-     theme, and white on either clears AA past 12:1) — closed with a gold seam.
-     The KPI cards keep their light faces, so every delta hue reads exactly as
-     it does elsewhere; only the band and the clock wear the navy. */
-  padding: 18px 20px;
-  border-radius: 16px;
-  background: linear-gradient(120deg, var(--ir-navy) 0%, var(--ir-navy-hi) 100%);
-  border-bottom: 3px solid var(--ir-gold);
-  box-shadow: var(--shadow-sm);
-}
-/* On the band the clock is white, with the gold carrying the greeting — the
-   same bar-and-accent pairing the section bars use, so the head reads as one
-   official surface. Fixed values, like those tokens: the band is a known navy
-   in both themes. */
-.dash-head .dash-clock { border-left-color: rgba(255, 255, 255, 0.25); }
-.dash-head .dash-clock__date,
-.dash-head .dash-clock__time { color: #fff; }
-.dash-head .dash-clock__greet { color: var(--ir-gold-hi); }
-.dash-head .dash-kpis {
-  flex: 1 1 26rem;
-  min-width: 0;
-  margin-bottom: 0;
-}
-/* RUNNING GOLD SEAM (owner request) — the AI assistance's orbit border, as a
-   seam: a bright comet slides along the gold edge forever. Same idea (a
-   translating shine, GPU-composited, zero layout work), restated as a
-   horizontal run because the seam is a line, not a loop. */
-.dash-head::after,
-.dash-grid-main::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 3px;
-  pointer-events: none;
-  background: linear-gradient(90deg, transparent 0%, var(--ir-gold) 25%, #ffe9a8 50%, var(--ir-gold) 75%, transparent 100%);
-  background-size: 200% 100%;
-  animation: dash-gold-run 3.5s linear infinite;
-}
-@keyframes dash-gold-run {
-  from { background-position: 200% 0; }
-  to { background-position: -100% 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dash-head::after,
-  .dash-grid-main::after { animation: none; }
-}
-.dash-head .dash-topbar { margin-bottom: 0; }
 .dash-topbar {
   display: flex;
-  /* ONE CHILD SINCE THE TITLE WENT (owner request): the clock alone, parked at
-     the row's right edge. */
-  justify-content: flex-end;
+  justify-content: space-between;
+  /* TOP ALIGNED, not bottom: the title block and the range card are two things
+     of different heights, and the reference hangs both off the page's own top
+     edge rather than aligning their feet. */
   align-items: flex-start;
   flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 22px;
 }
-.dash-clock {
+.dash-topbar h1 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.01em; color: var(--paper); }
+.dash-sub {
+  margin: 6px 0 0;
+  color: var(--steel);
+  font-size: 13.5px;
+  /* The sub-line is a sentence with a status dot at its head, so it is one row
+     rather than three inline spans that could wrap between the words. */
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  padding-left: 16px;
-  border-left: 1px solid var(--line);
-  text-align: right;
-}
-.dash-clock__date { font-size: 13px; font-weight: 600; color: var(--paper); }
-.dash-clock__time { font-size: 24px; font-weight: 700; color: var(--paper); font-variant-numeric: tabular-nums; }
-.dash-clock__greet { font-size: 12px; color: var(--steel); }
-
-/* Quick actions: REMOVED (owner request, 2026-10-21) — rules deleted with the bar. */
-@media (max-width: 760px) {
-  .dash-clock { align-items: flex-start; text-align: left; padding-left: 0; border-left: 0; }
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 /* THE LIVE DOT: the reference's green mark before the station's name. It is
    decoration and is hidden from a screen reader (the sentence beside it already
@@ -6660,27 +5937,83 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 /* The one card that is a control: the number is a queue, and a queue opens. It
    reads as a card at rest and lifts under the pointer, which is the difference
    between "a figure" and "a figure you can press". */
-.dash-kpi--link { cursor: pointer; transition: box-shadow 120ms ease, border-color 120ms ease, transform 120ms ease; }
-.dash-kpi--link:hover { transform: translateY(-1px); }
+.dash-kpi--link { cursor: pointer; transition: box-shadow 120ms ease, border-color 120ms ease; }
 .dash-kpi--link:hover { border-color: var(--line-bright); box-shadow: var(--shadow-sm); }
 .dash-kpi--link:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
-/* NO MARKS ON THE READINGS (owner request): the number is the hero — the largest
-   thing on the card by far — with the caption a quiet eyebrow above it and the
-   sub-line muted below. No gradient hairline either: hierarchy does the work a
-   decoration was doing. */
+/* THE MARK: a tinted circle holding the reading's own drawing. The four families
+   are the ones the rest of the product already uses — the status tints for the
+   workflow readings and the violet the median has always worn — so a colour on
+   this row means what it means everywhere else. */
+.dash-kpi__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+}
+.dash-kpi__glyph { width: 21px; height: 21px; }
+.dash-kpi__mark--blue { background: var(--cyan-bg); color: var(--cyan); }
+.dash-kpi__mark--green { background: var(--green-bg); color: var(--green-ink); }
+.dash-kpi__mark--amber { background: var(--amber-bg); color: var(--amber); }
+.dash-kpi__mark--violet { background: var(--violet-bg); color: var(--violet); }
+
 .dash-kpi__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-/* THE CAPTIONS ARE YELLOW (owner request, 2026-10-21): --amber is the palette's
-   yellow ink, measured per theme (light #B26A00, dark #D9A03F) so the words
-   stay legible on the cards in both. */
-.dash-kpi__label { font-size: 12px; font-weight: 600; color: var(--amber); text-transform: uppercase; letter-spacing: 0.06em; }
-.dash-kpi__value { font-size: 36px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; color: var(--paper); font-variant-numeric: tabular-nums; }
-.dash-kpi:hover { box-shadow: var(--shadow-sm); }
+.dash-kpi__label { font-size: 12px; font-weight: 600; color: var(--steel); text-transform: uppercase; letter-spacing: 0.06em; }
+.dash-kpi__value { font-size: 30px; font-weight: 700; line-height: 1.15; color: var(--paper); font-variant-numeric: tabular-nums; }
 .dash-kpi__value--time { font-size: 27px; }
 .dash-kpi__delta,
 .dash-kpi__note { font-size: 12.5px; color: var(--steel); min-height: 1em; }
 .dash-kpi__delta.is-up { color: var(--green-ink); }
 .dash-kpi__delta.is-down { color: var(--red-text); }
+
+/* THE SPARKLINE sits at the card's right edge, behind the number rather than
+   beside it: it is the range's daily series, so it belongs to the card as a
+   whole. `align-self: center` because the card's items are top-aligned. */
+.dash-spark {
+  flex: none;
+  width: 84px;
+  height: 34px;
+  align-self: center;
+  margin-left: auto;
+  overflow: visible;
+}
+.dash-spark__line {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---- The compact strip at the foot -----------------------------------------
+   The same four readings at a smaller size, each with its change against the
+   period before (see Dashboard.jsx). The mark is the card's own, one size down,
+   so the foot of the page reads as the same set of facts as the head. */
+.dash-sum {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.dash-sum__card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-subtle);
+}
+.dash-sum__mark { width: 36px; height: 36px; }
+.dash-sum__mark .dash-kpi__glyph { width: 18px; height: 18px; }
+.dash-sum__body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.dash-sum__value { font-size: 21px; font-weight: 700; line-height: 1.15; color: var(--paper); font-variant-numeric: tabular-nums; }
+.dash-sum__label { font-size: 12.5px; color: var(--steel); }
+.dash-sum .dash-kpi__delta { font-size: 12px; }
 
 /* Panels & grids */
 .dash-panel {
@@ -6814,35 +6147,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash-activity__mark--red { background: var(--red-bg); color: var(--red-text); }
 .dash-activity__glyph { width: 19px; height: 19px; }
 
-/* THE TYPE AS A PILL — the register's own chip (owner request): the incident
-   type's glyph plus its tracked capitals on a wash of the same hue family
-   (lib/reportFolder.js), so Recent Activity reads exactly like All Reports.
-   Same five families as .report-row__type, stated here so the dashboard does
-   not depend on the register's sheet being loaded. */
-.dash-activity__type {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  align-self: flex-start;
-  max-width: 100%;
-  padding: 0.14rem 0.5rem 0.14rem 0.42rem;
-  border-radius: 999px;
-  font-size: 0.66rem;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  background: var(--panel-raised);
-  color: var(--steel);
-}
-.dash-activity__type-mark { flex: none; width: 0.86rem; height: 0.86rem; stroke-width: 2; }
-.dash-activity__type-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dash-activity__type--blue { background: var(--cyan-bg); color: var(--cyan); }
-.dash-activity__type--violet { background: var(--violet-bg); color: var(--violet); }
-.dash-activity__type--red { background: var(--red-bg); color: var(--red-text); }
-.dash-activity__type--amber { background: var(--amber-bg); color: var(--amber); }
-.dash-activity__type--slate { background: var(--panel-raised); color: var(--steel); }
-
-.dash-activity__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.dash-activity__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .dash-activity__title {
   font-size: 14px;
   font-weight: 600;
@@ -6896,23 +6201,24 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash-viewall:hover { background: var(--cyan-bg); }
 .dash-viewall:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
-.dash-grid-main {
-  position: relative;
-  overflow: hidden;
-  display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
-  /* SAME SITUATION BOARD as the head (owner request): each chart row rides the
-     navy band closed with a gold seam, holding white panels — the header's own
-     pairing, so the trend / activity and status / hour rows read as the same
-     official surface as the readings above them. */
-  padding: 18px 20px;
-  border-radius: 16px;
-  background: linear-gradient(120deg, var(--ir-navy) 0%, var(--ir-navy-hi) 100%);
-  border-bottom: 3px solid var(--ir-gold);
-  box-shadow: var(--shadow-sm);
-}
+.dash-grid-main { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-bottom: 16px; }
+/* One column, by choice rather than by narrowness.
+
+   The trend panel used to take 1.6fr of this row, which is about 610px inside the
+   station's window — roughly 19px per day across a 30-day range, and a day is not
+   legible as a stack in 19px. The same pair already collapsed to one column below
+   980px, so stacking is the layout's own answer to "not enough room"; this just
+   says the trend is not a share-the-row panel at any width.
+
+   Written with `.dash-grid-main` in front so it outranks the 980px media query on
+   specificity rather than on source order — that query sets one column too, but a
+   rule that only applied below 980px would leave the wide case behind.
+
+   Two rows use it now: the trend, and the incident-category list, which gave up
+   its partner to the pie's row. They are unrelated charts that happen to want the
+   same thing from the grid — the whole width, at every size. */
+.dash-grid-main.dash-grid-main--stack { grid-template-columns: 1fr; }
+
 /* The pie's row: the status card hugs its drawing against the row's LEFT EDGE —
    which is the trend panel's own edge above it — and the hour chart beside it
    takes everything else.
@@ -7002,6 +6308,9 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   .dash-seg { transition: opacity 140ms ease; }
   .dash-hour { transition: background-color 140ms ease; }
   .dash-hour__bar { transition: opacity 140ms ease; }
+  /* Picking a line out is a state, not an animation — but a line that snaps to double
+     width reads as a glitch, so the width and the recession fade. */
+  .dash-rank__line { transition: stroke-width 140ms ease, opacity 140ms ease; }
   .dash-peek { animation: dash-peek-in 110ms ease-out; }
   /* 320ms on a slight-overshoot curve, not the 140ms beat: the lift is the pie's
      one moment of theatre — a wedge coming toward the reader — and at 140ms it
@@ -7013,18 +6322,6 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   .dash-pie__top { transition: stroke 140ms ease, stroke-width 140ms ease; }
   .dash-pie__stage { transition: transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1); }
   .dash-pie__ground { transition: transform 320ms ease, opacity 320ms ease; }
-}
-/* THE PAGE'S ARRIVAL — the one orchestrated entrance (owner request,
-   2026-10-21): the board first, then the panels, then the actions, 70ms apart.
-   Gated like every other motion on this page, and opacity/transform only, so a
-   reader who asked for less motion gets the same page instantly. */
-@keyframes dash-arrive {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .dash-head { animation: dash-arrive 240ms ease-out both; }
-  .dash-grid-main > * { animation: dash-arrive 240ms ease-out 70ms both; }
 }
 /* The pointer's lean is PURE MOTION — parallax, no state carried — so under
    reduced motion it does not happen at all and the stage is plain. The lift, the
@@ -7216,9 +6513,108 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    is quietly short of a day is worse than one that admits it. */
 .dash-chart-note { margin: 10px 0 0; font-size: 11.5px; color: var(--amber); }
 
-/* THE PEEK — the card that answers a hover on the hour strip. (It used to be
-   shared with the category rank chart; that panel is gone, and the hour strip
-   is the only reader left.)
+/* Incident categories over time — rank lanes.
+
+   Rank 1 at the TOP of the plot, so a line rising means a type climbing. The plot is
+   measured in pixels by the component (viewBox 1:1) rather than scaled, because the type
+   labels sit at their line's own height in the column beside it: a scaled SVG would put
+   a label a few pixels off its line, and the label IS the chart's legend. */
+.dash-rank { position: relative; }
+/* The measured column comes FIRST and the legend second, and the measured column carries
+   `min-width: 0` — a grid item is otherwise floored at its content's minimum, and the
+   SVG it contains is as wide as the column, so without this the two trade places on
+   resize and the legend is pushed off the panel. */
+.dash-rank__body { display: grid; grid-template-columns: minmax(0, 1fr) 176px; gap: 12px; align-items: start; }
+.dash-rank__cell { min-width: 0; }
+.dash-rank__plot { display: block; }
+.dash-rank__plot:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; border-radius: 4px; }
+/* The rank lanes: a dashed rule per position, numbered down the left. They are the axis,
+   not the data — a solid rule at every rank reads as a line at every rank, and the whole
+   chart turns into a stack of horizontals with six real lines lost inside it. */
+.dash-rank__lane { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 5; opacity: 0.55; }
+.dash-rank__grid { stroke: var(--line); stroke-width: 1; opacity: 0.35; }
+.dash-rank__lanenum { fill: var(--cyan-dim); font-size: 9px; font-variant-numeric: tabular-nums; }
+/* The slice being read, as a band behind the lines — the same highlight the hour strip
+   and the trend chart use for "the column in question". */
+.dash-rank__band { fill: var(--cyan-bg); }
+.dash-rank__line { stroke-width: 1.8; fill: none; }
+/* Picked out: thicker AND brighter, because six overlapping strokes at 0.4 still read as
+   six overlapping strokes — width is what separates the chosen line, and the 0.4 is the
+   same recession value the rest of the dashboard uses for "not the mark being read". */
+.dash-rank__line.is-focused { stroke-width: 3.2; }
+.dash-rank__line.is-muted { opacity: 0.4; }
+.dash-rank__axis { fill: var(--cyan-dim); font-size: 9.5px; font-variant-numeric: tabular-nums; }
+/* The hit target: a transparent rect over a whole slice. `transparent` rather than `none`
+   because a fill of `none` takes no pointer events, and this is the entire pointer
+   surface of the plot. */
+.dash-rank__hit { fill: transparent; }
+
+/* The type list, one button per drawn line, each sitting at its line's own height — so
+   the column doubles as the chart's legend and as the control that picks a line out. */
+.dash-rank__labels { list-style: none; margin: 0; padding: 0; position: relative; height: 236px; }
+.dash-rank__labels li { position: absolute; left: 0; right: 0; }
+/* One label per drawn line: a swatch in the line's own colour, its name, its count. The
+   count is there because rank hides magnitude — a line at the top of the chart may be
+   there on four reports — and this is where the reader can check that. */
+.dash-rank__label {
+  display: grid;
+  grid-template-columns: 9px 1fr auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.dash-rank__label:hover { border-color: var(--line-bright); background: var(--panel-raised); }
+.dash-rank__label.is-focused { border-color: currentColor; background: var(--panel-raised); }
+/* `currentColor` is the line's own ramp colour, set inline — the swatch is what ties a
+   name to a line, and it must be the same ink the line is drawn in. */
+.dash-rank__swatch { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+.dash-rank__name { color: var(--paper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-rank__count { font-style: normal; color: var(--steel); font-variant-numeric: tabular-nums; }
+/* THE SENTENCE UNDER THE CHART — the panel's actual answer ("which type is climbing"),
+   and the one line a reader who has never learned to read a rank chart can take away
+   without learning one.
+
+   It was set as a footnote: 12.5px in --steel, the same weight as the axis labels it sits
+   under, which made the answer to "what is this panel for" the least visible thing in it.
+   So it is a callout now — full body size in the primary ink, on a raised surface, with
+   the dashboard's cyan edge marking it as the conclusion rather than as a caption that
+   fell off the chart.
+
+   Its height is RESERVED, because picking a type swaps the range's sentence for that
+   type's reading and the panel must not move while the reader moves along the lines —
+   and tabular figures, because every number in both sentences changes width. */
+.dash-rank__note {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--cyan);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  color: var(--paper);
+  font-size: 14px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+/* The subject of the sentence — the type the panel is talking about — carries the weight
+   as well as the ink, since the sentence around it is now in the primary colour too. */
+.dash-rank__note strong { color: var(--paper); font-weight: 700; }
+/* The cut the chart applied, in the chart's own words — a limit of what is DRAWN rather
+   than a number, so it reads as a footnote under the sentence rather than as part of it.
+   Read in the same glance as the sentence above, so it is set a step larger than the
+   axis labels it used to match. */
+.dash-rank__omitted { margin: 8px 0 0; font-size: 12.5px; color: var(--steel); }
+
+/* THE PEEK — the card that answers a hover, shared by the hour strip and the
+   category rows.
 
    It is positioned from the mark it belongs to (see `peekAt` in Dashboard.jsx, which
    measures rather than computes — these two charts lay their marks out differently,
@@ -7415,14 +6811,6 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 }
 .dash-hours__note strong { color: var(--paper); }
 
-/* Incident type distribution: one labelled bar per type, longest first. */
-.dash-types__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.dash-types__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; align-items: center; gap: 10px; }
-.dash-types__name { font-size: 12.5px; color: var(--paper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dash-types__track { display: block; height: 8px; border-radius: 999px; background: var(--panel-raised); overflow: hidden; }
-.dash-types__bar { display: block; height: 100%; border-radius: 999px; background: var(--cyan); }
-.dash-types__count { font-size: 12.5px; font-weight: 700; color: var(--paper); font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
-.dash-types__note { margin: 10px 0 0; min-height: 18px; font-size: 12.5px; color: var(--steel); font-variant-numeric: tabular-nums; }
 
 .dash-empty { color: var(--steel); font-size: 13.5px; margin: 8px 0; }
 
@@ -7974,8 +7362,8 @@ body.profile-panel-open.ai-panel-open .dash-dock {
 
 /* THE TWO OCCUPANTS OF ONE CORNER, KEPT OFF EACH OTHER'S SQUARE.
 
-   User Management used to put a create circle in the bottom-right corner, and the
-   chathead rail hangs UPWARD from that same corner — so without this the
+   User Management puts its create circle in the bottom-right corner (`.users-fab`),
+   and the chathead rail hangs UPWARD from that same corner — so without this the
    button would sit on a colleague's face. The dock is lifted by exactly the button's
    height plus the gap between them, and `--fab-lift` is the whole of that arithmetic,
    written once: two rules that both need to know the button's size read one number,
@@ -8027,13 +7415,17 @@ body.users-fab-open .main {
 }
 
 /* Motion is optional. The states above all exist without it; only the transitions
-   are behind the query, which is the rule the rest of this stylesheet follows. */
+   are behind the query, which is the rule the rest of this stylesheet follows. The
+   circle that CREATES an account on the directory screen (`.users-fab`) is part of
+   this corner now, so its two fades are written here with the rest — a state belongs
+   where the component is drawn, and the fade between two of them belongs by kind. */
 @media (prefers-reduced-motion: no-preference) {
   .dash-chathead { transition: border-color 140ms ease, transform 140ms ease; }
   /* The lift is the press affordance now that the circle opens the conversation
      directly: it is the only signal, before a click, that this is a control and not a
      badge. Every circle is a control, so every circle lifts. */
   .dash-chathead:hover { transform: translateY(-1px); }
+  .users-fab { transition: background-color 140ms ease, transform 140ms ease; }
   /* The rail's reveal: the slide carries the motion and the fade covers its tail, so
      the rail is already translucent while it is still travelling and there is no moment
      where a fully opaque column is moving over the table. The house 140ms beat is right
@@ -8774,4 +8166,27 @@ body.users-fab-open .main {
     padding-left: 1.4rem;
   }
   body.recovery-sheet-open .recovery-print-foot { margin-top: 1.25rem; font-size: 10pt; }
+}
+/* Word-like surface (owner request): a small quiet toolbar for the editable
+   narrative, on the form and on the letter alike. The narrative carries its
+   own strip, with the blotter Upload riding it (see BlotterCapture). */
+.rt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  margin: 0 0 0.3rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px dashed rgba(17, 17, 17, 0.25);
+}
+/* Blotter capture review: the recognized text, editable before it lands in
+   the narrative. A plain box in the dialog own measure - this is a
+   checkpoint, not a second editor, so it borrows no prose chrome. */
+.blotter-review-text {
+  width: 100%;
+  min-height: 12rem;
+  box-sizing: border-box;
+  font: inherit;
+  line-height: 1.5;
+  padding: 0.5rem 0.6rem;
+  resize: vertical;
 }
