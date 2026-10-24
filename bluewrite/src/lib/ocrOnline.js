@@ -1,13 +1,14 @@
 // Blotter OCR — the online leg (owner request).
 //
-// POST /ocr/read proxies the imagetotext.info image-to-text API: the key
-// stays on the server, the browser never sees it. This module is the only
-// client code that talks to that endpoint — the offline engines
-// (ocrBlotter.js, ocrHandwriting.js) stay pure-local on purpose, so the
-// "no remote URL in the offline module" rule keeps holding.
+// POST /ocr/read reads the photo server-side — Gemini vision first, then
+// the imagetotext.info API: the keys stay on the server, the browser never
+// sees them. This module is the only client code that talks to that
+// endpoint — the offline engines (ocrBlotter.js, ocrHandwriting.js) stay
+// pure-local on purpose, so the "no remote URL in the offline module" rule
+// keeps holding.
 //
 // ONLINE-FIRST, LOCAL FALLBACK (owner decision): the photo is offered to
-// the online reader first; anything short of usable text — no key
+// the online readers first; anything short of usable text — no key anywhere
 // (`configured: false`), offline station LAN, refusal, throttle, empty
 // result — falls through to the on-device engines. A failed online read is
 // never shown as an error on its own: the local engines get their chance,
@@ -33,9 +34,10 @@ function blobToDataUrl(blob) {
   });
 }
 
-// Usable online text, or null when the local engines should take the photo.
-// Null is the ONLY failure shape: callers must not branch on WHY the online
-// read missed — key or cable, the answer is the same local read.
+// A usable online read ({ text, engine }), or null when the local engines
+// should take the photo. Null is the ONLY failure shape: callers must not
+// branch on WHY the online read missed — key or cable, the answer is the
+// same local read.
 export async function readOnlinePhoto(file) {
   let dataUrl;
   try {
@@ -52,14 +54,17 @@ export async function readOnlinePhoto(file) {
   }
   if (!out || out.configured === false) return null;
   const text = String(out.text ?? '').trim();
-  return text === '' ? null : text;
+  if (text === '') return null;
+  const engine = typeof out.engine === 'string' && out.engine !== '' ? out.engine : 'online';
+  return { text, engine };
 }
 
 // The capture's read: online first, the on-device engine on any miss.
-// Returns { text, engine } — engine is 'online' or 'local', so the caller
-// (and any future receipt line) can say which reader actually read.
+// Returns { text, engine } — engine names the reader that actually read
+// ('gemini', 'imagetotext', or 'local'), so the caller (and any future
+// receipt line) can say which one it was.
 export async function recognizeWithFallback(file, localRecognize, onProgress) {
   const online = await readOnlinePhoto(file);
-  if (online !== null) return { text: online, engine: 'online' };
+  if (online !== null) return online;
   return { text: await localRecognize(file, onProgress), engine: 'local' };
 }

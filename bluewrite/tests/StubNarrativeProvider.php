@@ -133,4 +133,20 @@ final class StubNarrativeProvider implements AiNarrativeProvider
 
         return $this->typeDetails ?? ['fields' => [], 'groups' => [], 'unstated' => []];
     }
+
+    /**
+     * The canned photo transcription. The default is the same miss a real
+     * provider reports when the photo holds no readable text: an empty
+     * string, which the caller answers with the next engine.
+     */
+    public function transcribeImage(string $imageBytes, string $mimeType): string
+    {
+        $this->calls++;
+        $this->received[] = [
+            'masked' => ['bytes' => strlen($imageBytes), 'mime' => $mimeType],
+            'options' => [],
+        ];
+
+        return (string) ($this->extra['transcription'] ?? '');
+    }
 }

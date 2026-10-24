@@ -36,6 +36,10 @@ const ONLINE = readFileSync(new URL('../../src/lib/ocrOnline.js', import.meta.ur
 const CTRL = readFileSync(new URL('../../app/controllers/OcrController.php', import.meta.url), 'utf8');
 const ROUTES = readFileSync(new URL('../../api/index.php', import.meta.url), 'utf8');
 const SAMPLE = readFileSync(new URL('../../app/config/ai.sample.php', import.meta.url), 'utf8');
+const IFACE = readFileSync(new URL('../../app/ai/AiNarrativeProvider.php', import.meta.url), 'utf8');
+const GEMINI = readFileSync(new URL('../../app/ai/GeminiNarrativeProvider.php', import.meta.url), 'utf8');
+const SVC = readFileSync(new URL('../../app/ai/NarrativeService.php', import.meta.url), 'utf8');
+const STUB = readFileSync(new URL('../../tests/StubNarrativeProvider.php', import.meta.url), 'utf8');
 
 test('plain blotter text becomes the record html, safely', () => {
   // Markup in the recognized text is ink, not structure.
@@ -207,21 +211,25 @@ test('a blotter photo can be dropped onto the narrative', () => {
 });
 
 test('the online reader is tried first, the local engines carry every miss', () => {
-  // Owner request: imagetotext.info reads first when reachable and keyed;
-  // anything short of usable text falls back to the on-device engines.
-  // The key stays on the server — the browser only ever talks to /ocr/read.
-  // The offline modules stay pure-local, so the vendored-offline rule above
-  // keeps holding for ocrBlotter.js and ocrHandwriting.js untouched.
+  // Owner request: Gemini vision reads first on the station's own key, then
+  // imagetotext.info when keyed; anything short of usable text falls back to
+  // the on-device engines. The keys stay on the server — the browser only
+  // ever talks to /ocr/read. The offline modules stay pure-local, so the
+  // vendored-offline rule above keeps holding for ocrBlotter.js and
+  // ocrHandwriting.js untouched.
   assert.match(ONLINE, /api\('\/ocr\/read'/, 'the online read bypasses the server proxy');
   assert.match(ONLINE, /out\.configured === false/, 'a keyless server reads as a failure instead of a local read');
-  assert.match(ONLINE, /return text === '' \? null : text;/, 'an empty online answer reaches the review instead of the local engines');
+  assert.match(ONLINE, /if \(text === ''\) return null;/, 'an empty online answer reaches the review instead of the local engines');
   assert.match(ONLINE, /catch \{\s*\n\s*return null;\s*\n\s*\}/, 'an unreachable online reader fails the capture instead of falling back');
   assert.match(
     ONLINE,
-    /const online = await readOnlinePhoto\(file\);\s*\n\s*if \(online !== null\) return \{ text: online, engine: 'online' \};/,
+    /const online = await readOnlinePhoto\(file\);\s*\n\s*if \(online !== null\) return online;/,
     'the online read is not tried before the local engines',
   );
   assert.match(ONLINE, /await localRecognize\(file, onProgress\)/, 'a local fallback never runs');
+  // The engine name rides back from the server, so the receipt can say
+  // which reader actually read — never invented client-side.
+  assert.match(ONLINE, /out\.engine/, 'the engine name never reaches the client');
   // The capture reads through the fallback wrapper, never around it — and
   // the review gate still stands between every reading and the narrative.
   assert.match(COMP, /recognizeWithFallback/, 'the capture bypasses the online-first read');
@@ -235,7 +243,16 @@ test('the online reader is tried first, the local engines carry every miss', () 
   assert.match(CTRL, /ALLOWED_MIME/, 'a non-photo reaches the upstream reader');
   assert.match(CTRL, /Authorization: Bearer ' \. \$key/, 'the upstream call carries no key');
   assert.match(CTRL, /imageToText/, 'the proxy points at the wrong upstream endpoint');
-  assert.match(CTRL, /Audit::log\(\(int\) \$user\['id'\], 'ocr\.read'/, 'an online read leaves no audit trail');
+  assert.match(CTRL, /Audit::log\(\$userId, 'ocr\.read'/, 'an online read leaves no audit trail');
+  // Gemini first on the station's own key, imagetotext second: one route,
+  // one answer shape, whichever engine produced it.
+  assert.match(CTRL, /transcribePhoto\(\$bytes, \$mime\)/, 'Gemini never sees the photo');
+  assert.match(CTRL, /catch \(AiUnavailableException \| AiProviderException\)/, 'a Gemini miss fails the capture instead of reaching imagetotext');
+  assert.match(CTRL, /'engine' => \$engine/, 'the answer hides which engine read');
+  assert.ok(
+    CTRL.indexOf('transcribePhoto') < CTRL.indexOf("getenv('IMAGETOTEXT_API_KEY')"),
+    'imagetotext runs before Gemini instead of after it',
+  );
   // The route is registered where every other controller route lives, with
   // its class required by hand like all the rest (no autoloader).
   assert.match(ROUTES, /require __DIR__ \. '\/\.\.\/app\/controllers\/OcrController\.php';/, 'the controller is not required — the route would 500');
@@ -243,4 +260,25 @@ test('the online reader is tried first, the local engines carry every miss', () 
   assert.match(ROUTES, /\(new OcrController\(\)\)->read\(\)/, 'the route does not reach the reader');
   // The key is documented env-only, never given a committed value.
   assert.match(SAMPLE, /IMAGETOTEXT_API_KEY/, 'the key setup is undocumented');
+});
+
+test('Gemini reads the photo on the station key before imagetotext is asked', () => {
+  // Owner request: the vision model the narrative features already run on
+  // transcribes the photo — no new key, no new billing — through the same
+  // provider interface every other AI reading travels.
+  assert.match(IFACE, /function transcribeImage\(string \$imageBytes, string \$mimeType\): string;/, 'the interface carries no photo reading');
+  // The photo rides as inlineData beside a verbatim-transcription
+  // instruction, at temperature 0.0 like the other reading task —
+  // creativity here is misreading.
+  assert.match(GEMINI, /public function transcribeImage\(string \$imageBytes, string \$mimeType\): string/, 'Gemini implements no photo reading');
+  assert.match(GEMINI, /'inlineData' => \[/, 'the photo never reaches the model');
+  assert.match(GEMINI, /transcriptionInstruction\(\)/, 'the transcription runs on an inline instruction');
+  assert.match(GEMINI, /'temperature' => 0\.0/, 'the transcription runs hot');
+  assert.match(GEMINI, /'responseMimeType' => 'text\/plain'/, 'the transcription answer is wrapped in schema');
+  // A thin service pass-through like classifyAccount: provider failures
+  // bubble, and the caller tries the next engine.
+  assert.match(SVC, /function transcribePhoto\(string \$imageBytes, string \$mimeType\): string/, 'the service carries no photo reading');
+  assert.match(SVC, /\$this->provider->transcribeImage\(\$imageBytes, \$mimeType\)/, 'the service does not reach the provider');
+  // The test double implements the interface, or every provider test fatals.
+  assert.match(STUB, /function transcribeImage\(string \$imageBytes, string \$mimeType\): string/, 'the stub breaks the interface');
 });
