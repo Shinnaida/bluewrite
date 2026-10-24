@@ -482,10 +482,15 @@ test('a traffic-accident vehicle row carries the driver\u2019s licence and the o
   // reporter (a borrowed car, a company vehicle).
   const vehicles = keysOf('Traffic Accident', 'vehicles');
   assert.ok(vehicles.includes('driver_license_no'));
+  assert.ok(vehicles.includes('driver_license_validity'));
+  assert.ok(vehicles.includes('or_number'));
+  assert.ok(vehicles.includes('cr_number'));
   assert.ok(vehicles.includes('owner_name'));
   // The pair the vehicle_completeness cross-check enforces stays intact.
   assert.ok(vehicles.includes('plate_number'));
   assert.ok(vehicles.includes('driver_name'));
+  // Blotter DOB lives on the person row the driver is matched from.
+  assert.ok(keysOf('Traffic Accident', 'complainant').includes('dob'));
   // The same row schema serves a drug-related seizure's vehicle, so it carries
   // them there too — one row shape, one set of rules to keep in step with PHP.
   assert.deepEqual(keysOf('Drug-Related Incident', 'vehicles'), vehicles);
@@ -1195,4 +1200,27 @@ test('a casualty count is a count of people, never a number typed twice', () => 
   assert.equal(ts.injuries, '2', 'the Uninjured are not casualties');
   assert.equal(ts.fatalities, '1');
   assert.deepEqual(validateReport(fire, 'finalize').errors, []);
+});
+
+test('the prose minimums measure words, never tags', () => {
+  // Ink is not text: a narrative of 115 words in bold is still 115 words,
+  // and a disposition padded with list markup is still short.
+  const taggedShort = '<b>' + 'x'.repeat(115) + '</b>'; // 122 chars raw, 115 words
+  assert.ok(taggedShort.length >= 120, 'test setup: the raw string clears the minimum');
+  const { errors: shortErrors } = validateReport(validBase('Theft', { narrative: taggedShort }), 'finalize');
+  assert.ok(
+    shortErrors.some((e) => e.path === 'narrative'),
+    'a tag-padded narrative cleared the minimum',
+  );
+  const taggedLong = '<ul><li><b>' + 'y '.repeat(61) + '</b></li></ul>'; // 121 chars of words with ink
+  const { errors: longErrors } = validateReport(validBase('Theft', { narrative: taggedLong }), 'finalize');
+  assert.ok(
+    !longErrors.some((e) => e.path === 'narrative'),
+    'a formatted narrative that says enough was flagged: ' + JSON.stringify(longErrors.map((e) => e.path)),
+  );
+  const { errors: actErrors } = validateReport(
+    validBase('Theft', { action_taken: '<p><i>Referred</i></p>' }),
+    'finalize',
+  );
+  assert.ok(actErrors.some((e) => e.path === 'action_taken'), 'a tag-padded disposition cleared the minimum');
 });
