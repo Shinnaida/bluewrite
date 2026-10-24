@@ -2723,6 +2723,16 @@ export function ReportEditor({
   // it in the bar. State, not a ref, so the portal branch re-renders once the
   // mount is up. Sheet-only, like the bar itself.
   const [sheetLetterMount, setSheetLetterMount] = useState(null);
+  // The banner-side home for the narrative's own strip (owner request): the
+  // mount div below the masthead hands its own node over by ref-callback, so
+  // the narrative toolbar portals under the banner instead of drawing inside
+  // the field. State, not a ref, so the portal branch re-renders once the
+  // mount is up.
+  const [narrativeToolbarMount, setNarrativeToolbarMount] = useState(null);
+  // Drag-and-drop blotter photo (owner request): a drop onto the narrative
+  // reads through the same capture the Upload button owns — the ref below
+  // is the capture's drop entry, so pick and drop share one review gate.
+  const blotterRef = useRef(null);
   // HOW BIG THE INLINE PAPER IS DRAWN (owner request): browser zoom scales
   // the whole workstation, so the sheet carries its own size on the desk —
   // the mount's `--sheet-zoom`, moved by the deskbar steppers below. Starts
@@ -4526,6 +4536,21 @@ export function ReportEditor({
           ) : null}
         </div>
 
+        {/* The narrative's own strip, BELOW the banner (owner request): the
+            formatting toolbar + blotter Upload live here, directly under the
+            masthead, instead of inside the narrative field. Rendered only
+            while the narrative card itself is on screen, so a hidden step
+            cannot leave a working strip behind. Empty (before the editor
+            portals its strip in) it draws nothing — see
+            .ir-narrative-toolbar:empty. */}
+        {!panelHidden(2) && (
+          <div
+            id="ir-narrative-toolbar"
+            className="ir-narrative-toolbar no-print"
+            ref={setNarrativeToolbarMount}
+          />
+        )}
+
         {/* (The record strip lives INSIDE the band now — see the block above,
             after .ir-case-actions. The stepper follows the band directly.) */}
 
@@ -4904,8 +4929,11 @@ export function ReportEditor({
                 ariaLabel="Detailed Description of Events"
                 placeholder={sheet ? "Write the whole incident summary here in your own words - who reported it, what happened, when and where, who was involved, and what was done. The AI fills the report fields from this; you review before filing." : "Describe the incident in chronological order. Include suspect description, witness information, and any property damage or injuries."}
                 toolbar="top"
+                toolbarMount={narrativeToolbarMount}
+                onDropPhoto={(file) => blotterRef.current?.dropFile?.(file)}
                 toolbarExtra={(
                   <BlotterCapture
+                    ref={blotterRef}
                     disabled={!canEdit}
                     onInsert={(text) => setNarrative(mergeBlotterText(draft.narrative, text))}
                   />

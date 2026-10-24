@@ -14,9 +14,9 @@
 // it holds no state of its own beyond the typewriter cursor and writes nothing
 // unless the host passes `editable` with the onEdit* callbacks, in which case
 // the narrative, findings and recorded action lines are inline formatted
-// editors — the narrative carries its own top strip (the blotter Upload
-// rides it — see BlotterCapture), while findings and action stay strip-free
-// and register their carets with the sheet's one floating box — and the
+// editors — the narrative, findings and action stay strip-free (the blotter
+// Upload lives on the form's own strip — see BlotterCapture) and register
+// their carets with the sheet's one floating box — and the
 // free-text facts are wrapping Word-like fields (owner request — type
 // directly on the letter, like in Word).
 //
@@ -63,8 +63,6 @@ import { toUpperCase, toSentenceCase, labelCase, properNounMap } from '../../lib
 import { stripLeadingBlotterRestatement } from '../../lib/narrativeText.js';
 import { sanitizeRichHtml, containsRichTags, richTextToPlain, sanitizeLetterHtml } from '../../lib/richText.js';
 import RichTextArea from './RichTextArea.jsx';
-import BlotterCapture from './BlotterCapture.jsx';
-import { mergeBlotterText } from '../../lib/blotterText.js';
 import WordField from './WordField.jsx';
 import SheetText, { sheetTextOf } from './SheetText.jsx';
 import { parseSheetDate, parseSheetDateTime } from '../../lib/sheetDateParse.js';
@@ -882,12 +880,7 @@ export default function ReportSheetBody({
             className="pr-narrative-edit"
             ariaLabel="Facts of the case — edit on the letter"
             rows={10}
-            toolbar="top"
-            toolbarExtra={(
-              <BlotterCapture
-                onInsert={(text) => onEditNarrative(mergeBlotterText(narrativeRaw, text))}
-              />
-            )}
+            toolbar="none"
           />
         ) : narrativeRich ? (
           <div
