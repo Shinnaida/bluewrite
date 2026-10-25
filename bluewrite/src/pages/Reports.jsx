@@ -4907,6 +4907,7 @@ export function ReportEditor({
                 toolbarExtra={(
                   <BlotterCapture
                     disabled={!canEdit}
+                    defaultRecordedBy={user?.full_name || ''}
                     onInsert={(text) => setNarrative(mergeBlotterText(draft.narrative, text))}
                   />
                 )}
