@@ -4246,7 +4246,6 @@ export function ReportEditor({
         report: { ...(draft || {}), id: draft?.id ?? editingId },
         ts: inlineTs,
         stationHeader,
-        recordedBy: { name: user?.full_name || user?.name || draft?.created_by_name },
       }}
       // Slim bar in the sheet format only (owner request, 2026-10-26): `sheet`
       // here is the FORMAT flag, not the panel's sheet object below — the bar
@@ -5628,7 +5627,6 @@ export function ReportEditor({
         <ReportPrint
           reportId={draft.id}
           onClose={() => setPrinting(false)}
-          recordedBy={{ name: user.full_name, badge: user.badge_number }}
         />
       )}
 
@@ -5641,7 +5639,6 @@ export function ReportEditor({
         <ReportPrint
           report={draft}
           autoPrint={false}
-          recordedBy={{ name: user.full_name, badge: user.badge_number }}
           onClose={() => setFinalizePreview(false)}
           footer={
             <div className="finalize-bar no-print" role="alertdialog" aria-label="Confirm finalize">
@@ -6990,7 +6987,6 @@ export function ReportsTable({
             variant="page"
             autoPrint={false}
             onClose={closeSheet}
-            recordedBy={{ name: user.full_name, badge: user.badge_number }}
             onLoaded={(filed) =>
               setSheetReport((cur) => (cur ? { ...cur, ...filed } : cur))
             }

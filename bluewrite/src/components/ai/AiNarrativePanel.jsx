@@ -421,7 +421,7 @@ export default function AiNarrativePanel({
   narrativeLanguage = 'en',
   // TASK 9 — the bondpaper, typed into IN THIS CARD. The editor hands over
   // everything the sheet needs to draw the letter for the report on screen
-  // ({ report, ts, stationHeader, recordedBy }), and a generated draft then
+  // ({ report, ts, stationHeader }), and a generated draft then
   // TYPES ITSELF INTO THE LETTER inside this panel: the static chrome (header,
   // date, title, certification boilerplate, every bold label) is on screen from
   // the first frame and only the AI's own values are revealed, one character
@@ -1170,9 +1170,12 @@ export default function AiNarrativePanel({
 
   // SHEET FORMAT — Arrange-only Generate Report (2026-10-23).
   // Organizes the officer's own account into the capstone police report format
-  // WITHOUT rewording: runs the same account read as Generate (fills type/date/place),
-  // ensures the report exists, then proposes the officer's own cleaned text as the draft.
+  // WITHOUT rewording: runs the same account read as Generate (Gemini fills
+  // type/date/place plus the type's own fields, blanks left blank), saves
+  // best-effort, then proposes the officer's own cleaned text as the draft.
   // No LLM call, so no tokens, no hallucination, works even when AI is down.
+  // Missing parts stay missing: a report the read could not complete still
+  // arranges, and the paper renders the blanks blank for the officer to fill.
   const arrangeReport = async () => {
     setLastPress({ kind: 'arrange' });
     let accountText = richTextToPlain(String(narrative || ''));
@@ -1192,27 +1195,29 @@ export default function AiNarrativePanel({
     // Guarded like generate()'s own awaits: the draft save behind
     // resolveReportId can throw (expired session, network, server refusal),
     // and an uncaught throw here would strand the panel in silent loading —
-    // a press that appears to do nothing. The failure path names the reason
-    // exactly as generate's does.
+    // a press that appears to do nothing.
+    //
+    // Best-effort save (owner request): Arrange needs no report id — there is
+    // no LLM call to file — so a refused or impossible save never blocks the
+    // press. The read above already filled what the account stated and left
+    // the rest blank; the paper renders those blanks blank. A refused save
+    // already says why on the editor banner (see ensureAiReportId).
     try {
       const restoredRun = beginFreshRun(false);
       if (restoredRun.narrative !== undefined) accountText = richTextToPlain(String(restoredRun.narrative));
       const runFindings = String(restoredRun.findings ?? notableFindings ?? '');
       const runActionTaken = String(restoredRun.actionTaken ?? actionTaken ?? '');
-      let arrangeRead = null;
       if (onReadAccount) {
-        arrangeRead = await runAccountRead(accountText);
+        await runAccountRead(accountText);
       }
       if (onBeforeGenerate && !onBeforeGenerate()) {
         return;
       }
-      setMessage('Preparing the report so it can be arranged...');
-      const rid = await resolveReportId();
-      if (rid == null) {
-        setMessage(saveBlockedMessage(arrangeRead, 'it can be arranged'));
-        setMode('error');
-        setPanelOpen(true);
-        return;
+      try {
+        setMessage('Preparing the report so it can be arranged...');
+        await resolveReportId();
+      } catch {
+        // Arranging never depends on the save — proceed to the draft.
       }
       setLastSource({ kind: 'notes', text: accountText, language: 'en' });
       setDraft(buildArrangeDraft({ accountText, notableFindings: runFindings, actionTaken: runActionTaken }));
@@ -2800,8 +2805,8 @@ export default function AiNarrativePanel({
               this screen. */}
           <div className="sheet-fullscreen-desk" ref={sheetFullRef}>
             {/* The paper takes the DRAFT's chrome and values from the host's
-                own payload (`sheet`), the same three things the card hands over
-                — report, letterhead and recording officer — so a preview can
+                own payload (`sheet`), the same things the card hands over
+                — report and letterhead — so a preview can
                 never be a preview of something else. A click on the paper is
                 not a dismissal: the document is the one thing here that is not
                 a way out. */}
@@ -2810,7 +2815,6 @@ export default function AiNarrativePanel({
                 report={sheet.report}
                 ts={sheet.ts}
                 stationHeader={sheet.stationHeader}
-                recordedBy={sheet.recordedBy}
                 pending={sheetPending}
                 revealPending={false}
               />

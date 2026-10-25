@@ -105,7 +105,6 @@ function prefersReducedMotion() {
  * @param {object|null} props.stationHeader  station letterhead (may be null)
  * @param {Array}  [props.verifications]     translation review records
  * @param {string|null} [props.verificationStatus]
- * @param {object|null} [props.recordedBy]   { name } of the officer using the app
  * @param {object|null} [props.pending]      Task 9 — the UNCOMMITTED AI draft to
  *   type into the sheet: `{ narrative, findingsText?, statusText?, suspectLines?,
  *   scope }`, where scope is 'generate' (type the facts too) or 'tighten' (type
@@ -173,7 +172,6 @@ export default function ReportSheetBody({
   stationHeader = null,
   verifications = [],
   verificationStatus = null,
-  recordedBy = null,
   pending = null,
   revealKey = 0,
   revealPending = true,
@@ -239,7 +237,10 @@ export default function ReportSheetBody({
     ts,
     suspectLines: pending && pending.scope !== 'tighten' ? pending.suspectLines : null,
   });
-  const recorderName = recordedBy?.name || report.created_by_name || '—';
+  // The recording officer is the report's own creator — never the account
+  // currently viewing it. A not-yet-saved draft has no creator, so the line
+  // reads blank until the first save rather than borrowing the login name.
+  const recorderName = String(report.created_by_name || '').trim() || '—';
   const showAppendix = hasSource(report);
   const sourceLanguageLabel = languageLabel(report.narrative_source_language);
   const latestReview = verifications.length > 0 ? verifications[0] : null;
@@ -1056,8 +1057,9 @@ export default function ReportSheetBody({
       {midHost}
 
       {/* ---- Signature block: Recorded by / IOC / Noted by. The labels type
-           like every other line; the signing name resolves per-report, then
-           the station default (see notedName above). ---- */}
+           like every other line. Recorded by is the report's own creator
+           (report.created_by_name) — never the viewing account; Noted by
+           resolves per-report, then the station default (see notedName above). ---- */}
       <div className="pr-footer-block">
         <p className="pr-recorded">
           <strong>{CL('recorded label', "Recorded by:")}</strong> {recorderName}
