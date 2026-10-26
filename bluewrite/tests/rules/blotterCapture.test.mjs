@@ -355,3 +355,72 @@ test('the review dialog offers the certification format, prefilled from the offi
   const SRC = readFileSync(new URL('../../src/pages/Reports.jsx', import.meta.url), 'utf8');
   assert.match(SRC, /defaultRecordedBy/, 'the form never hands the officer name to the capture');
 });
+
+test('certification format adds recorded-by and the issuance line, wording untouched', () => {
+  // The owner's sample: a raw image-to-text read goes in, the finished
+  // certification comes out — same words (RESKLESS stays RESKLESS), plus the
+  // RECORDED BY line before REMARKS and the closing issuance line.
+  const raw = [
+    'RESKLESS IMPRUDENCE RESULTING IN DAMAGE PROPERTY AND PHYSICAL INJURY',
+    '',
+    'PLACE OF INCIDENT: CANSIMUNDONG, INOBURAN, CITY OF NAGA, CEBU',
+    'FACTS : V1 WAS HEADING UPHILL WHILE V2 WAS HEADING DOWNHILL',
+    'AND THE BACKRIDER OF V2 SUSTAINED PHYSICAL INJURIES AND WERE BROUGHT TO NAGA HEALTH INFIRMARY FOR MEDICAL TREATMENT',
+    'REMARKS: BOTH PARTIES AMICABLY SETTLED THE INCIDENT',
+  ].join(NL);
+  const out = formatBlotterCertification(raw, { recordedBy: 'PSSg Caballero J.' });
+  const expected = [
+    'RESKLESS IMPRUDENCE RESULTING IN DAMAGE PROPERTY AND PHYSICAL INJURY',
+    '',
+    'PLACE OF INCIDENT: CANSIMUNDONG, INOBURAN, CITY OF NAGA, CEBU',
+    'FACTS : V1 WAS HEADING UPHILL WHILE V2 WAS HEADING DOWNHILL',
+    'AND THE BACKRIDER OF V2 SUSTAINED PHYSICAL INJURIES AND WERE BROUGHT TO NAGA HEALTH INFIRMARY FOR MEDICAL TREATMENT',
+    '',
+    'RECORDED BY :  PSSg Caballero J.',
+    '',
+    'REMARKS: BOTH PARTIES AMICABLY SETTLED THE INCIDENT',
+    '',
+    'This certification is issued upon the request of "name of who requested" for what ever legal purposes it may serve.',
+  ].join(NL);
+  assert.equal(out, expected);
+  // A named requestor replaces the placeholder.
+  assert.ok(
+    formatBlotterCertification(raw, { recordedBy: 'PSSg Caballero J.', requestedBy: 'Juan Dela Cruz' }).endsWith(
+      'This certification is issued upon the request of "Juan Dela Cruz" for what ever legal purposes it may serve.',
+    ),
+  );
+  // Idempotent: a formatted page formats to itself.
+  assert.equal(formatBlotterCertification(out, { recordedBy: 'PSSg Caballero J.' }), out);
+});
+
+test('certification format degrades gracefully without REMARKS or names', () => {
+  // No REMARKS line: the recorded-by line appends at the end, before issuance.
+  const out = formatBlotterCertification('FACTS : something happened', { recordedBy: '' });
+  assert.equal(
+    out,
+    'FACTS : something happened' + NL + NL + 'RECORDED BY :' + NL + NL + 'This certification is issued upon the request of "name of who requested" for what ever legal purposes it may serve.',
+  );
+  // Empty and blank reads stay empty — never a page of boilerplate.
+  assert.equal(formatBlotterCertification('', { recordedBy: 'PSSg Caballero J.' }), '');
+  assert.equal(formatBlotterCertification('   ' + NL + '  ', {}), '');
+  // CRLF and trailing spaces collapse; the wording is otherwise untouched.
+  const CR = String.fromCharCode(13);
+  assert.equal(
+    formatBlotterCertification('LINE ONE   ' + CR + NL + CR + NL + CR + NL + 'LINE TWO  ', {}),
+    'LINE ONE' + NL + NL + 'LINE TWO' + NL + NL + 'RECORDED BY :' + NL + NL + 'This certification is issued upon the request of "name of who requested" for what ever legal purposes it may serve.',
+  );
+});
+
+test('the review dialog offers the certification format, prefilled from the officer', () => {
+  // One explicit press shapes the reviewed text; nothing auto-formats.
+  assert.match(COMP, /formatBlotterCertification/, 'the dialog never formats the reviewed text');
+  assert.match(COMP, /Apply certification format/, 'the format press is missing from the review');
+  assert.match(COMP, /blotter-recorded-by/, 'the recorded-by field is missing');
+  assert.match(COMP, /blotter-requested-by/, 'the requested-by field is missing');
+  assert.match(COMP, /defaultRecordedBy/, 'the officer name never prefills the recorded-by field');
+  // Insert still carries only the reviewed text — formatting is a press, not a write.
+  assert.match(COMP, /onInsert/, 'Insert is gone from the review');
+  // The form prefills recorded-by from the logged-in officer.
+  const SRC = readFileSync(new URL('../../src/pages/Reports.jsx', import.meta.url), 'utf8');
+  assert.match(SRC, /defaultRecordedBy/, 'the form never hands the officer name to the capture');
+});

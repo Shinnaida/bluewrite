@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTypeFacts, properNounsFor, buildFindings, buildStructuredFindings } from '../../src/lib/sheetFacts.js';
+import { buildTypeFacts, properNounsFor, buildFindings, buildStructuredFindings, reportTitle } from '../../src/lib/sheetFacts.js';
 
 const labels = (type, ts, report = {}) =>
   buildTypeFacts(type, { report, ts }).map((e) => e.label);
@@ -150,4 +150,41 @@ test('the structured evidence lines stay separate from the officer ink', () => {
     'CCTV footage is available \u2014 lobby camera.',
   ]);
   assert.deepEqual(buildStructuredFindings({}), []);
+});
+
+// ---- The sheet's quoted title: the blotter's wording, not the dropdown -----
+// The officer types the offense exactly as the blotter book words it
+// (`ts.offense_caption`); until they do, the title falls back to the incident
+// type. The sheet upper-cases the result, so this returns it as recorded.
+test('reportTitle prefers the offense caption over the incident type', () => {
+  assert.equal(
+    reportTitle(
+      { incident_type: 'Traffic Accident' },
+      { offense_caption: 'Reckless imprudence resulting in damage to property and physical injury' },
+    ),
+    'Reckless imprudence resulting in damage to property and physical injury',
+  );
+});
+
+test('reportTitle falls back to the incident type when no caption is recorded', () => {
+  assert.equal(reportTitle({ incident_type: 'Traffic Accident' }, {}), 'Traffic Accident');
+  assert.equal(reportTitle({ incident_type: 'Theft' }, { offense_caption: '   ' }), 'Theft');
+});
+
+test('reportTitle returns blank when neither caption nor type exists (never invented)', () => {
+  assert.equal(reportTitle({}, {}), '');
+  assert.equal(reportTitle({ incident_type: '' }, { offense_caption: '' }), '');
+});
+
+test('buildTypeFacts never prints the caption or the recorder as fact rows', () => {
+  // The caption is the sheet's quoted TITLE and recorded_by its signature
+  // line; neither belongs in the labeled-facts block for any type.
+  for (const type of ['Traffic Accident', 'Theft', 'Physical Injury']) {
+    const flat = JSON.stringify(buildTypeFacts(type, {
+      report: {},
+      ts: { offense_caption: 'Some offense', recorded_by: 'PSSg Caballero' },
+    }));
+    assert.ok(!flat.includes('Some offense'), `${type} leaks the caption into facts`);
+    assert.ok(!flat.includes('PSSg Caballero'), `${type} leaks the recorder into facts`);
+  }
 });

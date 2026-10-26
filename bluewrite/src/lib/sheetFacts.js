@@ -76,6 +76,20 @@ export function properNounsFor(report = {}, ts = {}) {
   return names;
 }
 
+/**
+ * The sheet's quoted title. The officer types the offense exactly as the
+ * blotter book words it (`ts.offense_caption`); until they do, the title
+ * falls back to the incident type. The sheet upper-cases the result through
+ * its normal casing pass, so this returns it as recorded.
+ *
+ * @returns {string}
+ */
+export function reportTitle(report = {}, ts = {}) {
+  const caption = N(ts?.offense_caption);
+  if (caption !== '') return caption;
+  return N(report?.incident_type);
+}
+
 // “P8,500.00” if the stored value is a bare number; leave typed text alone.
 function fmtValue(v) {
   const s = N(v);

@@ -40,6 +40,7 @@ import {
   appendixCloseLine,
 } from '../lib/reportVerification.js';
 import {
+  reportTitle,
   buildTypeFacts,
   buildFindings,
   buildStructuredActions,
@@ -92,7 +93,6 @@ function prefersReducedMotion() {
  * @param {object|null} props.stationHeader  station letterhead (may be null)
  * @param {Array}  [props.verifications]     translation review records
  * @param {string|null} [props.verificationStatus]
- * @param {object|null} [props.recordedBy]   { name } of the officer using the app
  * @param {object|null} [props.pending]      Task 9 — the UNCOMMITTED AI draft to
  *   type into the sheet: `{ narrative, findingsText?, statusText?, suspectLines?,
  *   scope }`, where scope is 'generate' (type the facts too) or 'tighten' (type
@@ -120,7 +120,6 @@ export default function ReportSheetBody({
   stationHeader = null,
   verifications = [],
   verificationStatus = null,
-  recordedBy = null,
   pending = null,
   revealKey = 0,
   revealPending = true,
@@ -140,7 +139,10 @@ export default function ReportSheetBody({
     suspectLines: pending && pending.scope !== 'tighten' ? pending.suspectLines : null,
   });
   const findings = buildFindings(ts);
-  const recorderName = recordedBy?.name || report.created_by_name || '—';
+  // Who recorded the entry is RECORD data (`ts.recorded_by`), typed by the
+  // officer as the blotter book names them — never the account using the app,
+  // so the line stays blank until that data exists.
+  const recorderName = N(ts?.recorded_by);
   const showAppendix = hasSource(report);
   const sourceLanguageLabel = languageLabel(report.narrative_source_language);
   const latestReview = verifications.length > 0 ? verifications[0] : null;
@@ -272,7 +274,7 @@ export default function ReportSheetBody({
       </p>
 
       {/* Full caps: the quoted category follows the letter's own convention. */}
-      <p className="pr-incident-type">&ldquo;{toUpperCase(report.incident_type)}&rdquo;</p>
+      <p className="pr-incident-type">&ldquo;{toUpperCase(reportTitle(report, ts))}&rdquo;</p>
 
       {/* ---- Per-type labeled facts — bold chrome LABELS, typed values ---- */}
       <div className="pr-facts">
