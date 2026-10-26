@@ -1,0 +1,29 @@
+name: blotter_capture
+description: Photograph the written blotter, read it through the BlueWrite portal, and file photo plus reviewed text into a Write Report draft.
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Camera shutter for the blotter page (the emulator proves nothing — verify
+  # on a physical phone, which is the only camera this app ships to).
+  camera: ^0.11.0
+  # Portal calls: login + MFA, /ocr/read, /reports, /reports/:id/captures.
+  http: ^1.2.0
+  crypto: ^3.0.0
+  # The device token and the PIN verifier, in the platform keystore.
+  flutter_secure_storage: ^9.2.0
+  # Downscale before upload: a 1600px JPEG reads as well and uploads 10x faster.
+  image: ^4.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

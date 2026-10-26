@@ -58,6 +58,13 @@ require __DIR__ . '/../app/core/LegacyNormalizer.php';
 require __DIR__ . '/../app/core/IncidentTypes.php';
 require __DIR__ . '/../app/core/Station.php';
 require __DIR__ . '/../app/core/ReportVerification.php';
+// The phone app's long-lived credential (migration 024): issued off a full
+// sign-in, presented as `Authorization: Bearer`. Required here for this
+// project's usual reason — no autoloader.
+require __DIR__ . '/../app/core/DeviceTokens.php';
+// A blotter-capture photo filed against a report (migration 025): the stored
+// bytes live outside the web root, like the avatars. Same require rule.
+require __DIR__ . '/../app/core/ReportCaptures.php';
 // How far along each draft is: the tally Home's draft cards wear, derived from
 // the row itself so it is right for a draft any client saved (see the class).
 // Reached by ReportsController::index, and required here for this project's
@@ -99,6 +106,10 @@ require __DIR__ . '/../app/controllers/NewsController.php';
 require __DIR__ . '/../app/controllers/AuditsController.php';
 require __DIR__ . '/../app/controllers/StationController.php';
 require __DIR__ . '/../app/controllers/VerificationController.php';
+// The phone's token mint and inventory (migration 024), and the capture
+// photos filed against a report (migration 025). Same require rule.
+require __DIR__ . '/../app/controllers/DevicesController.php';
+require __DIR__ . '/../app/controllers/CapturesController.php';
 // The online photo reader (POST /ocr/read): a server-side proxy to the
 // imagetotext.info image-to-text API, so the API key stays on the server.
 // Required here for this project's usual reason: no autoloader.
@@ -107,7 +118,9 @@ require __DIR__ . '/../app/controllers/OcrController.php';
 use App\Controllers\AccountRequestsController;
 use App\Controllers\AuditsController;
 use App\Controllers\AuthController;
+use App\Controllers\CapturesController;
 use App\Controllers\DashboardController;
+use App\Controllers\DevicesController;
 use App\Controllers\MessagesController;
 use App\Controllers\NarrativeController;
 use App\Controllers\NewsController;
@@ -203,6 +216,31 @@ try {
         // cannot use mail finishes, and the session it uses has no user_id yet.
         if ($seg1 === 'recovery' && $method === 'POST') {
             $c->mfaRecovery();
+        }
+    }
+
+    // ---- Device tokens for the blotter-capture phone app (migration 024) ----
+    // Registered BEFORE the gate below, like /login and /mfa: the gate's CSRF
+    // check would answer 419 to a caller with no session at all, while the
+    // honest answer for these routes is 401 (issue without signing in, or a
+    // phone signing itself out on a dead token). Each method enforces its own
+    // CSRF instead — the session-only ones strictly, revokeCurrent through
+    // the bearer-skipping check (see DevicesController: tokens cannot mint
+    // tokens; only DELETE /devices/current accepts the token itself, which
+    // is the phone's own sign-out).
+    if ($seg0 === 'devices') {
+        $c = new DevicesController();
+        if ($seg1 === 'issue' && $method === 'POST') {
+            $c->issue();
+        }
+        if ($seg1 === null && $method === 'GET') {
+            $c->index();
+        }
+        if ($seg1 === 'current' && $method === 'DELETE') {
+            $c->revokeCurrent();
+        }
+        if ($seg1 !== null && ($parts[2] ?? null) === 'revoke' && !isset($parts[3]) && $method === 'POST') {
+            $c->revoke((string) $seg1);
         }
     }
 
@@ -483,6 +521,18 @@ try {
             }
             if ($parts[2] === 'history' && $method === 'GET') {
                 $c->history((string) $seg1);
+            }
+            // Blotter-capture photos filed against a report (migration 025).
+            // Append-only: list them, file one (multipart `photo` plus the
+            // reviewed `ocr_text`/`engine` fields), or read one's bytes.
+            if ($parts[2] === 'captures' && !isset($parts[3]) && $method === 'GET') {
+                (new CapturesController())->index((string) $seg1);
+            }
+            if ($parts[2] === 'captures' && !isset($parts[3]) && $method === 'POST') {
+                (new CapturesController())->store((string) $seg1);
+            }
+            if ($parts[2] === 'captures' && isset($parts[3]) && ($parts[4] ?? null) === 'photo' && !isset($parts[5]) && $method === 'GET') {
+                (new CapturesController())->photo((string) $seg1, (string) $parts[3]);
             }
             if ($parts[2] === 'print' && $method === 'GET') {
                 $c->printData((string) $seg1);

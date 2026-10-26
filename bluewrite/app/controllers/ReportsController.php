@@ -1409,10 +1409,73 @@ final class ReportsController
 
     /**
      * Phase 2 (UC-015/016): full single-report payload for the print-ready
-n     * view. Officers and Staff may print only their own reports; Admin may
+n     * view. Roles outside Admin and Officer may print only their own
+n     * reports; Admin and Officer may print any.
      * print any. Finalized reports include the finalization block
      * (finalized_by/at), drafts are labeled DRAFT.
      */
+    /**
+     * GET /reports/{id} — one report, read.
+     *
+     * THE READ THE SCREENS NEED, separated from printData on purpose. The print
+     * endpoint records `report.print` in the audit trail because printing a
+     * document is an act; opening the same record to read or continue it is not,
+     * and a server-rendered edit form that audited every page load as a print
+     * would make the trail lie about what happened at the station.
+     *
+     * The visibility rule is the print endpoint's, unchanged: the account that
+     * recorded the report, an administrator, or a reader recorded as reviewing a
+     * translation (see ReportVerification::mayViewForVerification). Narrative and
+     * type_specific are included because this is the screen that edits them —
+     * unlike the list, which deliberately carries neither.
+     */
+    public function show(string $id): void
+    {
+        $user = Auth::requireUser();
+        $pdo = Database::pdo();
+
+        $stmt = $pdo->prepare(
+            'SELECT r.*, u.full_name AS created_by_name, u.badge_number AS created_by_badge,
+                    fu.full_name AS finalized_by_name
+             FROM reports r
+             JOIN users u ON u.id = r.created_by
+             LEFT JOIN users fu ON fu.id = r.finalized_by
+             WHERE r.id = :id'
+        );
+        $stmt->execute([':id' => (int) $id]);
+        $report = $stmt->fetch();
+        if ($report === false || $report['deleted_at'] !== null) {
+            Response::json(404, ['error' => 'Report not found.']);
+        }
+        if (!ReportVerification::mayViewForVerification($user, $report)) {
+            Response::json(403, ['error' => 'You can only open reports you recorded.']);
+        }
+
+        $vstmt = $pdo->prepare(
+            'SELECT v.*, u.full_name AS verifier_name, r.name AS verifier_role
+             FROM report_verifications v
+             JOIN users u ON u.id = v.verifier_id
+             JOIN roles r ON r.id = u.role_id
+             WHERE v.report_id = :rid ORDER BY v.id DESC'
+        );
+        $vstmt->execute([':rid' => (int) $id]);
+        $verifications = $vstmt->fetchAll();
+        $status = ReportVerification::status($report, $verifications);
+
+        // The blotter-capture photos filed against this report (migration
+        // 025), oldest first: the draft sheet draws each photo beside the
+        // narrative it produced, so the officer checks image against text.
+        $captures = CapturesController::listFor($pdo, (int) $id);
+        Response::json(200, [
+            'report' => $report,
+            'station' => Station::header(),
+            'verification_status' => $status['code'],
+            'verification_label' => $status['label'],
+            'verifications' => $verifications,
+            'captures' => $captures,
+        ]);
+    }
+
     public function printData(string $id): void
     {
         $user = Auth::requireUser();
@@ -1454,12 +1517,17 @@ n     * view. Officers and Staff may print only their own reports; Admin may
         $vstmt->execute([':rid' => (int) $id]);
         $verifications = $vstmt->fetchAll();
         $status = ReportVerification::status($report, $verifications);
+        // The blotter-capture photos filed against this report (migration
+        // 025), oldest first: the draft sheet draws each photo beside the
+        // narrative it produced, so the officer checks image against text.
+        $captures = CapturesController::listFor($pdo, (int) $id);
         Response::json(200, [
             'report' => $report,
             'station' => Station::header(),
             'verification_status' => $status['code'],
             'verification_label' => $status['label'],
             'verifications' => $verifications,
+            'captures' => $captures,
         ]);
     }
 

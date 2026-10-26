@@ -113,6 +113,14 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // and the Admin list, so the scratch DB must carry it or those routes
         // fail as unknown-table 500s rather than as assertions.
         $this->runSqlFile(__DIR__ . '/../migrations/019_account_requests.sql');
+        // 024 is the phone app's device tokens. Auth::requireUser resolves a
+        // bearer off this table on every request, so the scratch DB must
+        // carry it or every device test fails as an unknown-table 500.
+        $this->runSqlFile(__DIR__ . '/../migrations/024_device_tokens.sql');
+        // 025 is the blotter-capture photos filed against a report. The
+        // capture routes and both report reads touch this table, so the
+        // scratch DB must carry it for the same reason.
+        $this->runSqlFile(__DIR__ . '/../migrations/025_report_captures.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         // Every account that OWES a second factor has an email address, because
@@ -127,6 +135,9 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         $ins->execute([':r' => 2, ':n' => 'Test Officer', ':b' => 'T-OFF-1', ':u' => 't.officer', ':e' => 't.officer@example.test', ':h' => $hash, ':s' => 'active']);
         $ins->execute([':r' => 3, ':n' => 'Test Staff', ':b' => 'T-STF-1', ':u' => 't.staff', ':e' => null, ':h' => $hash, ':s' => 'active']);
         $ins->execute([':r' => 2, ':n' => 'Inactive Officer', ':b' => 'T-OFF-2', ':u' => 't.inactive', ':e' => 't.inactive@example.test', ':h' => $hash, ':s' => 'inactive']);
+        // A second officer: the device and capture tests file and revoke
+        // across accounts, so one account is never enough.
+        $ins->execute([':r' => 2, ':n' => 'Test Officer 2', ':b' => 'T-OFF-3', ':u' => 't.officer2', ':e' => 't.officer2@example.test', ':h' => $hash, ':s' => 'active']);
 
         // Start every test with an empty mail log, so `lastEmailedCode()` can
         // only ever return a code this test caused the server to send.

@@ -4279,26 +4279,25 @@ body.users-fab-open .ir-page-head.users-head {
 
    SCOPED TO THE PANEL, deliberately — the print portal and the inline reveal
    keep the sheet's own behaviour, which is the very thing this now matches. */
-/* THE CARD'S PAGE IS TRUE SIZE, AND THE FRAME SCROLLS TO THE REST.
+/* THE CARD'S PAGE IS A FLAT 50%, AND THE FRAME SCROLLS TO THE REST.
 
-   The leaf is drawn at its own size — 8.5 × 11in, the station's paper, at full
-   scale (owner request: the sheet reads as the bondpaper it is, never as a
-   shrunken copy). It used to be drawn at a flat 50% with the same frame doing
-   the scrolling; the scale is gone, the scrolling stays. One size means the
-   page reads the same in every format and every window — the assistant's card
-   is a column in one format and a wide block in another, and a page that
-   changed size with the column was a different page each time.
+   The leaf is drawn at one fixed size — 8.5 × 11in at `zoom: 0.5` (owner
+   request, 2026-10-05): the same page in every format and every window. The
+   assistant's card is a column in one format and a wide block in another, so
+   a page that changed size with the column was a different page each time;
+   a measured fit (ResizeObserver re-fitting on every box change) fought the
+   stepper ladder's own sizes. One number ends both.
 
-   NO JAVASCRIPT SIZES THIS. A full leaf is wider and taller than most frames,
-   so the FRAME owns both scrollbars and the page keeps its measure — the
-   ResizeObserver that used to re-fit the page on every box change stays gone,
-   rather than left to fight this rule.
+   NO JAVASCRIPT SIZES THIS. A half leaf is still wider and taller than most
+   frames, so the FRAME owns both scrollbars and the page keeps its measure.
 
-   `width: 8.5in`, not `min(100%, 8.5in)`: the page is the paper, so it keeps
-   the paper's own width and the frame scrolls to whatever does not fit. */
+   `width: 8.5in`, not `min(100%, 8.5in)`: a percentage and the zoom would
+   each take a bite of the same scaling, and the page would come out at a
+   fraction of its 50%. */
 .ai-sheet-preview .print-sheet {
   flex: 0 0 auto;
   width: 8.5in;
+  zoom: 0.5;
   /* The leaf's floor, not a cap: the sheet grows when the letter needs more
      paper, so its own scrollbar (the frame's) always has the tail to reach. */
   min-height: 11in;
@@ -7269,6 +7268,37 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    rather than a child, since both charts are `role="img"` and everything inside one
    of those is presentational to assistive tech. */
 .dash-hours-wrap { position: relative; }
+/* ---- Incident categories over time: the rank chart's interactive half ---
+   The plot is `role="img"`, so the rank card, the type labels and the slice
+   hit targets are SIBLINGS of the picture, never children — everything inside
+   one of those is presentational to assistive tech. The wrapper is the
+   coordinate frame the card is positioned in, so it is positioned. */
+.dash-rank { position: relative; }
+/* The slice hit target covers the whole column: a fill of `none` would take
+   no pointer events, so it is transparent paint instead. */
+.dash-rank__hit { fill: transparent; }
+/* The sentence the panel exists to say: callout-weight (14px paper ink on the
+   raised surface, height reserved so swapping sentences never moves the
+   panel), never footnote-weight like the axis labels it sits under. */
+.dash-rank__note {
+  font-size: 14px;
+  color: var(--paper);
+  background: var(--panel-raised);
+  min-height: 3.25em;
+}
+/* The footnote is a step down from the sentence, but not the smallest text. */
+.dash-rank__omitted { font-size: 12.5px; }
+/* Picking a line out is a STATE: width separates the chosen line (six strokes
+   at 0.4 would still read as six), the rest recede to the dashboard value. */
+.dash-rank__line.is-focused { stroke-width: 2.4; }
+.dash-rank__line.is-muted { opacity: 0.4; }
+/* The rank lanes are the axis; the slice being read is a band — the same
+   device the other panels use for "this is the column in question". */
+.dash-rank__lane { stroke: var(--line-bright); }
+.dash-rank__band { fill: var(--cyan-bg); }
+@media (prefers-reduced-motion: no-preference) {
+  .dash-rank__line { transition: opacity 160ms ease-out, stroke-width 160ms ease-out; }
+}
 .dash-peek {
   position: absolute;
   z-index: 7;
@@ -8023,6 +8053,18 @@ body.profile-panel-open.ai-panel-open .dash-dock {
    NO MEDIA QUERY HERE, and this is the one place a breakpoint would be wrong: below
    720px the rail is already gone (see above), and the class costs nothing when there
    is no rail to lift. */
+/* THE CIRCLE: fixed in the corner, round, and filled with the screen's
+   primary — owned outright rather than inherited from the neutral button
+   (the exclusion chain in incident-report.css names it as a button it does
+   not paint). One control, wired in Users.jsx, with its name in `aria-label`
+   and `title` instead of a visible label. */
+.users-fab { position: fixed; right: 18px; bottom: 18px;
+  width: var(--fab-size, 56px); height: var(--fab-size, 56px);
+  border-radius: 50%; background: var(--ir-blue);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; padding: 0; cursor: pointer; color: var(--on-accent);
+  box-shadow: var(--shadow-md); z-index: 30;
+}
 body.users-fab-open {
   --fab-size: 56px;
   --fab-lift: calc(var(--fab-size) + 12px);
@@ -8809,4 +8851,73 @@ body.users-fab-open .main {
     padding-left: 1.4rem;
   }
   body.recovery-sheet-open .recovery-print-foot { margin-top: 1.25rem; font-size: 10pt; }
+}
+
+/* Captured blotter photos (migration 025): each photo beside the reviewed
+   narrative it produced — read-only, the phone files them, the portal
+   checks them. */
+.capture-strip {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 1rem 1.1rem;
+  margin-top: 1rem;
+}
+.capture-strip__title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  color: var(--paper);
+}
+.capture-strip__hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--steel);
+}
+.capture-strip__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.capture-strip__item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  padding: 0.6rem;
+  background: var(--panel-raised);
+}
+.capture-strip__thumb {
+  flex: 0 0 7rem;
+  display: block;
+  border-radius: 0.3rem;
+  overflow: hidden;
+}
+.capture-strip__thumb img {
+  display: block;
+  width: 7rem;
+  height: 7rem;
+  object-fit: cover;
+}
+.capture-strip__meta {
+  flex: 1;
+  min-width: 0;
+}
+.capture-strip__by {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--steel);
+}
+.capture-strip__text {
+  margin: 0.3rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--paper);
+  white-space: pre-wrap;
+}
+.capture-strip__text--empty {
+  font-style: italic;
+  color: var(--steel);
 }

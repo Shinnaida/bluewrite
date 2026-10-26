@@ -173,6 +173,7 @@ import AiNarrativePanel from '../components/ai/AiNarrativePanel.jsx';
 // dispute form. Same component for the editor and the reviewing officer, since
 // a verifier opens the report read-only through the same screen.
 import ReportVerificationPanel from '../components/reports/ReportVerificationPanel.jsx';
+import ReportCaptureStrip from '../components/reports/ReportCaptureStrip.jsx';
 // Phase 6 Stage 5 Track B — the terminology table (NarrativeTermsPanel.jsx) is
 // deliberately NOT imported here: the glossary ships with zero approved terms
 // today, so the only thing it could draw on this screen is its empty-state
@@ -2623,8 +2624,13 @@ export function ReportEditor({
   // when another report loads, so one report's status can never colour
   // another's notice.
   const [verificationStatus, setVerificationStatus] = useState(null);
+  // Blotter-capture photos filed against this report (migration 025), for
+  // the strip under the narrative. Reset when another report loads, so one
+  // report's photos can never colour another's sheet.
+  const [captures, setCaptures] = useState([]);
   useEffect(() => {
     setVerificationStatus(null);
+    setCaptures([]);
   }, [editingId]);
 
   const canFinalize = user.role === 'Admin' || user.role === 'Officer';
@@ -2888,6 +2894,7 @@ export function ReportEditor({
   useEffect(() => {
     if (reportId === null) {
       setDraft({ ...EMPTY });
+      setCaptures([]);
       setLoading(false);
       return;
     }
@@ -2914,6 +2921,8 @@ export function ReportEditor({
             ? String(r.incident_datetime).slice(0, 16).replace(' ', 'T')
             : '',
         });
+        // Captures ride the same read for the photo strip below.
+        setCaptures(Array.isArray(d.captures) ? d.captures : []);
         setLoading(false);
       })
       .catch((err) => {
@@ -4937,6 +4946,7 @@ export function ReportEditor({
                   <BlotterCapture
                     ref={blotterRef}
                     disabled={!canEdit}
+                    defaultRecordedBy={user?.full_name || ''}
                     onInsert={(text) => setNarrative(mergeBlotterText(draft.narrative, text))}
                   />
                 )}
@@ -4948,6 +4958,11 @@ export function ReportEditor({
                   "no approved report terminology published yet" disclaimer. It
                   mounts back under this line when the glossary has entries. */}
             </div>
+            {/* Blotter-capture photos (migration 025): each photo beside the
+                narrative it produced, read-only — the phone files them, the
+                portal checks them. Mounted only when the report carries some;
+                a report with no captures keeps the form it always had. */}
+            {editingId && captures.length > 0 && <ReportCaptureStrip captures={captures} />}
             {/* Phase 6 Stage 4 (D7) — the side-by-side review surface. After
                 Apply the native words are no longer in the narrative field, so
                 the original is shown BESIDE the English, read-only and
