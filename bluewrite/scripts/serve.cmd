@@ -55,7 +55,7 @@ if not defined PHP (
 )
 
 REM ---- What is up right now (the three ports, read-only) ----------------------
-netstat -ano | findstr /r /c:"127.0.0.1:8099 .*LISTENING" >nul 2>&1
+netstat -ano | findstr /r /c:":8099 .*LISTENING" >nul 2>&1
 if errorlevel 1 (
   echo [bluewrite] the API is down on 8099
 ) else (

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Reports · BlueWrite</title>
+  <link rel="icon" type="image/png" href="../../src/favicon.png">
+  <link rel="stylesheet" href="../shared/pages.css">
+  <link rel="stylesheet" href="officer.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="home.html">
+        <img src="../../src/assets/bluewrite-mark.png" alt="BlueWrite mark">
+        <span>BlueWrite</span>
+        <span class="role-tag">Officer</span>
+      </a>
+      <nav class="site-nav" aria-label="Main">
+        <ul>
+          <li><a href="home.html">Home</a></li>
+          <li><a href="write-report.html">Write Report</a></li>
+          <li><a href="my-reports.html" aria-current="page">My Reports</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <h1>My Reports</h1>
+    <p class="lede">Reports you have written. Open a draft to continue it, or review a submitted report.</p>
+
+    <div class="toolbar">
+      <label class="sr-only" for="search">Search reports</label>
+      <input id="search" class="search" type="search" placeholder="Search by number, type, or place">
+      <a class="btn btn--primary" href="write-report.html">New report</a>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Report no.</th>
+            <th scope="col">Type</th>
+            <th scope="col">Date</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Placeholder rows only. Replace with live data from the application. -->
+          <tr>
+            <td>Sample-001</td>
+            <td>Theft</td>
+            <td>2026-10-01</td>
+            <td><span class="status status--draft">Draft</span></td>
+          </tr>
+          <tr>
+            <td>Sample-002</td>
+            <td>Traffic incident</td>
+            <td>2026-10-03</td>
+            <td><span class="status status--review">For review</span></td>
+          </tr>
+          <tr>
+            <td>Sample-003</td>
+            <td>Other</td>
+            <td>2026-10-07</td>
+            <td><span class="status status--final">Submitted</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    City of Naga Police Station · Public Safety Department
+  </footer>
+</body>
+</html>

@@ -1,0 +1,87 @@
+/* ===========================================================================
+   Home's ShapeGrid backdrop (the React Bits component in ShapeGrid.jsx)
+
+   The grid FILLS the Home panel and sits BEHIND everything on it, so it adds no
+   box, shifts no text and adds nothing to the tab order — Home with the grid off
+   and Home with it on occupy the same layout to the pixel.
+
+   THE LAYERING IS THE WHOLE PROBLEM HERE, and the first attempt at it was wrong
+   in a way that is invisible in a screenshot. Home's children are static and
+   unpositioned, which is a paint layer ABOVE a negative-z-index child — so
+   `z-index:-1` put the grid behind a container that paints nothing, and the
+   container then took every hover over the whole panel. The grid drew, and the
+   pointer never reached it. Measured in headless Chrome, not guessed: a hit test
+   in the empty area below the register returned `.ir-home`, never the canvas.
+
+   So the order is stated explicitly instead:
+
+     z-index 0   the grid        — above Home's own box, so the pointer can find
+                                   it in every gap Home does not fill
+     z-index 1   Home's children — above the grid, so the grid can never draw
+                                   over a word, a card or a button
+
+   `.ir-home > :not(.home-grid)` sets the second one and is why nothing below
+   needs `position:relative` spelled per element. Every top-level child gets the
+   SAME z-index, so their order relative to each other is untouched.
+
+   `.ir-home` itself only needed to become the positioning context and to be tall
+   enough to host a full-height backdrop; both are declared with the Home screen
+   in incident-report.css, because they are facts about Home's box, not about the
+   grid.
+
+   EDGE TO EDGE. `.ir-home` is the panel's content box, so a grid at `inset: 0`
+   stops a page margin short of the panel on every side and the backdrop reads as
+   a floating rectangle with a plain border of page around it. The grid therefore
+   cancels that margin and fills the panel.
+
+   It cancels it by NAME: `--ir-gutter-*` are declared on `.ir-body` in
+   incident-report.css, on the very rule whose padding they describe, so the
+   padding IS the variable and the two cannot drift. A second copy of the clamps
+   here would have looked right on a wide desktop and gone wrong elsewhere — and
+   it very nearly did: the first attempt copied the clamps from `.main`, which
+   turns out never to win the cascade on that node (`.ir-body` overrides it with
+   a different three-value padding). Only the horizontal happened to agree.
+
+   The `0px` fallbacks are the safety net for the one way this can fail: if the
+   names ever go away, the grid degrades to the un-bled `inset: 0` rather than to
+   an invalid `inset`, which would drop the positioning entirely. */
+.home-grid {
+  position: absolute;
+  inset: calc(-1 * var(--ir-gutter-top, 0px)) calc(-1 * var(--ir-gutter-x, 0px))
+    calc(-1 * var(--ir-gutter-bottom, 0px));
+  z-index: 0;
+  /* The wrapper is never a target; the canvas alone takes the pointer below. */
+  pointer-events: none;
+}
+
+/* The hover effect needs the pointer, so the canvas takes it back. Only the
+   areas Home does not cover reach it: where a card or a row is, that content is
+   on top (z-index 1) and keeps its own events. */
+.home-grid__canvas {
+  pointer-events: auto;
+}
+
+.ir-home > :not(.home-grid) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Two decorative bands step aside so the hover is not switched off like a broken
+   light across the top half of the page: the hero is a wordmark and a kicker,
+   and the note under the button is a line of copy. Neither is a control, and
+   neither is worth blocking the effect for.
+
+   `.ir-actions-row` steps aside with them, so the CTA is handed the pointer
+   straight back by the rule below — which is why that rule is written by element
+   type and not by class: whatever is a real control keeps its clicks, no matter
+   which wrapper stood aside above it. (`> *` was the first attempt: it handed
+   the pointer back to the hero's two full-width paragraphs as well, which
+   re-blanketed the very band the rule above had just cleared.) */
+.ir-home .ir-hero,
+.ir-home .ir-actions-row,
+.ir-home .ir-home-cta-note {
+  pointer-events: none;
+}
+.ir-home :is(a, button, input, select, textarea) {
+  pointer-events: auto;
+}

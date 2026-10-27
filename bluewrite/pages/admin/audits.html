@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audits · Admin · BlueWrite</title>
+  <link rel="icon" type="image/png" href="../../src/favicon.png">
+  <link rel="stylesheet" href="../shared/pages.css">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="dashboard.html">
+        <img src="../../src/assets/bluewrite-mark.png" alt="BlueWrite mark">
+        <span>BlueWrite</span>
+        <span class="role-tag">Admin</span>
+      </a>
+      <nav class="site-nav" aria-label="Admin">
+        <ul>
+          <li><a href="dashboard.html">Dashboard</a></li>
+          <li><a href="users.html">Users</a></li>
+          <li><a href="audits.html" aria-current="page">Audits</a></li>
+          <li><a href="station.html">Station</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <h1>Audit Log</h1>
+    <p class="lede">Who did what, and when. Placeholder rows only — replace with live data from the application.</p>
+
+    <div class="toolbar">
+      <label class="sr-only" for="search">Search audit log</label>
+      <input id="search" class="search" type="search" placeholder="Search by user or action">
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">When</th>
+            <th scope="col">User</th>
+            <th scope="col">Action</th>
+            <th scope="col">Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="audit-time">2026-10-14 09:41</td>
+            <td>Maria Santos</td>
+            <td><span class="audit-kind audit-kind--user">Account approved</span></td>
+            <td>NC-0312 moved from pending to active</td>
+          </tr>
+          <tr>
+            <td class="audit-time">2026-10-14 08:15</td>
+            <td>Jose Ramos</td>
+            <td><span class="audit-kind audit-kind--report">Report finalized</span></td>
+            <td>Sample-002 marked submitted</td>
+          </tr>
+          <tr>
+            <td class="audit-time">2026-10-13 17:02</td>
+            <td>System</td>
+            <td><span class="audit-kind audit-kind--security">Sign-in locked</span></td>
+            <td>NC-0445 locked after repeated failures</td>
+          </tr>
+          <tr>
+            <td class="audit-time">2026-10-13 11:26</td>
+            <td>Maria Santos</td>
+            <td><span class="audit-kind">Station setting changed</span></td>
+            <td>Office hours updated</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    City of Naga Police Station · Public Safety Department
+  </footer>
+</body>
+</html>

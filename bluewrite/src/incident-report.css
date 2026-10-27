@@ -460,6 +460,25 @@
   position: relative;
   z-index: 30;
 }
+/* The station photo behind the rail. Absolute cover under the content: the
+   rail keeps its navy as the fallback, the photo paints over it at low
+   opacity, and the brand/nav/foot sit above it. */
+.ir-sidebar__backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  opacity: 0.28;
+  pointer-events: none;
+}
+.ir-sidebar__brand,
+.ir-sidebar__nav,
+.ir-sidebar__foot {
+  position: relative;
+  z-index: 1;
+}
 
 .ir-sidebar__brand {
   display: flex;
@@ -8986,4 +9005,93 @@
 @media (max-width: 380px) {
   .reports-register .reports-filters { grid-template-columns: minmax(0, 1fr); }
   .reports-register .folder-tab__icon { display: none; }
+}
+
+/* ---- The freed letter on the desk (owner request, 2026-10-26) -------------
+   On the sheet the letter IS the article under review — not a 50% card
+   thumbnail below the paragraph. The mount scope keeps the deck homes and the
+   fullscreen screen on their own sizes; the deskbar steppers move only the
+   paper (the mount carries `--sheet-zoom`, set inline by Reports.jsx). */
+/* The mount letter reads as the paper itself, full size: it squeezes to the
+   column it sits in (width: 100%), never overhanging the paper's text column
+   the way the card-preview rule's fixed 8.5in would. It is the paper, not a
+   pane in it: the frame's fixed height, own scrollbars, flex viewer layout
+   and padding stay in the card home. On the mount the letter flows to whatever
+   height it needs and the sheet itself scrolls — no nested preview box. */
+.ir-sheet-letter .ai-sheet-preview {
+  overflow: visible;
+  overflow-y: visible;
+  height: auto;
+  display: block;
+  margin-top: 0;
+  padding: 0;
+}
+.ir-sheet-letter .ai-sheet-preview .print-sheet {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  min-height: 0;
+  width: 100%;
+  /* No second inch: the letter sits INSIDE the paper's own padding (the
+     form's full 1in station margin), so its own 1in page padding would
+     inset the body twice and squeeze the text column to 4.5in. The paper's
+     inch is the margin; the letter adds none. Deck/card and print keep
+     their own inch (see styles.css) — they draw the leaf standalone. */
+  padding: 0;
+  /* Desk-only size: the deskbar steppers offer out/in plus a way back to
+     print size, and the mount carries the var Reports.jsx sets inline. */
+  zoom: var(--sheet-zoom, 1);
+}
+/* The letter reads as the same paper, not a page on a page: while the mount
+   holds the letter, the form's own band steps aside and the inner paper loses
+   its card chrome (no second page, no shadow, no 11-inch floor). The meta row
+   (office code + report date) and the narrative field step aside with the band:
+   the letter carries its own head, its own date and its own body, so the
+   form's copies would read the report twice. The narrative's own strip (with
+   blotter Upload) lives outside the field under the banner, and the capture
+   photos + verification review stay — only the raw paragraph yields. */
+.ir-form--sheet:has(.ir-sheet-letter:not(:empty)) .ir-sheet-head,
+.ir-form--sheet:has(.ir-sheet-letter:not(:empty)) .ir-sheet-head-meta,
+.ir-form--sheet:has(.ir-sheet-letter:not(:empty)) .ir-field.ir-narrative {
+  display: none;
+}
+/* ---- The sheet edits read as the document, not as fields -----------------
+   The editable sheet works like Word — no boxes, no dotted outlines, ever.
+   The global .ir-body wells would draw every inline value as a control, so
+   the sheet's own editors drop ALL chrome at every state: rest, hover and
+   focus all read as plain text, focus showing only the native caret. */
+.ir-form--sheet textarea.pr-edit {
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  resize: none;
+  padding: 0;
+}
+.ir-form--sheet textarea.pr-edit:focus {
+  box-shadow: none;
+  background: transparent;
+  outline: none;
+}
+/* A choice still opens on click, but the dropdown arrow is field chrome. */
+.ir-form--sheet select.pr-edit {
+  appearance: none;
+  background: transparent;
+  border: none;
+}
+/* Number spinners are field chrome too. */
+.ir-form--sheet input.pr-edit[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+/* ---- The View/zoom strip: pinned to the screen corner, not the page flow --
+   The paper's own size and mode controls float at the viewport's bottom-right
+   and stay there while the desk scrolls — fixed, not sticky, because the shell
+   scrolls inside `.main`. Off the paper by construction: the deskbar carries
+   `no-print`. Docked left, clear of the chatbot button. */
+.ir-sheet-deskbar > .ir-sheet-bar {
+  position: fixed;
+  left: 1.1rem;
+  bottom: 1.1rem;
+  z-index: 60;
 }

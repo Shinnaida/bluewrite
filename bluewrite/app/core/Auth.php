@@ -11,9 +11,32 @@ final class Auth
 {
     public static function requireUser(): array
     {
-        Session::start();
-        $id = Session::userId();
-        if ($id === null) {
+        // THE PHONE'S CREDENTIAL FIRST (migration 024): a presented bearer
+        // resolves to its account before any session is consulted, and then
+        // meets every check below that a session meets. A bearer that is
+        // PRESENT but resolves to nothing — revoked, expired, or never
+        // issued, indistinguishable by design (see DeviceTokens) — is
+        // answered as ITSELF rather than as a missing session, so the phone
+        // knows to run setup again instead of showing a sign-in page.
+        $tokenUserId = DeviceTokens::authenticateRequest();
+        if ($tokenUserId !== null) {
+            $user = self::fetchUser($tokenUserId);
+            if ($user === null || $user['status'] !== 'active') {
+                Response::json(401, [
+                    'error' => 'This device sign-in is no longer valid. Set up the app again.',
+                    'code' => 'device_token_invalid',
+                ]);
+            }
+        } else {
+            if (DeviceTokens::bearerToken() !== null) {
+                Response::json(401, [
+                    'error' => 'This device sign-in is no longer valid. Set up the app again.',
+                    'code' => 'device_token_invalid',
+                ]);
+            }
+            Session::start();
+            $id = Session::userId();
+            if ($id === null) {
             // A tab that is mid-second-factor lands here, which is exactly
             // right: its own context holds no account yet, so every endpoint
             // behind this gate is out of reach until a factor is proved. The one
@@ -23,10 +46,11 @@ final class Auth
             // one honest answer, and the client's job is the same for each.)
             Response::json(401, ['error' => 'Your session has expired. Sign in again to continue.']);
         }
-        $user = self::fetchUser($id);
-        if ($user === null || $user['status'] !== 'active') {
-            self::logout();
-            Response::json(401, ['error' => 'Your session is no longer valid. Sign in again to continue.']);
+            $user = self::fetchUser($id);
+            if ($user === null || $user['status'] !== 'active') {
+                self::logout();
+                Response::json(401, ['error' => 'Your session is no longer valid. Sign in again to continue.']);
+            }
         }
 
         // THE SECOND FACTOR IS ENFORCED ON EVERY REQUEST, not only at sign-in.
@@ -134,7 +158,18 @@ final class Auth
     public static function requireCsrf(): void
     {
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-        if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true) && !Csrf::validateHeader()) {
+        if (!in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+            return;
+        }
+        // THE PHONE SKIPS CSRF (migration 024): the bearer is a header
+        // credential — a forged cross-site request cannot set one, so there
+        // is no cookie to protect and nothing to forge. Presence is enough:
+        // even a dead token skips, so signing out on one answers 401
+        // downstream (set up again) instead of 419 here.
+        if (DeviceTokens::bearerToken() !== null) {
+            return;
+        }
+        if (!Csrf::validateHeader()) {
             Response::json(419, ['error' => 'Security token missing or expired. Reload the page and try again.']);
         }
     }

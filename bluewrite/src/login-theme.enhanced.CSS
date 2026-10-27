@@ -1,0 +1,336 @@
+/* ============================================================
+   BLUEWRITE — sign-in gate, ENHANCEMENT LAYER
+   Load AFTER login-theme.css. No markup changes, no selector renames, no layout
+   changes: everything here is polish on top of the existing gate.
+
+   What it adds
+   1. Readability   – small labels/fine print enlarged, muted ink lifted to pass
+                      contrast on the navy, browser autofill no longer paints white.
+   2. Depth         – glass card with blur, ambient glow + faint grid behind the page.
+   3. Brand         – gold gradient on "WRITE", soft glow on the mark.
+   4. Interaction   – hover/active/focus states on cards, inputs and buttons.
+   5. Motion        – staggered entrance, live status pulse, button sheen.
+                      All of it switched off under prefers-reduced-motion.
+   6. Accessibility – consistent focus ring, forced-colors fallback.
+   ============================================================ */
+
+.la-page {
+  /* Lift the two muted inks (were .84 / .62 alpha; the .62 fell near 4.5:1 on the
+     photo wash). Same hue, more presence. */
+  --la-ink-2: rgba(226, 236, 255, 0.9);
+  --la-ink-3: rgba(190, 210, 245, 0.74);
+  --la-gold-hi: #ffd86b;
+  --la-glow-blue: rgba(40, 120, 255, 0.28);
+  --la-ease: cubic-bezier(0.22, 0.8, 0.28, 1);
+  scroll-behavior: smooth;
+}
+
+/* ---------- 1. Ambient background ---------- */
+/* A faint blueprint grid fading out from the lower left, plus two soft glows.
+   Sits above the photo (same z-layer, later in the tree) and below all content. */
+.la-page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 36rem at 12% 88%, rgba(77, 141, 255, 0.16), transparent 70%),
+    radial-gradient(40rem 28rem at 88% 8%, rgba(240, 180, 41, 0.07), transparent 70%),
+    linear-gradient(rgba(122, 168, 255, 0.05) 1px, transparent 1px) 0 0 / 3.2rem 3.2rem,
+    linear-gradient(90deg, rgba(122, 168, 255, 0.05) 1px, transparent 1px) 0 0 / 3.2rem 3.2rem;
+  -webkit-mask-image: radial-gradient(ellipse at 20% 80%, #000 0%, transparent 75%);
+  mask-image: radial-gradient(ellipse at 20% 80%, #000 0%, transparent 75%);
+}
+
+/* Smoother seam between the photo band and the navy beneath it. */
+.la-photo-wash {
+  background: linear-gradient(180deg, rgba(5, 15, 34, 0.18) 0%, transparent 35%);
+}
+
+/* ---------- 2. Top bar ---------- */
+.la-topbar {
+  box-shadow: 0 6px 24px rgba(2, 8, 20, 0.45);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.la-seal { filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.35)); }
+
+.la-status-dot { animation: la-pulse 2.4s ease-in-out infinite; }
+.la-status-dot.is-down { animation-duration: 1.4s; }
+@keyframes la-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(53, 208, 127, 0.16); }
+  50%      { box-shadow: 0 0 0 7px rgba(53, 208, 127, 0); }
+}
+.la-status-dot.is-down {
+  animation-name: la-pulse-amber;
+}
+@keyframes la-pulse-amber {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(255, 202, 107, 0.2); }
+  50%      { box-shadow: 0 0 0 7px rgba(255, 202, 107, 0); }
+}
+
+/* ---------- 3. Brand column ---------- */
+.la-mark {
+  filter: drop-shadow(0 0 22px rgba(77, 141, 255, 0.4)) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
+}
+.la-hero { text-shadow: 0 2px 24px rgba(2, 8, 20, 0.55); }
+.la-hero em {
+  background: linear-gradient(180deg, var(--la-gold-hi) 0%, var(--la-gold) 55%, #d89a12 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--la-gold); /* fallback */
+  text-shadow: none;
+  filter: drop-shadow(0 2px 14px rgba(240, 180, 41, 0.25));
+}
+.la-tagline { text-shadow: 0 1px 12px rgba(2, 8, 20, 0.6); }
+.la-rule {
+  width: 5rem;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--la-gold) 0%, var(--la-gold) 55%, transparent 100%);
+}
+.la-lede { text-shadow: 0 1px 10px rgba(2, 8, 20, 0.5); }
+
+/* Feature cards: a lift, a brighter edge, a lit icon. */
+.la-feature {
+  position: relative;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 10px 28px rgba(2, 8, 20, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition:
+    transform 220ms var(--la-ease),
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    background 220ms ease;
+}
+.la-feature:hover {
+  transform: translateY(-4px);
+  border-color: var(--la-blue);
+  background: linear-gradient(180deg, rgba(14, 40, 76, 0.82), rgba(7, 22, 46, 0.86));
+  box-shadow: 0 16px 36px rgba(2, 8, 20, 0.5), 0 0 26px var(--la-glow-blue),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.la-feature-mark {
+  background: radial-gradient(circle at 50% 35%, rgba(240, 180, 41, 0.2), rgba(240, 180, 41, 0.04) 70%);
+  box-shadow: 0 0 18px rgba(240, 180, 41, 0.16), inset 0 0 10px rgba(240, 180, 41, 0.12);
+  transition: box-shadow 220ms ease, transform 220ms var(--la-ease);
+}
+.la-feature:hover .la-feature-mark {
+  transform: scale(1.06);
+  box-shadow: 0 0 26px rgba(240, 180, 41, 0.34), inset 0 0 12px rgba(240, 180, 41, 0.2);
+}
+.la-feature-body { color: var(--la-ink-2); }
+
+.la-advisory { color: var(--la-ink-3); }
+
+/* ---------- 4. Access card ---------- */
+.la-panel {
+  -webkit-backdrop-filter: blur(16px) saturate(125%);
+  backdrop-filter: blur(16px) saturate(125%);
+  box-shadow:
+    0 30px 80px rgba(2, 8, 20, 0.65),
+    0 0 60px var(--la-glow-blue),
+    0 0 0 1px rgba(122, 168, 255, 0.1) inset,
+    0 1px 0 rgba(255, 255, 255, 0.07) inset;
+}
+/* The gold tick on the card's top edge gets a little light of its own. */
+.la-panel::before {
+  width: 2.4rem;
+  box-shadow: 0 0 14px rgba(240, 180, 41, 0.55);
+}
+.la-panel-tick {
+  background: linear-gradient(90deg, transparent, var(--la-gold));
+}
+.la-panel-title .la-panel-tick:last-child {
+  background: linear-gradient(270deg, transparent, var(--la-gold));
+}
+/* Small caps were 9.6px and 10.2px: readable, now. */
+.la-panel-sub { font-size: 0.68rem; }
+.la-label,
+.la-verify-label { font-size: 0.7rem; }
+
+/* ---------- 5. Fields ---------- */
+.la-input,
+.la-textarea,
+.la-verify-recovery-input {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+.la-input:hover:not(:disabled):not(:focus),
+.la-textarea:hover:not(:focus),
+.la-verify-recovery-input:hover:not(:disabled):not(:focus) {
+  border-color: rgba(122, 168, 255, 0.6);
+}
+.la-input:focus {
+  background: rgba(4, 16, 36, 0.92);
+}
+.la-input-wrap > svg { transition: color 160ms ease; }
+.la-input-wrap:focus-within > svg { color: var(--la-blue); }
+.la-input::placeholder,
+.la-textarea::placeholder { color: rgba(170, 195, 235, 0.55); }
+
+/* Chrome/Edge autofill paints a pale yellow-white box that wrecks the dark card. */
+.la-input:-webkit-autofill,
+.la-input:-webkit-autofill:hover,
+.la-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff;
+  caret-color: #ffffff;
+  -webkit-box-shadow: 0 0 0 1000px #061429 inset;
+  box-shadow: 0 0 0 1000px #061429 inset;
+  border-color: var(--la-line-strong);
+  transition: background-color 9999s ease-out 0s;
+}
+
+.la-eye { transition: color 140ms ease, background 140ms ease; }
+.la-eye:hover { background: rgba(122, 168, 255, 0.12); }
+
+/* ---------- 6. Buttons ---------- */
+.la-submit,
+.la-verify-submit {
+  position: relative;
+  overflow: hidden;
+  transition: transform 140ms ease, box-shadow 200ms ease, background 200ms ease, filter 200ms ease;
+}
+.la-submit::after,
+.la-verify-submit::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: skewX(-18deg);
+  pointer-events: none;
+}
+.la-submit:hover:not(:disabled),
+.la-verify-submit:hover:not(:disabled) {
+  box-shadow: 0 0 32px rgba(240, 180, 41, 0.5), 0 8px 18px rgba(2, 8, 20, 0.4);
+  transform: translateY(-1px);
+}
+.la-submit:hover:not(:disabled)::after,
+.la-verify-submit:hover:not(:disabled)::after {
+  animation: la-sheen 700ms var(--la-ease);
+}
+.la-submit:active:not(:disabled),
+.la-verify-submit:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 0 14px rgba(240, 180, 41, 0.3);
+}
+@keyframes la-sheen {
+  to { left: 130%; }
+}
+.la-verify-submit { box-shadow: 0 0 18px rgba(240, 180, 41, 0.25); }
+
+.la-help-actions button { transition: background 140ms ease, border-color 140ms ease, color 140ms ease; }
+.la-help-actions button:not(.primary):hover:not(:disabled) {
+  background: rgba(122, 168, 255, 0.12);
+  border-color: var(--la-blue);
+  color: var(--la-ink);
+}
+.la-help-actions button.primary:hover:not(:disabled) { background: #ffc93c; }
+.la-help-link { transition: color 140ms ease; }
+
+/* Error/notice bands slide in rather than popping. */
+.la-error,
+.la-notice,
+.la-verify-alert,
+.la-help {
+  animation: la-drop 260ms var(--la-ease) both;
+}
+@keyframes la-drop {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---------- 7. Second step ---------- */
+.la-verify-card {
+  -webkit-backdrop-filter: blur(16px) saturate(125%);
+  backdrop-filter: blur(16px) saturate(125%);
+  box-shadow: 0 30px 80px rgba(2, 8, 20, 0.65), 0 0 60px var(--la-glow-blue),
+    0 1px 0 rgba(255, 255, 255, 0.07) inset;
+}
+.la-verify-aside {
+  background: linear-gradient(180deg, rgba(10, 30, 62, 0.8), rgba(4, 13, 30, 0.85));
+}
+.la-verify-shield {
+  background: radial-gradient(circle at 50% 35%, rgba(240, 180, 41, 0.2), transparent 70%);
+  box-shadow: 0 0 20px rgba(240, 180, 41, 0.2);
+}
+.la-verify-seg { transition: background 300ms ease; }
+.la-verify-facts li { color: var(--la-ink-2); }
+.la-verify-aside-text,
+.la-verify-lock,
+.la-verify-note { color: var(--la-ink-3); }
+
+/* ---------- 8. Entrance motion ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .la-topbar { animation: la-fade 500ms ease both; }
+  .la-lockup  { animation: la-rise 640ms var(--la-ease) 60ms both; }
+  .la-tagline { animation: la-rise 640ms var(--la-ease) 140ms both; }
+  .la-rule    { animation: la-grow 700ms var(--la-ease) 220ms both; transform-origin: left; }
+  .la-lede    { animation: la-rise 640ms var(--la-ease) 260ms both; }
+  .la-feature:nth-child(1) { animation: la-rise 640ms var(--la-ease) 340ms both; }
+  .la-feature:nth-child(2) { animation: la-rise 640ms var(--la-ease) 420ms both; }
+  .la-feature:nth-child(3) { animation: la-rise 640ms var(--la-ease) 500ms both; }
+  .la-foot    { animation: la-rise 640ms var(--la-ease) 580ms both; }
+  .la-panel,
+  .la-verify-card { animation: la-card 760ms var(--la-ease) 200ms both; }
+}
+@keyframes la-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes la-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes la-grow {
+  from { opacity: 0; transform: scaleX(0); }
+  to   { opacity: 1; transform: scaleX(1); }
+}
+@keyframes la-card {
+  from { opacity: 0; transform: translateY(22px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---------- 9. Accessibility ---------- */
+/* One focus ring for everything keyboard-reachable on the gate. */
+.la-page :is(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--la-gold);
+  outline-offset: 2px;
+}
+.la-input:focus-visible,
+.la-textarea:focus-visible,
+.la-verify-recovery-input:focus-visible { outline: none; } /* they draw their own ring */
+
+@media (prefers-reduced-motion: reduce) {
+  .la-status-dot,
+  .la-error, .la-notice, .la-verify-alert, .la-help { animation: none; }
+  .la-feature, .la-feature-mark,
+  .la-submit, .la-verify-submit { transition: none; }
+  .la-feature:hover, .la-feature:hover .la-feature-mark,
+  .la-submit:hover:not(:disabled), .la-verify-submit:hover:not(:disabled) { transform: none; }
+  .la-submit::after, .la-verify-submit::after { display: none; }
+}
+
+@media (forced-colors: active) {
+  .la-panel, .la-verify-card, .la-feature, .la-input { border: 1px solid CanvasText; }
+  .la-hero em { -webkit-text-fill-color: currentColor; background: none; }
+  .la-submit, .la-verify-submit { border: 1px solid ButtonText; }
+}
+
+/* ---------- 10. Small screens ---------- */
+@media (max-width: 1023px) {
+  /* The photo is the whole ground here; keep the grid subtle so type stays clean. */
+  .la-page::after { opacity: 0.6; }
+  .la-feature:hover { transform: none; }
+}
+@media (max-width: 480px) {
+  .la-input { font-size: 1rem; } /* stops iOS zooming the page on focus */
+  .la-textarea { font-size: 1rem; }
+}
+@media (hover: none) {
+  .la-feature:hover { transform: none; box-shadow: 0 10px 28px rgba(2, 8, 20, 0.35); }
+}
+@media (max-height: 720px) {
+  .la-page::after { opacity: 0.7; }
+}

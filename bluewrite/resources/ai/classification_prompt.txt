@@ -58,6 +58,18 @@ THE PEOPLE
   played: the account's own word is the whole answer, and a person the account
   does not name is not in your list.
 
+THE PLACE
+
+  `location` is where the incident HAPPENED — the scene, not an address the
+  account attaches to a person. "resident of Purok X", "brought to the
+  hospital", "reported from Barangay Y" are a person's home, a hospital, a
+  station: none of them is the scene, and none of them ever fills this field.
+  When the account gives the scene (a highway, a purok, an intersection, a
+  named establishment), report it as written; when it does not, `location` is
+  empty and `unstated` says "no place of incident given". That line is how
+  the officer learns the field still needs them, and for this required field
+  it is never skipped.
+
 THE INCIDENT TYPE
 
   Exactly ONE name from the station's own list, appended below, copied verbatim.

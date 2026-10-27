@@ -328,6 +328,71 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
     }
 
     /**
+     * Photo OCR (owner request): the blotter photo read by the station's own
+     * vision model instead of the on-device engines.
+     *
+     * Temperature 0.0 like classify(): transcription has one defensible
+     * answer, and creativity here is misreading. Plain text out (not the
+     * narrative path's JSON schema): the answer IS the transcription, and a
+     * schema wrapper would put parsing between the officer and their own
+     * blotter. An empty answer is a miss, not a failure — the caller tries
+     * the next engine.
+     */
+    public function transcribeImage(string $imageBytes, string $mimeType): string
+    {
+        if ($this->apiKey === '') {
+            throw new AiProviderException('Gemini API key is not configured.', retryable: false);
+        }
+        if ($imageBytes === '') {
+            throw new AiProviderException('No photo was sent with the request.', retryable: false);
+        }
+
+        $body = [
+            'contents' => [
+                ['role' => 'user', 'parts' => [
+                    ['inlineData' => [
+                        'mimeType' => $mimeType,
+                        'data' => base64_encode($imageBytes),
+                    ]],
+                    ['text' => self::transcriptionInstruction()],
+                ]],
+            ],
+            'generationConfig' => [
+                'temperature' => 0.0,
+                'maxOutputTokens' => $this->maxOutputTokens,
+                'responseMimeType' => 'text/plain',
+            ],
+        ];
+        if ($this->thinkingLevel !== '') {
+            $body['generationConfig']['thinkingConfig'] = ['thinkingLevel' => $this->thinkingLevel];
+        }
+
+        $decoded = json_decode($this->post($body), true);
+        if (!is_array($decoded)) {
+            throw new AiProviderException('Gemini returned a non-JSON response.');
+        }
+
+        return self::answerText($decoded);
+    }
+
+    /**
+     * The transcription instruction. Public for tests, like the
+     * classification instruction: what the model is told to do with the
+     * photo is assembled here, in one place, rather than at the call.
+     */
+    public static function transcriptionInstruction(): string
+    {
+        return 'Transcribe every handwritten and printed word in this police blotter photo, exactly as written. '
+            . 'Keep the original line breaks and reading order. '
+            . 'Do not correct spelling, do not expand abbreviations, do not add commentary, headers or explanations — '
+            . 'output only the transcription. '
+            . 'Return plain narrative text only: no tables, no grid or box characters, no markdown, '
+            . 'and no special characters beyond ordinary sentence punctuation '
+            . '(periods, commas, colons, apostrophes, hyphens, parentheses and question marks). '
+            . 'If no text is readable, output nothing.';
+    }
+
+    /**
      * The non-thought text of a candidate, joined.
      *
      * Gemini 3 is a THINKING model: the candidate may contain thought parts
@@ -1409,7 +1474,7 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
 
     private static function fewShotBlock(string $incidentType): string
     {
-        $file = dirname(__DIR__, 2) . '/resources/ai/narrative_few_shots.md';
+        $file = dirname(__DIR__, 2) . '/resources/ai/narrative_few_shots.txt';
         if (!is_file($file)) {
             return '';
         }

@@ -14,9 +14,9 @@
 // it holds no state of its own beyond the typewriter cursor and writes nothing
 // unless the host passes `editable` with the onEdit* callbacks, in which case
 // the narrative, findings and recorded action lines are inline formatted
-// editors — the narrative carries its own top strip (the blotter Upload
-// rides it — see BlotterCapture), while findings and action stay strip-free
-// and register their carets with the sheet's one floating box — and the
+// editors — the narrative, findings and action stay strip-free (the blotter
+// Upload lives on the form's own strip — see BlotterCapture) and register
+// their carets with the sheet's one floating box — and the
 // free-text facts are wrapping Word-like fields (owner request — type
 // directly on the letter, like in Word).
 //
@@ -63,8 +63,6 @@ import { toUpperCase, toSentenceCase, labelCase, properNounMap } from '../../lib
 import { stripLeadingBlotterRestatement } from '../../lib/narrativeText.js';
 import { sanitizeRichHtml, containsRichTags, richTextToPlain, sanitizeLetterHtml } from '../../lib/richText.js';
 import RichTextArea from './RichTextArea.jsx';
-import BlotterCapture from './BlotterCapture.jsx';
-import { mergeBlotterText } from '../../lib/blotterText.js';
 import WordField from './WordField.jsx';
 import SheetText, { sheetTextOf } from './SheetText.jsx';
 import { parseSheetDate, parseSheetDateTime } from '../../lib/sheetDateParse.js';
@@ -107,7 +105,6 @@ function prefersReducedMotion() {
  * @param {object|null} props.stationHeader  station letterhead (may be null)
  * @param {Array}  [props.verifications]     translation review records
  * @param {string|null} [props.verificationStatus]
- * @param {object|null} [props.recordedBy]   { name } of the officer using the app
  * @param {object|null} [props.pending]      Task 9 — the UNCOMMITTED AI draft to
  *   type into the sheet: `{ narrative, findingsText?, statusText?, suspectLines?,
  *   scope }`, where scope is 'generate' (type the facts too) or 'tighten' (type
@@ -165,9 +162,17 @@ function prefersReducedMotion() {
  *   lose its seals or its signatories.
  * @param {Function} [props.onEditLetterHtml] owner request — free edit.
  *   Called with the canvas html on every keystroke. Only read when
- *   `editable` is true and no AI draft is under review (`pending` null);
- *   while a draft is being reviewed the letter keeps its per-field editors
- *   and this is ignored.
+ *   `editable` is true and no AI draft is under review (`pending` null) —
+ *   unless `freeReview` opts the sheet-mount review into the canvas (see
+ *   below); while a draft is being reviewed anywhere else the letter keeps
+ *   its per-field editors and this is ignored.
+ * @param {boolean} [props.freeReview] owner request — review on the canvas.
+ *   Set only by the sheet mount in Edit mode (see SheetLetterDock): a draft
+ *   under review renders the same free canvas instead of per-field editors,
+ *   seeded from the provisional letter, so the officer types flowing text.
+ *   Keep/Discard keep working from the desk — Keep confirms (the canvas
+ *   text persists as the letter's own), Discard drops it with the snapshot.
+ *   Deck/card review never sets this and keeps its per-field editors.
  */
 export default function ReportSheetBody({
   report,
@@ -175,7 +180,6 @@ export default function ReportSheetBody({
   stationHeader = null,
   verifications = [],
   verificationStatus = null,
-  recordedBy = null,
   pending = null,
   revealKey = 0,
   revealPending = true,
@@ -189,6 +193,7 @@ export default function ReportSheetBody({
   onEditChrome = null,
   letterHtml = null,
   onEditLetterHtml = null,
+  freeReview = false,
 }) {
   const finalized = report.status === 'finalized';
   const reportNo = report.id ? `BW-${String(report.id).padStart(4, '0')}` : 'BW-____';
@@ -200,15 +205,21 @@ export default function ReportSheetBody({
   // keys — only the ink is overridable, never what a label resolves to.
   // FREE EDIT (owner request): the letter as one canvas, not a run of
   // boxes. When the host passes onEditLetterHtml (and no AI draft is under
-  // review), the editable letter renders a single Word-like canvas seeded
-  // from the composed body instead of per-field editors — typing anywhere is
-  // allowed because nothing has to map back into a field. The letterhead,
-  // the signature block and the appendix stay composed system ink; only the
+  // review — or a review the host explicitly frees with `freeReview`), the
+  // editable letter renders a single Word-like canvas seeded from the
+  // composed body instead of per-field editors — typing anywhere is allowed
+  // because nothing has to map back into a field. The letterhead, the
+  // signature block and the appendix stay composed system ink; only the
   // body frees.
-  const freeEdit = !!(editable && onEditLetterHtml && !pending);
+  const freeEdit = !!(editable && onEditLetterHtml && (!pending || freeReview));
   // Inside the free canvas (and its hidden seed copy) nothing binds to a
-  // field, so the inner tree always renders read-only.
-  const editInner = freeEdit ? false : editable;
+  // field, so the inner tree always renders read-only. While the sheet mount
+  // is in Edit mode (`freeReview`) the inner editors stay off even before
+  // the canvas takes over (a draft still landing): the paper reads clean
+  // and Word-like at every moment — flowing text or the free canvas, never
+  // a run of field boxes. The deck card never sets `freeReview`, so its
+  // per-field editors are untouched.
+  const editInner = freeEdit ? false : (editable && !freeReview);
   const chromeEdit = !!(editInner && onEditChrome);
   const st = (key, fallback) => sheetTextOf(ts, key, fallback);
   for (const hk of ['agency', 'commission', 'regional_office', 'provincial_office', 'station_name', 'station_location', 'office_code']) {
@@ -241,7 +252,10 @@ export default function ReportSheetBody({
     ts,
     suspectLines: pending && pending.scope !== 'tighten' ? pending.suspectLines : null,
   });
-  const recorderName = recordedBy?.name || report.created_by_name || '—';
+  // The recording officer is the report's own creator — never the account
+  // currently viewing it. A not-yet-saved draft has no creator, so the line
+  // reads blank until the first save rather than borrowing the login name.
+  const recorderName = String(report.created_by_name || '').trim() || '—';
   const showAppendix = hasSource(report);
   const sourceLanguageLabel = languageLabel(report.narrative_source_language);
   const latestReview = verifications.length > 0 ? verifications[0] : null;
@@ -543,10 +557,17 @@ export default function ReportSheetBody({
       setSeed(null);
       return;
     }
+    // Never clobber officer ink: once the canvas holds keystrokes the seed
+    // is frozen until the next run clears it (see restoreProvisionalSnapshot).
     if (letterHtml) return;
+    // Re-capture while the reveal types and on every new generation: a seed
+    // taken mid-typing (or from the previous run) would freeze a partial or
+    // stale letter under the officer's first keystroke. `cursor` moves with
+    // the typewriter, `revealKey` with each generation; both are inert
+    // otherwise, so a settled canvas never re-seeds.
     if (seedRef.current && seedRef.current.innerHTML) setSeed(seedRef.current.innerHTML);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [freeEdit, letterHtml]);
+  }, [freeEdit, letterHtml, cursor, revealKey]);
   const slots = [];
   let slotAcc = 0;
   const val = (text) => {
@@ -882,12 +903,7 @@ export default function ReportSheetBody({
             className="pr-narrative-edit"
             ariaLabel="Facts of the case — edit on the letter"
             rows={10}
-            toolbar="top"
-            toolbarExtra={(
-              <BlotterCapture
-                onInsert={(text) => onEditNarrative(mergeBlotterText(narrativeRaw, text))}
-              />
-            )}
+            toolbar="none"
           />
         ) : narrativeRich ? (
           <div
@@ -1063,8 +1079,9 @@ export default function ReportSheetBody({
       {midHost}
 
       {/* ---- Signature block: Recorded by / IOC / Noted by. The labels type
-           like every other line; the signing name resolves per-report, then
-           the station default (see notedName above). ---- */}
+           like every other line. Recorded by is the report's own creator
+           (report.created_by_name) — never the viewing account; Noted by
+           resolves per-report, then the station default (see notedName above). ---- */}
       <div className="pr-footer-block">
         <p className="pr-recorded">
           <strong>{CL('recorded label', "Recorded by:")}</strong> {recorderName}

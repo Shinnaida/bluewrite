@@ -1,0 +1,50 @@
+.narrative-reveal-wrapper {
+  position: relative;
+}
+
+/* Standard visually-hidden pattern: present for screen readers, invisible
+   on screen. (styles.css also defines .sr-only — duplicated here so this
+   component is self-contained if reused elsewhere.) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.narrative-reveal {
+  cursor: pointer;
+  white-space: pre-wrap;
+}
+
+/* Match the .ai-draft reading typography (see styles.css): the reveal
+   replaces the static draft text in place and must not shift size. */
+.narrative-reveal__typing,
+.narrative-reveal__text {
+  white-space: pre-wrap;
+  font-size: 1.08rem;
+  line-height: 1.85;
+  color: var(--paper, #fff);
+  letter-spacing: 0.01em;
+}
+
+/* Keyboard skip affordance — subtle until focused. */
+.narrative-reveal__skip {
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  color: var(--steel, #8fa3c8);
+  background: none;
+  border: 1px solid var(--line, #1e293b);
+  border-radius: 3px;
+}
+.narrative-reveal__skip:hover,
+.narrative-reveal__skip:focus-visible {
+  color: var(--ink, #e7eefc);
+  border-color: var(--line-bright, #24355e);
+}

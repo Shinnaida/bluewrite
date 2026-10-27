@@ -1,0 +1,116 @@
+/* BLUEWRITE — GradientBlobCard (adapted from a 21st.dev shadcn/Tailwind card)
+   see GradientBlobCard.jsx for the translation notes and the colour decision. */
+.gradient-blob-card {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  /* The source's soft double shadow, restated in the theme's own inks: a dark
+     cast down-right, a light lift up-left — the neumorphic pair the demo drew
+     with #bebebe/#ffffff, rebuilt from the palette's shadow tokens. */
+  box-shadow:
+    20px 20px 60px rgba(4, 16, 36, 0.35),
+    -20px -20px 60px rgba(255, 255, 255, 0.06);
+}
+
+/* The animated gradient blob: ALL BLUE, by request — the capstone's navy
+   through its surface blue to the bright blue ink, blurred and walked between
+   the card's four corners, at the source's own size, blur and opacity. */
+.gradient-blob-card__blob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 75%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: blur(12px);
+  background: linear-gradient(90deg, #0b2545, #1f5fd0, #4da3ff);
+  opacity: 1;
+  animation: gradient-blob 5s linear infinite;
+}
+@keyframes gradient-blob {
+  0%   { transform: translate(-100%, -100%); }
+  25%  { transform: translate(0%, -100%); }
+  50%  { transform: translate(0%, 0%); }
+  75%  { transform: translate(-100%, 0%); }
+  100% { transform: translate(-100%, -100%); }
+}
+
+/* The glassy plate: the source's own near-opaque frost (0.95 white with a
+   24px backdrop blur) — the content sits on a clean, solid-feeling surface. */
+.gradient-blob-card__glass {
+  position: absolute;
+  inset: 5px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(24px);
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.gradient-blob-card__content {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ---- THE RUNNING ORBIT BORDER (adapted from ruixen.ui's gradient-bold-card)
+   A comet of blue that runs around the card's border, forever.
+
+   THE MECHANISM IS A ROTATING SHEET, not an animated gradient angle: a huge
+   conic-gradient square — mostly transparent, with one bright head and a
+   fading tail — spins a full turn behind the glass, and the card's own
+   overflow:hidden clips it so only the border band is ever visible. A plain
+   `transform: rotate()` moves it (universally supported, GPU-composited,
+   zero layout work), where animating a gradient's angle needs @property and
+   quietly fails on engines that lack it.
+
+   The sheet is centered on the card (symmetric negative insets) and far
+   larger than it — far larger than the card's DIAGONAL, so every border
+   point stays covered at every rotation angle. The glass plate above it
+   covers the middle, so the band between the card's edge and the glass is
+   the only place the comet shows; the blob travels underneath the same gap
+   and reads as part of the same family.
+
+   The colours are the blob's own (bright blue ink over surface blue — the
+   literals this file already states, for the same reason: a gradient cannot
+   be repainted by token reliably, and both are one value in either theme). */
+.gradient-blob-card::before {
+  content: '';
+  position: absolute;
+  inset: -150%;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    rgba(77, 163, 255, 0) 0deg,
+    rgba(77, 163, 255, 0) 235deg,
+    rgba(77, 163, 255, 0.55) 300deg,
+    #4da3ff 340deg,
+    #9fd0ff 356deg,
+    #1f5fd0 360deg
+  );
+  animation: gradient-orbit 4s linear infinite;
+}
+
+@keyframes gradient-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Quality floor: the glow still reads without the travel. */
+@media (prefers-reduced-motion: reduce) {
+  .gradient-blob-card__blob {
+    animation: none;
+    /* Parked at the top-left corner's midpoint, the most even position. */
+    transform: translate(-50%, -50%);
+  }
+  /* And the comet parks too: the head still glows on the border, it just
+     does not run. */
+  .gradient-blob-card::before {
+    animation: none;
+  }
+}

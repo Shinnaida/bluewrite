@@ -199,6 +199,37 @@ final class ReportsTest extends BaseApiTestCase
     }
 
     /**
+     * Migration 023 — the officer's free-typed letter body (the sheet's Edit
+     * canvas) must survive the save: a PATCH carrying letter_html stores it
+     * through the letter subset, and the record reads it back for the next
+     * load. Markup outside the subset is stripped on the way in, so the
+     * record keeps ink, never scripts — and a non-string is refused rather
+     * than coerced.
+     */
+    public function testLetterHtmlPersistsThroughPatchAndReadback(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $report = $this->createReport($cookie, $csrf);
+        $id = (int) $report['id'];
+
+        $letter = '<div class="pr-facts"><p>Free-typed <b>ink</b> on the paper.</p><script>alert(1)</script></div>';
+        $saved = $this->patchReport($cookie, $csrf, $id, ['letter_html' => $letter]);
+        $this->assertSame(200, $saved['status'], json_encode($saved['body']));
+
+        $raw = $this->db()->query("SELECT letter_html FROM bluewrite_test.reports WHERE id = {$id}")->fetchColumn();
+        $this->assertStringContainsString('<b>ink</b>', (string) $raw, 'the freed letter did not persist');
+        $this->assertStringNotContainsString('<script>', (string) $raw, 'markup outside the subset reached the record');
+
+        // The sheet reloads it from the record, not from a tab's memory.
+        $read = $this->request('GET', "/reports/{$id}", null, $cookie);
+        $this->assertSame(200, $read['status'], json_encode($read['body']));
+        $this->assertStringContainsString('Free-typed', (string) ($read['body']['report']['letter_html'] ?? ''), 'the kept letter did not read back');
+
+        $bad = $this->patchReport($cookie, $csrf, $id, ['letter_html' => ['not' => 'text']]);
+        $this->assertSame(422, $bad['status'], json_encode($bad['body']));
+    }
+
+    /**
      * A row in a group is a record, not a placeholder: a victim with no name is
      * caught (and an UNIDENTIFIED suspect stays recordable by description —
      * covered on the JS side, where the shapes are pinned).

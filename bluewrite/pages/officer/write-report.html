@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Write Report · BlueWrite</title>
+  <link rel="icon" type="image/png" href="../../src/favicon.png">
+  <link rel="stylesheet" href="../shared/pages.css">
+  <link rel="stylesheet" href="officer.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="home.html">
+        <img src="../../src/assets/bluewrite-mark.png" alt="BlueWrite mark">
+        <span>BlueWrite</span>
+        <span class="role-tag">Officer</span>
+      </a>
+      <nav class="site-nav" aria-label="Main">
+        <ul>
+          <li><a href="home.html">Home</a></li>
+          <li><a href="write-report.html" aria-current="page">Write Report</a></li>
+          <li><a href="my-reports.html">My Reports</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <h1>Write Report</h1>
+    <p class="lede">Fill in the incident details. Fields marked <span class="req">*</span> are required.</p>
+
+    <form class="card" action="#" method="post">
+      <p class="advisory">
+        The AI assistant proposes wording only. The officer reviews and signs the final report.
+      </p>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="incident-type">Incident type <span class="req">*</span></label>
+          <select id="incident-type" name="incident_type" required>
+            <option value="">Select a type</option>
+            <option>Theft</option>
+            <option>Assault</option>
+            <option>Traffic incident</option>
+            <option>Other</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="incident-datetime">Date and time of incident <span class="req">*</span></label>
+          <input id="incident-datetime" name="incident_datetime" type="datetime-local" required>
+        </div>
+
+        <div class="field span-2">
+          <label for="location">Place of incident <span class="req">*</span></label>
+          <input id="location" name="location" type="text" required>
+        </div>
+
+        <div class="field">
+          <label for="complainant">Complainant</label>
+          <input id="complainant" name="complainant" type="text">
+        </div>
+
+        <div class="field">
+          <label for="respondent">Respondent</label>
+          <input id="respondent" name="respondent" type="text">
+        </div>
+
+        <div class="field span-2">
+          <label for="narrative">Narrative <span class="req">*</span></label>
+          <textarea id="narrative" name="narrative" required></textarea>
+        </div>
+
+        <div class="field">
+          <label for="reporter-name">Reporting party name <span class="req">*</span></label>
+          <input id="reporter-name" name="reporter_name" type="text" required>
+        </div>
+
+        <div class="field">
+          <label for="reporter-contact">Contact number</label>
+          <input id="reporter-contact" name="reporter_contact" type="tel">
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn--ai" type="button">Improve with AI</button>
+        <button class="btn" type="button">Save draft</button>
+        <button class="btn btn--primary" type="submit">Submit report</button>
+      </div>
+    </form>
+  </main>
+
+  <footer class="site-footer">
+    City of Naga Police Station · Public Safety Department
+  </footer>
+</body>
+</html>

@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTypeFacts, properNounsFor, reportTitle } from '../../src/lib/sheetFacts.js';
+import { buildTypeFacts, properNounsFor, buildFindings, buildStructuredFindings, reportTitle } from '../../src/lib/sheetFacts.js';
 
 const labels = (type, ts, report = {}) =>
   buildTypeFacts(type, { report, ts }).map((e) => e.label);
@@ -104,6 +104,15 @@ test('a line with no row, a blank line or a non-row key is ignored', () => {
   assert.equal(suspectValue(ts, [{ nope: true }, { row: 'x', line: FORMAL_LINE }]), raw);
 });
 
+test('formatted findings print as their plain words', () => {
+  // The officer's field may carry ink; the sheet prints words — a tag never
+  // becomes a printed line.
+  const found = buildFindings({
+    notable_findings: '<ul><li><b>Forced entry</b> at the back</li><li>CCTV <i>available</i></li></ul>',
+  });
+  assert.deepEqual(found, ['Forced entry at the back', 'CCTV available']);
+});
+
 test('traffic accident vehicle prints blotter sentence with OR/CR/owner/licence', () => {
   // Blotter reference: V1 YAMAHA NMAX plate G7185R OR/CR, owned and driven
   // by Joseph with licence + validity; missing parts leave no gap.
@@ -134,6 +143,14 @@ test('traffic accident vehicle omits unrecorded OR/CR/licence (never invented)',
   assert.equal(entry.values[0], 'HONDA XRM, plate GF39113, driven by Hero Sanoria Canque');
 });
 
+test('the structured evidence lines stay separate from the officer ink', () => {
+  // The letter renders the officer block as html and the evidence lines
+  // after it, so the two halves have to be readable apart.
+  assert.deepEqual(buildStructuredFindings({ cctv_available: 'Yes', cctv_description: 'lobby camera' }), [
+    'CCTV footage is available \u2014 lobby camera.',
+  ]);
+  assert.deepEqual(buildStructuredFindings({}), []);
+});
 
 // ---- The sheet's quoted title: the blotter's wording, not the dropdown -----
 // The officer types the offense exactly as the blotter book words it

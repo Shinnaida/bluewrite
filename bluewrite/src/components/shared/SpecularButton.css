@@ -1,0 +1,114 @@
+/* ---- SpecularButton (vendored from React Bits) ---------------------------
+   The component's own published stylesheet, with ONE addition at the end: the
+   block that gives the app's primary button its chrome back. See the note there
+   before editing anything above it — the two halves are deliberately separate. */
+
+.specular-button {
+  --sb-radius: 18px;
+  --sb-tint: #ffffff;
+  --sb-tint-opacity: 0;
+  --sb-blur: 0px;
+  --sb-text-color: #f5f5f5;
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  margin: 0;
+  font-family: inherit;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: var(--sb-text-color);
+  background: color-mix(in srgb, var(--sb-tint) calc(var(--sb-tint-opacity) * 100%), transparent);
+  border-radius: var(--sb-radius);
+  backdrop-filter: blur(var(--sb-blur));
+  -webkit-backdrop-filter: blur(var(--sb-blur));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.15s ease;
+}
+
+.specular-button:active {
+  transform: scale(0.97);
+}
+
+.specular-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--sb-text-color) 60%, transparent);
+  outline-offset: 3px;
+}
+
+.specular-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.specular-button:disabled:active {
+  transform: none;
+}
+
+.specular-button--sm {
+  font-size: 0.85rem;
+  padding: 10px 22px;
+}
+
+.specular-button--md {
+  font-size: 1rem;
+  padding: 14px 30px;
+}
+
+.specular-button--lg {
+  font-size: 1.15rem;
+  padding: 18px 40px;
+}
+
+/* Canvas extends past the button so the rim glow can bleed outside the edge */
+.specular-button__fx {
+  position: absolute;
+  inset: -20px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.specular-button__fx canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.specular-button__label {
+  position: relative;
+  z-index: 2;
+}
+
+/* ---- HOST INTEGRATION: the app's Generate action -------------------------
+   THIS FILE ADDS NOTHING TO THE APP'S BUTTON ANY MORE, and that is worth
+   stating, because it used to — and because the component cannot be trusted to
+   leave the button alone.
+
+   `main.jsx` imports styles.css FIRST and this file arrives later, through the
+   component graph. At EQUAL specificity the later rule wins, so the component's
+   own padding, font-size and drop shadow would replace the app's. While the
+   Generate button was a one-class rule (`.ai-run`), the app's chrome lost that
+   tie and had to be re-asserted here, which is what this block did.
+
+   The button is a PILL now, stated as `.ai-run.primary` (styles.css): two
+   classes, which out-specify `button.primary`, this file's `.specular-button`
+   presets and its size preset at once, in either bundle order. So the app's
+   surface — the navy plate, its blue rim, the pill's metrics, the blue lift,
+   the halo and the focus ring — needs no partner here.
+
+   WHAT THAT BUYS BEYOND TIDINESS: the published source is meant to be re-copied
+   over this file (see the header), and a re-copy takes this note with it. The
+   app's button survives that now; under the old arrangement it came back with
+   the vendor's 14px/30px padding and its dark drop shadow, silently. So if a
+   future re-copy DOES bring a preset that reaches the button, the fix is to
+   raise the app's own rule — not to start a second override block here.
+
+   What the component still contributes is the rim itself: the shader canvas
+   along the edge, and the radius its SDF must follow, which the panel passes as
+   a prop (RUN_RADIUS) so the drawn curve and the CSS curve are one curve. */

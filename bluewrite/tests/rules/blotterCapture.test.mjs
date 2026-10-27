@@ -16,9 +16,15 @@ import {
   escapeBlotterHtml,
   blotterTextToHtml,
   mergeBlotterText,
+  formatBlotterCertification,
+  cleanBlotterTranscription,
 } from '../../src/lib/blotterText.js';
 
+// Newline joiner for the certification-format fixtures below.
+const NL = String.fromCharCode(10);
+
 const OCR = readFileSync(new URL('../../src/lib/ocrBlotter.js', import.meta.url), 'utf8');
+const HW = readFileSync(new URL('../../src/lib/ocrHandwriting.js', import.meta.url), 'utf8');
 const COMP = readFileSync(
   new URL('../../src/components/reports/BlotterCapture.jsx', import.meta.url),
   'utf8',
@@ -31,6 +37,14 @@ const RT = readFileSync(
   new URL('../../src/components/reports/RichTextArea.jsx', import.meta.url),
   'utf8',
 );
+const ONLINE = readFileSync(new URL('../../src/lib/ocrOnline.js', import.meta.url), 'utf8');
+const CTRL = readFileSync(new URL('../../app/controllers/OcrController.php', import.meta.url), 'utf8');
+const ROUTES = readFileSync(new URL('../../api/index.php', import.meta.url), 'utf8');
+const SAMPLE = readFileSync(new URL('../../app/config/ai.sample.php', import.meta.url), 'utf8');
+const IFACE = readFileSync(new URL('../../app/ai/AiNarrativeProvider.php', import.meta.url), 'utf8');
+const GEMINI = readFileSync(new URL('../../app/ai/GeminiNarrativeProvider.php', import.meta.url), 'utf8');
+const SVC = readFileSync(new URL('../../app/ai/NarrativeService.php', import.meta.url), 'utf8');
+const STUB = readFileSync(new URL('../../tests/StubNarrativeProvider.php', import.meta.url), 'utf8');
 
 test('plain blotter text becomes the record html, safely', () => {
   // Markup in the recognized text is ink, not structure.
@@ -43,6 +57,31 @@ test('plain blotter text becomes the record html, safely', () => {
   // Nothing readable in, nothing html out.
   assert.equal(blotterTextToHtml('   \n  \n'), '');
   assert.equal(blotterTextToHtml(null), '');
+});
+
+test('offline reads convert to narrative text only', () => {
+  // Owner request, the client twin of the server rule: the on-device
+  // engines read with no AI instruction, so tables, pipes and symbols are
+  // cleaned before review — words and sentence punctuation survive.
+  assert.equal(
+    cleanBlotterTranscription('| Suspect | Age |\n|---|---|\nMaria knocked # loudly --- victim'),
+    'Suspect  Age\nMaria knocked  loudly --- victim',
+  );
+  assert.equal(
+    cleanBlotterTranscription('At ~8:30 — victim "shouted" …'),
+    'At 8:30 - victim "shouted" ...',
+  );
+  // Nothing readable in, nothing out — the capture shows the re-shoot
+  // error instead of an empty review.
+  assert.equal(cleanBlotterTranscription(''), '');
+  assert.equal(cleanBlotterTranscription(null), '');
+  assert.equal(cleanBlotterTranscription('|---|---|\n---|---'), '');
+  // Already-clean text passes through unchanged, so the online read the
+  // server already cleaned is never mangled by a second pass.
+  assert.equal(cleanBlotterTranscription('Maria parked at Purok Cacao.'), 'Maria parked at Purok Cacao.');
+  // The capture actually cleans before review — the rule cannot rot while
+  // the helper stays tested but unwired.
+  assert.match(COMP, /cleanBlotterTranscription/, 'the capture shows uncleaned engine text');
 });
 
 test('a capture never wipes the officer words', () => {
@@ -79,6 +118,16 @@ test('recognition is vendored and offline, per job', () => {
   assert.match(OCR, /ocrBase\(\)\}\/worker\.min\.js/, 'the worker path bypasses the deployment base');
   // A worker per job, terminated after it — no resident ~30 MB on shared PCs.
   assert.match(OCR, /await worker\.terminate\(\)/, 'the worker is never released');
+  // Phone photos arrive raw: 12-megapixel colour, often stored sideways
+  // with an orientation flag the gallery hides. The engine reads stored
+  // pixels and reasons about ink — so the photo is straightened, sanely
+  // sized and made ink-first before recognizing. When that shaping is
+  // impossible the raw pixels still get their chance instead of failing.
+  assert.match(OCR, /createImageBitmap\(image, \{ imageOrientation: 'from-image' \}\)/, 'the photo orientation flag is ignored');
+  assert.match(OCR, /MAX_EDGE_PX = 2000/, 'oversized photos still reach the engine full-size');
+  assert.match(OCR, /getImageData\(0, 0, width, height\)/, 'the shaping never reads the pixels back');
+  assert.match(OCR, /putImageData\(frame, 0, 0\)/, 'the ink-first pass never lands back on the canvas');
+  assert.match(OCR, /worker\.recognize\(await withReadablePixels\(image\)\)/, 'recognition bypasses the photo shaping step');
 });
 
 test('nothing reaches the narrative before review', () => {
@@ -99,35 +148,315 @@ test('nothing reaches the narrative before review', () => {
   // An empty read is an error with a way back, not an empty insert.
   assert.match(COMP, /no readable text/, 'an empty read is not explained');
   assert.match(COMP, /disabled=\{reviewText\.trim\(\) === ''\}/, 'an emptied review can still insert');
+  // The proofing desk: the photo sits beside its reading (ABBYY-style), so
+  // corrections are checked against the source. Wider dialog, photo first.
+  assert.match(COMP, /dialog dialog--blotter/, 'the review is still a narrow single column');
+  assert.match(COMP, /URL\.createObjectURL\(file\)/, 'the photo never reaches the review');
+  assert.match(COMP, /URL\.revokeObjectURL/, 'a replaced photo leaks its object URL');
+  assert.match(COMP, /blotter-review-grid/, 'the reading sits without its photo');
+  assert.match(COMP, /blotter-engine-badge/, 'the review hides which engine read');
 });
 
-test("the sheet's narrative carries its own strip, and nothing else does", () => {
-  // On the letter the narrative edits through the same Word-like box, with
-  // its strip on top and the Upload riding it — the capture lands through
-  // the safe merge, never around it.
+test("the sheet stays chrome-free — the capture lives on the form, not the paper", () => {
+  // Owner request: no strip on the letter — the narrative edits through the
+  // same Word-like box with no chrome, like findings, action and the free
+  // canvas. The blotter Upload rides the form's own strip (see Reports.jsx)
+  // and lands through the safe merge, never around it.
   assert.equal(
     (LEAF.match(/toolbar="top"/g) || []).length,
-    1,
-    'more than the narrative carries its own strip on the sheet',
+    0,
+    'a strip crept back onto the sheet',
   );
   assert.equal(
     (LEAF.match(/toolbar="none"/g) || []).length,
-    3,
-    'findings, action taken or the free canvas lost their chrome-free rule',
+    4,
+    'narrative, findings, action taken or the free canvas lost their chrome-free rule',
   );
-  assert.match(
-    LEAF,
-    /toolbar="top"[\s\S]*?toolbarExtra=\{\([\s\S]*?<BlotterCapture[\s\S]*?onInsert=\{\(text\) => onEditNarrative\(mergeBlotterText\(narrativeRaw, text\)\)\}/,
-    'the Upload stopped riding the narrative strip through the safe merge',
-  );
+  assert.doesNotMatch(LEAF, /<BlotterCapture/, 'the Upload button is back on the paper');
+  assert.doesNotMatch(LEAF, /mergeBlotterText/, 'the capture merge is back on the paper');
   // The box renders the riding extra on the strip, and no strip at all for
   // the chrome-free sections.
   assert.match(RT, /toolbarExtra = null,/, 'the box lost the riding slot');
   assert.match(RT, /\{toolbarExtra && \(/, 'the box stopped drawing the riding slot');
+  // The strip portals under the masthead banner on the form (see
+  // toolbarMount): inline above the text only where no banner home exists.
+  assert.match(RT, /import \{ createPortal \} from 'react-dom';/, 'the strip is no longer portable');
+  assert.match(RT, /toolbarMount = null,/, 'the box lost its banner-mount slot');
+  assert.match(RT, /\{!toolbarMount && tools\}/, 'the strip still draws inline beside its banner home');
+  assert.match(RT, /createPortal\(tools, toolbarMount\)/, 'the strip is not portaled under the banner');
   // No docked ribbon on the sheet: the strip above the narrative is the
   // only chrome the letter carries.
   assert.doesNotMatch(LEAF, /[Rr]ibbon/, 'a ribbon crept back onto the sheet');
   // The component touches recognition only through the vendored offline
-  // module — never a direct (or remote) engine import of its own.
+  // modules — never a direct (or remote) engine import of its own.
+  // Owner request (2026-10-27): no print/handwriting mode toggle on the
+  // strip — the capture always reads with the print engine.
   assert.doesNotMatch(COMP, /tesseract/, 'the review bypasses the offline module');
+  assert.match(COMP, /import \{ recognizeBlotterImage \} from '\.\.\/\.\.\/lib\/ocrBlotter\.js';/, 'the print read lost its engine');
+  assert.doesNotMatch(COMP, /recognizeBlotterHandwriting/, 'the handwriting switch is back');
+  assert.doesNotMatch(COMP, />\s*Print\s*</, 'the Print toggle is back on the strip');
+});
+
+test('the handwriting read stays on this computer, line by line', () => {
+  // A TrOCR-small handwriting model, vendored with the app: remote models
+  // are forbidden, so a station PC with no internet still reads.
+  assert.match(HW, /env\.allowRemoteModels = false;/, 'the handwriting model may phone home');
+  assert.match(HW, /localModelPath/, 'the handwriting weights are not pinned local');
+  assert.match(HW, /handwriting\//, 'the handwriting weights lost their vendored home');
+  assert.match(HW, /const MODEL_ID = 'Xenova\/trocr-small-handwritten';/, 'the handwriting model is gone');
+  assert.match(HW, /pipeline\('image-to-text', MODEL_ID,/, 'the transcriber does not read text from images');
+  assert.match(HW, /quantized: true/, 'the full-size weights ship to station PCs');
+  // Cursive is read one line at a time: the page is split into line bands
+  // by row-ink projection, each band keeps its original ink, and the lines
+  // join back in order. The photo's own rotation flag is honoured first,
+  // like the print path.
+  assert.match(HW, /function splitTextLines\(canvas/, 'the page is no longer split into lines');
+  assert.match(HW, /imageOrientation: 'from-image'/, 'a sideways photo reaches the handwriting model unrotated');
+  assert.match(HW, /generated_text/, 'the line reads are never collected');
+  assert.match(HW, /out\.join\('\\n'\)/, 'the lines do not join back into a page');
+});
+
+test('a blotter photo can be dropped onto the narrative', () => {
+  // Owner request: dragging a blotter photo onto the narrative reads it like
+  // an Upload pick — same engines, same review gate, same offline contract.
+  // The editor owns the drop chrome; the capture owns the read; the form
+  // wires the two with a ref, so pick and drop share one gate.
+  const SRC = readFileSync(new URL('../../src/pages/Reports.jsx', import.meta.url), 'utf8');
+  // The box takes drops through a slot and shows a hint while one hovers.
+  assert.match(RT, /onDropPhoto = null,/, 'the box lost its drop slot');
+  assert.match(RT, /const dropArmed = typeof onDropPhoto === 'function' && !disabled;/, 'a disabled box still takes drops');
+  assert.match(RT, /onDragEnter/, 'a dragged photo never arms the hint');
+  assert.match(RT, /onDragOver/, 'dropping is never allowed over the narrative');
+  assert.match(RT, /onDrop/, 'a dropped photo never reaches the capture');
+  assert.match(RT, /rt-drop-hint/, 'the drop hint is gone');
+  assert.match(RT, /rt-drop-active/, 'the drop frame is gone');
+  assert.match(RT, /image\\\/\(jpeg\|png\|webp\)/, 'a non-photo drop can start a read');
+  // The capture exposes one drop entry that reuses the Upload read path.
+  assert.match(COMP, /forwardRef/, 'the capture cannot be driven by a drop');
+  assert.match(COMP, /useImperativeHandle/, 'the capture exposes no drop entry');
+  assert.match(COMP, /const dropFile = \(file\) =>/, 'the drop entry is gone');
+  assert.match(COMP, /fileRef\.current = file;\s*\n\s*readPhoto\(file\);/, 'a drop bypasses the review gate');
+  // The form wires the narrative drop slot to the capture entry.
+  assert.match(SRC, /const blotterRef = useRef\(null\);/, 'the form lost its capture ref');
+  assert.match(SRC, /<BlotterCapture\s*\n\s*ref=\{blotterRef\}/, 'the capture is not driven by a drop');
+  assert.match(SRC, /onDropPhoto=\{\(file\) => blotterRef\.current\?\.dropFile\?\.\(file\)\}/, 'a drop never reaches the capture');
+});
+
+test('the online reader is tried first, the local engines carry every miss', () => {
+  // Owner request: Gemini vision reads first on the station's own key, then
+  // imagetotext.info when keyed; anything short of usable text falls back to
+  // the on-device engines. The keys stay on the server — the browser only
+  // ever talks to /ocr/read. The offline modules stay pure-local, so the
+  // vendored-offline rule above keeps holding for ocrBlotter.js and
+  // ocrHandwriting.js untouched.
+  assert.match(ONLINE, /api\('\/ocr\/read'/, 'the online read bypasses the server proxy');
+  assert.match(ONLINE, /out\.configured === false/, 'a keyless server reads as a failure instead of a local read');
+  assert.match(ONLINE, /if \(text === ''\) return null;/, 'an empty online answer reaches the review instead of the local engines');
+  assert.match(ONLINE, /catch \{\s*\n\s*return null;\s*\n\s*\}/, 'an unreachable online reader fails the capture instead of falling back');
+  assert.match(
+    ONLINE,
+    /const online = await readOnlinePhoto\(file\);\s*\n\s*if \(online !== null\) return online;/,
+    'the online read is not tried before the local engines',
+  );
+  assert.match(ONLINE, /await localRecognize\(file, onProgress\)/, 'a local fallback never runs');
+  // The engine name rides back from the server, so the receipt can say
+  // which reader actually read — never invented client-side.
+  assert.match(ONLINE, /out\.engine/, 'the engine name never reaches the client');
+  // The capture reads through the fallback wrapper, never around it — and
+  // the review gate still stands between every reading and the narrative.
+  assert.match(COMP, /recognizeWithFallback/, 'the capture bypasses the online-first read');
+  assert.doesNotMatch(COMP, /await recognize\(file,/, 'the capture reads around the fallback');
+  // The proxy keeps the secret: env key, never echoed, never forwarded to
+  // the client. Keyless is a local-read signal, not an error.
+  assert.match(CTRL, /getenv\('IMAGETOTEXT_API_KEY'\)/, 'the key is not read from the environment');
+  assert.doesNotMatch(CTRL, /\$_POST\['key'\]|\$body\['key'\]/, 'a client-supplied key reaches the proxy');
+  assert.match(CTRL, /'configured' => false/, 'a keyless station gets an error instead of a local read');
+  assert.match(CTRL, /MAX_IMAGE_BYTES/, 'an oversized photo reaches the upstream reader');
+  assert.match(CTRL, /ALLOWED_MIME/, 'a non-photo reaches the upstream reader');
+  assert.match(CTRL, /Authorization: Bearer ' \. \$key/, 'the upstream call carries no key');
+  assert.match(CTRL, /imageToText/, 'the proxy points at the wrong upstream endpoint');
+  assert.match(CTRL, /Audit::log\(\$userId, 'ocr\.read'/, 'an online read leaves no audit trail');
+  // Gemini first on the station's own key, imagetotext second: one route,
+  // one answer shape, whichever engine produced it.
+  assert.match(CTRL, /transcribePhoto\(\$bytes, \$mime\)/, 'Gemini never sees the photo');
+  assert.match(CTRL, /catch \(AiUnavailableException \| AiProviderException\)/, 'a Gemini miss fails the capture instead of reaching imagetotext');
+  assert.match(CTRL, /'engine' => \$engine/, 'the answer hides which engine read');
+  assert.ok(
+    CTRL.indexOf('transcribePhoto') < CTRL.indexOf("getenv('IMAGETOTEXT_API_KEY')"),
+    'imagetotext runs before Gemini instead of after it',
+  );
+  // The route is registered where every other controller route lives, with
+  // its class required by hand like all the rest (no autoloader).
+  assert.match(ROUTES, /require __DIR__ \. '\/\.\.\/app\/controllers\/OcrController\.php';/, 'the controller is not required — the route would 500');
+  assert.match(ROUTES, /\$seg0 === 'ocr' && \$seg1 === 'read'/, 'POST /ocr/read is not routed');
+  assert.match(ROUTES, /\(new OcrController\(\)\)->read\(\)/, 'the route does not reach the reader');
+  // The key is documented env-only, never given a committed value.
+  assert.match(SAMPLE, /IMAGETOTEXT_API_KEY/, 'the key setup is undocumented');
+});
+
+test('Gemini reads the photo on the station key before imagetotext is asked', () => {
+  // Owner request: the vision model the narrative features already run on
+  // transcribes the photo — no new key, no new billing — through the same
+  // provider interface every other AI reading travels.
+  assert.match(IFACE, /function transcribeImage\(string \$imageBytes, string \$mimeType\): string;/, 'the interface carries no photo reading');
+  // The photo rides as inlineData beside a verbatim-transcription
+  // instruction, at temperature 0.0 like the other reading task —
+  // creativity here is misreading.
+  assert.match(GEMINI, /public function transcribeImage\(string \$imageBytes, string \$mimeType\): string/, 'Gemini implements no photo reading');
+  assert.match(GEMINI, /'inlineData' => \[/, 'the photo never reaches the model');
+  assert.match(GEMINI, /transcriptionInstruction\(\)/, 'the transcription runs on an inline instruction');
+  // Owner request: the conversion hands back narrative text only — the
+  // instruction itself forbids tables and special characters.
+  assert.match(GEMINI, /no tables/, 'the transcription may draw a table again');
+  assert.match(GEMINI, /no special characters/, 'the transcription may keep special characters again');
+  // And the controller enforces it for both online engines (Gemini takes an
+  // instruction, imagetotext does not), through the one gate both answers
+  // pass through.
+  assert.match(CTRL, /cleanTranscription/, 'a table from the online reader reaches the review screen');
+  assert.match(GEMINI, /'temperature' => 0\.0/, 'the transcription runs hot');
+  assert.match(GEMINI, /'responseMimeType' => 'text\/plain'/, 'the transcription answer is wrapped in schema');
+  // A thin service pass-through like classifyAccount: provider failures
+  // bubble, and the caller tries the next engine.
+  assert.match(SVC, /function transcribePhoto\(string \$imageBytes, string \$mimeType\): string/, 'the service carries no photo reading');
+  assert.match(SVC, /\$this->provider->transcribeImage\(\$imageBytes, \$mimeType\)/, 'the service does not reach the provider');
+  // The test double implements the interface, or every provider test fatals.
+  assert.match(STUB, /function transcribeImage\(string \$imageBytes, string \$mimeType\): string/, 'the stub breaks the interface');
+});
+
+test('certification format adds recorded-by and the issuance line, wording untouched', () => {
+  // The owner's sample: a raw image-to-text read goes in, the finished
+  // certification comes out — same words (RESKLESS stays RESKLESS), plus the
+  // RECORDED BY line before REMARKS and the closing issuance line.
+  const raw = [
+    'RESKLESS IMPRUDENCE RESULTING IN DAMAGE PROPERTY AND PHYSICAL INJURY',
+    '',
+    'PLACE OF INCIDENT: CANSIMUNDONG, INOBURAN, CITY OF NAGA, CEBU',
+    'FACTS : V1 WAS HEADING UPHILL WHILE V2 WAS HEADING DOWNHILL',
+    'AND THE BACKRIDER OF V2 SUSTAINED PHYSICAL INJURIES AND WERE BROUGHT TO NAGA HEALTH INFIRMARY FOR MEDICAL TREATMENT',
+    'REMARKS: BOTH PARTIES AMICABLY SETTLED THE INCIDENT',
+  ].join(NL);
+  const out = formatBlotterCertification(raw, { recordedBy: 'PSSg Caballero J.' });
+  const expected = [
+    'RESKLESS IMPRUDENCE RESULTING IN DAMAGE PROPERTY AND PHYSICAL INJURY',
+    '',
+    'PLACE OF INCIDENT: CANSIMUNDONG, INOBURAN, CITY OF NAGA, CEBU',
+    'FACTS : V1 WAS HEADING UPHILL WHILE V2 WAS HEADING DOWNHILL',
+    'AND THE BACKRIDER OF V2 SUSTAINED PHYSICAL INJURIES AND WERE BROUGHT TO NAGA HEALTH INFIRMARY FOR MEDICAL TREATMENT',
+    '',
+    'RECORDED BY :  PSSg Caballero J.',
+    '',
+    'REMARKS: BOTH PARTIES AMICABLY SETTLED THE INCIDENT',
+    '',
+    'This certification is issued upon the request of "name of who requested" for what ever legal purposes it may serve.',
+  ].join(NL);
+  assert.equal(out, expected);
+  // A named requestor replaces the placeholder.
+  assert.ok(
+    formatBlotterCertification(raw, { recordedBy: 'PSSg Caballero J.', requestedBy: 'Juan Dela Cruz' }).endsWith(
+      'This certification is issued upon the request of "Juan Dela Cruz" for what ever legal purposes it may serve.',
+    ),
+  );
+  // Idempotent: a formatted page formats to itself.
+  assert.equal(formatBlotterCertification(out, { recordedBy: 'PSSg Caballero J.' }), out);
+});
+
+test('certification format degrades gracefully without REMARKS or names', () => {
+  // No REMARKS line: the recorded-by line appends at the end, before issuance.
+  const out = formatBlotterCertification('FACTS : something happened', { recordedBy: '' });
+  assert.equal(
+    out,
+    'FACTS : something happened' + NL + NL + 'RECORDED BY :' + NL + NL + 'This certification is issued upon the request of "name of who requested" for what ever legal purposes it may serve.',
+  );
+  // Empty and blank reads stay empty — never a page of boilerplate.
+  assert.equal(formatBlotterCertification('', { recordedBy: 'PSSg Caballero J.' }), '');
+  assert.equal(formatBlotterCertification('   ' + NL + '  ', {}), '');
+  // CRLF and trailing spaces collapse; the wording is otherwise untouched.
+  const CR = String.fromCharCode(13);
+  assert.equal(
+    formatBlotterCertification('LINE ONE   ' + CR + NL + CR + NL + CR + NL + 'LINE TWO  ', {}),
+    'LINE ONE' + NL + NL + 'LINE TWO' + NL + NL + 'RECORDED BY :' + NL + NL + 'This certification is issued upon the request of "name of who requested" for what ever legal purposes it may serve.',
+  );
+});
+
+test('the review dialog offers the certification format, prefilled from the officer', () => {
+  // One explicit press shapes the reviewed text; nothing auto-formats.
+  assert.match(COMP, /formatBlotterCertification/, 'the dialog never formats the reviewed text');
+  assert.match(COMP, /Apply certification format/, 'the format press is missing from the review');
+  assert.match(COMP, /blotter-recorded-by/, 'the recorded-by field is missing');
+  assert.match(COMP, /blotter-requested-by/, 'the requested-by field is missing');
+  assert.match(COMP, /defaultRecordedBy/, 'the officer name never prefills the recorded-by field');
+  // Insert still carries only the reviewed text — formatting is a press, not a write.
+  assert.match(COMP, /onInsert/, 'Insert is gone from the review');
+  // The form prefills recorded-by from the logged-in officer.
+  const SRC = readFileSync(new URL('../../src/pages/Reports.jsx', import.meta.url), 'utf8');
+  assert.match(SRC, /defaultRecordedBy/, 'the form never hands the officer name to the capture');
+});
+
+test('certification format adds recorded-by and the issuance line, wording untouched', () => {
+  // The owner's sample: a raw image-to-text read goes in, the finished
+  // certification comes out — same words (RESKLESS stays RESKLESS), plus the
+  // RECORDED BY line before REMARKS and the closing issuance line.
+  const raw = [
+    'RESKLESS IMPRUDENCE RESULTING IN DAMAGE PROPERTY AND PHYSICAL INJURY',
+    '',
+    'PLACE OF INCIDENT: CANSIMUNDONG, INOBURAN, CITY OF NAGA, CEBU',
+    'FACTS : V1 WAS HEADING UPHILL WHILE V2 WAS HEADING DOWNHILL',
+    'AND THE BACKRIDER OF V2 SUSTAINED PHYSICAL INJURIES AND WERE BROUGHT TO NAGA HEALTH INFIRMARY FOR MEDICAL TREATMENT',
+    'REMARKS: BOTH PARTIES AMICABLY SETTLED THE INCIDENT',
+  ].join(NL);
+  const out = formatBlotterCertification(raw, { recordedBy: 'PSSg Caballero J.' });
+  const expected = [
+    'RESKLESS IMPRUDENCE RESULTING IN DAMAGE PROPERTY AND PHYSICAL INJURY',
+    '',
+    'PLACE OF INCIDENT: CANSIMUNDONG, INOBURAN, CITY OF NAGA, CEBU',
+    'FACTS : V1 WAS HEADING UPHILL WHILE V2 WAS HEADING DOWNHILL',
+    'AND THE BACKRIDER OF V2 SUSTAINED PHYSICAL INJURIES AND WERE BROUGHT TO NAGA HEALTH INFIRMARY FOR MEDICAL TREATMENT',
+    '',
+    'RECORDED BY :  PSSg Caballero J.',
+    '',
+    'REMARKS: BOTH PARTIES AMICABLY SETTLED THE INCIDENT',
+    '',
+    'This certification is issued upon the request of "name of who requested" for what ever legal purposes it may serve.',
+  ].join(NL);
+  assert.equal(out, expected);
+  // A named requestor replaces the placeholder.
+  assert.ok(
+    formatBlotterCertification(raw, { recordedBy: 'PSSg Caballero J.', requestedBy: 'Juan Dela Cruz' }).endsWith(
+      'This certification is issued upon the request of "Juan Dela Cruz" for what ever legal purposes it may serve.',
+    ),
+  );
+  // Idempotent: a formatted page formats to itself.
+  assert.equal(formatBlotterCertification(out, { recordedBy: 'PSSg Caballero J.' }), out);
+});
+
+test('certification format degrades gracefully without REMARKS or names', () => {
+  // No REMARKS line: the recorded-by line appends at the end, before issuance.
+  const out = formatBlotterCertification('FACTS : something happened', { recordedBy: '' });
+  assert.equal(
+    out,
+    'FACTS : something happened' + NL + NL + 'RECORDED BY :' + NL + NL + 'This certification is issued upon the request of "name of who requested" for what ever legal purposes it may serve.',
+  );
+  // Empty and blank reads stay empty — never a page of boilerplate.
+  assert.equal(formatBlotterCertification('', { recordedBy: 'PSSg Caballero J.' }), '');
+  assert.equal(formatBlotterCertification('   ' + NL + '  ', {}), '');
+  // CRLF and trailing spaces collapse; the wording is otherwise untouched.
+  const CR = String.fromCharCode(13);
+  assert.equal(
+    formatBlotterCertification('LINE ONE   ' + CR + NL + CR + NL + CR + NL + 'LINE TWO  ', {}),
+    'LINE ONE' + NL + NL + 'LINE TWO' + NL + NL + 'RECORDED BY :' + NL + NL + 'This certification is issued upon the request of "name of who requested" for what ever legal purposes it may serve.',
+  );
+});
+
+test('the review dialog offers the certification format, prefilled from the officer', () => {
+  // One explicit press shapes the reviewed text; nothing auto-formats.
+  assert.match(COMP, /formatBlotterCertification/, 'the dialog never formats the reviewed text');
+  assert.match(COMP, /Apply certification format/, 'the format press is missing from the review');
+  assert.match(COMP, /blotter-recorded-by/, 'the recorded-by field is missing');
+  assert.match(COMP, /blotter-requested-by/, 'the requested-by field is missing');
+  assert.match(COMP, /defaultRecordedBy/, 'the officer name never prefills the recorded-by field');
+  // Insert still carries only the reviewed text — formatting is a press, not a write.
+  assert.match(COMP, /onInsert/, 'Insert is gone from the review');
+  // The form prefills recorded-by from the logged-in officer.
+  const SRC = readFileSync(new URL('../../src/pages/Reports.jsx', import.meta.url), 'utf8');
+  assert.match(SRC, /defaultRecordedBy/, 'the form never hands the officer name to the capture');
 });

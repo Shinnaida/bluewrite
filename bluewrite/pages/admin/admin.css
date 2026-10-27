@@ -1,0 +1,158 @@
+/* BlueWrite — admin UI rules (Dashboard, Users, Audits, Station).
+   Load AFTER ../shared/pages.css. Nothing in here is used by officer pages. */
+
+.stat-grid {
+  display: grid;
+  gap: var(--space);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  margin-bottom: 24px;
+}
+
+.stat {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+
+.stat__label {
+  margin: 0 0 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+
+.stat__value {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--navy);
+  line-height: 1.1;
+}
+
+.stat__note { margin: 4px 0 0; color: var(--ink-dim); font-size: 0.9rem; }
+
+/* ---------- Role pills (Users table) ---------- */
+
+.role {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.role--admin { background: #e6eefc; color: var(--navy-hi); }
+.role--officer { background: #dcf5e6; color: var(--green-ok); }
+
+/* ---------- Account state pills (Users table) ---------- */
+
+.state {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.state--active { background: #dcf5e6; color: var(--green-ok); }
+.state--pending { background: #fdf1dc; color: var(--amber); }
+.state--locked { background: #fde4e2; color: var(--red); }
+
+/* ---------- Audits ---------- */
+
+.audit-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.audit-kind::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--cyan);
+  flex: none;
+}
+
+.audit-kind--security::before { background: var(--red); }
+.audit-kind--report::before { background: var(--green-ok); }
+.audit-kind--user::before { background: var(--violet); }
+
+.audit-time { color: var(--ink-dim); font-size: 0.9rem; white-space: nowrap; }
+
+/* ---------- Station settings ---------- */
+
+.settings-grid {
+  display: grid;
+  gap: var(--space);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.settings-grid .span-2 { grid-column: 1 / -1; }
+
+.field textarea { min-height: 88px; resize: vertical; }
+
+.field__hint { margin: 0; color: var(--ink-dim); font-size: 0.88rem; }
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+  justify-content: flex-end;
+}
+
+.notice {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--cyan);
+  background: var(--cyan-bg);
+  color: var(--ink-dim);
+  border-radius: 6px;
+}
+
+/* Two-column dashboard panels. */
+.panel-grid {
+  display: grid;
+  gap: var(--space);
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+/* Simple bar rows for the dashboard breakdown (no chart library here). */
+.bar-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 48px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 0.92rem;
+}
+
+.bar-row__track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--panel-raised);
+  overflow: hidden;
+}
+
+.bar-row__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--cyan);
+}
+
+.bar-row__count { text-align: right; color: var(--ink-dim); font-weight: 600; }
+
+/* ---------- Small screens ---------- */
+
+@media (max-width: 640px) {
+  .form-actions { justify-content: stretch; }
+  .form-actions .btn { flex: 1; justify-content: center; }
+  .bar-row { grid-template-columns: 104px 1fr 40px; }
+}

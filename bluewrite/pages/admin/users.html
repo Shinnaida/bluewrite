@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Users · Admin · BlueWrite</title>
+  <link rel="icon" type="image/png" href="../../src/favicon.png">
+  <link rel="stylesheet" href="../shared/pages.css">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="dashboard.html">
+        <img src="../../src/assets/bluewrite-mark.png" alt="BlueWrite mark">
+        <span>BlueWrite</span>
+        <span class="role-tag">Admin</span>
+      </a>
+      <nav class="site-nav" aria-label="Admin">
+        <ul>
+          <li><a href="dashboard.html">Dashboard</a></li>
+          <li><a href="users.html" aria-current="page">Users</a></li>
+          <li><a href="audits.html">Audits</a></li>
+          <li><a href="station.html">Station</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <h1>Users</h1>
+    <p class="lede">Station accounts and pending requests. Placeholder rows only — replace with live data from the application.</p>
+
+    <div class="toolbar">
+      <label class="sr-only" for="search">Search users</label>
+      <input id="search" class="search" type="search" placeholder="Search by name or badge no.">
+      <a class="btn btn--primary" href="#">New account</a>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Badge no.</th>
+            <th scope="col">Role</th>
+            <th scope="col">State</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Maria Santos</td>
+            <td>NC-0101</td>
+            <td><span class="role role--admin">Admin</span></td>
+            <td><span class="state state--active">Active</span></td>
+          </tr>
+          <tr>
+            <td>Jose Ramos</td>
+            <td>NC-0234</td>
+            <td><span class="role role--officer">Officer</span></td>
+            <td><span class="state state--active">Active</span></td>
+          </tr>
+          <tr>
+            <td>Ana Dela Cruz</td>
+            <td>NC-0312</td>
+            <td><span class="role role--officer">Officer</span></td>
+            <td><span class="state state--pending">Pending</span></td>
+          </tr>
+          <tr>
+            <td>Mark Villanueva</td>
+            <td>NC-0445</td>
+            <td><span class="role role--officer">Officer</span></td>
+            <td><span class="state state--locked">Locked</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    City of Naga Police Station · Public Safety Department
+  </footer>
+</body>
+</html>
