@@ -7,7 +7,9 @@
 // allowlisted subset (see src/lib/richText.js): every keystroke is sanitized
 // on the way out, and pasted Word/Docs markup is unwrapped to its words.
 //
-// `toolbar="top"` (default) rules the strip above the text, as on the form.
+// `toolbar="top"` (default) rules the strip above the text — on the form the
+// strip portals under the masthead banner (see `toolbarMount`), so the
+// formatting rides below the banner instead of inside the field.
 // `toolbar="none"` carries no strip at all: for the sheet's prose, where the
 // ONE ribbon dock (see SheetToolBox.jsx) serves every section and the
 // text blocks stay fully chrome-free. A "none" editor registers itself on
@@ -19,7 +21,8 @@
 // replaces. Plain-text values pass through untouched, so legacy rows and AI
 // drafts (which never carry tags) behave exactly as before.
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { sanitizeRichHtml } from '../../lib/richText.js';
 import { registerSheetEditor, unregisterSheetEditor } from '../../lib/sheetTools.js';
 
@@ -47,13 +50,73 @@ export default function RichTextArea({
   // Strip-less (`toolbar="none"`) editors render no strip at all, so
   // nothing extra can ride them.
   toolbarExtra = null,
+  // A node elsewhere in the page the strip portals into (the mount below
+  // the masthead on the Write Report form). Null renders the strip inline,
+  // above the text — the sheet letter keeps that shape.
+  toolbarMount = null,
   // The allowlist the keystrokes are cleaned through. The prose default
   // keeps the small subset; the free-letter canvas passes the letter subset
   // (structure + sheet hooks) so seeding from the composed body round-trips.
   sanitize = sanitizeRichHtml,
+  // A dropped blotter photo lands here (see BlotterCapture): the form wires
+  // the capture's drop entry to this slot, so dragging a photo onto the
+  // narrative reads it like Upload would. Null renders no drop handling.
+  onDropPhoto = null,
 }) {
   const boxRef = useRef(null);
+  const wrapRef = useRef(null);
+  const dragDepth = useRef(0);
+  const [dropActive, setDropActive] = useState(false);
   const html = String(value ?? '');
+
+  // Drag-and-drop photo (owner request): a blotter photo dropped onto the
+  // narrative reads like an Upload pick. Drag events bubble from children,
+  // so a depth count keeps the hint steady until the pointer truly leaves.
+  const dropArmed = typeof onDropPhoto === 'function' && !disabled;
+  const hasFiles = (e) => {
+    try {
+      if (!e?.dataTransfer) return false;
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) return true;
+      const types = e.dataTransfer.types || [];
+      for (let i = 0; i < types.length; i++) if (types[i] === 'Files') return true;
+      return false;
+    } catch {
+      return false;
+    }
+  };
+  const onDragEnter = (e) => {
+    if (!dropArmed || !hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth.current += 1;
+    setDropActive(true);
+  };
+  const onDragOver = (e) => {
+    if (!dropArmed || !hasFiles(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  };
+  const onDragLeave = (e) => {
+    if (!dropArmed) return;
+    e.preventDefault();
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDropActive(false);
+  };
+  const onDrop = (e) => {
+    if (!dropArmed) return;
+    const files = e?.dataTransfer?.files ? Array.from(e.dataTransfer.files) : [];
+    const photo = files.find((f) => /^image\/(jpeg|png|webp)$/.test(f.type || ''));
+    if (!photo) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth.current = 0;
+    setDropActive(false);
+    onDropPhoto(photo);
+  };
+  const dropHint = dropArmed && dropActive ? (
+    <div className="rt-drop-hint" aria-hidden="true">
+      <span>Drop the blotter photo here — it reads on this computer, and you review it before it lands.</span>
+    </div>
+  ) : null;
 
   // The stored html is the source of truth, but the caret's home is not
   // rewritten under it: while focused, keystrokes own the DOM and only the
@@ -153,13 +216,34 @@ export default function RichTextArea({
   // its own dock above the paper). The ribbon dock does the formatting,
   // so nothing renders here but the text itself.
   if (toolbar === 'none') {
-    return <div className={`rt-wrap ${className}`}>{editBox}</div>;
+    return (
+      <div
+        ref={wrapRef}
+        className={`rt-wrap ${className}${dropActive ? ' rt-drop-active' : ''}`}
+        onDragEnter={dropArmed ? onDragEnter : undefined}
+        onDragOver={dropArmed ? onDragOver : undefined}
+        onDragLeave={dropArmed ? onDragLeave : undefined}
+        onDrop={dropArmed ? onDrop : undefined}
+      >
+        {editBox}
+        {dropHint}
+      </div>
+    );
   }
 
   return (
-    <div className={`rt-wrap ${className}`}>
-      {tools}
+    <div
+      ref={wrapRef}
+      className={`rt-wrap ${className}${dropActive ? ' rt-drop-active' : ''}`}
+      onDragEnter={dropArmed ? onDragEnter : undefined}
+      onDragOver={dropArmed ? onDragOver : undefined}
+      onDragLeave={dropArmed ? onDragLeave : undefined}
+      onDrop={dropArmed ? onDrop : undefined}
+    >
+      {!toolbarMount && tools}
       {editBox}
+      {dropHint}
+      {toolbarMount ? createPortal(tools, toolbarMount) : null}
     </div>
   );
 }

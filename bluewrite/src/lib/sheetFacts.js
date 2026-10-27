@@ -9,6 +9,7 @@
 // in both callers.
 
 import { suspectLine } from './suspectLine.js';
+import { richTextToPlain } from './richText.js';
 
 // “August 06, 2026” — the format the PNP template uses for dates.
 const LONG_DATE = new Intl.DateTimeFormat('en-PH', {
@@ -523,13 +524,26 @@ export function buildTypeFacts(type, ctx) {
 // NOTABLE FINDINGS — the officer's own free-text observations come FIRST
 // (one printed line per typed line), then genuinely recorded evidence-type
 // observations from the structured fields.
+//
+// Word-like ink (owner request): the officer's field may carry the allowlisted
+// subset, so its lines are read through the PLAIN text — a tag never becomes
+// a printed line and never reaches the casing. Plain values read exactly as
+// before, so legacy rows are untouched.
 export function buildFindings(ts) {
-  const findings = [];
-  const officerLines = String(ts.notable_findings || '')
+  return [...officerFindings(ts), ...buildStructuredFindings(ts)];
+}
+
+/** The officer's own findings lines, tag-stripped when the field is rich. */
+export function officerFindings(ts) {
+  return richTextToPlain(String(ts.notable_findings || ''))
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
-  findings.push(...officerLines);
+}
+
+/** The genuinely recorded evidence-type observations from the structured fields. */
+export function buildStructuredFindings(ts) {
+  const findings = [];
   if (ts.cctv_available === 'Yes') {
     findings.push(`CCTV footage is available${has(ts.cctv_description) ? ` — ${N(ts.cctv_description)}` : ''}.`);
   } else if (ts.cctv_available === 'No') {

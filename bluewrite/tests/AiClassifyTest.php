@@ -196,6 +196,11 @@ final class AiClassifyTest extends TestCase
         // call rests on has to be in what the model is actually sent.
         $this->assertStringContainsString('Report what the account STATES', $instruction);
         $this->assertStringContainsString('Leave everything else EMPTY', $instruction);
+        // And the place rule: a live traffic read left `location` empty without
+        // saying so, because the account's only addresses belonged to people.
+        $this->assertStringContainsString('THE PLACE', $instruction);
+        $this->assertStringContainsString('none of them ever fills this field', $instruction);
+        $this->assertStringContainsString('no place of incident given', $instruction);
     }
 
     /** A missing or empty resource file would silently send no rules at all. */
@@ -586,6 +591,11 @@ final class AiClassifyTest extends TestCase
         // blocks the officer's Submit on a field the account had answered.
         $this->assertStringContainsString('HOW FIELDS ARE NOT AN EXCEPTION', $prompt);
         $this->assertStringContainsString('must never come back empty', $prompt);
+        // And the traffic-accident reading: a live blotter read merged V1 and
+        // V2 into one vehicle and filed the logbook serial as data.
+        $this->assertStringContainsString('READING A TRAFFIC-ACCIDENT ACCOUNT', $prompt);
+        $this->assertStringContainsString('V1 and V2 are different vehicles', $prompt);
+        $this->assertStringContainsString('Logbook chrome is not data', $prompt);
     }
 
     /**

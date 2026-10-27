@@ -20,11 +20,15 @@ import TerminologyChatbot from './TerminologyChatbot.jsx';
 // on why the beat used to ride the chathead rail and what its absence broke.
 import PresenceBeat from './PresenceBeat.jsx';
 import { ConnectionBanner } from './ConnectionNotice.jsx';
+// The editor lives in pages/Reports.jsx — the copy all Oct 25-26 work
+// (cert-format press, recorded-by fix, phone-flow captures, zoom pill)
+// landed in. The flat components/Reports.jsx twin is stale (Oct 24) and
+// kept only because rule tests read it as text; nothing renders it.
 import {
   ReportsTable,
   ReportEditor,
   ReportWelcome,
-} from './Reports.jsx';
+} from '../pages/Reports.jsx';
 // The idle limit, its warning threshold and the poll interval live in
 // lib/session.js: the profile menu states the same limit to the officer, and a
 // number typed out twice is a number that disagrees with itself once.
@@ -32,6 +36,11 @@ import { formatCountdown, IDLE_LIMIT_MIN, IDLE_POLL_MS, IDLE_WARNING_SEC } from 
 import { isSaveChord, isTypingTarget, modalOpen, plainLetter } from '../lib/shortcuts.js';
 import { FORM_FORMAT_KEY, readFormFormat } from '../lib/formFormat.js';
 import KeyboardShortcuts from './KeyboardShortcuts.jsx';
+// The phone arrival banner: a phone-filed capture is a NEW draft, so the
+// portal polls the officer's own register and offers each fresh filing the
+// moment it lands — one press opens it in Write Report (see the component
+// for why no server change was needed).
+import PhoneArrivalWatcher from './reports/PhoneArrivalWatcher.jsx';
 
 // ---------------------------------------------------------------------------
 // Display preferences (Profile ▸ Preferences)
@@ -696,6 +705,15 @@ export default function Shell({
       {shortcutsOpen && (
         <KeyboardShortcuts isAdmin={isAdmin} onClose={() => setShortcutsOpen(false)} />
       )}
+
+      {/* A phone capture landing while the portal is open banners here, on
+          every screen and for every role — the officer's own filings only,
+          and never the draft already on screen (see PhoneArrivalWatcher). */}
+      <PhoneArrivalWatcher
+        user={user}
+        openReportId={view.kind === 'report' ? view.id : null}
+        onOpenReport={(reportId) => setView({ kind: 'report', id: reportId })}
+      />
 
       {/* Logout confirmation — rendered for every role; the Profile menu is
           shared, so one dialog covers Admin, Officer and Staff. */}

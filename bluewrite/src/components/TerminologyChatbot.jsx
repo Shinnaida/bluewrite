@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
-import assistantAvatar from '../assets/Friendly AI Police Assistant Badge.png';
+import assistantAvatar from '../assets/White Robot Chatbot Icon.png';
 import './TerminologyChatbot.css';
 
 const EXAMPLES = ['Probable cause', 'Chain of custody', 'Warrant of arrest'];
@@ -17,7 +17,20 @@ export default function TerminologyChatbot({ open, onOpen, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [minimized, setMinimized] = useState(false);
+  const [closing, setClosing] = useState(false);
   const input = useRef(null);
+  const closeTimer = useRef(null);
+
+  useEffect(() => () => { if (closeTimer.current) window.clearTimeout(closeTimer.current); }, []);
+
+  // Exit choreography: shrink the panel back toward the launcher first, and
+  // only then tell the parent to unmount it. Instant on reduced motion.
+  function beginClose() {
+    if (closing) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { onClose?.(); return; }
+    setClosing(true);
+    closeTimer.current = window.setTimeout(() => { setClosing(false); onClose?.(); }, 190);
+  }
   const transcript = useRef(null);
   const inFlight = useRef(false);
   const id = useId();
@@ -54,7 +67,7 @@ export default function TerminologyChatbot({ open, onOpen, onClose }) {
   return (
     <div className="terminology-dock">
       {open ? (
-        <section className={`terminology-chat${minimized ? ' is-minimized' : ''}`} aria-labelledby={`${id}-title`}>
+        <section className={`terminology-chat${minimized ? ' is-minimized' : ''}${closing ? ' is-closing' : ''}`} aria-labelledby={`${id}-title`}>
           <header className="terminology-chat__head">
             <img className="terminology-chat__avatar" src={assistantAvatar} alt="" width="40" height="40" />
             <div className="terminology-chat__identity">
@@ -63,7 +76,7 @@ export default function TerminologyChatbot({ open, onOpen, onClose }) {
             </div>
             <div className="terminology-chat__actions">
               <button type="button" onClick={() => setMinimized((v) => !v)} aria-label={minimized ? 'Expand chatbot' : 'Minimize chatbot'} aria-expanded={!minimized}>{minimized ? '+' : '−'}</button>
-              <button type="button" onClick={onClose} aria-label="Close chatbot">×</button>
+              <button type="button" onClick={beginClose} aria-label="Close chatbot">×</button>
             </div>
           </header>
           {!minimized && (
@@ -96,7 +109,7 @@ export default function TerminologyChatbot({ open, onOpen, onClose }) {
               <form className="terminology-chat__form" onSubmit={send}>
                 <label className="sr-only" htmlFor={`${id}-question`}>Ask about a police term</label>
                 <div>
-                  <input id={`${id}-question`} ref={input} value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={300} placeholder="Ask about a police term…" disabled={busy} autoComplete="off" />
+                  <input id={`${id}-question`} ref={input} value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={300} placeholder="Ask in English, Tagalog, or Bisaya…" disabled={busy} autoComplete="off" />
                   <button type="submit" aria-label="Send" title="Send" disabled={busy || !question.trim()}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4 20-7z" /></svg></button>
                 </div>
                 <footer>
@@ -108,7 +121,7 @@ export default function TerminologyChatbot({ open, onOpen, onClose }) {
           )}
         </section>
       ) : (
-        <button className="terminology-launcher" type="button" onClick={() => { setMinimized(false); onOpen?.(); }} aria-label="Open police terminology chatbot">Ask BlueWrite</button>
+        <button className="terminology-launcher" type="button" onClick={() => { setMinimized(false); onOpen?.(); }} aria-label="Open police terminology chatbot" title="BlueWrite AI"><img className="terminology-launcher__icon" src={assistantAvatar} alt="" width="32" height="32" aria-hidden="true" /><span className="terminology-launcher__status" aria-hidden="true" /></button>
       )}
     </div>
   );

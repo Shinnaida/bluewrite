@@ -2623,8 +2623,46 @@ export function ReportEditor({
   // when another report loads, so one report's status can never colour
   // another's notice.
   const [verificationStatus, setVerificationStatus] = useState(null);
+  // Blotter-capture photos filed against this report (migration 025).
+  // Reset when another report loads, so one report's photos can never
+  // colour another's sheet.
+  const [captures, setCaptures] = useState([]);
+  // Phone captures the officer already inserted this sitting, so one
+  // sitting cannot land twice. Reset with the report, like captures.
+  const [insertedCaptures, setInsertedCaptures] = useState([]);
+  // The phone capture whose review dialog is open: Insert marks it done
+  // (or skips when its text is already in the narrative) instead of
+  // merging a duplicate. Null for Upload picks and drops.
+  const pendingCaptureRef = useRef(null);
+  // The dialog opens BY ITSELF for a waiting phone capture (owner
+  // request): no list, no strip — opening the draft IS the review. The
+  // first capture whose text is not already in the narrative pops the
+  // moment the draft's reads land; each Insert advances to the next
+  // waiting one; Cancel stays closed until the draft is reopened.
+  const firstWaitingCapture = (list, narrativeHtml, inserted) => {
+    const plain = String(narrativeHtml || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+    return (
+      (Array.isArray(list) ? list : []).find((c) => {
+        if (!c || inserted.includes(c.id)) return false;
+        const head = String(c.ocr_text || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+        return head.length >= 20 && !plain.includes(head);
+      }) || null
+    );
+  };
+  const openCaptureReview = (c) => {
+    if (!c || !canEdit) return;
+    pendingCaptureRef.current = { id: c.id, text: c.ocr_text || '' };
+    blotterRef.current?.reviewCapture?.({
+      photoUrl: c.photo_url,
+      text: c.ocr_text || '',
+      engine: c.engine,
+    });
+  };
   useEffect(() => {
     setVerificationStatus(null);
+    setCaptures([]);
+    setInsertedCaptures([]);
+    pendingCaptureRef.current = null;
   }, [editingId]);
 
   const canFinalize = user.role === 'Admin' || user.role === 'Officer';
@@ -2723,6 +2761,16 @@ export function ReportEditor({
   // it in the bar. State, not a ref, so the portal branch re-renders once the
   // mount is up. Sheet-only, like the bar itself.
   const [sheetLetterMount, setSheetLetterMount] = useState(null);
+  // The banner-side home for the narrative's own strip (owner request): the
+  // mount div below the masthead hands its own node over by ref-callback, so
+  // the narrative toolbar portals under the banner instead of drawing inside
+  // the field. State, not a ref, so the portal branch re-renders once the
+  // mount is up.
+  const [narrativeToolbarMount, setNarrativeToolbarMount] = useState(null);
+  // Drag-and-drop blotter photo (owner request): a drop onto the narrative
+  // reads through the same capture the Upload button owns — the ref below
+  // is the capture's drop entry, so pick and drop share one review gate.
+  const blotterRef = useRef(null);
   // HOW BIG THE INLINE PAPER IS DRAWN (owner request): browser zoom scales
   // the whole workstation, so the sheet carries its own size on the desk —
   // the mount's `--sheet-zoom`, moved by the deskbar steppers below. Starts
@@ -2878,6 +2926,7 @@ export function ReportEditor({
   useEffect(() => {
     if (reportId === null) {
       setDraft({ ...EMPTY });
+      setCaptures([]);
       setLoading(false);
       return;
     }
@@ -2904,6 +2953,17 @@ export function ReportEditor({
             ? String(r.incident_datetime).slice(0, 16).replace(' ', 'T')
             : '',
         });
+        // Captures ride the same read — and the first one still waiting pops
+        // the blotter dialog by itself (owner request: opening the draft IS
+        // the review; Cancel stays closed until the draft is reopened).
+        const loaded = Array.isArray(d.captures) ? d.captures : [];
+        setCaptures(loaded);
+        const first = firstWaitingCapture(loaded, r.narrative, []);
+        if (first) {
+          setTimeout(() => {
+            if (alive) openCaptureReview(first);
+          }, 0);
+        }
         setLoading(false);
       })
       .catch((err) => {
@@ -3394,6 +3454,12 @@ export function ReportEditor({
       set('narrative_source_text', narrativeUndo.sourceText);
       set('narrative_source_language', narrativeUndo.sourceLanguage);
       narrativeSourceRef.current = narrativeUndo.source;
+      // The review canvas writes keystrokes into letter_html (see freeReview),
+      // so bringing back the snapshotted words must drop the canvas text too —
+      // otherwise the provisional letter survives its own Discard (or the new
+      // run that replaces it). Guarded by the snapshot like the rest: a kept
+      // letter's snapshot is already dropped, so kept ink is untouched here.
+      set('letter_html', '');
       setNarrativeUndo(null);
     }
     if (aiUndo.findings !== null) restored.findings = aiUndo.findings;
@@ -3541,7 +3607,10 @@ export function ReportEditor({
 
       return {
         ok: true,
-        filled: [...fill.filled, ...(details?.filled ?? [])],
+        // One line per field: the two reads overlap (a group label and the
+        // scalar it derives can share words), and a doubled line reads as
+        // two findings rather than one receipt.
+        filled: [...new Set([...fill.filled, ...(details?.filled ?? [])])],
         stillNeeded,
         // Both halves answer about the SAME account, so the lines are joined
         // rather than one list replacing the other — and deduplicated, because
@@ -4233,7 +4302,6 @@ export function ReportEditor({
         report: { ...(draft || {}), id: draft?.id ?? editingId },
         ts: inlineTs,
         stationHeader,
-        recordedBy: { name: user?.full_name || user?.name || draft?.created_by_name },
       }}
       // Slim bar in the sheet format only (owner request, 2026-10-26): `sheet`
       // here is the FORMAT flag, not the panel's sheet object below — the bar
@@ -4525,6 +4593,21 @@ export function ReportEditor({
             </div>
           ) : null}
         </div>
+
+        {/* The narrative's own strip, BELOW the banner (owner request): the
+            formatting toolbar + blotter Upload live here, directly under the
+            masthead, instead of inside the narrative field. Rendered only
+            while the narrative card itself is on screen, so a hidden step
+            cannot leave a working strip behind. Empty (before the editor
+            portals its strip in) it draws nothing — see
+            .ir-narrative-toolbar:empty. */}
+        {!panelHidden(2) && (
+          <div
+            id="ir-narrative-toolbar"
+            className="ir-narrative-toolbar no-print"
+            ref={setNarrativeToolbarMount}
+          />
+        )}
 
         {/* (The record strip lives INSIDE the band now — see the block above,
             after .ir-case-actions. The stepper follows the band directly.) */}
@@ -4904,10 +4987,37 @@ export function ReportEditor({
                 ariaLabel="Detailed Description of Events"
                 placeholder={sheet ? "Write the whole incident summary here in your own words - who reported it, what happened, when and where, who was involved, and what was done. The AI fills the report fields from this; you review before filing." : "Describe the incident in chronological order. Include suspect description, witness information, and any property damage or injuries."}
                 toolbar="top"
+                toolbarMount={narrativeToolbarMount}
+                onDropPhoto={(file) => blotterRef.current?.dropFile?.(file)}
                 toolbarExtra={(
                   <BlotterCapture
+                    ref={blotterRef}
                     disabled={!canEdit}
-                    onInsert={(text) => setNarrative(mergeBlotterText(draft.narrative, text))}
+                    defaultRecordedBy={user?.full_name || ''}
+                    onInsert={(text) => {
+                      const pending = pendingCaptureRef.current;
+                      if (pending && pending.text) {
+                        const head = pending.text.trim().replace(/\s+/g, ' ').slice(0, 80);
+                        const plain = String(draft.narrative || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+                        const done = [...insertedCaptures, pending.id].filter((x) => x != null);
+                        setInsertedCaptures(done);
+                        pendingCaptureRef.current = null;
+                        if (head.length >= 20 && plain.includes(head)) {
+                          notify?.('That capture is already in the narrative.');
+                          return;
+                        }
+                      }
+                      const merged = mergeBlotterText(draft.narrative, text);
+                      setNarrative(merged);
+                      // Each Insert advances to the next waiting capture, so a
+                      // multi-page filing reviews page after page by itself.
+                      const done = pending ? [...insertedCaptures, pending.id].filter((x) => x != null) : insertedCaptures;
+                      const next = firstWaitingCapture(captures, merged, done);
+                      if (next) openCaptureReview(next);
+                    }}
+                    onClose={() => {
+                      pendingCaptureRef.current = null;
+                    }}
                   />
                 )}
               />
@@ -4918,6 +5028,12 @@ export function ReportEditor({
                   "no approved report terminology published yet" disclaimer. It
                   mounts back under this line when the glossary has entries. */}
             </div>
+            {/* Phone captures (migration 025) need no section of their own:
+                the app files photo plus officer-reviewed text as a PROPOSAL,
+                and the first capture still waiting pops the blotter dialog by
+                itself when the draft opens — photo beside the reading,
+                correct-then-Insert, exactly like an Upload. A report with no
+                captures keeps the form it always had. */}
             {/* Phase 6 Stage 4 (D7) — the side-by-side review surface. After
                 Apply the native words are no longer in the narrative field, so
                 the original is shown BESIDE the English, read-only and
@@ -5577,13 +5693,13 @@ export function ReportEditor({
           </div>
           {/* PAPER MODE read-out: one line saying where corrections go while the clean paper is up. Desk chrome, never printed. */}
           {sheetLetterMount && canEdit && !letterEdit && (
-            <p className="field-hint no-print">Clean paper — switch to Edit above to type corrections on the letter.</p>
+            <p className="field-hint no-print" style={{ textAlign: 'center' }}>Clean paper — switch to Edit above to type corrections on the letter.</p>
           )}
           {/* FREE EDIT read-out: the letter is keeping its own text, so the
               fields no longer describe what is on the paper. Revert (above)
               drops the kept text; saving keeps it. Desk chrome, never printed. */}
           {sheetLetterMount && canEdit && !!draft?.letter_html && (
-            <p className="field-hint no-print">This letter keeps its own text — Revert above to compose it from the fields again.</p>
+            <p className="field-hint no-print" style={{ textAlign: 'center' }}>This letter keeps its own text — Revert above to compose it from the fields again.</p>
           )}
         </div>
       )}
@@ -5597,7 +5713,6 @@ export function ReportEditor({
         <ReportPrint
           reportId={draft.id}
           onClose={() => setPrinting(false)}
-          recordedBy={{ name: user.full_name, badge: user.badge_number }}
         />
       )}
 
@@ -5610,7 +5725,6 @@ export function ReportEditor({
         <ReportPrint
           report={draft}
           autoPrint={false}
-          recordedBy={{ name: user.full_name, badge: user.badge_number }}
           onClose={() => setFinalizePreview(false)}
           footer={
             <div className="finalize-bar no-print" role="alertdialog" aria-label="Confirm finalize">
@@ -6959,7 +7073,6 @@ export function ReportsTable({
             variant="page"
             autoPrint={false}
             onClose={closeSheet}
-            recordedBy={{ name: user.full_name, badge: user.badge_number }}
             onLoaded={(filed) =>
               setSheetReport((cur) => (cur ? { ...cur, ...filed } : cur))
             }

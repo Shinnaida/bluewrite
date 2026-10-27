@@ -39,6 +39,7 @@ import { DEPARTMENT, STATION, SYSTEM_TITLE } from '../lib/appInfo.js';
 import pnpSeal from '../assets/pnp-logo.png';
 import citySeal from '../assets/city-of-naga-seal.png';
 import brandMark from '../assets/bluewrite-mark.png';
+import stationPhoto from '../assets/police_station_sidebar_background.png';
 // The destinations, their drawings and the current-tab rule live in the top bar's
 // module: one list, one icon set, one answer to "where am I" for both chromes.
 import { ADMIN_LINKS, NavIcon, activeFor } from './AppTopBar.jsx';
@@ -70,6 +71,9 @@ export default function AppSidebar({
 
   return (
     <aside className="ir-sidebar">
+      {/* The station photo behind the rail. Decoration only: the rail's own text is
+          the content, so the image is hidden from assistive technology. */}
+      <img className="ir-sidebar__backdrop" src={stationPhoto} alt="" aria-hidden="true" />
       {/* The lockup doubles as Home, like the bar's: an Admin's home base is the
           Dashboard. A button rather than a link because it changes the screen
           in place, which is what every destination below it does. */}

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard · Admin · BlueWrite</title>
+  <link rel="icon" type="image/png" href="../../src/favicon.png">
+  <link rel="stylesheet" href="../shared/pages.css">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="brand" href="dashboard.html">
+        <img src="../../src/assets/bluewrite-mark.png" alt="BlueWrite mark">
+        <span>BlueWrite</span>
+        <span class="role-tag">Admin</span>
+      </a>
+      <nav class="site-nav" aria-label="Admin">
+        <ul>
+          <li><a href="dashboard.html" aria-current="page">Dashboard</a></li>
+          <li><a href="users.html">Users</a></li>
+          <li><a href="audits.html">Audits</a></li>
+          <li><a href="station.html">Station</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <h1>Station Dashboard</h1>
+    <p class="lede">Station-wide reporting activity. Placeholder figures only — replace with live data from the application.</p>
+
+    <section class="stat-grid" aria-label="Totals">
+      <div class="stat">
+        <p class="stat__label">Total reports</p>
+        <p class="stat__value">128</p>
+        <p class="stat__note">All time</p>
+      </div>
+      <div class="stat">
+        <p class="stat__label">Submitted</p>
+        <p class="stat__value">96</p>
+        <p class="stat__note">Finalized by officers</p>
+      </div>
+      <div class="stat">
+        <p class="stat__label">For review</p>
+        <p class="stat__value">21</p>
+        <p class="stat__note">Waiting on a supervisor</p>
+      </div>
+      <div class="stat">
+        <p class="stat__label">Officers</p>
+        <p class="stat__value">34</p>
+        <p class="stat__note">Active accounts</p>
+      </div>
+    </section>
+
+    <div class="panel-grid">
+      <section class="card" aria-labelledby="by-type-title">
+        <h2 id="by-type-title">Reports by type</h2>
+        <div class="bar-row"><span>Theft</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 64%"></span></span><span class="bar-row__count">41</span></div>
+        <div class="bar-row"><span>Traffic incident</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 48%"></span></span><span class="bar-row__count">31</span></div>
+        <div class="bar-row"><span>Assault</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 28%"></span></span><span class="bar-row__count">18</span></div>
+        <div class="bar-row"><span>Other</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 20%"></span></span><span class="bar-row__count">13</span></div>
+      </section>
+
+      <section class="card" aria-labelledby="by-status-title">
+        <h2 id="by-status-title">Reports by status</h2>
+        <div class="bar-row"><span>Submitted</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 75%"></span></span><span class="bar-row__count">96</span></div>
+        <div class="bar-row"><span>For review</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 16%"></span></span><span class="bar-row__count">21</span></div>
+        <div class="bar-row"><span>Draft</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 9%"></span></span><span class="bar-row__count">11</span></div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    City of Naga Police Station · Public Safety Department
+  </footer>
+</body>
+</html>

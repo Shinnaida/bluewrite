@@ -72,6 +72,19 @@ return [
     // §7 — when false, the UI hides Generate and shows manual-mode.
     'enabled' => true,
 
+    // Online photo reader (owner request) — POST /ocr/read proxies the
+    // imagetotext.info image-to-text API. Env-only, like WEBZ_API_TOKEN:
+    // there is deliberately NO key slot in this file, so no paid key can be
+    // committed. Set IMAGETOTEXT_API_KEY in the server environment; with it
+    // unset the endpoint answers `configured: false` and every photo reads
+    // on-device. Upstream notes: premium key required, hourly throttle on
+    // abuse ("Blocked for 1 Hour"), and every forwarded photo leaves the
+    // station — the authority for that was recorded before the route shipped
+    // (see OcrController).
+    //
+    // putenv('IMAGETOTEXT_API_KEY=...'); — set it in the real environment,
+    // never here.
+
     // Phase 6 Stage 3 — translation of a Bisaya/Tagalog/mixed source into a
     // formal English narrative (decision D6). Enabled by default for every
     // incident type, INCLUDING the sensitive ones, by the owner's decision.

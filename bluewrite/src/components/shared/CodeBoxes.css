@@ -1,0 +1,87 @@
+/* BLUEWRITE — CodeBoxes
+   The row of six boxes the sign-in code is typed into.
+
+   EVERY COLOUR HERE IS A TOKEN. That is not tidiness for its own sake: this is
+   the one control an officer uses on a night-shift workstation and on a bright
+   front-desk PC, and the app's dark palette answers for both. The role tokens
+   (--ir-*) are the ones the rest of the gate reads, and the raw palette tokens
+   (--panel-sunken, --line-bright, --focus-ring, --red-bg) are the two or three
+   the gate has no alias for.
+
+   The digit face is the app's own monospace stack: six digits read off another
+   screen, one per box, and a proportional face makes a 1 and an l the same shape
+   at a glance. */
+
+.code-boxes {
+  --cb-width: 46px;
+  --cb-height: 54px;
+  --cb-gap: 8px;
+  --cb-font: 22px;
+
+  display: flex;
+  gap: var(--cb-gap);
+}
+
+.code-boxes__box {
+  width: var(--cb-width);
+  height: var(--cb-height);
+  padding: 0;
+  border: 1px solid var(--line-bright);
+  border-radius: 8px;
+  background: var(--panel-sunken);
+  color: var(--ir-text);
+  font-family: var(--font-mono);
+  font-size: var(--cb-font);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+/* The box the officer is typing into: the one place the accent appears in the
+   row, so it reads as "here" rather than as decoration. The ring is the app's
+   own focus ring token, which is the same one every other field on this screen
+   wears — a control that invents its own focus colour is a control that looks
+   like it came from somewhere else. */
+.code-boxes__box:focus {
+  outline: none;
+  border-color: var(--ir-blue);
+  background: var(--ir-card);
+  box-shadow: 0 0 3px var(--focus-ring);
+}
+
+/* A refused code, or the boxes an incomplete one left empty (the screen decides
+   which, and hands the indexes down). Both halves move: the border says which box
+   is wrong from across a desk, the tint says it without relying on colour alone
+   being noticed. */
+.code-boxes__box[data-invalid] {
+  border-color: var(--ir-red);
+  background: var(--red-bg);
+}
+
+.code-boxes__box[data-invalid]:focus {
+  border-color: var(--ir-red);
+  box-shadow: 0 0 3px var(--red-line);
+}
+
+.code-boxes__box:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Under the two-column breakpoint the card is one column and the row has the
+   whole width to itself; the boxes still have to fit a 360px phone without
+   wrapping, so they give up six pixels each rather than pushing the row onto a
+   second line. Six at 40px and a 6px gap is 270px, which clears the narrowest
+   phone the station supports with room to spare. */
+@media (max-width: 460px) {
+  .code-boxes {
+    --cb-width: 40px;
+    --cb-height: 48px;
+    --cb-gap: 6px;
+    --cb-font: 19px;
+  }
+}

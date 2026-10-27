@@ -186,6 +186,43 @@ export async function apiUpload(path, formData, { method = 'POST' } = {}) {
 }
 
 /**
+ * `api` for a response that is BYTES, not JSON (a capture photo).
+ *
+ * WHY NOT JUST <img src>. An <img> carries the session cookie but NOT the
+ * tab header (see currentTabId above), so the server reads it as the `''`
+ * context — a client that names no tab — and answers 401 where the portal
+ * sees a signed-in officer. The photo then renders as a torn glyph beside
+ * text that reads fine, which is exactly the wrong way round for a desk
+ * whose job is checking image against text. Fetching the bytes with the
+ * same headers as every other `api` call and drawing the blob URL keeps
+ * the photo behind the same gate as the text beside it.
+ *
+ * Takes the full server path as-is (`photo_url` already carries `/api/v1`).
+ * The caller owns the URL: revoke it when the photo is closed or replaced,
+ * the way BlotterCapture already revokes its Upload blob URLs.
+ */
+export async function apiBlobUrl(url) {
+  const res = await fetch(url, {
+    credentials: 'same-origin',
+    headers: { [TAB_HEADER]: currentTabId() },
+  });
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const data = await res.clone().json();
+      if (data?.error) message = data.error;
+    } catch {
+      // non-JSON failure — keep the generic message
+    }
+    if (res.status === 401) onSessionMismatch?.();
+    const err = new Error(message);
+    err.status = res.status;
+    throw err;
+  }
+  return URL.createObjectURL(await res.blob());
+}
+
+/**
  * One response, read the one way: decode it, keep the CSRF token it may carry,
  * and turn a failure into the classified Error every screen already handles.
  *

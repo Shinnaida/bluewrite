@@ -1,0 +1,91 @@
+/* BlueWrite — officer UI rules (Home, Write Report, My Reports).
+   Load AFTER ../shared/pages.css. Nothing in here is used by admin pages. */
+
+.hero {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  min-height: 220px;
+  margin-bottom: 24px;
+  background: var(--navy) url('../../src/assets/home-hero.jpg') center / cover no-repeat;
+}
+
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(11, 37, 69, 0.92), rgba(11, 37, 69, 0.35));
+}
+
+.hero__text {
+  position: relative;
+  z-index: 1;
+  color: #fff;
+  padding: 32px;
+  max-width: 560px;
+}
+
+.hero__text h1 { color: #fff; }
+.hero__text p { color: #dbe6ff; margin: 0; }
+
+.action-grid {
+  display: grid;
+  gap: var(--space);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.action-card { display: block; text-decoration: none; color: inherit; }
+.action-card:hover { border-color: var(--cyan); }
+.action-card h2 { color: var(--navy); }
+.action-card p { color: var(--ink-dim); margin: 0; }
+
+/* ---------- Write Report form ---------- */
+
+.form-grid {
+  display: grid;
+  gap: var(--space);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.form-grid .span-2 { grid-column: 1 / -1; }
+
+.field textarea { min-height: 140px; resize: vertical; }
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+  justify-content: flex-end;
+}
+
+.advisory {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--violet);
+  background: #f5efff;
+  color: var(--ink-dim);
+  border-radius: 6px;
+}
+
+/* ---------- My Reports status pills ---------- */
+
+.status {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status--draft { background: #eef0f4; color: var(--ink-dim); }
+.status--review { background: #fdf1dc; color: var(--amber); }
+.status--final { background: #dcf5e6; color: var(--green-ok); }
+
+/* ---------- Small screens ---------- */
+
+@media (max-width: 640px) {
+  .hero__text { padding: 22px; }
+  .form-actions { justify-content: stretch; }
+  .form-actions .btn { flex: 1; justify-content: center; }
+}

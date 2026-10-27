@@ -1,0 +1,79 @@
+/* BLUEWRITE — AiOrbBackdrop (see the .jsx file for what this is and why) */
+
+/* THE COMPOSITION. The aura and the orb share one centred column, so the glow
+   is centred on the BALL rather than on the card — the one thing "centre it"
+   has to mean — and the column's width is the card's, exactly as the orb's own
+   row was before this existed. The stage carries the gap that separates the orb
+   from the actions under it (it was the row's margin until this existed), so
+   the stage's box is exactly the ball's box. */
+.ai-voice-stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin: 0 0 0.7rem;
+}
+
+/* The orb paints over the aura. An absolutely positioned sibling with a
+   z-index paints over static content in the same stacking context, so without
+   this the backdrop would cover the ball it is backing.
+
+   THE ROW'S OWN MARGIN IS CANCELLED HERE, and only here. A margin under the
+   row is outside the row's box but inside a flex container's line, so the
+   stage would measure ball + 11.2px and the backdrop's `top: 50%` would land
+   5.6px below the ball — measured in a browser, 2026-10-05, before this line
+   existed. The orb keeps its own margin anywhere but in this stage. */
+.ai-voice-stage > .ai-voice-row {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 0;
+}
+
+/* THE SQUARE BEHIND THE ORB. Its size is the orb's nominal size scaled by the
+   inline `--ai-orb-size` custom property the component sets from its `size`
+   prop — 1.6× the ball, which is the scale that puts the shader's bright ring
+   in the gap between the drawn sphere and the dashed orbit rather than under
+   the sphere where nobody can see it.
+
+   `max-width: 100%` is the one concession to a narrow card: a canvas wider than
+   the column would give the card a horizontal scrollbar for the sake of
+   decoration. When the clamp bites, the canvas is taller than it is wide — and
+   the shader centres its orb on min(width, height), so the glow stays round and
+   centred, just closer to the ball. */
+.ai-orb-backdrop {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--ai-orb-size) * 1.6);
+  height: calc(var(--ai-orb-size) * 1.6);
+  max-width: 100%;
+  transform: translate(-50%, -50%);
+  /* Decoration, exactly as the orb is: a drag across the glow is a drag across
+     the panel, and it is hidden from assistive technology in the markup. */
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* The canvas is stretched by the stylesheet; the drawing buffer inside it is
+   sized by the component (see the ResizeObserver there). */
+.ai-orb-backdrop canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* THE STAND-IN, for a machine whose WebGL context is refused: the same glow as
+   a painted ring — transparent core, blue body, fading rim — so the panel still
+   has a lit assistant rather than an empty box. */
+.ai-orb-backdrop__paint {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(77, 163, 255, 0) 0%,
+    rgba(77, 163, 255, 0.32) 40%,
+    rgba(47, 123, 224, 0.5) 56%,
+    rgba(11, 42, 92, 0.28) 70%,
+    rgba(11, 42, 92, 0) 88%
+  );
+}

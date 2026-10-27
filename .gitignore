@@ -1,6 +1,12 @@
 # Huge local Laragon installer — GitHub rejects files over 100 MB
 laragon-wamp.exe
 
+# Downloaded on-device OCR models (342 MB of ONNX binaries) — fetched at
+# setup, not source. GitHub rejects files over 100 MB, so these live here
+# untracked, like the installer above.
+bluewrite/public/handwriting/
+bluewrite/public/ocr/
+
 # Working backups incl. a SQL dump of real reports — NEVER publish
 .design-backup/
 

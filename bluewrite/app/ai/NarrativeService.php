@@ -78,7 +78,7 @@ final class NarrativeService
         foreach ([
             'narrative_system_prompt.txt',
             'type_vocabulary.json',
-            'narrative_few_shots.md',
+            'narrative_few_shots.txt',
         ] as $f) {
             $path = $root . '/resources/ai/' . $f;
             hash_update($ctx, $f . '|');
@@ -183,6 +183,24 @@ final class NarrativeService
             ]),
             'residualRisk' => MaskingGateway::freeTextResidualRisk($account),
         ];
+    }
+
+    /**
+     * Photo OCR (owner request): the blotter photo read by the provider's
+     * own vision model through the station's already-configured key.
+     *
+     * A thin pass-through like classifyAccount(): provider exceptions bubble
+     * to the caller, which tries the next engine — an empty key, an offline
+     * cable and a refused call all read the same downstream (a miss, never
+     * an officer-facing error on their own).
+     *
+     * @param string $imageBytes the decoded photo bytes (never a data URI)
+     * @param string $mimeType the sniffed photo kind (jpeg, png, webp, gif)
+     * @return string the transcription, trimmed; '' when nothing readable
+     */
+    public function transcribePhoto(string $imageBytes, string $mimeType): string
+    {
+        return $this->provider->transcribeImage($imageBytes, $mimeType);
     }
 
     /**

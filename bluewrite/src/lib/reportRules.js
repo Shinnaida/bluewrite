@@ -364,7 +364,9 @@ function checkField(rule, value) {
   const v = String(value ?? '').trim();
   if (rule.required && v === '') return `${rule.label} is required.`;
   if (v === '') return null; // optional and empty — nothing further to check
-  if (rule.minLength && v.length < rule.minLength) {
+  // Ink is not text: the minimum measures the prose, never the markup — a
+  // narrative of 115 characters in bold is still 115 characters.
+  if (rule.minLength && v.replace(/<[^>]*>/g, '').length < rule.minLength) {
     return `${rule.label} must be at least ${rule.minLength} characters.`;
   }
   if (rule.type === 'number') {

@@ -116,4 +116,22 @@ interface AiNarrativeProvider
         array $fields,
         array $options = [],
     ): array;
+
+    /**
+     * Photo OCR — read the text out of a blotter photo with the provider's
+     * own vision reading (owner request: the station's Gemini key reads
+     * better than the on-device engines on cursive logbook pages).
+     *
+     * Like classify() it reads and never writes: a verbatim transcription of
+     * the ink, line breaks kept, no commentary added. An empty string means
+     * the photo held no readable text — a miss the caller answers with the
+     * next engine, never with an error.
+     *
+     * @param string $imageBytes the decoded photo bytes (never a data URI)
+     * @param string $mimeType the sniffed photo kind (jpeg, png, webp, gif)
+     * @return string the transcription, trimmed; '' when nothing readable
+     * @throws AiProviderException when the provider is unreachable, times
+     *         out, or returns an unusable payload.
+     */
+    public function transcribeImage(string $imageBytes, string $mimeType): string;
 }

@@ -1,0 +1,270 @@
+/* BlueWrite — shared base stylesheet for the static pages.
+   Used by BOTH roles:
+     officer pages → ../shared/pages.css + ../officer/officer.css
+     admin pages   → ../shared/pages.css + ./admin.css
+   Role-specific rules live in the role folder, never here.
+   Colours and fonts mirror src/styles.css and src/incident-report.css. */
+
+:root {
+  --void: #eef0f4;          /* page background */
+  --panel: #ffffff;         /* cards and forms */
+  --panel-raised: #f4f6fa;  /* table header, subtle fills */
+  --line: #d8dce4;          /* borders */
+  --navy: #0b2545;          /* headings, top bar */
+  --navy-hi: #133e87;       /* primary button */
+  --cyan: #1f5fd0;          /* links, focus, accents */
+  --cyan-bg: #e6eefc;       /* tinted accent wash */
+  --violet: #8444f2;        /* AI assist accent */
+  --ink: #1a2236;           /* body text */
+  --ink-dim: #33405a;       /* secondary text */
+  --green-ok: #15803d;
+  --amber: #b26a00;
+  --red: #b3261e;
+
+  --font-body: 'IBM Plex Sans', 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --radius: 10px;
+  --space: 16px;
+}
+
+/* Fonts are declared in src/fonts/fonts.css, shared with the app. */
+@import url('../../src/fonts/fonts.css');
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--void);
+  line-height: 1.5;
+}
+
+a { color: var(--cyan); }
+
+:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+
+/* ---------- Header and navigation ---------- */
+
+.site-header {
+  background: var(--navy);
+  color: #fff;
+}
+
+.site-header__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px var(--space);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.brand img { height: 36px; width: auto; }
+
+/* Role tag shown next to the wordmark (Officer / Admin). */
+.role-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.site-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.site-nav a {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: #dbe6ff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.site-nav a:hover { background: rgba(255, 255, 255, 0.12); }
+
+.site-nav a[aria-current='page'] {
+  background: #fff;
+  color: var(--navy);
+}
+
+/* ---------- Layout ---------- */
+
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px var(--space) 48px;
+}
+
+h1, h2, h3 { color: var(--navy); line-height: 1.2; }
+h1 { font-size: clamp(1.6rem, 3vw, 2.2rem); margin: 0 0 8px; }
+h2 { font-size: 1.25rem; margin: 0 0 12px; }
+
+.lede { color: var(--ink-dim); margin: 0 0 24px; max-width: 60ch; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.card + .card { margin-top: var(--space); }
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--navy);
+  padding: 9px 16px;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn--primary {
+  background: var(--navy-hi);
+  border-color: var(--navy-hi);
+  color: #fff;
+}
+
+.btn--ai {
+  background: var(--violet);
+  border-color: var(--violet);
+  color: #fff;
+}
+
+.btn--danger {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+
+.btn:hover { filter: brightness(0.95); }
+
+/* ---------- Tables ---------- */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.search {
+  font: inherit;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-width: 240px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 620px;
+}
+
+th, td {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+th {
+  background: var(--panel-raised);
+  color: var(--navy);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+tbody tr:hover { background: var(--cyan-bg); }
+
+/* ---------- Forms (shared bits; role sheets add their own) ---------- */
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+
+.field label { font-weight: 600; color: var(--navy); }
+
+.field .req { color: var(--red); }
+
+.field input,
+.field select,
+.field textarea {
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 10px;
+  width: 100%;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus { border-color: var(--cyan); }
+
+/* ---------- Footer ---------- */
+
+.site-footer {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px var(--space) 32px;
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+/* Visually hidden, still read by screen readers. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- Small screens ---------- */
+
+@media (max-width: 640px) {
+  main { padding: 20px 12px 36px; }
+}

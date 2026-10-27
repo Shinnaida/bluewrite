@@ -70,6 +70,20 @@ THE GROUPS (people and things, one entry each)
   reverse is just as wrong: never add a row for a thing the account does not
   name.
 
+READING A TRAFFIC-ACCIDENT ACCOUNT
+
+  Blotter-style accounts use a shorthand this call must unfold, not copy.
+  V1 and V2 are different vehicles: each gets its own row, with only the
+  driver, plate, licence and ownership the account attaches to THAT vehicle.
+  A licence, OR or CR number the account does not attach to a named driver
+  or vehicle stays empty — it is never dealt across rows to fill them.
+  The driver, the owner and the complainant are different roles even when
+  one person plays two of them; record each role the account states.
+  Logbook chrome is not data: an entry serial, a column heading, a
+  signature block, or a second incident's entry that the page caught are
+  never a field, never a row, and a second incident is never a third
+  vehicle. Read only the incident the account describes.
+
 WHAT YOU COULD NOT READ
 
   Under `unstated`, list in plain English the fields the account leaves out that
