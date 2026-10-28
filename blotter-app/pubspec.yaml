@@ -27,3 +27,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/bluewrite-mark.png
+    - assets/pin-station.jpg
+    - assets/pin-pnp.png
+    - assets/pin-seal.png

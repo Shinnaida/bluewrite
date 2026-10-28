@@ -3,15 +3,15 @@ import 'package:flutter/material.dart';
 import '../api/portal_client.dart';
 import '../api/server_discovery.dart';
 import '../storage/secure_store.dart';
+import 'station_desk.dart';
 
 /// Step 1 of one-time setup: where is the portal? The phone answers that
-/// itself — no address to type, no button to test.
+/// itself, quietly — no test buttons, no address typing in the normal path.
 ///
-/// ORDER. The last address that worked is tried first (that is what keeps
-/// the app working off the station Wi-Fi too, anywhere the server is
-/// reachable). Otherwise the phone scans the Wi-Fi it is on for a
-/// BlueWrite server. Typing an address is the last resort, offered only when
-/// both miss — and even then the app tests it on submit, never the officer.
+/// ORDER. The last address that worked is tried first, otherwise the phone
+/// scans the Wi-Fi it is on for a BlueWrite server. A manual address is a
+/// hidden last resort, offered only when both miss — and even then the app
+/// tests it on submit, never the officer.
 class ServerSetupScreen extends StatefulWidget {
   const ServerSetupScreen({super.key, required this.onConnected});
   final ValueChanged<String> onConnected;
@@ -23,10 +23,10 @@ class ServerSetupScreen extends StatefulWidget {
 class _ServerSetupScreenState extends State<ServerSetupScreen> {
   final _store = SecureStore();
   final _url = TextEditingController();
-  bool _scanning = true;
-  bool _verifyingStored = true;
-  double _progress = 0;
+  bool _failed = false;
+  bool _showManual = false;
   bool _busy = false;
+  double _progress = 0;
   String? _error;
 
   @override
@@ -41,25 +41,17 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
     super.dispose();
   }
 
-  /// Stored address first, then the LAN scan. The first handshake wins and
-  /// setup moves on with no press at all.
+  /// Stored address first, then the LAN scan — all silent. The first
+  /// handshake wins and setup moves on with no press at all.
   Future<void> _find() async {
     setState(() {
-      _scanning = true;
-      _verifyingStored = true;
-      _progress = 0;
+      _failed = false;
+      _showManual = false;
       _error = null;
+      _progress = 0;
     });
-    final stored = await _store.baseUrl();
-    if (!mounted) return;
-    final known = await ServerDiscovery.verifyStored(stored);
-    if (!mounted) return;
-    if (known != null) {
-      _connected(known);
-      return;
-    }
-    setState(() => _verifyingStored = false);
-    final found = await ServerDiscovery.scanLan(
+    final found = await ServerDiscovery.autoConnect(
+      storedBaseUrl: await _store.baseUrl(),
       onProgress: (p) {
         if (mounted) setState(() => _progress = p);
       },
@@ -69,10 +61,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
       _connected(found);
       return;
     }
-    setState(() {
-      _scanning = false;
-      _error = 'No station server was found on this Wi-Fi.';
-    });
+    setState(() => _failed = true);
   }
 
   Future<void> _connected(String base) async {
@@ -81,8 +70,8 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
     widget.onConnected(base);
   }
 
-  /// The fallback: an address typed by hand is still tested by the app, on
-  /// submit, exactly like a discovered one.
+  /// Last resort, still automatic: a typed address is tested by the app on
+  /// submit, exactly like a discovered one. No separate test step.
   Future<void> _connectManual() async {
     final base = _url.text.trim().replaceAll(RegExp(r'/+$'), '');
     if (base.isEmpty) {
@@ -108,73 +97,114 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Connect to the station server')),
+      backgroundColor: StationDesk.ink,
+      appBar: AppBar(
+        backgroundColor: StationDesk.ink,
+        foregroundColor: StationDesk.paper,
+        title: const Text('Connect to the station server'),
+      ),
       body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: _scanning ? _scanningBody() : _manualBody(),
+        padding: const EdgeInsets.all(24),
+        child: _failed ? _failedBody(context) : _quietBody(),
       ),
     );
   }
 
-  Widget _scanningBody() {
+  /// The normal view: a quiet spinner, nothing to press, nothing to test.
+  /// Progress is the LAN knock-through fraction, so a slow network reads
+  /// as movement, not a freeze.
+  Widget _quietBody() {
+    final pct = (_progress * 100).round().clamp(0, 100);
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 20, width: 20, child: Center(child: CircularProgressIndicator())),
-        const SizedBox(height: 16),
-        Text(
-          _verifyingStored
-              ? 'Checking the last server this phone used…'
-              : 'Looking for the station server on this Wi-Fi… ${(_progress * 100).round()}%',
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'No need to type anything — the app finds the server itself. Stay on the station Wi-Fi while it looks.',
-          textAlign: TextAlign.center,
-        ),
+        const SizedBox(
+            height: 20,
+            width: 20,
+            child: Center(child: CircularProgressIndicator(color: StationDesk.gold))),
+        const SizedBox(height: 20),
+        const Text('Connecting to the station server…',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: StationDesk.paper, fontSize: 16)),
+        const SizedBox(height: 12),
+        if (_progress > 0 && _progress < 1) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: _progress,
+              backgroundColor: Colors.white.withValues(alpha: 0.12),
+              valueColor: const AlwaysStoppedAnimation<Color>(StationDesk.gold),
+              minHeight: 6,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text('Looking for the station server on this Wi-Fi… $pct%',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: StationDesk.paper.withValues(alpha: 0.65), fontSize: 12)),
+        ] else
+          Text('Stay on the station Wi-Fi — the phone finds the server itself.',
+              textAlign: TextAlign.center,
+              style: StationDesk.note().copyWith(fontSize: 12)),
       ],
     );
   }
 
-  Widget _manualBody() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Text(
-          'The server was not found by itself. If the phone is off the station Wi-Fi — or the server moved — enter its address (the same one a phone browser would open, e.g. http://192.168.0.108:8099). The app tests it when you continue.',
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _url,
-          keyboardType: TextInputType.url,
-          autocorrect: false,
-          decoration: const InputDecoration(
-            labelText: 'Server address',
-            hintText: 'http://192.168.0.108:8099',
-            border: OutlineInputBorder(),
+  Widget _failedBody(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 32),
+          const Icon(Icons.wifi_off_outlined, color: StationDesk.gold, size: 44),
+          const SizedBox(height: 16),
+          const Text('Could not reach the station server.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: StationDesk.paper, fontSize: 16, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Text('Stay on the station Wi-Fi and try again.',
+              textAlign: TextAlign.center, style: StationDesk.note()),
+          const SizedBox(height: 24),
+          FilledButton(
+            style: StationDesk.goldAction(context),
+            onPressed: _busy ? null : _find,
+            child: const Text('Try again'),
           ),
-          onSubmitted: (_) => _connectManual(),
-        ),
-        if (_error != null) ...[
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: StationDesk.paper),
+            onPressed: () => setState(() => _showManual = !_showManual),
+            child: Text(_showManual ? 'Hide manual entry' : 'Enter address manually'),
+          ),
+          if (_showManual) ...[
+            TextField(
+              controller: _url,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              style: const TextStyle(color: StationDesk.paper),
+              decoration: StationDesk.field('Server address',
+                  hint: 'http://172.16.51.252:8099'),
+              onSubmitted: (_) => _connectManual(),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: StationDesk.error),
+            ],
           const SizedBox(height: 12),
-          Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          FilledButton(
+            style: StationDesk.goldAction(context),
+            onPressed: _busy ? null : _connectManual,
+            child: _busy
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: StationDesk.ink))
+                : const Text('Continue'),
+          ),
+          ],
         ],
-        const SizedBox(height: 16),
-        FilledButton(
-          onPressed: _busy ? null : _connectManual,
-          child: _busy
-              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Connect'),
-        ),
-        const SizedBox(height: 8),
-        TextButton.icon(
-          onPressed: _busy ? null : _find,
-          icon: const Icon(Icons.refresh),
-          label: const Text('Look for the server again'),
-        ),
-      ],
+      ),
     );
   }
 }

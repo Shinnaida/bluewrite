@@ -23,7 +23,7 @@ class BlotterApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Blotter Capture',
+      title: 'BlueWrite',
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFF0C1B33)),
       home: const _Gate(),
     );
@@ -47,6 +47,9 @@ class _GateState extends State<_Gate> {
     _decide();
   }
 
+  /// Reopen rule: a stored token plus a stored PIN means the PIN screen
+  /// only — never setup, never login, never a server check first. The
+  /// server is verified silently after unlock, in _openApp.
   Future<void> _decide() async {
     final hasSetup = await _store.hasSetup();
     if (!mounted) return;
@@ -80,6 +83,9 @@ class _GateState extends State<_Gate> {
   }
 
   Future<void> _openApp() async {
+    // Held before the first await: pushing through a saved handle is the
+    // honest way to cross the async gaps below.
+    final navigator = Navigator.of(context);
     final baseUrl = await _store.baseUrl();
     final token = await _store.token();
     if (!mounted) return;
@@ -87,19 +93,21 @@ class _GateState extends State<_Gate> {
       setState(() => _route = 'setup');
       return;
     }
-    // The server may have moved since setup (new DHCP lease, new PC): a
-    // stored address is verified before it is used, and a dead one sends
-    // the phone back to discovery — the sign-in on it stays untouched.
+    // The server may have moved since setup (new DHCP lease, new PC):
+    // verified silently first, then a quiet LAN scan — the sign-in on the
+    // phone stays untouched either way. Only when both miss does the
+    // phone show the setup screen's manual fallback.
     setState(() => _route = 'checking');
-    final alive = await ServerDiscovery.verifyStored(baseUrl);
+    final found = await ServerDiscovery.autoConnect(storedBaseUrl: baseUrl);
     if (!mounted) return;
-    if (alive == null) {
+    if (found == null) {
       setState(() => _route = 'refind');
       return;
     }
-    Navigator.of(context).pushAndRemoveUntil(
+    if (found != baseUrl) await _store.saveBaseUrl(found);
+    navigator.pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (_) => CaptureScreen(client: PortalClient(baseUrl), bearer: token),
+        builder: (_) => CaptureScreen(client: PortalClient(found), bearer: token),
       ),
       (_) => false,
     );

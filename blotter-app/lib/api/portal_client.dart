@@ -114,6 +114,21 @@ class PortalClient {
     throw PortalError(_msg(body, res.statusCode));
   }
 
+  /// The signed-in officer's own identity (see AuthController::me) — used
+  /// to prefill Recorded by, exactly like the web's BlotterCapture dialog
+  /// (defaultRecordedBy). Works on the Bearer device token, like /station.
+  Future<Map<String, String>> me(String bearer) async {
+    final res = await http.get(_u('/me'), headers: _headers(bearer: bearer));
+    final body = _decode(res);
+    if (res.statusCode == 200) {
+      return {
+        'full_name': (body['full_name'] ?? '').toString(),
+        'username': (body['username'] ?? '').toString(),
+      };
+    }
+    throw PortalError(_msg(body, res.statusCode));
+  }
+
   /// The station's own incident-type list — the same dropdown the Write
   /// Report form reads, so a draft filed here never names a type the create
   /// would reject (see StationController::index).
@@ -148,9 +163,10 @@ class PortalClient {
     return null; // configured:false, 502, anything — the hand-typed path.
   }
 
-  /// Create the draft the captures will hang off. The capture text lands in
-  /// the narrative exactly as an Upload / drag-drop capture does on the web
-  /// (see mergeBlotterText); the sheet composes around it.
+  /// Create the draft the captures will hang off. The caller files the
+  /// reviewed text as the narrative (as HTML via blotterTextToHtml) — the
+  /// same paragraphs a web Upload inserts — so the Write Report sheet opens
+  /// with the scanned words already editable.
   Future<int> createDraft(String bearer, Map<String, dynamic> fields) async {
     final res = await http
         .post(_u('/reports'), headers: _headers(bearer: bearer), body: jsonEncode(fields))

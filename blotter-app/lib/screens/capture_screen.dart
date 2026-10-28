@@ -131,8 +131,18 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Evidence-room chrome: deep station navy, warm paper text, one gold
+    // accent spent on the page frame + shutter. Everything else stays
+    // quiet so the blotter page is the brightest thing on screen.
+    const ink = Color(0xFF0C1B33);
+    const dusk = Color(0xFF16294D);
+    const paper = Color(0xFFF4EFE3);
+    const gold = Color(0xFFC9A227);
     return Scaffold(
+      backgroundColor: ink,
       appBar: AppBar(
+        backgroundColor: ink,
+        foregroundColor: paper,
         title: const Text('Capture the blotter'),
         actions: [
           IconButton(
@@ -148,38 +158,181 @@ class _CaptureScreenState extends State<CaptureScreen> {
           if (_error != null) {
             return Center(
               child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(_error!, textAlign: TextAlign.center),
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.videocam_off_outlined, color: paper, size: 44),
+                    const SizedBox(height: 16),
+                    Text(_error!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: paper, height: 1.5)),
+                  ],
+                ),
               ),
             );
           }
           if (snap.connectionState != ConnectionState.done || _controller == null) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: gold),
+                  SizedBox(height: 16),
+                  Text('Opening the camera…', style: TextStyle(color: paper)),
+                ],
+              ),
+            );
           }
           return Column(
             children: [
-              Expanded(child: CameraPreview(_controller!)),
-              Padding(
-                padding: const EdgeInsets.all(20),
+              // The viewfinder: the live page under an evidence frame that
+              // shows where the page edges should sit.
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CameraPreview(_controller!),
+                    const CustomPaint(painter: _PageFramePainter()),
+                    Positioned(
+                      top: 14,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'Fit the page inside the corners',
+                            style: TextStyle(color: paper, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // The capture desk: one instruction, one shutter, nothing
+              // else competing for the thumb.
+              Container(
+                width: double.infinity,
+                color: dusk,
+                padding: const EdgeInsets.fromLTRB(24, 18, 24, 28),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const Text(
-                      'Fill the frame with the blotter page, hold steady, and press Capture.',
+                      'Fill the frame with the blotter page, hold steady, then press capture.',
                       textAlign: TextAlign.center,
+                      style: TextStyle(color: paper, height: 1.5),
                     ),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: _sending ? null : _shutter,
-                      icon: const Icon(Icons.camera_alt),
-                      label: Text(_sending ? 'Working…' : 'Capture'),
+                    const SizedBox(height: 16),
+                    _ShutterButton(
+                      sending: _sending,
+                      onTap: _sending ? null : _shutter,
                     ),
+                    const SizedBox(height: 10),
+                    Text(_sending ? 'Working…' : 'Capture',
+                        style: TextStyle(
+                            color: paper.withValues(alpha: _sending ? 0.6 : 1),
+                            fontWeight: FontWeight.w600)),
+                    if (_error != null) ...[
+                      const SizedBox(height: 8),
+                      Text(_error!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Color(0xFFE8A0A0), fontSize: 12)),
+                    ],
                   ],
                 ),
               ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// The evidence frame drawn over the viewfinder: gold corners the officer
+/// fits the page inside, plus a faint hairline suggesting the page edges.
+/// Painted, not widgeted, so it never shifts the preview by a pixel.
+class _PageFramePainter extends CustomPainter {
+  const _PageFramePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const inset = 26.0;
+    const arm = 44.0;
+    final frame = Rect.fromLTWH(inset, inset, size.width - inset * 2, size.height - inset * 2);
+    final hair = Paint()
+      ..color = Colors.white.withValues(alpha: 0.14)
+      ..strokeWidth = 1;
+    canvas.drawRect(frame, hair);
+    final gold = Paint()
+      ..color = const Color(0xFFC9A227)
+      ..strokeWidth = 3.5
+      ..strokeCap = StrokeCap.round;
+    // Each corner is one L drawn as a single path.
+    canvas.drawPath(_corner(frame.topLeft, 1, 1, arm), gold);
+    canvas.drawPath(_corner(Offset(frame.right, frame.top), -1, 1, arm), gold);
+    canvas.drawPath(_corner(Offset(frame.left, frame.bottom), 1, -1, arm), gold);
+    canvas.drawPath(_corner(Offset(frame.right, frame.bottom), -1, -1, arm), gold);
+  }
+
+  Path _corner(Offset at, double dx, double dy, double arm) {
+    return Path()
+      ..moveTo(at.dx + dx * arm, at.dy)
+      ..lineTo(at.dx, at.dy)
+      ..lineTo(at.dx, at.dy + dy * arm);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// One big round shutter: a gold ring around a paper disc with the camera
+/// mark. While the photo is in flight it shows a spinner and goes quiet.
+class _ShutterButton extends StatelessWidget {
+  const _ShutterButton({required this.sending, required this.onTap});
+  final bool sending;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Capture blotter page',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 78,
+          height: 78,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+                color: const Color(0xFFC9A227).withValues(alpha: onTap == null ? 0.35 : 1),
+                width: 3),
+          ),
+          padding: const EdgeInsets.all(5),
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: onTap == null
+                  ? const Color(0xFFF4EFE3).withValues(alpha: 0.45)
+                  : const Color(0xFFF4EFE3),
+            ),
+            child: sending
+                ? const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 3, color: Color(0xFF0C1B33)),
+                  )
+                : const Icon(Icons.camera_alt, color: Color(0xFF0C1B33), size: 32),
+          ),
+        ),
       ),
     );
   }

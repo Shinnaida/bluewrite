@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/portal_client.dart';
 import '../storage/secure_store.dart';
+import 'station_desk.dart';
 
 /// Step 2 of one-time setup: the FULL portal sign-in — username or badge
 /// number, password, then the emailed six-digit code — exactly as on the web.
@@ -34,6 +35,13 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _client = PortalClient(widget.baseUrl);
+    // Remembered account: the last username that signed this phone in.
+    _store.username().then((name) {
+      if (!mounted) return;
+      if (name != null && name.isNotEmpty && _user.text.isEmpty) {
+        setState(() => _user.text = name);
+      }
+    });
   }
 
   @override
@@ -97,6 +105,11 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final device = await _client.issueDevice('Android phone');
       await _store.saveSetup(baseUrl: widget.baseUrl, token: device.token);
+      // Remember the account on this phone: the username (or badge number)
+      // is saved next to the token + PIN verifier, so the PIN screen can
+      // greet the officer and the next setup can prefill it.
+      final who = _user.text.trim();
+      if (who.isNotEmpty) await _store.saveUsername(who);
     } on PortalError catch (e) {
       if (!mounted) return;
       setState(() => _error = e.message);
@@ -124,20 +137,70 @@ class _LoginScreenState extends State<LoginScreen> {
     await widget.onDone();
   }
 
+  /// Where the officer stands in one-time setup: account, emailed code,
+  /// then the daily PIN. Dots + a plain sentence, never a bare number.
+  Widget _stepHeader() {
+    final step = _setPin ? 2 : 1;
+    final title = _setPin
+        ? 'Step 2 of 2 — the daily app PIN'
+        : _mfa
+            ? 'Step 1 of 2 — the emailed code'
+            : 'Step 1 of 2 — the portal account';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: List.generate(2, (i) {
+            final on = i < step;
+            return Container(
+              margin: EdgeInsets.only(right: i == 0 ? 6 : 0),
+              width: 28,
+              height: 4,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(2),
+                color: on
+                    ? StationDesk.gold
+                    : StationDesk.paper.withValues(alpha: 0.25),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 10),
+        Text(title,
+            style: const TextStyle(
+                color: StationDesk.paper, fontSize: 16, fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign in once')),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      backgroundColor: StationDesk.ink,
+      appBar: AppBar(
+        backgroundColor: StationDesk.ink,
+        foregroundColor: StationDesk.paper,
+        // No title: the masthead below already says what this is, and the
+        // bar is kept only for the back button (change server address).
+        automaticallyImplyLeading: true,
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            StationDesk.masthead(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _stepHeader(),
+                  const SizedBox(height: 12),
               if (_setPin) ...[
-                const Text(
+                Text(
                   'Set the daily app PIN. It unlocks this phone only — it '
                   'never leaves the phone, and the portal never sees it.',
+                  style: StationDesk.note(),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -145,53 +208,59 @@ class _LoginScreenState extends State<LoginScreen> {
                   keyboardType: TextInputType.number,
                   obscureText: true,
                   maxLength: 8,
-                  decoration: const InputDecoration(labelText: 'App PIN', border: OutlineInputBorder()),
+                  style: const TextStyle(color: StationDesk.paper),
+                  decoration: StationDesk.field('App PIN'),
                 ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: _pin2,
                   keyboardType: TextInputType.number,
                   obscureText: true,
                   maxLength: 8,
-                  decoration: const InputDecoration(labelText: 'Repeat the PIN', border: OutlineInputBorder()),
+                  style: const TextStyle(color: StationDesk.paper),
+                  decoration: StationDesk.field('Repeat the PIN'),
                   onSubmitted: (_) => _savePin(),
                 ),
               ] else if (_mfa) ...[
                 Text(
                   'A code was emailed${_mfaHint != null && _mfaHint!.isNotEmpty ? ' to $_mfaHint' : ''}. Enter it to finish signing in.',
+                  style: StationDesk.note(),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _code,
                   keyboardType: TextInputType.number,
                   maxLength: 6,
-                  decoration: const InputDecoration(labelText: '6-digit code', border: OutlineInputBorder()),
+                  style: const TextStyle(color: StationDesk.paper),
+                  decoration: StationDesk.field('6-digit code'),
                   onSubmitted: (_) => _verify(),
                 ),
               ] else ...[
-                const Text('Sign in with the same account you use on the portal.'),
+                Text('Sign in with the same account you use on the portal.',
+                    style: StationDesk.note()),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _user,
                   autocorrect: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Username or badge number',
-                    border: OutlineInputBorder(),
-                  ),
+                  style: const TextStyle(color: StationDesk.paper),
+                  decoration: StationDesk.field('Username or badge number'),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _pass,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+                  style: const TextStyle(color: StationDesk.paper),
+                  decoration: StationDesk.field('Password'),
                   onSubmitted: (_) => _signIn(),
                 ),
               ],
               if (_error != null) ...[
                 const SizedBox(height: 12),
-                Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                Text(_error!, style: StationDesk.error),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               FilledButton(
+                style: StationDesk.goldAction(context),
                 onPressed: _busy
                     ? null
                     : _setPin
@@ -200,11 +269,17 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? _verify
                             : _signIn,
                 child: _busy
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: StationDesk.ink))
                     : Text(_setPin ? 'Save PIN and finish' : _mfa ? 'Verify code' : 'Sign in'),
               ),
             ],
           ),
+        ),
+          ],
         ),
       ),
     );

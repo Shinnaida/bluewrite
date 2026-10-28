@@ -17,6 +17,7 @@ class SecureStore {
   static const _kBaseUrl = 'bw.base_url';
   static const _kToken = 'bw.device_token';
   static const _kPinCheck = 'bw.pin_check';
+  static const _kUsername = 'bw.username';
 
   Future<void> saveSetup({required String baseUrl, required String token}) async {
     await _storage.write(key: _kBaseUrl, value: baseUrl);
@@ -31,6 +32,15 @@ class SecureStore {
 
   Future<String?> baseUrl() => _storage.read(key: _kBaseUrl);
   Future<String?> token() => _storage.read(key: _kToken);
+
+  /// The account that signed this phone in (username or badge number).
+  /// Written at login alongside the device token so the PIN screen and
+  /// the next setup can greet the officer by name instead of asking again.
+  /// Kept on sign-out like the server address — signing in again is setup,
+  /// retyping who you are is not.
+  Future<void> saveUsername(String username) =>
+      _storage.write(key: _kUsername, value: username);
+  Future<String?> username() => _storage.read(key: _kUsername);
 
   Future<bool> hasSetup() async => await token() != null;
 
