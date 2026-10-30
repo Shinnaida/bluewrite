@@ -5200,11 +5200,28 @@ body.users-fab-open .ir-page-head.users-head {
    views, filters, table — capped at 76rem and centred, instead of running to
    the window edges. The leftover width still lands in the Details column (see
    below), so narrowing the page buys the details room rather than empty gaps. */
-.audits-page { max-width: 76rem; margin-inline: auto; }
+.audits-page { max-width: none; width: 100%; margin: 0; }
 /* WHITE PAGE like User Management and All Reports (owner request): no blue
    gradient anywhere on this screen, scoped to the class Audits.jsx publishes
    for its lifetime so no other screen is touched. */
 body.audits-white .main.ir-body { background: #ffffff; }
+/* NO BLUE GRADIENT on the Audit Trail (owner request): the title band paints its
+   own navy veil (.ir-page-head::after) over a tinted card, which is the gradient
+   the screen showed. On this screen the band is transparent and the veil is off,
+   so the head reads like User Management's white surface. */
+body.audits-white .ir-page-head {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+body.audits-white .ir-page-head::after { background: none; }
+/* WHITE PAGE for the register (owner request): with the register's own card
+   gone, the page behind the shelves and rows is the paper — the same white
+   User Management and the Audit Trail sit on. Scoped to the class the register
+   publishes while its list is on screen, so the editor/sheet it opens keeps
+   the ordinary page. */
+body.register-white .main.ir-body { background: #ffffff; }
 body.audits-white .audits-table thead th { border-bottom: 2px solid var(--ir-gold); }
 /* THE REGISTER'S OWN HEAD (owner request): the shelf strip and the search rail
    share one row over the strip's own hairline, and the labelled filter grid
@@ -5214,8 +5231,12 @@ body.audits-white .audits-table thead th { border-bottom: 2px solid var(--ir-gol
    keeps its centred column; the head inside it runs the page width. */
 /* A TIGHT 0.1CM between the view tabs and the table head (owner request):
    the TIME / WHO / ACTION / ON / DETAILS line sits just under the strip.
-   Scoped to this head so the register's own spacing is untouched. */
-.audits-head { margin-bottom: 0.1cm; transform: translateY(-10%); }
+   Scoped to this head so the register's own spacing is untouched. The whole
+   strip rides a little ABOVE the page (owner request): the same 0.02cm-from-
+   the-top measure the All Reports register opens on, so the two heads sit at
+   the same height. */
+.audits-page { margin-top: calc(0.02cm - var(--ir-gutter-top)); }
+.audits-head { margin-bottom: 0.1cm; transform: translateY(-22%); }
 .audits-filterbar { margin-bottom: 1rem; }
 /* HEAD READABILITY (owner request, 2026-10-21): the audit tabs read one step up
    from the register's shelf, the search rail takes a longer field, and the
@@ -5226,6 +5247,91 @@ body.audits-white .audits-table thead th { border-bottom: 2px solid var(--ir-gol
 .audits-page .register-tools__search { flex-basis: 20rem; max-width: 27rem; }
 .audits-page .register-tools__search input { font-size: 0.935rem; }
 .audits-page .register-tool__label { font-size: 0.77rem; }
+/* FULL-WIDTH WHITE TRAIL (owner request): the table runs edge to edge of the
+   white page, and the station's navy + gold carry the identity — flat washes
+   only, never a gradient. Scoped to .audits-page so All Reports keeps its own
+   measures. */
+.audits-page .table-wrap { border: 0; border-radius: 0; background: transparent; }
+/* STICKY COLUMN HEAD: on a 25-row page the TIME / WHO / ACTION / ON / DETAILS
+   line stays pinned while the trail scrolls under it. Solid paper behind it so
+   rows never show through; the gold rule stays the head's own. */
+.audits-page .audits-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #ffffff;
+  color: var(--ir-navy);
+}
+/* THE DAY BAND in station colours: navy ink on a flat light-blue wash, closed
+   with a gold inset on the left — the same navy + gold pairing as the tabs'
+   selected rule, so the band reads as the trail's own section bar. */
+.audits-table .blotter-date th {
+  background: var(--cyan-bg);
+  color: var(--ir-navy);
+  box-shadow: inset 3px 0 0 var(--ir-gold);
+}
+/* THE FILTERS KEY answers its state: navy ring and ink while the row is open
+   or holding a narrowing, quiet otherwise. A state, not decoration. */
+.audits-page .register-tool[aria-expanded='true'] {
+  border-color: var(--ir-navy);
+  color: var(--ir-navy);
+}
+/* ONE orchestrated arrival: the head first, the trail just behind it —
+   opacity and translate only, so reduced-motion readers get the same page
+   instantly. Row hover answers the pointer with a short lift of the ring. */
+@keyframes audits-arrive {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .audits-page .folder-head { animation: audits-arrive 240ms ease-out both; }
+  .audits-page .table-wrap { animation: audits-arrive 240ms ease-out 70ms both; }
+  .audits-page .audits-filterbar:not([hidden]) { animation: audits-arrive 180ms ease-out both; }
+  .audits-page .register-tool svg { transition: transform 180ms ease; }
+  .audits-page .register-tool[aria-expanded='true'] svg { transform: scaleY(-1); }
+  .audits-table tbody tr:not(.blotter-date) { transition: box-shadow 140ms ease; }
+}
+/* SEARCH + FILTERS BELOW THE TABS (owner request): the strip holds the top line
+   alone — All activity / AI chatbot questions — and the search rail with the
+   Filters key stands on its own line under the strip's hairline, full width, so
+   the field can breathe. Scoped to .audits-page so All Reports keeps its own
+   side-by-side rail. */
+.audits-page .audits-head { flex-direction: column; align-items: stretch; }
+.audits-page .audits-head .folder-tabs { flex: 1 1 100%; }
+.audits-page .audits-head .register-tools {
+  flex: 1 1 100%;
+  width: 100%;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  padding-bottom: 0.5rem;
+}
+.audits-page .register-tools__search { flex: 1 1 16rem; max-width: none; height: 44px; }
+.audits-page .register-tools__search input { font-size: 0.93rem; }
+/* SAME INSTRUMENT AS ALL REPORTS (owner request): the strip rides full width
+   on its own line, the rail stands under it at the register's own 44px
+   height, and Filters + Sort wear the labelled-key plate — the pill field,
+   the seam, and the two keys read as one rail because they are the same
+   measures (see .reports-register above). Scoped to .audits-page so the
+   register keeps its own. */
+.audits-page .audits-head { gap: 0.65rem 1rem; padding-top: 1rem; }
+.audits-page .folder-tabs { flex-basis: 100%; }
+.audits-page .folder-tab { min-height: 44px; font-family: var(--font-body); font-size: 0.88rem; }
+.audits-page .audits-head .register-tools { padding: 0 0 0.75rem; }
+.audits-page .register-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: auto;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 0.8rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
 .audits-table {
   width: 100%;
   border-collapse: collapse;

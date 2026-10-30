@@ -1,5 +1,6 @@
-import React, { Fragment, useCallback, useEffect, useState } from 'react';
+import React, { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { api, classifyError, isUnreachable } from '../lib/api.js';
+import RowMenu from './RowMenu.jsx';
 
 /**
  * AuditTrail — admin browser for the append-only audit_logs table.
@@ -86,6 +87,11 @@ export default function Audits({ notify, onConnError }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [draftFilters, setDraftFilters] = useState(EMPTY_FILTERS);
   const [error, setError] = useState(null);
+  // The trail's order: newest first unless asked for oldest first. Read by the
+  // server (see AuditsController `dir`), so every page arrives in the order
+  // the tab names — not just the page on screen.
+  const [sortDir, setSortDir] = useState('desc');
+  const [sortMenuAt, setSortMenuAt] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -95,6 +101,7 @@ export default function Audits({ notify, onConnError }) {
       }
       params.set('page', String(page));
       params.set('per_page', '25');
+      params.set('dir', sortDir);
       const data = await api(`/audits?${params.toString()}`);
       setAudits(data.audits);
       setActions(data.actions ?? []);
@@ -109,11 +116,18 @@ export default function Audits({ notify, onConnError }) {
       }
       setAudits((cur) => cur ?? []);
     }
-  }, [filters, page, onConnError]);
+  }, [filters, page, sortDir, onConnError]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // WHITE PAGE like User Management and All Reports: no blue gradient, published
+  // for the lifetime of this screen and removed on unmount.
+  useEffect(() => {
+    document.body.classList.add('audits-white');
+    return () => document.body.classList.remove('audits-white');
+  }, []);
 
   function applyFilters(e) {
     e.preventDefault();
@@ -128,6 +142,7 @@ export default function Audits({ notify, onConnError }) {
   }
 
   const hasFilters = Object.values(filters).some((v) => v !== '' && v !== 0);
+  const hasDraft = Object.values(draftFilters).some((v) => v !== '' && v !== 0);
   const onChatView = filters.action === CHAT_FILTERS.action;
 
   function showChatView() {
@@ -136,78 +151,211 @@ export default function Audits({ notify, onConnError }) {
     setPage(1);
   }
 
+  // THE FILTER ROW FOLDS like All Reports: the narrowing controls stand under
+  // the strip's hairline only while the funnel says so — `hidden` rather than
+  // unmounting, so `aria-controls` always resolves. The search box stays on the
+  // rail: it is never folded away.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersId = useId();
+  const filterCount = ['action', 'user_id', 'date_from', 'date_to']
+    .filter((k) => draftFilters[k] !== '' && draftFilters[k] !== 0).length;
+
+  // SORT, the trail's order as a menu like All Reports': the order in force is
+  // ticked, the button names it, and it wears the accent while the trail reads
+  // in an order other than the one it opened in. The menu ports to <body>, so
+  // it opens from viewport coordinates under its button (see RowMenu).
+  function openSortMenu(e) {
+    const box = e.currentTarget.getBoundingClientRect();
+    setSortMenuAt({ x: box.left, y: box.bottom + 6 });
+  }
+  const sortItems = [
+    { key: 'desc', label: 'Newest first' },
+    { key: 'asc', label: 'Oldest first' },
+  ].map((o) => ({
+    label: o.label,
+    checked: o.key === sortDir,
+    onSelect: () => { setSortDir(o.key); setSortMenuAt(null); setPage(1); },
+  }));
+
+  // Arrow keys / Home / End move BETWEEN the two views, the pattern a tablist
+  // follows (with one tab in the page's tab order, so Tab leaves the strip
+  // rather than walking every view in it).
+  const viewRefs = useRef([]);
+  function onViewKey(e, i) {
+    const last = 1;
+    let next = null;
+    if (e.key === 'ArrowRight') next = i === last ? 0 : i + 1;
+    else if (e.key === 'ArrowLeft') next = i === 0 ? last : i - 1;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = last;
+    if (next === null) return;
+    e.preventDefault();
+    [clearFilters, showChatView][next]?.();
+    viewRefs.current[next]?.focus();
+  }
+
   return (
     <div className="audits-page">
-      {/* Document page head, matching the report register and Home. */}
-      <div className="ir-page-head">
-        <h1 className="ir-title">AUDIT TRAIL</h1>
-        <div className="ir-meta">
-          <div>{pagination ? `${pagination.total} ENTRIES` : 'LOADING…'}</div>
-          <div>APPEND-ONLY RECORD</div>
+      {/* THE REGISTER'S OWN HEAD: the shelf strip, the search rail beside it on
+          the same row, and the filter line under the strip's own hairline — the
+          same instrument All Reports draws, from the same classes, so the two
+          screens cannot drift apart. One row, not a stack: views left, search +
+          Filters key right, narrowing controls folded under the hairline. */}
+      <div className="folder-head audits-head">
+        <div className="folder-tabs" role="tablist" aria-label="Activity view">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!onChatView}
+            className="folder-tab"
+            tabIndex={!onChatView ? 0 : -1}
+            ref={(el) => { viewRefs.current[0] = el; }}
+            onClick={clearFilters}
+            onKeyDown={(e) => onViewKey(e, 0)}
+          >
+            <span className="folder-tab__label">All activity</span>
+            <span className="folder-tab__note">{sortDir === 'desc' ? 'Newest first' : 'Oldest first'}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={onChatView}
+            className="folder-tab"
+            tabIndex={onChatView ? 0 : -1}
+            ref={(el) => { viewRefs.current[1] = el; }}
+            onClick={showChatView}
+            onKeyDown={(e) => onViewKey(e, 1)}
+          >
+            <span className="folder-tab__label">AI chatbot questions</span>
+          </button>
         </div>
-      </div>
-
-      <div className="audit-views">
-        <button type="button" aria-pressed={!onChatView} className={!onChatView ? 'primary' : ''} onClick={clearFilters}>
-          All activity
-        </button>
-        <button type="button" aria-pressed={onChatView} className={onChatView ? 'primary' : ''} onClick={showChatView}>
-          AI chatbot questions
-        </button>
-      </div>
-
-      <form className="reports-toolbar" onSubmit={applyFilters}>
-        <div className="reports-toolbar-row">
-          <div className="reports-search">
+        <div className="register-tools">
+          <form className="reports-search register-tools__search" role="search" onSubmit={applyFilters}>
             <input
               type="search"
+              className="register-tools__input"
               placeholder="Search details…"
               aria-label="Search audit details"
               value={draftFilters.q}
-              onChange={(e) => setDraftFilters((f) => ({ ...f, q: e.target.value }))}
+              onChange={(e) => {
+                const next = { ...draftFilters, q: e.target.value };
+                setDraftFilters(next);
+                setFilters(next);
+                setPage(1);
+              }}
             />
-          </div>
-          <select
-            aria-label="Filter by action"
-            value={draftFilters.action}
-            onChange={(e) => setDraftFilters((f) => ({ ...f, action: e.target.value }))}
+          </form>
+          <span className="register-tools__rule" aria-hidden="true" />
+          <button
+            type="button"
+            className="register-tool"
+            aria-label={filterCount > 0 ? `Filters — ${filterCount} set` : 'Filters'}
+            aria-expanded={filtersOpen}
+            aria-controls={filtersId}
+            onClick={() => setFiltersOpen((v) => !v)}
           >
-            <option value="">All actions</option>
-            {actions.map((a) => (
-              <option key={a} value={a}>{ACTION_LABELS[a] ?? a}</option>
-            ))}
-          </select>
-          <select
-            aria-label="Filter by user"
-            value={draftFilters.user_id}
-            onChange={(e) => setDraftFilters((f) => ({ ...f, user_id: e.target.value }))}
+            <svg
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M4 5.5h16l-6.2 7.2v5.1l-3.6 1.7v-6.8L4 5.5z" />
+            </svg>
+            <span className="register-tool__label">Filters</span>
+            {filterCount > 0 && (
+              <span className="register-tool__count" aria-hidden="true">
+                {filterCount}
+              </span>
+            )}
+          </button>
+          {/* SORT. The trail's order, as a menu, with the order in force ticked
+              (see RowMenu's `checked`). The button states that order in its own
+              name — the mark cannot — and wears the accent while the trail reads
+              oldest first. */}
+          <button
+            type="button"
+            className="register-tool"
+            aria-label={`Sort trail — ${sortDir === 'desc' ? 'Newest first' : 'Oldest first'}`}
+            aria-haspopup="menu"
+            aria-expanded={sortMenuAt !== null}
+            data-on={sortDir !== 'desc' ? 'true' : undefined}
+            onClick={openSortMenu}
           >
-            <option value="">All users</option>
-            {(audits ?? [])
-              .map((a) => ({ id: a.user_id, name: a.user_name }))
-              .filter((u) => u.id !== null)
-              .reduce((uniq, u) => (uniq.some((x) => x.id === u.id) ? uniq : [...uniq, u]), [])
-              .map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M4 6.5h11" /><path d="M4 12h7.5" /><path d="M4 17.5h4.5" /><path d="M17.5 9.5v8" /><path d="m14.6 14.9 2.9 2.9 2.9-2.9" /></svg>
+            <span className="register-tool__label">Sort</span>
+          </button>
+          {sortMenuAt && (
+            <RowMenu
+              at={sortMenuAt}
+              label="Sort trail"
+              items={sortItems}
+              onClose={() => setSortMenuAt(null)}
+            />
+          )}
+        </div>
+      </div>
+      <form className="reports-toolbar register-filters audits-filterbar" id={filtersId} hidden={!filtersOpen} onSubmit={applyFilters}>
+        <div className="reports-filters">
+          <label className="reports-filter">
+            <span className="reports-filter__label">Action</span>
+            <select
+              aria-label="Filter by action"
+              value={draftFilters.action}
+              onChange={(e) => setDraftFilters((f) => ({ ...f, action: e.target.value }))}
+            >
+              <option value="">All actions</option>
+              {actions.map((a) => (
+                <option key={a} value={a}>{ACTION_LABELS[a] ?? a}</option>
               ))}
-          </select>
-          <input
-            type="date"
-            aria-label="From date"
-            title="From date"
-            value={draftFilters.date_from}
-            onChange={(e) => setDraftFilters((f) => ({ ...f, date_from: e.target.value }))}
-          />
-          <input
-            type="date"
-            aria-label="To date"
-            title="To date"
-            value={draftFilters.date_to}
-            onChange={(e) => setDraftFilters((f) => ({ ...f, date_to: e.target.value }))}
-          />
+            </select>
+          </label>
+          <label className="reports-filter">
+            <span className="reports-filter__label">User</span>
+            <select
+              aria-label="Filter by user"
+              value={draftFilters.user_id}
+              onChange={(e) => setDraftFilters((f) => ({ ...f, user_id: e.target.value }))}
+            >
+              <option value="">All users</option>
+              {(audits ?? [])
+                .map((a) => ({ id: a.user_id, name: a.user_name }))
+                .filter((u) => u.id !== null)
+                .reduce((uniq, u) => (uniq.some((x) => x.id === u.id) ? uniq : [...uniq, u]), [])
+                .map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+            </select>
+          </label>
+          <label className="reports-filter">
+            <span className="reports-filter__label">From</span>
+            <input
+              type="date"
+              aria-label="From date"
+              title="From date"
+              value={draftFilters.date_from}
+              onChange={(e) => setDraftFilters((f) => ({ ...f, date_from: e.target.value }))}
+            />
+          </label>
+          <label className="reports-filter">
+            <span className="reports-filter__label">To</span>
+            <input
+              type="date"
+              aria-label="To date"
+              title="To date"
+              value={draftFilters.date_to}
+              onChange={(e) => setDraftFilters((f) => ({ ...f, date_to: e.target.value }))}
+            />
+          </label>
           <button type="submit" className="primary">Apply</button>
-          {hasFilters && (
-            <button type="button" onClick={clearFilters}>Clear</button>
+          {hasDraft && (
+            <button type="button" className="reports-filter__clear" onClick={clearFilters}>Clear filters</button>
           )}
         </div>
       </form>

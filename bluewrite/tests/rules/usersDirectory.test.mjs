@@ -103,9 +103,10 @@ test('the table keeps its own semantics: a caption, and one scoped heading per c
   assert.match(html, /<caption class="sr-only">/);
   assert.match(html, /Press Enter on a row to open that account, or Menu \/ Shift\+F10 for its actions\./);
 
-  // EIGHT COLUMNS, all scoped: the Actions column was the ninth, and a heading that
-  // is not a `th scope="col"` is a heading a screen reader cannot pair with a cell.
-  assert.equal((html.match(/scope="col"/g) || []).length, 8);
+  // SEVEN COLUMNS, all scoped: the Actions column and the Two-factor column are
+  // gone by request, and a heading that is not a `th scope="col"` is a heading a
+  // screen reader cannot pair with a cell.
+  assert.equal((html.match(/scope="col"/g) || []).length, 7);
   assert.match(html, /<th scope="col">Full name<\/th>/);
   assert.match(html, /<th scope="col" class="num">Badge no\.<\/th>/);
   assert.match(html, /<th scope="col" class="status">Status<\/th>/);
@@ -128,27 +129,25 @@ test('a cell with nothing in it says so, and no dash stands in for a value', asy
   assert.match(html, /<span class="users-email" title="m\.santos@nagacity\.gov\.ph">m\.santos@nagacity\.gov\.ph<\/span>/);
 });
 
-test('the second factor reads in all four states, and the blocking one is not subtle', async () => {
+test('the second-factor column is gone by request, and nothing of it is left behind', async () => {
   const { renderDirectory } = await load();
   const html = renderDirectory();
 
-  // UNDERWAY (code by email), LOCKED (too many wrong codes), OWING AN ADDRESS (the
-  // state an administrator has to act on), and NOT REQUIRED (a Staff account, which
-  // has no factor to have). Four sentences, four inks — and each one is a different
-  // class, so a stylesheet change cannot merge two of them.
-  assert.match(html, /class="user-mfa user-mfa--on"[^>]*>Email code</);
-  assert.match(html, /class="user-mfa user-mfa--thin"[^>]*>Locked</);
-  assert.match(html, /class="user-mfa user-mfa--off"[^>]*>No email</);
-  assert.match(html, /class="user-mfa user-mfa--na"[^>]*>Not required</);
+  // REMOVED, not hidden: neither the heading nor a cell may survive. Asserted as
+  // ABSENCES, in the direction that matters — a heading with no cells, or one
+  // cell left behind, is how the column comes back.
+  assert.doesNotMatch(html, /<th[^>]*>Two-factor</);
+  assert.doesNotMatch(html, /user-mfa/);
+  assert.doesNotMatch(html, />Email code</);
+  assert.doesNotMatch(html, />No email</);
 
-  // Every one of them also states itself when pointed at, which is where the "why"
-  // lives: the tooltips carry the address, the lock's expiry, and what to do next.
-  assert.match(html, /title="A six-digit code is sent to m\.santos@nagacity\.gov\.ph at each sign-in\."/);
-  assert.match(html, /title="Codes go to j\.delacruz@nagacity\.gov\.ph\. Locked until 2026-09-22 19:05:00/);
-  assert.match(html, /title="Staff accounts sign in with a password only\."/);
+  // The account page still states the factor (see userProfile.test.mjs): the
+  // directory stopped carrying it, the record did not lose it.
+  const src = flat(await readSrc());
+  assert.doesNotMatch(src, /twoFactorCell/);
 });
 
-test('the status chip is a chip, centred with its own heading, and the stamp is the server’s', async () => {
+test('the status chip is a chip, centred with its own heading, and the sign-in reads in the table’s own face', async () => {
   const { renderDirectory } = await load();
   const html = renderDirectory();
 
@@ -162,9 +161,11 @@ test('the status chip is a chip, centred with its own heading, and the stamp is 
   // because a station PC's clock is whatever somebody set it to (see lib/presence.js
   // on why the rail is handed ages rather than timestamps). `num` is the table's own
   // never-wrap rule; without it the timestamp broke across two lines and took the
-  // row's height with it.
-  assert.match(html, /<td class="num stamp">2026-09-22 18:19:16<\/td>/);
-  assert.match(html, /<td class="num stamp">Never<\/td>/);
+  // row's height with it. And `num` is ALL it wears: the machine `stamp` face is
+  // gone, so the sign-in reads in the same face as the full name beside it.
+  assert.match(html, /<td class="num">2026-09-22 18:19:16<\/td>/);
+  assert.match(html, /<td class="num">Never<\/td>/);
+  assert.doesNotMatch(html, /num stamp">2026/);
   assert.doesNotMatch(html, /ago</);
 });
 

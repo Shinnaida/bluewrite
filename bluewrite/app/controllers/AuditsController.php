@@ -118,6 +118,10 @@ final class AuditsController
         $perPage = min(100, max(5, (int) ($_GET['per_page'] ?? 25)));
         $offset = ($page - 1) * $perPage;
 
+        // Sort direction: newest first unless the trail is asked for oldest first.
+        // Whitelisted to two values — the string never reaches the query raw.
+        $dir = strtolower(trim((string) ($_GET['dir'] ?? 'desc'))) === 'asc' ? 'ASC' : 'DESC';
+
         $whereSql = implode(' AND ', $where);
 
         $countStmt = $pdo->prepare("SELECT COUNT(*) FROM audit_logs a WHERE {$whereSql}");
@@ -130,7 +134,7 @@ final class AuditsController
              FROM audit_logs a
              LEFT JOIN users u ON u.id = a.user_id
              WHERE {$whereSql}
-             ORDER BY a.created_at DESC, a.id DESC
+             ORDER BY a.created_at {$dir}, a.id {$dir}
              LIMIT {$perPage} OFFSET {$offset}"
         );
         $stmt->execute($params);

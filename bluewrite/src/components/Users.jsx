@@ -61,8 +61,7 @@ const usesEmailCode = (role) => CODE_ROLES.includes(role);
  * it moves here with it — a panel that promises a reach the server does not honour is
  * worse than a form that says nothing at all.
  *
- * `signIn` is the same distinction the directory's Two-factor column draws, stated
- * once so the two cannot disagree about what a Staff account is.
+ * `signIn` states once what a Staff account is: a password and nothing else.
  */
 const ROLE_REACH = {
   Admin: {
@@ -99,44 +98,6 @@ const EMPTY_FORM = {
   role: 'Staff',
   password: '',
 };
-
-/**
- * What the Two-factor column says about one account.
- *
- * The second factor is a six-digit code emailed to the account's own address, so
- * what this column reports is whether that address EXISTS (the factor rests on
- * it), whether the factor is currently LOCKED after too many wrong codes, and
- * nothing else. 'Not required' is a Staff account — the factor is only mandatory
- * for Admin and Officer (see EmailOtp::REQUIRED_ROLES).
- *
- * "No email" is the state worth an administrator's attention: that account
- * cannot finish signing in at all, and the fix — recording an address — is on
- * the Edit form directly below this row.
- */
-function twoFactorCell(user) {
-  if (user.role !== 'Admin' && user.role !== 'Officer') {
-    return { text: 'Not required', cls: 'user-mfa--na', title: 'Staff accounts sign in with a password only.' };
-  }
-  if (!user.email) {
-    return {
-      text: 'No email',
-      cls: 'user-mfa--off',
-      title: 'This account cannot receive a sign-in code. Add an email address before it needs to sign in.',
-    };
-  }
-  if (user.otp_locked_until) {
-    return {
-      text: 'Locked',
-      cls: 'user-mfa--thin',
-      title: `Codes go to ${user.email}. Locked until ${user.otp_locked_until} after too many incorrect codes — Reset verification clears it.`,
-    };
-  }
-  return {
-    text: 'Email code',
-    cls: 'user-mfa--on',
-    title: `A six-digit code is sent to ${user.email} at each sign-in.`,
-  };
-}
 
 /** What a row says under the pointer, and how its actions are found at all. */
 function rowHint(user) {
@@ -191,7 +152,7 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
         {/* The heading row is read out of the markup, so it needs a name of its
             own — and the sentence tells a screen reader the same thing a row's
             tooltip tells an eye. */}
-        <caption className="sr-only">          Station accounts: name, badge number, username, email, role, status, second factor and last sign-in. Press Enter on a row to open that account, or Menu / Shift+F10 for its actions.
+        <caption className="sr-only">          Station accounts: name, badge number, username, email, role, status and last sign-in. Press Enter on a row to open that account, or Menu / Shift+F10 for its actions.
         </caption>
         <thead>
           <tr>
@@ -203,7 +164,6 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
             {/* Centred with its cells (see th.status in styles.css): a chip hard
                 against the left edge read as if it belonged to the column before it. */}
             <th scope="col" className="status">Status</th>
-            <th scope="col">Two-factor</th>
             <th scope="col" className="num">Last sign-in</th>
           </tr>
         </thead>
@@ -248,16 +208,13 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
                 <td className="status">
                   <span className={`badge ${u.status}`}>{u.status}</span>
                 </td>
-                <td>
-                  <span className={`user-mfa ${cell.cls}`} title={cell.title}>
-                    {cell.text}
-                  </span>
-                </td>
                 {/* The stamp the server sent, verbatim — never a client-side
                     "2h ago": a station PC's clock is whatever somebody set it
                     to, which is the same reason the rail is handed ages rather
-                    than timestamps (see lib/presence.js). */}
-                <td className="num stamp">
+                    than timestamps (see lib/presence.js). Read in the table's
+                    own face like the name beside it, not the machine `stamp`:
+                    this column is read down, not scanned for values. */}
+                <td className="num">
                   {u.last_login_at ? u.last_login_at.replace('T', ' ') : 'Never'}
                 </td>
               </tr>

@@ -13,10 +13,9 @@
 // the part worth checking (see the note at the top of Users.jsx).
 //
 // THE ROWS ARE THE STATES, not one happy account repeated. Between them they carry
-// the four second-factor answers, an account with no address at all (the one an
-// administrator has to act on), a deactivated account, an account that has never
-// signed in, and a name long enough to have wrapped the row before the actions
-// column was removed.
+// an officer with no address at all (the one an administrator has to act on), a
+// deactivated account, an account that has never signed in, and a name long enough
+// to have wrapped the row before the actions column was removed.
 
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -55,9 +54,8 @@ export const ACCOUNTS = [
     otp_locked_until: '2026-09-22 19:05:00',
   },
   // OFFICER WITH NO ADDRESS. This account cannot complete a sign-in at all, so the
-  // Two-factor column says "No email" and the Email column says "Not recorded" —
-  // two cells stating the same absence from the two directions an administrator
-  // comes at it (fix the address, or explain a failed sign-in).
+  // Email column says "Not recorded" — the absence an administrator comes at
+  // when fixing the address or explaining a failed sign-in.
   {
     id: 12,
     full_name: 'Keith Abalo',
@@ -68,8 +66,8 @@ export const ACCOUNTS = [
     status: 'active',
     last_login_at: '2026-09-22T18:17:08',
   },
-  // STAFF: no second factor to have (see EmailOtp::REQUIRED_ROLES), so the column
-  // reports the rule rather than a fault — and the address is optional.
+  // STAFF: no second factor to have (see EmailOtp::REQUIRED_ROLES) — and the
+  // address is optional.
   {
     id: 11,
     full_name: 'Elena Ramos',
