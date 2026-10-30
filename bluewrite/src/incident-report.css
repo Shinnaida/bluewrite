@@ -8167,6 +8167,218 @@
   color: var(--ir-text);
 }
 
+/* ---- The letterhead document: the canvas flanked by the seals ---- */
+/* The editor reads the way the sheet lays the head out: the left seal, the
+   centered document, the right seal. On a narrow screen they stack with the
+   seals on top, because a squeezed canvas is not one anyone can type in. */
+.st-doc {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.9rem;
+  align-items: start;
+  padding: 0.9rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 3px;
+  background: var(--ir-page);
+}
+
+.st-doc-seal {
+  width: 0.85in;
+  height: 0.85in;
+  object-fit: contain;
+  background: #fff;
+}
+
+/* The style editor: type, spacing, color and seal arrangement, saved as data
+   beside the letter — the preview below wears it live through the canvas
+   variables, the same translation every sheet renders. */
+.st-style {
+  border: 1px solid var(--ir-border);
+  border-radius: 3px;
+  background: var(--ir-page);
+  padding: 0.9rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.st-style-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+}
+.st-style .form-grid {
+  margin: 0;
+}
+.st-style input[type='range'] {
+  width: 100%;
+  accent-color: var(--ir-blue-ink);
+}
+/* The slim spacing row: slider, live reading and Save on one line. */
+.st-style--slim {
+  gap: 0.6rem;
+}
+.st-lsrow {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.st-lsrow input[type='range'] {
+  flex: 1;
+  min-width: 0;
+}
+.st-lsval {
+  min-width: 3em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+/* The top drop strip: only on screen while a seal is being dragged, or while
+   the stacked arrangement keeps the seals above the lines. */
+.st-doc-top {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.9rem;
+  min-height: 1in;
+  padding: 0.6rem;
+  margin-bottom: 0.6rem;
+  border: 1px dashed var(--ir-border);
+  border-radius: 3px;
+  background: var(--ir-page);
+}
+.st-doc-top.is-over {
+  border-color: var(--ir-blue-ink);
+  background: #eef4ff;
+}
+/* The side slots: invisible drop targets while side-by-side, dashed empties
+   while stacked. A seal being dragged is a move, never a copy. */
+.st-doc-slot {
+  display: grid;
+  place-items: center;
+  border: 1px dashed transparent;
+  border-radius: 3px;
+  min-width: 0.85in;
+}
+.st-doc-slot.is-empty {
+  border-color: var(--ir-border);
+  min-height: 0.85in;
+}
+.st-doc-slot.is-over {
+  border-color: var(--ir-blue-ink);
+  background: #eef4ff;
+}
+.st-doc-drag {
+  display: inline-grid;
+  cursor: grab;
+}
+.st-doc-drag:active {
+  cursor: grabbing;
+}
+/* Swapped sides: the slots trade places around the canvas. */
+.st-doc--swapped > .st-doc-slot:first-child {
+  order: 3;
+}
+.st-doc--swapped > .rt-wrap {
+  order: 2;
+}
+.st-doc--swapped > .st-doc-slot:last-child {
+  order: 1;
+}
+/* The canvas wears the edited style through variables — the stored letter
+   keeps no style of its own, so the variables are the only ink the preview
+   can carry. Each falls back to what the canvas always wore. */
+.st-doc-edit {
+  text-align: var(--lh-align, center);
+  font-family: var(--lh-font, inherit);
+  font-size: var(--lh-size, 0.82rem);
+  line-height: var(--lh-lh, 1.5);
+  letter-spacing: var(--lh-ls, normal);
+  color: var(--lh-color, inherit);
+}
+/* Same paragraph reset as the sheets: the canvas preview must read exactly
+   like the officer sheet, or a tight line-height looks fine here and broken
+   there. */
+.st-doc-edit p { margin: 0; line-height: inherit; }
+
+/* The two badge files, the way the sheet wears them. */
+.st-seals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.st-sealcard {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 3px;
+  background: var(--ir-page);
+}
+
+.st-sealcard-img {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--ir-border);
+  border-radius: 3px;
+}
+
+.st-sealcard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.st-sealcard-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.st-sealcard label.st-toolbtn {
+  cursor: pointer;
+}
+
+/* The standard lines live folded away: the document above is the editor, and
+   these are the fallback it overrides and the seed it was built from. */
+.st-lines {
+  margin-top: 1.25rem;
+}
+
+.st-lines > summary {
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--ir-blue-ink);
+}
+
+@media (max-width: 560px) {
+  .st-doc {
+    grid-template-columns: 1fr;
+  }
+  .st-doc-seal {
+    margin-inline: auto;
+  }
+}
+
+/* The inline answer beside a save button: what saved, and when. It reads only
+   while its form is clean — the next keystroke takes it away. Green ink, no
+   box: the button already says where it belongs. */
+.st-saved {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ir-ok-ink, #1e7e34);
+}
+
 /* ---- Shared bits ---- */
 .st-problem {
   margin: 0.75rem 0 0;
@@ -8673,6 +8885,11 @@
   line-height: 1.32;
   color: var(--ir-text);
 }
+/* The freed letterhead renders as <p> lines inside this container. Default
+   paragraph margins would double-space the block and make a saved
+   line-height of 1.0 look broken, so the container's own line-height (the
+   saved style) is the only spacing the block wears. */
+.ir-sheet-head-lines p { margin: 0; line-height: inherit; }
 
 .ir-sheet-head-strong {
   font-weight: 700;

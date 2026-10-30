@@ -5645,6 +5645,18 @@ button.dash-kpi--link:focus-visible {
   line-height: 1.45;
 }
 .pr-org strong { letter-spacing: 0.02em; }
+/* The freed letterhead renders as <p> lines inside this container. The
+   browser's default paragraph margins would double-space the block and make
+   a saved line-height of 1.0 look broken, so the container's own line-height
+   (the saved style) is the only spacing the block wears. */
+.pr-org p { margin: 0; line-height: inherit; }
+/* The station's own contact lines — Station settings ▸ Station contact &
+   sign-off — printed under the location line in smaller type. Only rendered
+   when at least one line is on file. */
+.pr-contact {
+  font-size: 9pt;
+  color: inherit;
+}
 
 /* Sits directly under the header band: the office code holds the left
    margin, the date the right one, and the shared baseline keeps the two

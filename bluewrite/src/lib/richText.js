@@ -93,8 +93,38 @@ export function sanitizeRichHtml(html) {
   return out;
 }
 
+function decodeEntitiesOnce(s) {
+  return s.replace(/&(#\d+|#x[0-9a-fA-F]+|[a-zA-Z]+);/g, (m, body) => {
+    const lower = body.toLowerCase();
+    if (lower === 'amp') return '&';
+    if (lower === 'lt') return '<';
+    if (lower === 'gt') return '>';
+    if (lower === 'quot') return '"';
+    if (lower === 'apos' || body === '#39' || body === '#x27' || body === '#X27') return "'";
+    if (lower === 'nbsp') return '\u00A0';
+    if (body[0] === '#') {
+      const code = body[1].toLowerCase() === 'x' ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
+      if (Number.isFinite(code) && code > 0 && code <= 0x10ffff) return String.fromCodePoint(code);
+      return m;
+    }
+    return m; // unknown named entity: leave intact so the escaper keeps it literal
+  });
+}
+
+// Entity-aware escaper: the editor's innerHTML serializes a non-breaking
+// space as `&nbsp;`, and a typed `&` as `&amp;`. A naive `&` → `&amp;`
+// pass turns those into `&amp;nbsp;` on the first save and `&amp;amp;nbsp;`
+// on the next — exactly the corruption in the letterhead. Decoding first
+// (to a fixpoint, so already-doubled values collapse one layer per save
+// instead of growing) keeps stored entities stable across round trips.
 function escapeText(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let prev = String(s);
+  for (let i = 0; i < 3; i++) {
+    const next = decodeEntitiesOnce(prev);
+    if (next === prev) break;
+    prev = next;
+  }
+  return prev.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\u00A0/g, '&nbsp;');
 }
 
 // The free letter's own subset (owner request): the prose subset above PLUS

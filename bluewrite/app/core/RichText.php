@@ -171,6 +171,20 @@ final class RichText
 
     private static function escapeText(string $s): string
     {
-        return str_replace(['&', '<', '>'], ['&amp;', '&lt;', '&gt;'], $s);
+        // Entity-aware escaper (mirrors escapeText in src/lib/richText.js):
+        // the editor serializes NBSP as `&nbsp;`, so a naive `&` → `&amp;`
+        // pass doubles it on every save (`&nbsp;` → `&amp;nbsp;` →
+        // `&amp;amp;nbsp;`). Decoding to a fixpoint first keeps stored
+        // entities stable across round trips.
+        $prev = $s;
+        for ($i = 0; $i < 3; $i++) {
+            $next = html_entity_decode($prev, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            if ($next === $prev) {
+                break;
+            }
+            $prev = $next;
+        }
+        $out = str_replace(['&', '<', '>'], ['&amp;', '&lt;', '&gt;'], $prev);
+        return str_replace("\u{00A0}", '&nbsp;', $out);
     }
 }

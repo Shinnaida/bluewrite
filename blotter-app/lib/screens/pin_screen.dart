@@ -3,8 +3,9 @@ import 'package:flutter/services.dart';
 
 import '../storage/secure_store.dart';
 
-/// The daily unlock, dressed like the station: the station photo up top,
-/// the BlueWrite mark and the PNP + Naga seals, and the PIN card below.
+/// The daily unlock, dressed like the station: the station's own login
+/// artwork full-bleed behind everything, the BlueWrite mark and the PNP +
+/// Naga seals, and the PIN card below.
 ///
 /// The policy is unchanged — a local PIN of 4–8 digits checked against the
 /// salted verifier in the keystore. Nothing travels: a wrong PIN is just a
@@ -96,42 +97,23 @@ class _PinScreenState extends State<PinScreen> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: _navy,
         resizeToAvoidBottomInset: true,
         body: Stack(
           children: [
-            // Station photo fading into the wave field below.
+            // The station's own login artwork, full-bleed behind the form —
+            // the same photo the sign-in screen stands on.
             Positioned.fill(
-              child: Column(
-                children: [
-                  SizedBox(
-                    height: 260,
-                    width: double.infinity,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.asset('assets/pin-station.jpg', fit: BoxFit.cover),
-                        // Soft white fade so the navy title reads over the photo.
-                        const DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [Colors.transparent, Color(0xCCFFFFFF)],
-                              stops: [0.4, 1.0],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: CustomPaint(
-                      painter: _WavesPainter(),
-                      child: Container(),
-                    ),
-                  ),
-                ],
+              child: Image.asset(
+                'assets/pin-background.png',
+                fit: BoxFit.cover,
+              ),
+            ),
+            // A navy veil over the artwork so the masthead and the seals
+            // read over it; the PIN card itself is opaque already.
+            Positioned.fill(
+              child: Container(
+                color: _navy.withValues(alpha: 0.45),
               ),
             ),
             SafeArea(
@@ -161,7 +143,7 @@ class _PinScreenState extends State<PinScreen> {
                         text: const TextSpan(
                           style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: 2),
                           children: [
-                            TextSpan(text: 'BLUE', style: TextStyle(color: _navy)),
+                            TextSpan(text: 'BLUE', style: TextStyle(color: Colors.white)),
                             TextSpan(text: 'WRITE', style: TextStyle(color: _brand)),
                           ],
                         ),
@@ -171,18 +153,18 @@ class _PinScreenState extends State<PinScreen> {
                     const Center(
                       child: Text(
                         'CITY OF NAGA POLICE STATION',
-                        style: TextStyle(color: _navy, fontSize: 11, letterSpacing: 1.5, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: Colors.white, fontSize: 11, letterSpacing: 1.5, fontWeight: FontWeight.w600),
                       ),
                     ),
                     const SizedBox(height: 6),
                     Center(
-                      child: Container(width: 48, height: 3, color: _brand),
+                      child: Container(width: 48, height: 3, color: Color(0xFFC9A227)),
                     ),
                     const SizedBox(height: 6),
                     const Center(
                       child: Text(
                         'SECURE  •  RECORD  •  REPORT',
-                        style: TextStyle(color: _navy, fontSize: 10, letterSpacing: 2),
+                        style: TextStyle(color: Color(0xCCFFFFFF), fontSize: 10, letterSpacing: 2),
                       ),
                     ),
                     if (_account != null) ...[
@@ -428,29 +410,4 @@ class _UnlockButton extends StatelessWidget {
   }
 }
 
-/// The light-blue wave field under the station photo.
-class _WavesPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    void wave(Color color, double base, double amp, double phase) {
-      final path = Path()
-        ..moveTo(0, base)
-        ..cubicTo(w * 0.25, base - amp + phase, w * 0.4, base + amp, w * 0.6, base + phase)
-        ..cubicTo(w * 0.8, base - amp, w * 0.9, base + amp * 0.5, w, base - phase)
-        ..lineTo(w, h)
-        ..lineTo(0, h)
-        ..close();
-      canvas.drawPath(path, Paint()..color = color);
-    }
 
-    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), Paint()..color = Colors.white);
-    wave(const Color(0xFFE4F2FF), 24, 26, 10);
-    wave(const Color(0xFFC4E3FF), 66, 30, -8);
-    wave(const Color(0xFFA9D6FF), 118, 34, 12);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

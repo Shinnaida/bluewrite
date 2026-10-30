@@ -105,6 +105,39 @@ test('the freed letter drops everything that is not ink and hooks', () => {
   assert.equal(sanitizeLetterHtml('a<!-- hidden -->b'), 'ab');
 });
 
+test('the freed letter keeps the ribbon\u2019s per-word ink classes', () => {
+  // The letterhead ribbon colors/sizes single words with lh-* utility
+  // classes — and only classes survive the sanitizer, so these must pass
+  // through untouched while a style attribute is still stripped.
+  assert.equal(
+    sanitizeLetterHtml('<span class="lh-c-navy lh-s-16">Hi</span>'),
+    '<span class="lh-c-navy lh-s-16">Hi</span>'
+  );
+  assert.equal(
+    sanitizeLetterHtml('<span class="lh-f-georgia">Hi</span>'),
+    '<span class="lh-f-georgia">Hi</span>'
+  );
+  assert.equal(
+    sanitizeLetterHtml('<span style="color:red" class="lh-c-red">Hi</span>'),
+    '<span class="lh-c-red">Hi</span>'
+  );
+});
+
+test('entities survive a save instead of doubling', () => {
+  // The editor serializes NBSP as `&nbsp;`; the escaper must keep it,
+  // or every save adds a layer (`&nbsp;` → `&amp;nbsp;` → `&amp;amp;nbsp;`).
+  assert.equal(sanitizeRichHtml('a&nbsp;b'), 'a&nbsp;b');
+  assert.equal(sanitizeLetterHtml('<p>a&nbsp;b</p>'), '<p>a&nbsp;b</p>');
+  // A typed `&` round-trips as `&amp;`, not `&amp;amp;`.
+  assert.equal(sanitizeRichHtml('Ana &amp; Maria'), 'Ana &amp; Maria');
+  assert.equal(sanitizeLetterHtml('<p>Ana &amp; Maria</p>'), '<p>Ana &amp; Maria</p>');
+  // An already-doubled value collapses instead of growing a third layer.
+  assert.equal(sanitizeRichHtml('a&amp;nbsp;b'), 'a&nbsp;b');
+  assert.equal(sanitizeLetterHtml('<p>a&amp;amp;nbsp;b</p>'), '<p>a&nbsp;b</p>');
+  // Raw characters still escape exactly once.
+  assert.equal(sanitizeRichHtml('5 < 7 & counting'), '5 &lt; 7 &amp; counting');
+});
+
 test('the detector only answers the subset', () => {
   assert.equal(containsRichTags('plain words'), false);
   assert.equal(containsRichTags('a <b>b</b>'), true);

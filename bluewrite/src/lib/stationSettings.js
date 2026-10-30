@@ -20,6 +20,7 @@
 // tested directly (tests/rules/stationSettings.test.mjs).
 
 import { INCIDENT_TYPES, TYPE_FIELDS } from './incidentTypes.js';
+import { richTextToPlain, sanitizeLetterHtml } from './richText.js';
 
 // ---------------------------------------------------------------------------
 // The letterhead
@@ -100,6 +101,257 @@ export function headerError(current) {
     if (v.length > max) return `${label} must be at most ${max} characters.`;
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// The contact lines and the default sign-off
+// ---------------------------------------------------------------------------
+
+/**
+ * The default Noted By official — kept on file WITH the letterhead. `max`
+ * mirrors the limit StationController::update() validates to; `kind`
+ * decides the input drawn.
+ *
+ * noted_by is the name printed on the sheet's "Noted by:" line when a report
+ * names no reviewing official of its own. Blank means "not set": the sheet
+ * falls back to BUILT_IN_NOTED_BY, which mirrors the constant the sheet draws
+ * (NOTED_BY_NAME in components/reports/ReportSheetBody.jsx) — keep the two in
+ * lockstep.
+ *
+ * The Gmail/telephone lines were removed from this form (owner request):
+ * they already live as typed lines in the freed letterhead document, so a
+ * second copy here was only a second place to mistype them. The resolver
+ * below still reads them when an old row carries them, so existing sheets
+ * keep printing what is on file.
+ */
+export const CONTACT_FIELDS = [
+  { key: 'noted_by', label: 'Default Noted By officer', max: 120, kind: 'officer' },
+];
+
+/** What the sheet prints for "Noted by:" when neither the report nor the station names anyone. */
+export const BUILT_IN_NOTED_BY = 'DEXTER MALEZA CALACAR';
+
+/** The contact block as strings — blank (not the letterhead defaults) is the empty state. */
+export function resolveContact(header) {
+  const out = { station_email: '', station_phone: '', noted_by: '' };
+  if (header && typeof header === 'object') {
+    // CONTACT_FIELDS is what the form offers (sign-off only); the two legacy
+    // keys are still read so rows saved before their removal keep printing.
+    for (const key of [...CONTACT_FIELDS.map((f) => f.key), 'station_email', 'station_phone']) {
+      const v = header[key];
+      if (typeof v === 'string' && v.trim() !== '' && out[key] === '') out[key] = v;
+    }
+  }
+  return out;
+}
+
+/** Which contact lines differ from what is saved — the PATCH sends only these. */
+export function changedContactFields(current, saved) {
+  const body = {};
+  for (const { key } of CONTACT_FIELDS) {
+    const now = String(current?.[key] ?? '').trim();
+    const before = String(saved?.[key] ?? '').trim();
+    if (now !== before) body[key] = now;
+  }
+  return body;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * First problem with the contact block, or null.
+ *
+ * Everything here is optional — a blank line clears it — so only a malformed
+ * value is refused. The email check is deliberately looser than the server's
+ * filter_var: it only has to catch a typo before the round trip, and the
+ * server remains the authority.
+ */
+export function contactError(current) {
+  for (const { key, label, max, kind } of CONTACT_FIELDS) {
+    const v = String(current?.[key] ?? '').trim();
+    if (v === '') continue;
+    if (v.length > max) return `${label} must be at most ${max} characters.`;
+    if (kind === 'email' && !EMAIL_RE.test(v)) return `${label} must be a valid email address.`;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// The letterhead as a document
+// ---------------------------------------------------------------------------
+
+/**
+ * The freed letterhead's text budget, in characters of words (not markup) —
+ * mirrors StationController::LETTERHEAD_MAX_WORDS. Keep the two in lockstep.
+ */
+export const LETTERHEAD_MAX_WORDS = 2000;
+
+/** Escape once: the seed is built from field text, never trusted markup. */
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * The standard letterhead as a document — the seed the Word-like editor
+ * opens from. Centered lines in sheet order (the seven lines, then the
+ * contact lines), in the same subset the freed document keeps, so seeding
+ * round-trips: opening the editor and saving without touching anything
+ * stores the standard letterhead word for word.
+ */
+export function composeLetterheadHtml(header, contact) {
+  const h = resolveHeader(header);
+  const c = resolveContact(contact ?? header);
+  const lines = [
+    h.agency,
+    h.commission,
+    `<strong>${esc(h.regional_office)}</strong>`,
+    `<strong>${esc(h.provincial_office)}</strong>`,
+    `<strong>${esc(h.station_name)}</strong>`,
+    esc(h.station_location),
+  ];
+  if (c.station_phone) lines.push(esc(c.station_phone));
+  if (c.station_email) lines.push(`Email Add: ${esc(c.station_email)}`);
+  return `<div align="center">${lines.map((l) => `<p>${l}</p>`).join('')}</div>`;
+}
+
+/**
+ * First problem with a freed letterhead document, or null.
+ *
+ * Length is read in WORDS (richTextToPlain), not markup — the same rule the
+ * server enforces after sanitizing — so formatting can never spend the
+ * budget, and the editor agrees with the 422 before the round trip.
+ */
+export function letterheadHtmlError(html) {
+  const words = richTextToPlain(sanitizeLetterHtml(html ?? ''));
+  if (words.length > LETTERHEAD_MAX_WORDS) {
+    return `The letterhead document must be at most ${LETTERHEAD_MAX_WORDS} characters of text.`;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// The letterhead's presentation — typography, spacing, color, seals
+// ---------------------------------------------------------------------------
+
+/**
+ * The letterhead's presentation as DATA, not markup. The stored letter HTML
+ * keeps no style of its own (the sanitizer strips every style attribute on
+ * both sides of the wire), and every sheet renders this object as its
+ * container's own inline style. Mirrors Station::letterheadStyle() and
+ * StationController::letterheadStyleError() — keep the three in lockstep.
+ */
+export const LETTERHEAD_STYLE_DEFAULTS = {
+  font: 'Arial',
+  size_px: 13,
+  line_height: 1.5,
+  letter_spacing_px: 0,
+  color: '#0f1f3d',
+  align: 'center',
+  seals: 'split',
+};
+
+/** Faces the style editor offers — sheet-safe, no download needed. */
+export const LETTERHEAD_STYLE_FONTS = ['Arial', 'Verdana', 'Georgia', 'Times New Roman', 'Courier New'];
+
+export const LETTERHEAD_STYLE_SEALS = ['split', 'swapped', 'stacked'];
+
+export const LETTERHEAD_STYLE_ALIGN = ['left', 'center', 'right', 'justify'];
+
+function styleNum(v, lo, hi) {
+  const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : typeof v === 'number' ? v : NaN;
+  return Number.isFinite(n) && n >= lo && n <= hi ? n : null;
+}
+
+/** A full style object: the stored value kept where it is valid, defaults elsewhere. */
+export function resolveLetterheadStyle(stored) {
+  const out = { ...LETTERHEAD_STYLE_DEFAULTS };
+  if (!stored || typeof stored !== 'object') return out;
+  if (LETTERHEAD_STYLE_FONTS.includes(stored.font)) out.font = stored.font;
+  const size = styleNum(stored.size_px, 10, 22);
+  if (size !== null) out.size_px = Math.round(size);
+  const lh = styleNum(stored.line_height, 1.0, 2.5);
+  if (lh !== null) out.line_height = Math.round(lh * 100) / 100;
+  const ls = styleNum(stored.letter_spacing_px, 0, 3);
+  if (ls !== null) out.letter_spacing_px = Math.round(ls * 100) / 100;
+  if (typeof stored.color === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(stored.color.trim())) {
+    out.color = stored.color.trim();
+  }
+  if (LETTERHEAD_STYLE_ALIGN.includes(stored.align)) out.align = stored.align;
+  if (LETTERHEAD_STYLE_SEALS.includes(stored.seals)) out.seals = stored.seals;
+  return out;
+}
+
+/** Which style keys differ from what is saved — the PATCH sends only these. */
+export function changedLetterheadStyle(current, saved) {
+  const body = {};
+  const now = resolveLetterheadStyle(current);
+  const before = resolveLetterheadStyle(saved);
+  for (const key of Object.keys(LETTERHEAD_STYLE_DEFAULTS)) {
+    if (now[key] !== before[key]) body[key] = now[key];
+  }
+  return body;
+}
+
+/**
+ * First problem with a letterhead style, or null. Mirrors the server's 422s:
+ * only the seven known keys pass, each inside its own range.
+ */
+export function letterheadStyleError(current) {
+  const v = current ?? {};
+  const known = Object.keys(LETTERHEAD_STYLE_DEFAULTS);
+  for (const key of Object.keys(v)) {
+    if (!known.includes(key)) return 'The letterhead style holds an unknown setting.';
+  }
+  if (v.font !== undefined && !LETTERHEAD_STYLE_FONTS.includes(v.font)) {
+    return 'The letterhead font is not offered.';
+  }
+  if (v.size_px !== undefined && styleNum(v.size_px, 10, 22) === null) {
+    return 'The letterhead size must be between 10 and 22.';
+  }
+  if (v.line_height !== undefined && styleNum(v.line_height, 1.0, 2.5) === null) {
+    return 'The letterhead line spacing must be between 1.0 and 2.5.';
+  }
+  if (v.letter_spacing_px !== undefined && styleNum(v.letter_spacing_px, 0, 3) === null) {
+    return 'The letterhead letter spacing must be between 0 and 3.';
+  }
+  if (v.color !== undefined && !(typeof v.color === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v.color.trim()))) {
+    return 'The letterhead color must be a hex color.';
+  }
+  if (v.align !== undefined && !LETTERHEAD_STYLE_ALIGN.includes(v.align)) {
+    return 'The letterhead alignment is not offered.';
+  }
+  if (v.seals !== undefined && !LETTERHEAD_STYLE_SEALS.includes(v.seals)) {
+    return 'The seal arrangement is not offered.';
+  }
+  return null;
+}
+
+/**
+ * The style object as a container's inline style — the one translation the
+ * admin preview, the write sheet and the print sheet all share, so the
+ * three cannot disagree about what a setting looks like.
+ */
+const LETTERHEAD_FONT_FALLBACK = {
+  Arial: 'sans-serif',
+  Verdana: 'sans-serif',
+  Georgia: 'serif',
+  'Times New Roman': 'serif',
+  'Courier New': 'monospace',
+};
+
+export function letterheadCss(style) {
+  const s = resolveLetterheadStyle(style);
+  return {
+    fontFamily: `'${s.font}', ${LETTERHEAD_FONT_FALLBACK[s.font] ?? 'sans-serif'}`,
+    fontSize: `${s.size_px}px`,
+    lineHeight: String(s.line_height),
+    letterSpacing: `${s.letter_spacing_px}px`,
+    color: s.color,
+    textAlign: s.align,
+  };
 }
 
 // ---------------------------------------------------------------------------
