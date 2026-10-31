@@ -22,6 +22,10 @@ const LONG_DATE = new Intl.DateTimeFormat('en-PH', {
 // keeps the reported time informal (“Around H:MM A.M./P.M., Month DD, YYYY”).
 export function fmtIncidentLong(v) {
   if (!v) return '—';
+  // A blotter hedges its own time ("MORE OR LESS 8:40 AM, October 31, 2026").
+  // The words are the record — Date.parse() happily drops them and reformats
+  // the rest, so a hedged line is returned verbatim, never reformatted.
+  if (/more\s+or\s+less|around|approx|on\s+or\s+about|\bcirca\b/i.test(String(v))) return String(v);
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return String(v).replace('T', ' ');
   let h = d.getHours();
@@ -280,7 +284,7 @@ export function buildTypeFacts(type, ctx) {
   const place = () => ({ label: 'Place', values: [has(report.location) ? report.location : '—'] });
   const when = () => ({
     label: 'Date & Time of Incident',
-    values: [`Around ${fmtIncidentLong(report.incident_datetime)}`],
+    values: [fmtIncidentLong(report.incident_datetime)],
   });
   // Task 7 — the scanned sheet's "Date of Discovery" line, when the officer
   // recorded one (it is distinct from the incident date). Formatted like every
@@ -357,10 +361,6 @@ export function buildTypeFacts(type, ctx) {
       return [
         place(),
         when(),
-        has(ts.accident_type) ? { label: 'Accident Type', values: [N(ts.accident_type)] } : null,
-        has(ts.weather_condition) || has(ts.road_condition)
-          ? { label: 'Road / Weather', values: [join(ts.road_condition, ts.weather_condition)] }
-          : null,
         ...vehicleEntries,
         has(ts.suspected_cause) ? { label: 'Suspected Cause', values: [N(ts.suspected_cause)] } : null,
         has(ts.traffic_violation) ? { label: 'Traffic Violation', values: [N(ts.traffic_violation)] } : null,

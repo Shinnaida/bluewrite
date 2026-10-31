@@ -73,10 +73,16 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
   /// Last resort, still automatic: a typed address is tested by the app on
   /// submit, exactly like a discovered one. No separate test step.
   Future<void> _connectManual() async {
-    final base = _url.text.trim().replaceAll(RegExp(r'/+$'), '');
+    var base = _url.text.trim().replaceAll(RegExp(r'/+$'), '');
     if (base.isEmpty) {
       setState(() => _error = 'Enter the server address from the station PC.');
       return;
+    }
+    // Scheme-tolerant: a bare `host:port` (or LAN IP) is the station's plain
+    // HTTP; a pasted internet address keeps its own scheme (https tunnel
+    // URLs included) — typing the scheme is never required.
+    if (!RegExp(r'^[a-zA-Z][a-zA-Z0-9+.-]*://').hasMatch(base)) {
+      base = 'http://$base';
     }
     setState(() {
       _busy = true;
@@ -124,7 +130,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
             width: 20,
             child: Center(child: CircularProgressIndicator(color: StationDesk.gold))),
         const SizedBox(height: 20),
-        const Text('Connecting to the station server…',
+        const Text('Connecting to the BlueWrite server…',
             textAlign: TextAlign.center,
             style: TextStyle(color: StationDesk.paper, fontSize: 16)),
         const SizedBox(height: 12),
@@ -139,11 +145,11 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          Text('Looking for the station server on this Wi-Fi… $pct%',
+          Text('Looking for the station server… $pct%',
               textAlign: TextAlign.center,
               style: TextStyle(color: StationDesk.paper.withValues(alpha: 0.65), fontSize: 12)),
         ] else
-          Text('Stay on the station Wi-Fi — the phone finds the server itself.',
+          Text('The phone finds the server itself when it is reachable — station Wi-Fi, or anywhere over the internet once the station publishes it.',
               textAlign: TextAlign.center,
               style: StationDesk.note().copyWith(fontSize: 12)),
       ],
@@ -164,7 +170,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
               style: TextStyle(
                   color: StationDesk.paper, fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          Text('Stay on the station Wi-Fi and try again.',
+          Text('Check this phone\u2019s connection and that the station server is published, then try again.',
               textAlign: TextAlign.center, style: StationDesk.note()),
           const SizedBox(height: 24),
           FilledButton(
@@ -186,6 +192,12 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
               decoration: StationDesk.field('Server address',
                   hint: 'http://172.16.51.252:8099'),
               onSubmitted: (_) => _connectManual(),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'On station Wi-Fi: the LAN address. Anywhere else: the station\u2019s published https address.',
+              textAlign: TextAlign.center,
+              style: StationDesk.note().copyWith(fontSize: 12),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),

@@ -398,9 +398,11 @@ export default function ReportSheetBody({
           <strong>Recorded by:</strong> {recorderName}
         </p>
 
+        {String(report.ioc_name || '').trim() !== '' && (
         <p className="pr-recorded">
-          <strong>IOC:</strong> {String(report.ioc_name || '').trim() || '—'}
+          <strong>IOC:</strong> {String(report.ioc_name || '').trim()}
         </p>
+        )}
 
         <div className="pr-noted">
           <span className="pr-noted-label">Noted by:</span>

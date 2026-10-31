@@ -8,7 +8,7 @@ drag-drop capture on the web: photo beside the reading, correct-then-Insert.
 Nothing reaches the narrative until the officer inserts it there.
 
 ```
-Phone (station Wi-Fi) ──HTTP──▶ Server PC: PHP API on 0.0.0.0:8099
+Phone (station Wi-Fi, or any internet — see INTERNET_ACCESS.md) ──HTTP(S)──▶ Server PC: PHP API on 0.0.0.0:8099
                                     │      (see LAN_SETUP.md)
                                     └─ MySQL on 127.0.0.1:3306 (never exposed)
 ```
@@ -58,7 +58,10 @@ This is the existing LAN setup, not a new one. From `docs/LAN_SETUP.md`:
 
 Off the station Wi-Fi the app still tries the last address first, so it
 works from anywhere the server is reachable (VPN, forwarded port, reverse
-proxy — the station's own network setup, not an app setting). If the server
+proxy — the station's own network setup, not an app setting). To open the
+app on mobile data or any outside internet, publish the server with the
+encrypted tunnel in `docs/INTERNET_ACCESS.md` and type the published
+`https://` address into the app once. If the server
 moves to a new address, the app notices the old one is dead and finds it
 again on its own, keeping the sign-in.
 
@@ -102,7 +105,8 @@ never holds the password. The portal lists each phone under its account
 
 - Same LAN rules as the portal: trusted network only, plain HTTP on the LAN
   (see LAN_SETUP.md §10 for the HTTPS hardening), never forward port 8099,
-  never expose MySQL.
+  never expose MySQL. For internet access, publish only through the HTTPS
+  tunnel in `docs/INTERNET_ACCESS.md` — still never a raw port forward.
 - Tokens live a year, are hashed at rest on the server, and are shown once —
   at issue. There is deliberately no endpoint that returns one again.
 - Tokens cannot mint tokens: issue and inventory demand the cookie session.

@@ -51,7 +51,7 @@ class PortalClient {
       res = await http.get(_u('/station')).timeout(timeout);
     } catch (_) {
       throw const PortalError(
-          "Can't reach the BlueWrite server. Check the address and that the phone is on the station Wi-Fi, then try again.");
+          "Can't reach the BlueWrite server. Check the address, this phone's internet connection (station Wi-Fi or mobile data), and that the server is published for internet access — then try again.");
     }
     if (res.statusCode == 404) {
       // /station is session-guarded in some builds; the handshake we need is

@@ -40,10 +40,11 @@ copy C:\bw-app\build\app\outputs\flutter-apk\app-debug.apk blotter-app\build\app
 `C:\bw-app\build` is scratch (git-ignored here via `blotter-app/.gitignore`);
 `blotter-app/` stays the source of truth — never edit the staging copy.
 
-## Verify on the real path (station Wi-Fi)
+## Verify on the real path (station Wi-Fi or internet)
 
 1. The portal API answers on the LAN (`http://<pc-lan-ip>:8099/`, firewall
-   rule "BlueWrite LAN 8099" in place).
+   rule "BlueWrite LAN 8099" in place) — or, for internet access, the
+   published `https://` address from `bluewrite/docs/INTERNET_ACCESS.md`.
 2. App: it finds the server itself (last address first, then a Wi-Fi scan) →
    full sign-in with the emailed code → set the app PIN. Type an address
    only if the scan finds nothing.

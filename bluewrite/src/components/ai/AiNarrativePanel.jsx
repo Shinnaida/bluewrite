@@ -2617,12 +2617,19 @@ export default function AiNarrativePanel({
                           )}
                           {/* Each result offers to repeat ITSELF: a generated draft
                               regenerates from the report, a tightened draft is
-                              tightened again. Offering "Regenerate" on a tighten
+                              tightened again, an arranged draft is arranged again.
+                              Offering "Regenerate" on a tighten or arrange
                               result would swap the officer's own prose for an
                               AI-written one under a button they did not mean to
                               press. */}
                           {tightenDraft ? (
                             <button type="button" onClick={() => tighten()}>Tighten again</button>
+                          ) : draft?.arranged ? (
+                            <button
+                              type="button"
+                              onClick={() => arrangeReport()}
+                              title="Re-arranges your current account text into the report format — your wording is kept exactly as written."
+                            >Arrange again</button>
                           ) : (
                             <button type="button" onClick={() => setShowFeedback((v) => !v)}>Regenerate…</button>
                           )}
@@ -2648,6 +2655,13 @@ export default function AiNarrativePanel({
                           type="button"
                           onClick={() => {
                             setShowFeedback(false);
+                            // An arranged draft repeats ITSELF: re-arranging keeps
+                            // the officer's wording, while generate() would swap
+                            // it for AI-written prose (see the actions above).
+                            if (draft?.arranged) {
+                              arrangeReport();
+                              return;
+                            }
                             // Track C — regenerating inside the guided review is
                             // still step 1, so it lands back in the review state.
                             if (guidedIsReviewing(guided)) moveGuided('regenerate');
