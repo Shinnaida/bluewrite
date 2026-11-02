@@ -77,7 +77,7 @@ test('the account page names the person, and states every fact of the record', a
 
 test('a fact the record holds nothing about says so in words, and a fault is not quiet', async () => {
   const { renderProfile, SPARSE_ACCOUNT } = await load();
-  // A STAFF account with almost nothing on file: no address, no badge, never signed in.
+  // An OFFICER account with almost nothing on file: no address, no badge, never signed in.
   const html = renderProfile({ user: SPARSE_ACCOUNT, reports: null, signIns: [], activity: [] });
 
   // ABSENCES IN WORDS, the same distinction `.users-none` draws in the directory.
@@ -88,15 +88,10 @@ test('a fact the record holds nothing about says so in words, and a fault is not
   // …and an em dash never stands in for a value (the directory's rule, kept here too).
   assert.doesNotMatch(html, />—</);
 
-  // STAFF HAS NO SECOND FACTOR TO HAVE, so the fact reports the rule rather than a fault.
-  assert.match(html, /Not required for this role/);
-
-  // AND THE SAME MISSING ADDRESS ON AN OFFICER IS A FAULT, because that account cannot
-  // complete a sign-in at all — the one absence on this page that is somebody's job to
-  // fix, and it is why the two roles do not share a sentence here.
-  const officer = renderProfile({ user: { ...SPARSE_ACCOUNT, role: 'Officer' }, reports: null, signIns: [], activity: [] });
-  assert.match(officer, /Required, but there is no address to send it to/);
-  assert.doesNotMatch(officer, /Not required for this role/);
+  // A MISSING ADDRESS IS A FAULT, because that account cannot complete a sign-in
+  // at all — the one absence on this page that is somebody's job to fix.
+  assert.match(html, /Required, but there is no address to send it to/);
+  assert.doesNotMatch(html, /Not required for this role/);
 });
 
 test('a locked second factor is called out, because it is the fact with a fix', async () => {
@@ -357,7 +352,7 @@ test('a row opens the ACCOUNT, the pen opens the form, and Escape goes back one 
   // THE STEP: the row hands over the account (`openProfile`), and the form is reached
   // from the page's own pen (`onEdit`) — so the two are separate acts rather than the
   // same click landing somewhere else.
-  assert.match(src, /<UsersTable users=\{shown\} onOpen=\{openProfile\} onEdit=\{startEdit\} onMenu=\{openRowMenu\} \/>/);
+  assert.match(src, /<UsersTable users=\{sorted\} sortKey=\{sort\} onOpen=\{openProfile\} onEdit=\{startEdit\} onMenu=\{openRowMenu\} \/>/);
   assert.match(src, /onEdit=\{\(\) => startEdit\(profileUser\)\}/);
   assert.match(src, /onBack=\{closeProfile\}/);
   assert.match(src, /onRetry=\{reloadProfile\}/);
@@ -382,8 +377,8 @@ test('the page is the form’s sibling state on one screen, and the directory is
 
   // The centred column is the screen's, not the form's: the title stays where it is and
   // the body under it changes. The DIRECTORY keeps the full window — a table is the one
-  // thing on this screen that wants all of it.
-  assert.match(src, /<div className=\{form \|\| profileUser \? 'acct-page' : undefined\}>/);
+  // thing on this screen that wants all of it — and sits flush under the top bar.
+  assert.match(src, /acct-page\$\{profileUser && !form \? ' acct-read' : ''\}/);
 
   // AND THE ACCOUNT IS READ OUT OF THE ROSTER IT CAME FROM, by id — so the page and the
   // row it was opened from cannot be showing two different records, and a re-read of the

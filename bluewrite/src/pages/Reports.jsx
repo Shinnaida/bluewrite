@@ -1298,7 +1298,6 @@ const REVIEW_INPUTS = {
   },
 
   location: { placeholder: 'Specific address or intersection' },
-  ioc_name: { placeholder: 'Name of the officer handling the case' },
 };
 
 /**
@@ -1793,19 +1792,7 @@ function ReportReview({ draft, user, complete, onGoToSection, edit }) {
       <section className="ir-review-section">
         <ReviewHeading index={4} complete={complete} onGoToSection={onGoToSection} />
         <div className="ir-review-rows">
-          <ReviewRow
-            label="Action Taken / Status"
-            value={draft.action_taken}
-            wide
-            required
-            {...editable('action_taken')}
-          />
-          <ReviewRow
-            label="Investigator-on-Case (IOC)"
-            value={draft.ioc_name}
-            required
-            {...editable('ioc_name')}
-          />
+          {/* Action Taken / IOC rows hidden by owner request (2026-11-02). */}
           {/* A derived read-out, deliberately NOT editable: the badge line comes
               from the account. A path here would offer an edit that has nowhere
               to be written. The signature rows that used to close this section
@@ -2543,12 +2530,10 @@ export function ReportEditor({
   onMutated,
   onClosed,
   onConnError,
-  // How to draw the same form (Profile ▸ Preferences ▸ Form format). Three
-  // values — 'document', 'sheet', 'steps' — defined once in lib/formFormat.js,
-  // because the menu that sets it and this component that answers it must not
-  // each keep their own idea of the set. Only the two format-specific answers
-  // are asked below; everything else about the editor is format-agnostic.
-  formFormat = 'document',
+  // How to draw the same form (Profile ▸ Preferences ▸ Form format). Two
+  // values — 'sheet', 'steps' — defined once in lib/formFormat.js.
+  // Document is hidden and never offered; Sheet keeps its own rules.
+  formFormat = 'sheet',
   // Shell hands these down so a sign-out can save the open draft first (see the
   // registration effect below and Shell.flushPending) and so Ctrl+S reaches
   // whichever copy of the editor is on screen.
@@ -2724,8 +2709,9 @@ export function ReportEditor({
   // the error jumps resolve by element id and a field outside the DOM can
   // neither be focused nor scrolled to.
   //
-  // Sheet is the only format that still draws the whole report at once.
-  const deck = stepped || formFormat === 'document';
+  // Sheet is the only format that draws the whole report at once; deck is
+  // steps only now — Document is hidden and Sheet never copies its rules.
+  const deck = stepped; // legacy 'document' also decks, but is no longer offered
   // ---- The sheet form format (Profile ▸ Preferences) ----------------------
   // The third format, and deliberately not a third tree: it renders the same
   // cards through the same fields and the same rules, and differs only in the
@@ -2874,53 +2860,28 @@ export function ReportEditor({
     setEditingReviewRow(null);
   }
 
-  // ---- Unsaved-work recovery (tab-session) ------------------------------
-  // A dev-server rebuild, an accidental refresh, or a browser crash used to
-  // wipe the whole in-progress report. Mirror the draft into sessionStorage
-  // (per tab, keyed by report id) and offer to restore it on remount.
-  const editStoreKey = `bw-edit-${reportId ?? 'new'}`;
-  const [restoreOffer, setRestoreOffer] = useState(null); // {savedAt, draft}
+  // ---- Autosave OFF (owner request, 2026-11-02) -------------------------
+  // The tab-session mirror and its "Restore them" offer are gone: an autosaved
+  // copy of an in-progress report could be restored over a page the officer had
+  // already arranged, which is how one report ended up carrying its own text
+  // twice. Nothing is mirrored into the browser any more, and any copy an
+  // earlier session left behind is DELETED on mount — the once-per-tab scan
+  // below removes every `bw-edit-…` key this app ever wrote.
+  //
+  // A report is written only by an explicit Save Draft (see writeDraft) and by
+  // the exit flush, which saves on the way out rather than in the background.
   useEffect(() => {
     try {
-      const raw = window.sessionStorage.getItem(editStoreKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.draft && parsed.draft.incident_type) {
-        setRestoreOffer(parsed);
+      const stale = [];
+      for (let i = 0; i < window.sessionStorage.length; i += 1) {
+        const key = window.sessionStorage.key(i);
+        if (key && key.startsWith('bw-edit-')) stale.push(key);
       }
+      for (const key of stale) window.sessionStorage.removeItem(key);
     } catch {
-      // corrupted or unavailable storage — ignore
+      // storage unavailable — nothing to clear
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => {
-    if (!draft || !dirtyRef.current) return;
-    try {
-      window.sessionStorage.setItem(
-        editStoreKey,
-        JSON.stringify({ savedAt: Date.now(), draft }),
-      );
-    } catch {
-      // best-effort only
-    }
-  }, [draft, editStoreKey]);
-  function restoreEdits() {
-    if (!restoreOffer) return;
-    setDraft(restoreOffer.draft);
-    idRef.current = restoreOffer.draft.id ?? reportId;
-    setEditingId(restoreOffer.draft.id ?? reportId);
-    dirtyRef.current = true;
-    setRestoreOffer(null);
-    setError(null);
-  }
-  function discardEdits() {
-    try {
-      window.sessionStorage.removeItem(editStoreKey);
-    } catch {
-      // ignore
-    }
-    setRestoreOffer(null);
-  }
 
   // Load an existing report.
   useEffect(() => {
@@ -2982,16 +2943,16 @@ export function ReportEditor({
   }, [reportId]);
 
   // ---- The automatic save path -------------------------------------------
-  // ONE writer for every save the officer did not press: the 30s interval, the
-  // exit flush, and the sign-out flush Shell holds. The manual Save button
-  // stays separate on purpose — it validates first and reports failures, and
-  // neither belongs in a save nobody asked for.
+  // ONE writer for every save the officer did not press: the exit flush and the
+  // sign-out flush Shell holds. (The 30s background interval is OFF — see
+  // above.) The manual Save button stays separate on purpose — it validates
+  // first and reports failures, and neither belongs in a save nobody asked for.
   //
   // Returns the report id, or null when there is nothing the API can accept:
   // `incident_type` is NOT NULL in the schema and required by POST /reports, so
   // a report with no type chosen yet cannot be stored at all. Nothing is lost
-  // when that happens — it is still in the editor and in the sessionStorage
-  // mirror above, which is what the recovery offer restores.
+  // when that happens — it is still in the editor, which is the only place it
+  // lives now that nothing is mirrored into the browser.
   //
   // `keepalive` keeps the request alive after the document is destroyed. It is
   // the only reason a save fired from a closing tab reaches the server, and it
@@ -3003,7 +2964,7 @@ export function ReportEditor({
   // (and with it the slightly older body, which the next write corrects) rather
   // than starting a second one. A keepalive exit write can therefore ride on an
   // ordinary request already in flight: that request is saving the same draft,
-  // and the mirror above still holds the text if it loses the race with unload.
+  // so the text survives even if the closing document loses the race with unload.
   const inFlightRef = useRef(null);
 
   // Word-like ink (owner request): the prose fields store the allowlisted
@@ -3060,31 +3021,15 @@ export function ReportEditor({
     setDraft((prev) => (prev ? { ...prev, id, created_by: user.id } : prev));
   }, [user.id]);
 
-  // Autosave draft every 30s while editing and dirty.
-  useEffect(() => {
-    const iv = setInterval(async () => {
-      if (!dirtyRef.current) return;
-      const isNew = !idRef.current;
-      try {
-        const id = await writeDraft();
-        if (id === null) return; // no incident type yet — nothing savable
-        adoptSavedId(id);
-        dirtyRef.current = false;
-        // Only a CREATE reaches onMutated: refreshing Home's list is about the
-        // new report number, and bumping it every tick would refetch that list
-        // every 30 seconds while the officer is typing.
-        if (isNew) onMutated?.();
-        notify('Draft saved automatically.');
-      } catch {
-        // silent: next tick retries; explicit Save shows the error
-      }
-    }, 30000);
-    return () => clearInterval(iv);
-  }, [notify, onMutated, writeDraft, adoptSavedId]);
+  // AUTOSAVE IS OFF (owner request, 2026-11-02). The 30-second background write
+  // is removed: a report is written when the officer presses Save Draft, and by
+  // the exit flush below. Nothing is saved behind their back, so an unfinished
+  // or half-arranged page is never persisted over the page they are working on.
+  // `adoptSavedId` is still used by Save Draft and the exit flush.
 
   // ---- Saving on the way out ----------------------------------------------
-  // The interval alone leaves up to 30 seconds of typing unsaved, and the
-  // moments that lose work are exactly the ones between ticks — an officer who
+  // Nothing is saved behind the officer's back until one of these fires, and the
+  // moments that lose work are exactly the ones in between — an officer who
   // closes the tab, is timed out, or clicks away mid-sentence. Three exits are
   // covered, because each one slips past the other two:
   //   · pagehide — tab closed, refreshed, navigated away, window closed. The
@@ -3102,9 +3047,8 @@ export function ReportEditor({
   // one itself, through the registration effect below.
   //
   // All of it is silent and best-effort, and there is deliberately NO
-  // beforeunload prompt: it would fire on healthy exits too, and the
-  // sessionStorage mirror already covers the case where the write cannot get
-  // through — an officer never has to answer a dialog to keep their work.
+  // beforeunload prompt: it would fire on healthy exits too — an officer never
+  // has to answer a dialog to keep their work.
   // Returns a promise so the one caller that can wait — Shell's sign-out, which
   // must not end the session before the write lands — can wait. The page events
   // and the unmount simply ignore it: nothing awaits an unload.
@@ -3119,8 +3063,8 @@ export function ReportEditor({
         if (isNew) onMutated?.();
       })
       .catch(() => {
-        // Offline, or the session ended first: the mirror above is the
-        // fallback and the recovery offer picks it up in this tab.
+        // Offline, or the session ended first: nothing to do from an unload.
+        // The page itself is untouched, and Save Draft still reports the error.
       });
   }, [writeDraft, adoptSavedId, onMutated]);
 
@@ -3506,7 +3450,11 @@ export function ReportEditor({
   // known before the first answer lands. A read that names no type — and an
   // officer who typed none either — skips it entirely; the panel's own message
   // then says the report still needs a type, and the next press reads on.
-  async function readAccountForForm(accountText) {
+  // Arrange-only (sheet writing assistant): fill type/date/place only and add
+  // no field labels the account never stated — skip the type-details read, so
+  // the sheet renders exactly the screenshot shape (Place, Time, Vehicles,
+  // Facts, Remarks) with no invented Traffic Violation / Injuries labels.
+  async function readAccountForForm(accountText, opts = {}) {
     const account = String(accountText || '').trim();
     if (account === '') {
       return { ok: false, message: 'Write the incident in your own words first — there is nothing to read yet.' };
@@ -3553,7 +3501,8 @@ export function ReportEditor({
       // notice missing, and silence there reads as "the AI found nothing" when
       // it means "the AI was never asked". Reported on the receipt.
       let detailsFailed = false;
-      if (afterFirst.incident_type) {
+      const arrangeOnly = opts.arrangeOnly === true;
+      if (afterFirst.incident_type && !arrangeOnly) {
         try {
           const answer = await api('/ai/classify/details', {
             method: 'POST',
@@ -4657,24 +4606,6 @@ export function ReportEditor({
         </div>
       )}
 
-      {restoreOffer && canEdit && (
-        <div className="alert info" role="status">
-          Unsaved changes from earlier in this tab were recovered
-          {' '}(last kept {new Date(restoreOffer.savedAt).toLocaleTimeString()}).
-          <button
-            type="button"
-            className="primary"
-            style={{ marginLeft: '0.6rem' }}
-            onClick={restoreEdits}
-          >
-            Restore them
-          </button>
-          <button type="button" style={{ marginLeft: '0.4rem' }} onClick={discardEdits}>
-            Discard
-          </button>
-        </div>
-      )}
-
       {Array.isArray(ruleWarnings) && ruleWarnings.length > 0 && (
         <div className="alert info" role="status">
           {ruleWarnings.map((w, i) => (
@@ -5247,16 +5178,10 @@ export function ReportEditor({
           </IrCard>
         )}
 
-        {/* Section 5 pairs the section's ONE long field with its ONE short
-            field: the two cards below share a row so the section reads as a
-            pair rather than as two stacked full-width bands, which is also one
-            fewer scroll to reach the Submit bar. Both keep their own header
-            bar, their own hint and their own step index, so the dot's jump
-            still flashes them together and the current-step highlight still
-            covers the whole section instead of one card of it.
-
-            Neither card carries `wide`: inside `.ir-card-row` that modifier
-            would span the row and put them back one above the other. */}
+        {/* Section 5 (Action Taken / IOC) hidden by owner request
+            (2026-11-02): the fields stay stored when present but are never
+            shown or demanded on any report. */}
+        {false && (
         <div className="ir-card-row">
           {/* Action Taken / Status is a required document block: the narrative
               generator receives it as context, and the report cannot be
@@ -5337,6 +5262,7 @@ export function ReportEditor({
             </div>
           </IrCard>
         </div>
+        )}
 
         {/* AI assistance — where the document format keeps the writing
             assistant (see `aiPanel` above), and why it is HERE rather than
@@ -5513,7 +5439,7 @@ export function ReportEditor({
             Not in the sheet format (a page has no way forward) and not in the
             stepped format, which carries its own row because it has one more
             step to walk: Review. */}
-        {formFormat === 'document' && (
+        {false && formFormat === 'document' && (
           <div className="ir-doc-nav">
             {/* Save is in the case bar (see above), not here: this row is the
                 document's NAVIGATION — where you are going — and it now carries
@@ -6490,7 +6416,7 @@ export function ReportsTable({
   initialDateFrom = '',
   initialDateTo = '',
   initialType = '',
-  formFormat = 'document',
+  formFormat = 'sheet',
   // Forwarded to the editor this list opens, for the same reason formFormat is
   // (see Shell): a sign-out must save the open draft however it was opened, and
   // Ctrl+S must reach a report opened from the list as well as one opened from

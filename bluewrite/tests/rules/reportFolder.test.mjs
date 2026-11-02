@@ -199,22 +199,21 @@ test('the shelf is the stage of the work, not the exact status', () => {
   assert.equal(statusBucket('DRAFT'), 'draft');
 
   assert.deepEqual(STATUS_BUCKETS.map((s) => s.key), ['draft', 'submitted']);
-  assert.deepEqual(STATUS_BUCKETS.map((s) => s.label), ['Draft', 'Submitted']);
+  assert.deepEqual(STATUS_BUCKETS.map((s) => s.label), ['Draft', 'Finalized']);
 
-  // ...AND THE OFFICER'S OWN WORD FOR THAT SHELF (owner request, 2026-10-13):
-  // the TAB is renamed, the bucket it holds is not — same keys, same data, so a
-  // rename can never move a report. An Admin's All Reports keeps the three
-  // statuses, because a review queue IS the difference between them.
+  // ...AND EVERY SCREEN'S OWN WORD FOR THAT SHELF (owner request, 2026-10-13,
+  // extended to the Admin 2026-10-30): the TAB is renamed, the bucket it holds
+  // is not — same keys, same data, so a rename can never move a report.
   assert.deepEqual(shelvesFor({ officer: true }).map((s) => s.label), ['All Reports', 'Draft', 'Finalized']);
   assert.deepEqual(shelvesFor({ officer: true }).map((s) => s.key), ['all', 'draft', 'submitted']);
-  assert.deepEqual(shelvesFor({}).map((s) => s.label), ['All Reports', 'Draft', 'Submitted']);
+  assert.deepEqual(shelvesFor({}).map((s) => s.label), ['All Reports', 'Draft', 'Finalized']);
 });
 
-test('the officer reads two words for a status, and the Admin reads three', () => {
-  // THE OFFICER NEVER READS "SUBMITTED" (owner request, 2026-10-13: "remove
-  // submitted — all data in it should be in finalized"). The word itself is
-  // decided in ONE place, which is what keeps a row, the sheet it opens, the tab
-  // above them and the filter under them from disagreeing.
+test('every screen reads two words for a status, submitted included', () => {
+  // NO SCREEN READS "SUBMITTED" (owner request, 2026-10-13: "remove submitted
+  // — all data in it should be in finalized"; extended to the Admin 2026-10-30).
+  // The word itself is decided in ONE place, which is what keeps a row, the
+  // sheet it opens, the tab above them and the filter under them from disagreeing.
   assert.equal(statusText('submitted', { officer: true }), 'finalized');
   assert.equal(statusText('finalized', { officer: true }), 'finalized');
   assert.equal(statusText('draft', { officer: true }), 'draft');
@@ -223,8 +222,8 @@ test('the officer reads two words for a status, and the Admin reads three', () =
   assert.equal(statusText('ESCALATED', { officer: true }), 'escalated');
   assert.equal(statusText('', { officer: true }), '');
   assert.equal(statusText(undefined, { officer: true }), '');
-  // The Admin — whose queue is the difference — reads the raw status.
-  assert.equal(statusText('submitted'), 'submitted');
+  // The Admin reads the same word now.
+  assert.equal(statusText('submitted'), 'finalized');
   assert.equal(statusText('FINALIZED'), 'finalized');
   assert.equal(FINALIZED_LABEL, 'Finalized');
 });
@@ -239,16 +238,12 @@ test('the officer’s filtered list asks for the set its shelf holds', () => {
     /\$status === 'filed'[\s\S]{0,120}r\.status IN \('submitted', 'finalized'\)/,
     'the server no longer reads the officer\'s `filed` as the sent set',
   );
-  // The option offers the officer's word and no third one, while All Reports
-  // keeps both statuses for the Admin.
+  // The option offers the one filed word and no third one, for officers and
+  // Admins alike.
   assert.match(reports, /<option value="filed">\{FINALIZED_LABEL\}<\/option>/);
-  assert.match(
-    reports,
-    /<option value="submitted">Submitted<\/option>[\s\S]{0,90}<option value="finalized">Finalized<\/option>/,
-    'the Admin lost the two statuses they review apart',
-  );
+  assert.doesNotMatch(reports, /<option value="submitted">Submitted<\/option>/);
   assert.match(reports, /Needs attention \(draft \+ not finalized\)/);
-  assert.match(reports, /Needs attention \(draft \+ submitted\)/);
+  assert.doesNotMatch(reports, /Needs attention \(draft \+ submitted\)/);
   // The row badge and the sheet's badge both read the one word — the officer's
   // register and the panel a row opens cannot say different things.
   assert.match(list, /statusText\(report\.status, \{ officer \}\)/);
@@ -1215,13 +1210,11 @@ test('the register paints its file panel, and the officer reads two words', asyn
   assert.match(officerView, /6-10 of 12 reports/);
   assert.match(officerView, /Page 2 of 3/);
 
-  // ONE VOCABULARY PER READER (see statusText in lib/reportFolder.js): everything
-  // that has left the officer's hands is FINALIZED to them — the word is folded,
-  // and the badge's own class stays the raw status so the colour does not move —
-  // while All Reports keeps `submitted` and `finalized` apart, because the Admin's
-  // review queue is the difference between them.
+  // ONE VOCABULARY EVERYWHERE (see statusText in lib/reportFolder.js): everything
+  // that has left the officer's hands is FINALIZED — the word is folded, and the
+  // badge's own class stays the raw status so the colour does not move.
   assert.match(officerView, /<span class="badge submitted">finalized<\/span>/);
-  assert.match(render({ officer: false }), /<span class="badge submitted">submitted<\/span>/);
+  assert.match(render({ officer: false }), /<span class="badge submitted">finalized<\/span>/);
   // A DRAFT wears no badge for either reader: the resting state is not news.
   assert.equal(officerView.match(/class="badge draft"/g), null);
 

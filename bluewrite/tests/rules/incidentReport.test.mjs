@@ -10,9 +10,11 @@ import {
   specTimestamp,
   stationClock,
   CUSTOM_TYPE,
+  classifyClosestType,
   incidentTypeBoxValue,
   resolveIncidentTypeInput,
 } from '../../src/lib/incidentReport.js';
+import { INCIDENT_TYPES } from '../../src/lib/incidentTypes.js';
 
 // The station's own list, as the form receives it. "Other Incident" is the
 // catch-all the custom path resolves to.
@@ -115,6 +117,53 @@ test('text that is not a type becomes an Other Incident, specified', () => {
   });
 });
 
+test('a blotter legal phrase folds to its main incident and keeps its words', () => {
+  // The camera/blotter read names the incident the way the blotter wrote it —
+  // "RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL
+  // INJURY" — which is on no list. The box must ACCEPT it: the report is
+  // filed under the main incident (the traffic accident), and the exact words
+  // ride along as the Category rather than being thrown away.
+  const words = 'Reckless imprudence resulting to damage to property and physical injury';
+  assert.deepEqual(resolveIncidentTypeInput(words, INCIDENT_TYPES), {
+    type: 'Traffic Accident',
+    custom: words,
+  });
+  // Without the recklessness it is a different incident: the same harms with
+  // no reckless act name the harm itself — person before property.
+  assert.deepEqual(
+    resolveIncidentTypeInput('damage to property and physical injury', INCIDENT_TYPES).type,
+    'Assault / Physical Injury',
+  );
+  // And a phrase with no real signal still takes the old answer: an Other
+  // Incident, specified — never an invented type.
+  assert.deepEqual(resolveIncidentTypeInput('Illegal Gambling', INCIDENT_TYPES), {
+    type: CUSTOM_TYPE,
+    custom: 'Illegal Gambling',
+  });
+});
+
+test('the classifier only ever names a type the station carries', () => {
+  // Exact and legacy spellings land first, whatever the casing.
+  assert.equal(classifyClosestType('  theft ', ['Theft', 'Robbery']), 'Theft');
+  assert.equal(
+    classifyClosestType('Vehicular Accident', ['Theft', 'Traffic Accident']),
+    'Traffic Accident',
+  );
+  // Only a listed type can win: the Station that configured Traffic Accident
+  // away files the same phrase under the harm it CAN record…
+  assert.equal(
+    classifyClosestType(
+      'Reckless imprudence resulting to damage to property and physical injury',
+      ['Assault / Physical Injury', 'Property Damage / Malicious Mischief', 'Other Incident'],
+    ),
+    'Assault / Physical Injury',
+  );
+  // …and with no signal at all there is no classification to carry.
+  assert.equal(classifyClosestType('property', ['Theft', 'Other Incident']), null);
+  assert.equal(classifyClosestType('', ['Theft']), null);
+  assert.equal(classifyClosestType('stole my phone', []), null);
+});
+
 test('an empty box clears the type and carries no specification', () => {
   assert.deepEqual(resolveIncidentTypeInput('', TYPES), { type: '', custom: null });
   assert.deepEqual(resolveIncidentTypeInput('   ', TYPES), { type: '', custom: null });
@@ -150,6 +199,16 @@ test('the box shows the specification back for an Other Incident that has one', 
   assert.equal(
     incidentTypeBoxValue({ incident_type: 'Other Incident', type_specific: {} }),
     'Other Incident',
+  );
+  // A folded report reads back its own words, not the canonical type they
+  // were filed under — the officer typed the legal phrase and it must still
+  // read that way when they return to it.
+  assert.equal(
+    incidentTypeBoxValue({
+      incident_type: 'Traffic Accident',
+      type_specific: { incident_category: 'Reckless imprudence resulting to damage to property' },
+    }),
+    'Reckless imprudence resulting to damage to property',
   );
   // Every other type reads back as itself.
   assert.equal(incidentTypeBoxValue({ incident_type: 'Theft' }), 'Theft');

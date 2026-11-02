@@ -650,7 +650,7 @@ export default function Login({ onLogin, boot, notice = null }) {
         setSubmitting(false);
         return;
       }
-      // No second factor for this account (Staff): straight in, as before.
+      // No second factor for this account: straight in, as before.
       onLogin({ ...res.user, mfa: res.mfa, expires_at: res.expires_at });
     } catch (err) {
       // A mailer problem is the server's sentence about THIS account, not an

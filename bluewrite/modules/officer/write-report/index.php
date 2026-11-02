@@ -154,24 +154,7 @@ bw_page_start([
     </div>
   </section>
 
-  <section class="card" aria-labelledby="sec-disposition">
-    <div class="card__head">
-      <div>
-        <h2 class="card__title" id="sec-disposition">Disposition</h2>
-        <p class="card__sub">What the station did, and who carries the case.</p>
-      </div>
-    </div>
-    <div class="form-grid">
-      <div class="field field--wide">
-        <label for="action_taken">Action taken / status <span class="req">*</span></label>
-        <textarea id="action_taken" name="action_taken" rows="4" maxlength="4000"></textarea>
-      </div>
-      <div class="field">
-        <label for="ioc_name">Investigator-on-case <span class="req">*</span></label>
-        <input id="ioc_name" name="ioc_name" type="text" maxlength="120" autocomplete="off">
-      </div>
-    </div>
-  </section>
+  <?php // Disposition (Action taken / IOC) hidden by owner request (2026-11-02): fields stay stored when present, never shown or demanded. ?>
 
   <section class="card" aria-labelledby="sec-party">
     <div class="card__head">

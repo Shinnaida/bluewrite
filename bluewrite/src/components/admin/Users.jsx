@@ -35,6 +35,20 @@ import ConnectionHub from '../shared/ConnectionHub.jsx';
  * cannot create.
  */
 const ROLES = ['Admin', 'Officer'];
+/** The orders the directory offers, in menu order. Name first: a station
+ *  directory reads alphabetically. Badge number is the station's own identifier
+ *  order; recently signed in answers who was last at a desk. */
+const SORT_ORDERS = [
+  { key: 'name', label: 'Name A–Z' },
+  { key: 'badge', label: 'Badge number' },
+  { key: 'recent', label: 'Recently signed in' },
+];
+/** Server time an account was last seen, for the recent order. An account the
+ *  server has never stamped sorts after every account it has. */
+function seenTime(u) {
+  const t = new Date(String(u.last_seen_at ?? '').replace(' ', 'T')).getTime();
+  return Number.isNaN(t) ? -Infinity : t;
+}
 
 /** The page sizes the directory's footer offers; ten is the default. */
 const PAGE_SIZES = [10, 25, 50];
@@ -173,7 +187,7 @@ function rowHint(user) {
  * deliberate press from there — the pen on the photograph — and the row menu still
  * carries the direct way in for anyone who already knows what they came to change.
  */
-export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, onMenu = () => {} }) {
+export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, onMenu = () => {}, sortKey = null }) {
   return (
     <div className="table-wrap">
       <table className="users-table">
@@ -184,8 +198,11 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
         </caption>
         <thead>
           <tr>
-            <th scope="col">Full name</th>
-            <th scope="col" className="num">Badge no.</th>
+            {/* THE SORTED COLUMN SAYS SO: the rail's Sort key decides the order, and
+                the column that order is read down wears the blue (see styles.css) —
+                Recent reads newest-first, so it alone sorts descending. */}
+            <th scope="col" aria-sort={sortKey === 'name' ? 'ascending' : undefined} className={sortKey === 'name' ? 'is-sorted' : undefined}>Full name</th>
+            <th scope="col" aria-sort={sortKey === 'badge' ? 'ascending' : undefined} className={sortKey === 'badge' ? 'num is-sorted' : 'num'}>Badge no.</th>
             <th scope="col">Username</th>
             <th scope="col">Email</th>
             <th scope="col">Role</th>
@@ -193,7 +210,7 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
                 against the left edge read as if it belonged to the column before it. */}
             <th scope="col" className="status">Status</th>
             <th scope="col">Two-factor</th>
-            <th scope="col" className="num">Last sign-in</th>
+            <th scope="col" aria-sort={sortKey === 'recent' ? 'descending' : undefined} className={sortKey === 'recent' ? 'num is-sorted' : 'num'}>Last sign-in</th>
           </tr>
         </thead>
         <tbody>
@@ -284,6 +301,10 @@ export default function Users({ notify }) {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
+  const [status, setStatus] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sort, setSort] = useState('name');
+  const [sortMenuAt, setSortMenuAt] = useState(null);
   // The directory is read a page at a time. Held here, not in the table, because the
   // footer that moves between pages is outside it.
   const [page, setPage] = useState(1);
@@ -850,21 +871,54 @@ export default function Users({ notify }) {
   const needle = search.trim().toLowerCase();
   const shown = (users ?? []).filter((u) => {
     if (role !== '' && u.role !== role) return false;
+    if (status !== '' && u.status !== status) return false;
     if (needle === '') return true;
     return `${u.full_name} ${u.username} ${u.badge_number} ${u.email ?? ''}`
       .toLowerCase()
       .includes(needle);
   });
-  const filtered = needle !== '' || role !== '';
+  const filtered = needle !== '' || role !== '' || status !== '';
+  // How many of the row's own keys are set: the Filters button wears this while
+  // the row is folded away, so a narrowed list never reads as unfiltered.
+  const filterCount = (role !== '' ? 1 : 0) + (status !== '' ? 1 : 0);
+  const sorted = [...shown].sort((a, b) => {
+    if (sort === 'badge') {
+      return String(a.badge_number ?? '').localeCompare(String(b.badge_number ?? ''), undefined, { numeric: true });
+    }
+    if (sort === 'recent') return seenTime(b) - seenTime(a);
+    return String(a.full_name ?? '').localeCompare(String(b.full_name ?? ''), undefined, { sensitivity: 'base' });
+  });
+  const sortOrder = SORT_ORDERS.find((o) => o.key === sort) ?? SORT_ORDERS[0];
+  // The sort menu opens under its button: viewport coordinates for a menu
+  // portaled to <body> (see RowMenu).
+  function openSortMenu(e) {
+    const box = e.currentTarget.getBoundingClientRect();
+    setSortMenuAt({ x: box.left, y: box.bottom + 6 });
+  }
+  const sortItems = SORT_ORDERS.map((o) => ({
+    label: o.label,
+    checked: o.key === sort,
+    onSelect: () => { setSort(o.key); setSortMenuAt(null); setPage(1); },
+  }));
+  function clearFilters() {
+    setSearch('');
+    setRole('');
+    setStatus('');
+    setPage(1);
+  }
+  // THE DIRECTORY COUNT FOR THE TOOLBAR CHIP. It names the whole station even
+  // while the table is filtered — a filtered view never reads as a station that
+  // lost accounts — and sits beside Who's connected (owner request) rather than
+  // in the page head.
 
   // THE PAGE, cut from what is SHOWN, not from the station: the footer's "of N" is the
   // same number the filters produced. `pageNow` clamps a page that a narrower filter has
   // emptied out from under the user, so the footer never points past the last page.
-  const pageCount = Math.max(1, Math.ceil(shown.length / pageSize));
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const pageNow = Math.min(page, pageCount);
   const pageFrom = (pageNow - 1) * pageSize + 1;
   const pageTo = Math.min(pageNow * pageSize, shown.length);
-  const pageRows = shown.slice((pageNow - 1) * pageSize, pageNow * pageSize);
+  const pageRows = sorted.slice((pageNow - 1) * pageSize, pageNow * pageSize);
 
   // The account being READ, looked up out of the list rather than copied at the moment
   // the row was clicked: `load()` replaces that list after every change, so a name, a
@@ -924,11 +978,29 @@ export default function Users({ notify }) {
           <div className="reports-toolbar-row users-filters">
             <div className="users-filters__filters">
               {/* The box IS the filter: there is nothing to submit and nothing to
-                  wait for, so there is no Search button beside it. Escape clears
+                  wait for, so the magnifier submits nothing — the list narrows as it is typed, in the register's own dress. Escape clears
                   it, which is the one key a search field is expected to answer. */}
-              <div className="reports-search">
+              <div className="reports-search register-tools__search">
+                <button type="submit" className="reports-search__go" aria-label="Search accounts">
+                  <svg
+                    width="19"
+                    height="19"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z" />
+                    <path d="m16.2 16.2 4.3 4.3" />
+                  </svg>
+                </button>
                 <input
                   type="search"
+                  className="register-tools__input"
                   placeholder="Search name, username, badge no. or email…"
                   aria-label="Search accounts by name, username, badge number or email"
                   value={search}
@@ -944,33 +1016,63 @@ export default function Users({ notify }) {
                   }}
                 />
               </div>
-              <select
-                className="users-role-filter"
-                aria-label="Filter by role"
-                value={role}
-                onChange={(e) => {
-                  setRole(e.target.value);
-                  setPage(1);
-                }}
+              {/* The seam between "what you are looking for" and the keys that
+                  narrow and order it — the register's own hairline, not an edge. */}
+              <span className="register-tools__rule" aria-hidden="true" />
+              {/* FILTERS. The role and status keys live in the row below; this is
+                  their disclosure, wearing the count of what that row is holding
+                  while it is folded away (the audit trail's own pattern). */}
+              <button
+                type="button"
+                className="register-tool"
+                aria-label={filterCount > 0 ? `Filters — ${filterCount} set` : 'Filters'}
+                aria-expanded={filtersOpen}
+                aria-controls="users-filter-row"
+                onClick={() => setFiltersOpen((v) => !v)}
               >
-                <option value="">All roles</option>
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-              {filtered && (
-                <button
-                  type="button"
-                  className="users-clear"
-                  onClick={() => {
-                    setSearch('');
-                    setRole('');
-                    setPage(1);
-                  }}
-                >
-                  Clear filters
-                </button>
-              )}
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M4 5.5h16l-6.2 7.2v5.1l-3.6 1.7v-6.8L4 5.5z" /></svg>
+                <span className="register-tool__label">Filters</span>
+                {filterCount > 0 && (<span className="register-tool__count" aria-hidden="true">{filterCount}</span>)}
+              </button>
+              {/* SORT. The directory's order, as a menu, with the order in force
+                  ticked (see RowMenu's `checked`). The button states that order in
+                  its own name, and wears the accent while the list is in an order
+                  other than Name A–Z. */}
+              <button
+                type="button"
+                className="register-tool"
+                aria-label={`Sort accounts — ${sortOrder.label}`}
+                aria-haspopup="menu"
+                aria-expanded={sortMenuAt !== null}
+                data-on={sort !== 'name' ? 'true' : undefined}
+                onClick={openSortMenu}
+              >
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M4 6.5h11" /><path d="M4 12h7.5" /><path d="M4 17.5h4.5" /><path d="M17.5 9.5v8" /><path d="m14.6 14.9 2.9 2.9 2.9-2.9" /></svg>
+                <span className="register-tool__label">Sort</span>
+              </button>
+            </div>
+            {/* THE FILTER ROW. Role and status live here, in labelled cells the way
+                the register's own filters do — the rail above stays a rail. Folded
+                away until asked for; the Filters key wears the count meanwhile. */}
+            <div className="reports-toolbar register-filters" id="users-filter-row" hidden={!filtersOpen}>
+              <div className="reports-filters">
+                <label className="reports-filter">
+                  <span className="reports-filter__label">Role</span>
+                  <select aria-label="Filter by role" value={role} onChange={(e) => { setRole(e.target.value); setPage(1); }}>
+                    <option value="">All roles</option>
+                    {ROLES.map((r) => (<option key={r} value={r}>{r}</option>))}
+                  </select>
+                </label>
+                <label className="reports-filter">
+                  <span className="reports-filter__label">Status</span>
+                  <select aria-label="Filter by status" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
+                    <option value="">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </label>
+                {filtered && (<button type="button" className="reports-filter__clear" onClick={clearFilters}>Clear filters</button>)}
+              </div>
             </div>
 
             <div className="users-filters__actions">
@@ -991,6 +1093,46 @@ export default function Users({ notify }) {
                 </svg>
                 Add User
               </button>
+
+              {/* THE DIRECTORY'S MARK, beside the roster's doorway: the account icon
+                  carries the station's headcount as its badge (owner request).
+                  A status, not a control: it names the
+                  whole directory even while the table is filtered. */}
+              <span
+                className="users-directory-chip"
+                role="status"
+                aria-label={error
+                  ? 'Account list unavailable'
+                  : users
+                    ? (filtered
+                      ? `${shown.length} of ${users.length} accounts shown`
+                      : `${users.length} account${users.length === 1 ? '' : 's'}`)
+                    : 'Loading accounts…'}
+                title={error
+                  ? 'Account list unavailable'
+                  : users
+                    ? (filtered
+                      ? `${shown.length} of ${users.length} accounts shown`
+                      : `${users.length} account${users.length === 1 ? '' : 's'}`)
+                    : 'Loading…'}
+              >
+                <span className="users-directory-chip__icon" aria-hidden="true">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="8" r="3.6" />
+                    <path d="M4.5 19.5c1.4-3.6 4.2-5.4 7.5-5.4s6.1 1.8 7.5 5.4" />
+                  </svg>
+                  <span className="users-directory-chip__badge">{error ? '–' : (users ? users.length : '–')}</span>
+                </span>
+              </span>
 
               {/* THE ROSTER'S DOORWAY, and it is a pill rather than a panel because the
                   panel is the top of the page: a toggle says whether it is open (the
@@ -1385,11 +1527,13 @@ export default function Users({ notify }) {
             </div>
           ) : shown.length === 0 ? (
             <div className="empty">
-              <strong>No accounts match these filters.</strong> Clear them to see the whole directory.
+              <strong>No accounts match these filters.</strong>{' '}
+              <button type="button" className="button-link" onClick={clearFilters}>Clear them</button>{' '}
+              to see the whole directory.
             </div>
           ) : (
             <>
-              <UsersTable users={pageRows} onOpen={openProfile} onEdit={startEdit} onMenu={openRowMenu} />
+              <UsersTable users={pageRows} sortKey={sort} onOpen={openProfile} onEdit={startEdit} onMenu={openRowMenu} />
               <div className="users-footer">
                 <span className="users-footer__count">
                   Showing {pageFrom}–{pageTo} of {shown.length} accounts
@@ -1442,6 +1586,15 @@ export default function Users({ notify }) {
           label={`Actions for ${menu.user.full_name}`}
           items={rowItems(menu.user)}
           onClose={closeRowMenu}
+        />
+      )}
+
+      {sortMenuAt && (
+        <RowMenu
+          at={sortMenuAt}
+          label="Sort accounts"
+          items={sortItems}
+          onClose={() => setSortMenuAt(null)}
         />
       )}
 

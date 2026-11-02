@@ -17,14 +17,13 @@ use App\Core\Audit;
 $pdo = Database::pdo();
 
 // Admin and Officer accounts carry an email address because the second factor is
-// a code sent to it — without one they cannot sign in at all. Staff (e.ramos)
-// signs in with a password alone and needs none. These are DEV addresses: point
-// them at a mailbox you can read, or set mail.transport to 'log' and read the
-// code out of config/mail.log.
+// a code sent to it — without one they cannot sign in at all. These are DEV
+// addresses: point them at a mailbox you can read, or set mail.transport to
+// 'log' and read the code out of config/mail.log.
 $users = [
     ['role_id' => 1, 'full_name' => 'Maria Santos',   'badge_number' => 'ADM-0001', 'username' => 'm.santos',   'email' => 'm.santos@example.test'],
     ['role_id' => 2, 'full_name' => 'Juan Dela Cruz', 'badge_number' => '4471',     'username' => 'j.delacruz', 'email' => 'j.delacruz@example.test'],
-    ['role_id' => 3, 'full_name' => 'Elena Ramos',    'badge_number' => '8823',     'username' => 'e.ramos',    'email' => null],
+    ['role_id' => 2, 'full_name' => 'Elena Ramos',    'badge_number' => '8823',     'username' => 'e.ramos',    'email' => 'e.ramos@example.test'],
 ];
 
 $hash = password_hash('Passw0rd!23', PASSWORD_BCRYPT);

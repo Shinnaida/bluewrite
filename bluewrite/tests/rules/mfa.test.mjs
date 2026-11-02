@@ -115,7 +115,7 @@ test('the hint states the rule from the constants, not from a sentence', () => {
 test('the stage comes from the server, and an unknown one means a code', () => {
   assert.deepEqual(MFA_STAGES, ['verify'], 'the enrollment stage went with the app factor');
   assert.equal(stageFrom({ mfa: { required: true, stage: 'verify' } }), 'verify');
-  // A Staff sign-in, or a completed one: nothing to ask for.
+  // A sign-in the factor does not cover, or a completed one: nothing to ask for.
   assert.equal(stageFrom({ user: { id: 1 } }), null);
   assert.equal(stageFrom({ mfa: { required: false, stage: 'verify' } }), null);
   assert.equal(stageFrom(null), null);

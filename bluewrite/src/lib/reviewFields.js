@@ -43,8 +43,6 @@ const GROUP_ITEM = /^(\w+)\[(\d+)\]\.(\w+)$/;
  */
 const FORM_FIELD_ALIASES = {
   narrative: 'r-narr',
-  action_taken: 'r-act',
-  ioc_name: 'r-ioc',
   // The date/time pair is the one place the `<key>` → `r-<key>` rule does not
   // hold: `incident_datetime` is TWO controls (`r-date` + `r-time`), so the
   // date half is named here. Without it the banner's link for a missing
@@ -83,8 +81,6 @@ export const REVIEW_SCALAR_PATHS = [
   'incident_time_approximate',
   'location',
   'narrative',
-  'action_taken',
-  'ioc_name',
 ];
 
 /** `vehicles[0].driver_name` → `{ groupKey, index, fieldKey }`, else null. */

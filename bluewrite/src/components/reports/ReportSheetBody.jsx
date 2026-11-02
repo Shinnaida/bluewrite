@@ -53,6 +53,8 @@ import {
   fmtIncidentLong,
   fmtLong,
   properNounsFor,
+  reportTitle,
+  meaningfulValues,
 } from '../../lib/sheetFacts.js';
 import { buildActionBlock } from '../../lib/printActions.js';
 // Task 2 — the letter's casing layer. `labelCase` spells every bold label in
@@ -60,7 +62,13 @@ import { buildActionBlock } from '../../lib/printActions.js';
 // the report's OWN proper nouns) without ever flattening an existing capital or
 // changing a word — so the narrative's wording stays exactly as accepted.
 import { toUpperCase, toSentenceCase, labelCase, properNounMap } from '../../lib/printCasing.js';
-import { stripLeadingBlotterRestatement } from '../../lib/narrativeText.js';
+import {
+  stripLeadingBlotterRestatement,
+  stripRedundantSheetHeader,
+  stripRedundantSheetHeaderHtml,
+  correctNagaPlaceLines,
+  correctNagaPlaceLinesHtml,
+} from '../../lib/narrativeText.js';
 import { sanitizeRichHtml, containsRichTags, richTextToPlain, sanitizeLetterHtml } from '../../lib/richText.js';
 import RichTextArea from './RichTextArea.jsx';
 import WordField from './WordField.jsx';
@@ -495,7 +503,13 @@ export default function ReportSheetBody({
   // The cased plain path below never sees tags: a rich narrative renders its
   // html as-is, so its casing is not computed at all rather than computed
   // over markup it would mangle.
-  const narrativeText = narrativeRich ? '' : caseValue(stripLeadingBlotterRestatement(narrativeRaw)) || '—';
+  // Redundant header lines (owner request, 2026-11-02): the account's own
+  // opening date/time and title restate the certification line and the quoted
+  // title, so the sheet skips them — paper only, the record is untouched.
+  const sheetTitle = reportTitle(report, ts);
+  const narrativeText = narrativeRich
+    ? ''
+    : caseValue(correctNagaPlaceLines(stripRedundantSheetHeader(stripLeadingBlotterRestatement(narrativeRaw), sheetTitle))) || '—';
 
   // NOTABLE FINDINGS / ACTION TAKEN: a generate proposal replaces them; a
   // tighten (or no proposal) leaves the committed values untouched.
@@ -622,12 +636,25 @@ export default function ReportSheetBody({
         {CL('certify b', "appeared among other things the following data to wit;")}
       </p>
 
-      {/* Full caps: the quoted category follows the letter's own convention. */}
-      <p className="pr-incident-type">&ldquo;{CL('incident type', toUpperCase(report.incident_type))}&rdquo;</p>
+      {/* Full caps: the quoted category follows the letter's own convention —
+          the recorded offense caption when the officer typed one, else the
+          incident type. Hidden when blank (owner request, 2026-11-02): an
+          unrecorded title prints no empty quotes on any incident's sheet. */}
+      {N(reportTitle(report, ts)) !== '' && (
+        <p className="pr-incident-type">&ldquo;{CL('incident type', toUpperCase(reportTitle(report, ts)))}&rdquo;</p>
+      )}
 
       {/* ---- Per-type labeled facts — bold chrome LABELS, typed values ---- */}
       <div className="pr-facts">
         {facts.map((entry, i) => {
+          // Owner request (2026-11-02): the account states its own place and
+          // time (PLACE OF INCIDENT / T/D OF INCIDENT), so the composed
+          // Place and Date & Time lines are omitted on every incident's
+          // sheet — never a duplicate, never a dash. The fields stay for
+          // folders, filters, the AI read and finalize; edit boxes stay.
+          if (!factEdit && (entry.label === 'Place' || entry.label === 'Date & Time of Incident')) {
+            return null;
+          }
           if (entry.items) {
             // Numbered Stolen/Items block with optional TOTAL. Editable: each
             // row's description, quantity and value type straight into the
@@ -801,19 +828,18 @@ export default function ReportSheetBody({
               </div>
             );
           }
-          const values = (entry.values || []).filter(Boolean);
+          // Blank-line rule (owner request, 2026-11-02): values that are empty
+          // or placeholder-only ('—', 'N/A', 'None', …) carry nothing recorded,
+          // so the line is omitted on every incident's sheet — never a dash.
+          const values = meaningfulValues(entry.values);
           // Every resolved value types: one box per source field, joined the
           // way the read path joins them. Resolved first, so an unrecorded
-          // field still offers its box instead of a dash. The const fallbacks
+          // field still offers its box. The const fallbacks
           // ('None', '—') never enter a box — an empty box means "not recorded".
           const factSpec = resolveFactSpec(entry.label);
+          // No recorded value and no box to offer: omit the line entirely.
           if (values.length === 0 && !factSpec) {
-            return (
-              <div className="pr-fact" key={`fact-${i}`}>
-                <span className="pr-fact-label">{CL(`label ${entry.label}`, labelCase(entry.label))}:</span>
-                <span className="pr-fact-value">—</span>
-              </div>
-            );
+            return null;
           }
           if (factSpec) {
             return (
@@ -911,7 +937,7 @@ export default function ReportSheetBody({
         ) : narrativeRich ? (
           <div
             className="pr-narrative-html"
-            dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(narrativeRaw) }}
+            dangerouslySetInnerHTML={{ __html: correctNagaPlaceLinesHtml(sanitizeRichHtml(stripRedundantSheetHeaderHtml(narrativeRaw, sheetTitle))) }}
           />
         ) : (
           <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(narrativeText); })()}</span>
@@ -975,8 +1001,10 @@ export default function ReportSheetBody({
         </div>
       )}
 
-      {/* Flush-left entries (scanned reference: the action text starts at the
-          same margin as the heading). */}
+      {/* ACTION TAKEN / STATUS hidden by owner request (2026-11-02): the block
+          stays out of the sheet for every incident type. Kept in code but not
+          rendered. */}
+      {false && (
       <div className="pr-section pr-actions">
         <strong>{CL('actions head', "ACTION TAKEN / STATUS:")}</strong>
         {editInner && onEditAction ? (
@@ -1019,6 +1047,7 @@ export default function ReportSheetBody({
           })
         )}
       </div>
+      )}
 
     </>
   );
@@ -1043,7 +1072,7 @@ export default function ReportSheetBody({
   ) : letterHtml ? (
     <div
       className="pr-letter-html"
-      dangerouslySetInnerHTML={{ __html: sanitizeLetterHtml(letterHtml) }}
+      dangerouslySetInnerHTML={{ __html: correctNagaPlaceLinesHtml(sanitizeLetterHtml(letterHtml)) }}
     />
   ) : (
     midPart
@@ -1086,14 +1115,8 @@ export default function ReportSheetBody({
            (report.created_by_name) — never the viewing account; Noted by
            resolves per-report, then the station default (see notedName above). ---- */}
       <div className="pr-footer-block">
-        <p className="pr-recorded">
-          <strong>{CL('recorded label', "Recorded by:")}</strong> {recorderName}
-        </p>
-
-        <p className="pr-recorded">
-          <strong>{CL('ioc label', "IOC:")}</strong> {String(report.ioc_name || '').trim() || '—'}
-        </p>
-
+        {/* Recorded by / IOC hidden by owner request (2026-11-02): kept in
+            code but not rendered on any incident's sheet. */}
         <div className="pr-noted">
           <span className="pr-noted-label">{CL('noted label', "Noted by:")}</span>
           <span className="pr-noted-name">

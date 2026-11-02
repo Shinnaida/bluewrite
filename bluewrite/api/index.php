@@ -55,6 +55,9 @@ require __DIR__ . '/../app/core/PasswordPolicy.php';
 // use rather than at boot. Three controllers reach it (AuthController's
 // /me/photo, UsersController's /users/:id/photo, PresenceController's roster).
 require __DIR__ . '/../app/core/AvatarPhoto.php';
+// The station's two seal files (migration 027): same require rule as the
+// avatars, because StationController serves them the same way.
+require __DIR__ . '/../app/core/StationSeal.php';
 require __DIR__ . '/../app/core/LegacyNormalizer.php';
 // Migration 020 — a report's incident types, and the name the station calls
 // them by (the officer's own words when the report was filed under the
@@ -386,6 +389,13 @@ try {
         (new NarrativeController())->classify();
     }
 
+    // POST /ai/enhance — Enhance Wording. Like /ai/classify it takes no report
+    // id: the officer's own report text is the whole source, and the answer is
+    // a proposal that is never written to a report here.
+    if ($seg0 === 'ai' && $seg1 === 'enhance' && !isset($parts[2]) && $method === 'POST') {
+        (new NarrativeController())->enhance();
+    }
+
     // POST /ocr/read — the online photo reader (owner request). Online-first
     // with local fallback: with no key the controller answers
     // `configured: false` and the client reads on-device; on any upstream
@@ -485,6 +495,22 @@ try {
             $c->update();
         }
     }
+    // The two seal files (migration 027): an uploaded badge per side, served
+    // as bytes; the bundled artwork needs no route. Same require rule as the
+    // avatar reader — the seals print on every sheet, so everyone signed in
+    // can read them, but only an Admin can change them.
+    if ($seg0 === 'station' && $seg1 === 'seal' && isset($parts[2]) && !isset($parts[3])) {
+        $c = new StationController();
+        if ($method === 'GET') {
+            $c->seal((string) $parts[2]);
+        }
+        if ($method === 'POST') {
+            $c->setSeal((string) $parts[2]);
+        }
+        if ($method === 'DELETE') {
+            $c->clearSeal((string) $parts[2]);
+        }
+    }
 
     // Audit trail browser (Admin-only, read-only).
     if ($seg0 === 'audits' && $seg1 === null && $method === 'GET') {
@@ -517,6 +543,7 @@ try {
             if ($parts[2] === 'narrative' && ($parts[3] ?? null) === 'tighten' && $method === 'POST') {
                 (new NarrativeController())->tighten((string) $seg1);
             }
+
             // Phase 6 Stage 4 — the translation verification record.
             // Append-only: POST records an act, GET reads the history. No
             // update and no delete route exists, by design.

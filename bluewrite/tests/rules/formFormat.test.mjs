@@ -15,8 +15,8 @@ import {
   normaliseFormFormat,
 } from '../../src/lib/formFormat.js';
 
-test('the three formats, in the order the control shows them', () => {
-  assert.deepEqual(FORM_FORMATS, ['document', 'sheet', 'steps']);
+test('the single format (Document and Steps hidden, Sheet only)', () => {
+  assert.deepEqual(FORM_FORMATS, ['sheet']);
 });
 
 test('every format has a label and a hint — the hint IS the row value', () => {
@@ -30,20 +30,19 @@ test('every format has a label and a hint — the hint IS the row value', () => 
   assert.equal(Object.keys(FORM_FORMAT_HINTS).length, FORM_FORMATS.length);
 });
 
-test('normaliseFormFormat accepts the three values and rejects everything else', () => {
-  for (const value of FORM_FORMATS) {
-    assert.equal(normaliseFormFormat(value), value);
-  }
-  // What localStorage can actually hand back.
-  for (const junk of ['', 'Steps', 'page', 'blank', 'STEPPED', null, undefined, 0, {}, []]) {
+test('normaliseFormFormat accepts sheet and rejects everything else', () => {
+  assert.equal(normaliseFormFormat('sheet'), 'sheet');
+  // What localStorage can actually hand back — including the hidden legacy values.
+  for (const junk of ['', 'Steps', 'steps', 'page', 'blank', 'STEPPED', 'document', 'Document', null, undefined, 0, {}, []]) {
     assert.equal(normaliseFormFormat(junk), null, `${JSON.stringify(junk)} must not be a format`);
   }
 });
 
 test('"page" is NOT a format — the sheet format is called "sheet"', () => {
   // Worth pinning: the value travels through localStorage and a route check, so
-  // a wrong literal in one of them would be a silent fallback to the document
-  // format rather than an error.
+  // a wrong literal in one of them would be a silent fallback to the sheet
+  // format rather than an error. Legacy 'document' also falls back to sheet.
   assert.equal(normaliseFormFormat('page'), null);
+  assert.equal(normaliseFormFormat('document'), null);
   assert.equal(normaliseFormFormat('sheet'), 'sheet');
 });

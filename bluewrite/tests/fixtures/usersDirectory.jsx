@@ -66,15 +66,15 @@ export const ACCOUNTS = [
     status: 'active',
     last_login_at: '2026-09-22T18:17:08',
   },
-  // STAFF: no second factor to have (see EmailOtp::REQUIRED_ROLES) — and the
-  // address is optional.
+  // OFFICER without an address on file — a fault somebody has to fix, because
+  // every role signs in with an emailed code.
   {
     id: 11,
     full_name: 'Elena Ramos',
     badge_number: '8823',
     username: 'e.ramos',
     email: null,
-    role: 'Staff',
+    role: 'Officer',
     status: 'active',
     last_login_at: '2026-09-22T18:13:50',
   },
@@ -87,7 +87,7 @@ export const ACCOUNTS = [
     badge_number: '9054',
     username: 'j.bautista',
     email: null,
-    role: 'Staff',
+    role: 'Officer',
     status: 'inactive',
     last_login_at: null,
   },

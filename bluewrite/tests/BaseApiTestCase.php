@@ -119,6 +119,11 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // and the Admin list, so the scratch DB must carry it or those routes
         // fail as unknown-table 500s rather than as assertions.
         $this->runSqlFile(__DIR__ . '/../migrations/019_account_requests.sql');
+        // 022 is the station's default signing official. The settings screen
+        // PATCHes station_settings.noted_by and the sheet reads it back, so
+        // the scratch DB must carry the column or those writes fail as
+        // unknown-column 500s rather than as assertions.
+        $this->runSqlFile(__DIR__ . '/../migrations/022_station_noted_by.sql');
         // 024 is the phone app's device tokens. Auth::requireUser resolves a
         // bearer off this table on every request, so the scratch DB must
         // carry it or every device test fails as an unknown-table 500.
@@ -127,6 +132,17 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // capture routes and both report reads touch this table, so the
         // scratch DB must carry it for the same reason.
         $this->runSqlFile(__DIR__ . '/../migrations/025_report_captures.sql');
+        // 026 is the station's Gmail and telephone. Same reason as 022: the
+        // settings screen writes them and the API reads them back.
+        $this->runSqlFile(__DIR__ . '/../migrations/026_station_contact.sql');
+        // 027 is the freed letterhead's center block and the two seal files.
+        // The settings screen PATCHes letterhead_html and uploads the seals,
+        // and every sheet reads all three back.
+        $this->runSqlFile(__DIR__ . '/../migrations/027_station_letterhead_doc.sql');
+        // 028 is the letterhead's presentation as data (typography, spacing,
+        // color, seal arrangement). The settings screen PATCHes
+        // letterhead_style and every sheet renders it back.
+        $this->runSqlFile(__DIR__ . '/../migrations/028_letterhead_style.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         // Every account that OWES a second factor has an email address, because

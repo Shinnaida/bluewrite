@@ -132,6 +132,46 @@ export function setSessionMismatchHandler(fn) {
   onSessionMismatch = fn;
 }
 
+// How long one request may go unanswered before the UI stops waiting for it.
+// Without this a hung station server holds every screen on its spinner forever:
+// the layout never breaks, but it never comes back either, which reads as a
+// frozen app. Fifteen seconds is past any healthy LAN answer and short enough
+// that an officer sees the banner, not a stall. Keepalive exit-flushes skip it
+// (below): a page that is closing cannot wait for anything.
+export const FETCH_TIMEOUT_MS = 15000;
+
+/** A fetch that gives up on its own: the network failing must end in an ERROR
+ * the UI already knows how to draw, never in a promise that never settles. */
+async function fetchWithTimeout(url, options = {}) {
+  const { timeoutMs = FETCH_TIMEOUT_MS, ...init } = options;
+  // An exit-flush (keepalive) outlives the document that fired it: arming a
+  // timer on it would abort a save the officer already walked away from, and
+  // the sessionStorage mirror is its safety net instead (see api below).
+  if (init.keepalive || typeof AbortController === 'undefined') {
+    return fetch(url, init);
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** A fetch failure as the classified Error every screen already handles.
+ * fetch itself rejects with a bare TypeError / AbortError that carries no
+ * status, no cause and no sentence — and a caller that re-throws it raw hands
+ * the UI a shape it never agreed to draw. This is the one place that shape is
+ * translated, so every unreachable server reads the same whatever fired it. */
+function offlineError(err) {
+  if (err?.cause === 'database' || err?.cause === 'server' || err?.cause === 'offline') return err;
+  const out = new Error(err?.name === 'AbortError' ? 'The BlueWrite server is taking too long to answer.' : 'Can\u2019t reach the BlueWrite server.');
+  out.cause = 'offline';
+  out.timeout = err?.name === 'AbortError';
+  return out;
+}
+
 export async function api(path, { method = 'GET', body, keepalive = false } = {}) {
   const headers = { [TAB_HEADER]: currentTabId() };
   if (body) headers['Content-Type'] = 'application/json';
@@ -139,19 +179,24 @@ export async function api(path, { method = 'GET', body, keepalive = false } = {}
     headers['X-CSRF-Token'] = csrfToken;
   }
 
-  const res = await fetch(`${API}${path}`, {
-    method,
-    credentials: 'same-origin',
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-    // `keepalive` lets a request outlive the document that fired it, which is
-    // the only way a save triggered by a closing tab reaches the server — an
-    // ordinary fetch is cancelled with the page (see ReportEditor's exit
-    // flush). Browsers cap a keepalive body at 64 KB; a draft is a few KB, and
-    // an over-cap request fails the same silent, best-effort way as an offline
-    // one, with the sessionStorage mirror still holding the text.
-    keepalive,
-  });
+  let res;
+  try {
+    res = await fetchWithTimeout(`${API}${path}`, {
+      method,
+      credentials: 'same-origin',
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      // `keepalive` lets a request outlive the document that fired it, which is
+      // the only way a save triggered by a closing tab reaches the server — an
+      // ordinary fetch is cancelled with the page (see ReportEditor's exit
+      // flush). Browsers cap a keepalive body at 64 KB; a draft is a few KB, and
+      // an over-cap request fails the same silent, best-effort way as an offline
+      // one, with the sessionStorage mirror still holding the text.
+      keepalive,
+    });
+  } catch (err) {
+    throw offlineError(err);
+  }
 
   return readResponse(res);
 }
@@ -175,12 +220,17 @@ export async function apiUpload(path, formData, { method = 'POST' } = {}) {
   const headers = { [TAB_HEADER]: currentTabId() };
   if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
 
-  const res = await fetch(`${API}${path}`, {
-    method,
-    credentials: 'same-origin',
-    headers,
-    body: formData,
-  });
+  let res;
+  try {
+    res = await fetchWithTimeout(`${API}${path}`, {
+      method,
+      credentials: 'same-origin',
+      headers,
+      body: formData,
+    });
+  } catch (err) {
+    throw offlineError(err);
+  }
 
   return readResponse(res);
 }
@@ -202,10 +252,15 @@ export async function apiUpload(path, formData, { method = 'POST' } = {}) {
  * the way BlotterCapture already revokes its Upload blob URLs.
  */
 export async function apiBlobUrl(url) {
-  const res = await fetch(url, {
-    credentials: 'same-origin',
-    headers: { [TAB_HEADER]: currentTabId() },
-  });
+  let res;
+  try {
+    res = await fetchWithTimeout(url, {
+      credentials: 'same-origin',
+      headers: { [TAB_HEADER]: currentTabId() },
+    });
+  } catch (err) {
+    throw offlineError(err);
+  }
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
     try {

@@ -241,8 +241,7 @@ export function preferencesSummary({ formFormat, mode, density } = {}) {
  * (migration 018) is NOT "not set up": it can still finish a sign-in offline, so
  * the header says so rather than reading as a lockout. The `mfa` argument is
  * optional and every part of it is optional too: an older payload without it
- * renders exactly the sentence this function used to return, and a Staff account
- * (where the factor is not required) never grows the prefix.
+ * renders exactly the sentence this function used to return.
  */
 export function securitySummary(idleMinutes = IDLE_LIMIT_MIN, mfa = null) {
   const parts = [];

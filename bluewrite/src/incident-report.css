@@ -612,6 +612,41 @@
 }
 .ir-side-link:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
+/* Tap-the-rail collapse (owner request): no button — the rail's own empty
+   surface is the control, so it shows the pointer and a focus ring of its own.
+   Presses on destinations, the lockup and the account chrome are left alone
+   by the handler in AppSidebar.jsx. */
+.ir-sidebar { cursor: pointer; }
+.ir-sidebar:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+
+/* Collapsed rail: icons only. Text nodes cannot be targeted, so the rows go
+   silent by size while their marks (fixed-size svg) keep drawing. */
+.ir-sidebar.is-collapsed { width: 4.25rem; padding-left: 0.6rem; padding-right: 0.6rem; }
+.ir-sidebar.is-collapsed .ir-sidebar__word,
+.ir-sidebar.is-collapsed .ir-sidebar__seals-text { display: none; }
+.ir-sidebar.is-collapsed .ir-sidebar__logo { justify-content: center; }
+.ir-sidebar.is-collapsed .ir-side-link { justify-content: center; font-size: 0; gap: 0; }
+.ir-sidebar.is-collapsed .ir-profile-trigger-name,
+.ir-sidebar.is-collapsed .ir-profile-caret { display: none; }
+.ir-sidebar.is-collapsed .ir-profile-trigger { justify-content: center; }
+.ir-sidebar { transition: width 180ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  .ir-sidebar { transition: none; }
+}
+/* Narrow window: the rail becomes a top strip so the register keeps its
+   columns. The destinations scroll sideways; the account stays at the end. */
+@media (max-width: 760px) {
+  .shell--admin { flex-direction: column; }
+  .shell--admin .ir-sidebar,
+  .shell--admin .ir-sidebar.is-collapsed { width: auto; flex-direction: row; align-items: center; padding: 0.6rem; }
+  .shell--admin .ir-sidebar__backdrop { object-position: center center; }
+  .shell--admin .ir-sidebar__brand { border-bottom: 0; margin-bottom: 0; padding: 0.2rem 0.4rem; }
+  .shell--admin .ir-sidebar__nav { flex-direction: row; overflow-x: auto; flex: 1; }
+  .shell--admin .ir-side-link { width: auto; white-space: nowrap; font-size: 0.82rem; }
+  .shell--admin .ir-sidebar__foot { margin-top: 0; }
+  .shell--admin .ir-sidebar__seals { display: none; }
+}
+
 /* ---- 1c. The account chrome: ONE component, two chromes ------------------
 
    The bell and the profile control are drawn by AppChrome and PLACED by whichever
@@ -1291,6 +1326,63 @@
   background: var(--ir-gold-hi);
   border-color: var(--ir-gold-hi);
   color: var(--ir-on-gold);
+}
+
+/* Phone files button: the navy file button docked beside the AI chatbot
+   launcher (owner request), so waiting phone filings are one tap away on
+   every screen. The launcher is a ~56px circle at right:18px bottom:18px
+   (see TerminologyChatbot.css) — this sits on the same line, a tap to its
+   left. The amber dot is the waiting count; the button rests disabled and
+   badgeless when nothing is waiting. */
+.ir-phone-btn {
+  position: fixed;
+  right: 86px;
+  bottom: 18px;
+  z-index: 60;
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--ir-navy, #0b2545);
+  color: #fff;
+  border: 1px solid var(--ir-navy, #0b2545);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+.ir-phone-btn:hover:not(:disabled) {
+  background: var(--ir-navy-hi, #133e87);
+  border-color: var(--ir-navy-hi, #133e87);
+}
+.ir-phone-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.ir-phone-btn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+.ir-phone-btn__count {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--ir-gold, #f59e0b);
+  color: var(--ir-on-gold, #1a233a);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+@media print {
+  .ir-phone-btn { display: none; }
 }
 
 .ir-body .req {
@@ -3506,12 +3598,12 @@
 
    The two CHAINS must agree: excluding only the base rule would leave its
    `:hover` repainting the border blue under the pointer. */
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.conn-hub-toggle):not(.glass-folder__open):not(.folder-tab):not(.register-tool):not(.reports-search__go):not(.report-row__open):not(.report-row__edit):not(.report-row__menu):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-face):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger) {
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.conn-hub-toggle):not(.glass-folder__open):not(.folder-tab):not(.register-tool):not(.reports-search__go):not(.report-row__open):not(.report-row__edit):not(.report-row__menu):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-face):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.conn-banner-close):not(.float-card__close):not(.float-card__action):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger) {
   background: var(--ir-btn);
   border: 1px solid var(--ir-border);
   color: var(--ir-btn-ink);
 }
-.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.conn-hub-toggle):not(.glass-folder__open):not(.folder-tab):not(.register-tool):not(.reports-search__go):not(.report-row__open):not(.report-row__edit):not(.report-row__menu):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-face):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger):hover {
+.ir-body button:not(.ir-submit):not(.ai-run):not(.ai-side-close):not(.ir-nav-link):not(.ir-stepper-node):not(.ir-review-flag):not(.ir-review-value--editable):not(.ir-review-done):not(.th-sort):not(.users-fab):not(.conn-hub-toggle):not(.glass-folder__open):not(.folder-tab):not(.register-tool):not(.reports-search__go):not(.report-row__open):not(.report-row__edit):not(.report-row__menu):not(.ir-nav-back):not(.ir-home-cta):not(.ir-draft-face):not(.ir-draft-more):not(.ir-home-drafts-all):not(.conn-banner-retry):not(.conn-banner-close):not(.float-card__close):not(.float-card__action):not(.idle-warning-stay):not(.dash-chip):not(.primary):not(.danger):hover {
   border-color: var(--ir-blue);
   color: var(--ir-blue-ink);
   background: var(--ir-btn);
@@ -3984,6 +4076,17 @@
   color: var(--ir-head-ink);
   background: var(--ir-raised);
   border-color: var(--ir-border);
+  border-bottom-color: var(--ir-bar-accent);
+}
+/* PLATELESS TABS on the officer's register (owner request): the current shelf
+   is named by its accent rule alone — no raised plate, no border box. Scoped
+   to `register-officer` (the class RegisterEdges publishes for the officer's
+   side), so the admin's tabs keep the plate they have always had. The count
+   pill and the accent rule still carry "you are here". */
+body.register-officer .reports-register .folder-tab[aria-selected='true'],
+body.register-officer .reports-register .folder-tab[aria-selected='true']:hover {
+  background: transparent;
+  border-color: transparent;
   border-bottom-color: var(--ir-bar-accent);
 }
 .folder-tab:focus-visible {
@@ -4718,13 +4821,22 @@
    treatment above (same reason the folder is), the element-level `button`
    and `button:hover` in styles.css are the next rule out-specifying this one
    — they would paint the page a panel grey and ring it blue under the
-   pointer. THE CARD IS STILL UNDER THE POINTER (owner request, 2026-10-06):
-   the hover-neutralizer below holds the ground so the paint never lands at
-   all — no lift, no tint, no chrome. The keyboard ring below is untouched. */
+   pointer. The neutralizer below holds the BUTTON's own ground so that paint
+   never lands; the CARD answers instead (owner request): a one-pixel lift
+   into a light wash with a brighter ring, the same hover the directory and
+   audit cards wear. The keyboard ring below is untouched. */
 .report-row__open:hover {
   background: none;
   border: 0;
   color: inherit;
+}
+.report-row__open:hover .file-card__paper {
+  background: var(--cyan-bg);
+  box-shadow: 0 0 0 1px var(--ir-blue), 0 4px 14px rgba(15, 36, 71, 0.10);
+  transform: translateY(-1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .report-row__open:hover .file-card__paper { transform: none; }
 }
 .report-row__open:focus-visible {
   outline: 2px solid var(--cyan);
@@ -5068,8 +5180,15 @@
   position: relative;
   z-index: 1;
 }
-/* The card stays still under the pointer (owner request, 2026-10-06): no
-   hover lift, no tint — the resting row is the only row there is. */
+/* The card answers the pointer with the directory's own hover (owner request):
+   lift, wash and ring arrive on `.report-row__open:hover` above; the paper
+   below only carries the transition. */
+.file-card__paper {
+  transition: background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .file-card__paper { transition: none; }
+}
 /* The page's ruled lines: the ghost placeholder, and the real text sitting
    where the lines would be. */
 .file-card__ghost {
@@ -8083,6 +8202,20 @@
   font-weight: 700;
 }
 
+/* The station's own contact lines in the proof — the same smaller line the
+   sheet prints under the location line. Only rendered when set. */
+.st-proof-contact {
+  font-size: 0.7rem;
+  color: var(--ir-muted);
+}
+
+/* The writing page's own contact line — the print sheet's .pr-contact, to
+   the letter, so the page and the printer cannot disagree. */
+.ir-sheet-head-contact {
+  font-size: 0.72rem;
+  color: var(--ir-muted);
+}
+
 /* The office code prints at the sheet's left margin, under the seals — not
    centered with the org block, so it is not centered here either. */
 .st-proof-code {
@@ -8091,6 +8224,25 @@
   font-size: 0.72rem;
   letter-spacing: 0.04em;
   color: var(--ir-muted);
+}
+
+/* ---- The contact block: filed with the letterhead, not printed as it ---- */
+/* A hairline, not a box: this lives inside the letterhead's own tab, and a
+   second bordered card around it would read as a second setting rather than
+   as the letterhead's own back page. The h3 restates the block head's own
+   type so the two cannot drift. */
+.st-subblock {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--ir-border);
+}
+
+.st-subblock h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ir-head-ink);
 }
 
 /* ---- The type list ---- */
@@ -8469,12 +8621,18 @@
      is fixed and the height is a MINIMUM, so the page is a page: it holds the
      sheet's own measure however much is written on it, and grows past a page
      only when there is genuinely more than a page to write (the printed sheet
-     would run to a second leaf at the same point). `max-width: 100%` is the one
-     concession: a phone cannot show 8.5 inches of anything, so the paper narrows
-     there and the margins clamp with it — see the padding below, which is a full
-     inch only where there is room for one. */
+     would run to a second leaf at the same point).
+
+     THE WIDTH NO LONGER YIELDS TO THE COLUMN (owner request, 2026-11-02): with
+     `max-width: 100%` the paper narrowed whenever the workspace beside it got
+     tight — the AI assistant's rail, a narrower window — so the same sheet was
+     a different size from one view to the next. The page keeps its 8.5in and
+     the workspace scrolls to it instead. The phone keeps the one concession
+     below: a phone cannot show 8.5 inches of anything, so under 880px the
+     paper narrows and the margins clamp with it. */
   width: 8.5in;
-  max-width: 100%;
+  max-width: none;
+  flex: none;
   min-height: 11in;
   margin: 0 auto;
   padding: clamp(1rem, 5vw, 1in) var(--ir-sheet-inset) clamp(1.2rem, 6vw, 1in);
@@ -8482,6 +8640,12 @@
   color: var(--ir-text);
   border-radius: 2px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 14px 32px rgba(16, 24, 40, 0.1);
+}
+/* The one place the page yields: a phone cannot show 8.5in of anything. */
+@media (max-width: 880px) {
+  .ir-form--sheet {
+    max-width: 100%;
+  }
 }
 
 /* One measure. The panels stop being a 2x2 of plates and become the sections
@@ -8874,6 +9038,46 @@
   width: auto;
 }
 
+/* The arranged seals (Station settings ▸ Letterhead style). Swapped trades
+   the slots around the lines; stacked grids both seals above the lines —
+   the lines keep their own class, so the type, spacing and color stay put
+   whichever arrangement is on file. */
+.ir-sheet-head--swapped > .ir-sheet-seal--code {
+  order: 3;
+}
+.ir-sheet-head--swapped > .ir-sheet-head-lines {
+  order: 2;
+}
+.ir-sheet-head--swapped > .ir-sheet-seal--station {
+  order: 1;
+}
+.ir-sheet-head--stacked {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  align-items: center;
+  column-gap: 0.6rem;
+  row-gap: 0.25rem;
+  grid-template-areas:
+    'code station'
+    'lines lines';
+}
+.ir-sheet-head--stacked > .ir-sheet-seal--code {
+  grid-area: code;
+  justify-self: end;
+  width: clamp(0.5in, 11vw, 0.7in);
+  height: clamp(0.5in, 11vw, 0.7in);
+}
+.ir-sheet-head--stacked > .ir-sheet-seal--station {
+  grid-area: station;
+  justify-self: start;
+  height: clamp(0.5in, 11vw, 0.7in);
+  width: auto;
+}
+.ir-sheet-head--stacked > .ir-sheet-head-lines {
+  grid-area: lines;
+}
+
 .ir-sheet-head-lines {
   flex: 1;
   min-width: 0;
@@ -9025,6 +9229,37 @@
   max-width: 8.5in;
   margin-inline: auto;
   padding-inline: var(--ir-sheet-inset);
+}
+
+/* ---- The assistant docks on the right on wide screens (owner request) ----
+   Below the paper the assistant is a long scroll away from the account it
+   works on. Where the viewport fits the paper (8.5in) plus a rail, the panel
+   parks at the right edge, vertically centred and always in reach; the reveal
+   toggle, zoom and hints stay below the paper where they belong. Narrower
+   screens keep the stacked desk unchanged. Print is unaffected (the deskbar
+   carries no-print). The rail keeps the dialog layer clear (dialogs sit at
+   60+), and the mode cards stack single-file at rail width. */
+@media (min-width: 1280px) {
+  .ir-sheet-deskbar > .ir-sheet-ai {
+    position: fixed;
+    right: 1.25rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22rem;
+    max-width: calc(100vw - 2.5rem);
+    max-height: calc(100vh - 7rem);
+    overflow-y: auto;
+    margin: 0;
+    padding: 0.85rem 0.9rem;
+    background: var(--ir-card);
+    border: 1px solid var(--ir-border);
+    border-radius: 0.75rem;
+    box-shadow: 0 8px 28px rgba(15, 35, 70, 0.14);
+    z-index: 20;
+  }
+  .ir-sheet-deskbar > .ir-sheet-ai .ai-generate-modes {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ===========================================================================
@@ -9259,6 +9494,36 @@
      print size, and the mount carries the var Reports.jsx sets inline. */
   zoom: var(--sheet-zoom, 1);
 }
+/* THE HEADING MUST NOT CHANGE SIZE WHEN THE PAPER TAKES OVER (owner request,
+   2026-11-02). While the officer is composing, the top of the page is the
+   form's own band (`.ir-sheet-head-lines`, 0.74rem, and the meta row at
+   0.72rem). The moment a letter exists — Generate, Arrange, or a reopened
+   report — the paper docks and its real header (`.pr-org` at 10.5pt, the seals
+   at 1in/0.95in) replaces that band, so the same seven lines of the station's
+   letterhead came out visibly BIGGER mid-write. On the desk the paper's header
+   is drawn at the band's own scale, line for line: the org block, the seals,
+   the office code and the date with its caption. Print is untouched — the print
+   sheet keeps its own 10.5pt / 9pt (see `@media print` in styles.css); only the
+   screen copy matches the band, so generating never resizes the heading. */
+.ir-sheet-letter .ai-sheet-preview .print-sheet .pr-org {
+  font-size: 0.74rem;
+  /* The band spaces its lines with a 0.05rem gap and no margins; the paper
+     separates them with <br>, so the gap is folded into its leading. */
+  line-height: 1.39;
+}
+.ir-sheet-letter .ai-sheet-preview .print-sheet .pr-code-logo {
+  width: clamp(0.58in, 13vw, 0.85in);
+  height: clamp(0.58in, 13vw, 0.85in);
+}
+.ir-sheet-letter .ai-sheet-preview .print-sheet .pr-seal {
+  height: clamp(0.55in, 12vw, 0.8in);
+}
+.ir-sheet-letter .ai-sheet-preview .print-sheet .pr-code-date {
+  font-size: 0.72rem;
+}
+.ir-sheet-letter .ai-sheet-preview .print-sheet .pr-date-label {
+  font-size: 0.64rem;
+}
 /* The letter reads as the same paper, not a page on a page: while the mount
    holds the letter, the form's own band steps aside and the inner paper loses
    its card chrome (no second page, no shadow, no 11-inch floor). The meta row
@@ -9267,10 +9532,43 @@
    form's copies would read the report twice. The narrative's own strip (with
    blotter Upload) lives outside the field under the banner, and the capture
    photos + verification review stay — only the raw paragraph yields. */
-.ir-form--sheet:has(.ir-sheet-letter:not(:empty)) .ir-sheet-head,
-.ir-form--sheet:has(.ir-sheet-letter:not(:empty)) .ir-sheet-head-meta,
-.ir-form--sheet:has(.ir-sheet-letter:not(:empty)) .ir-field.ir-narrative {
+.ir-form--sheet:has(.ir-sheet-letter > .sheet-ribbon-dock) .ir-sheet-head,
+.ir-form--sheet:has(.ir-sheet-letter > .sheet-ribbon-dock) .ir-sheet-head-meta,
+.ir-form--sheet:has(.ir-sheet-letter > .sheet-ribbon-dock) .ir-field.ir-narrative {
   display: none;
+}
+/* ---- Floating generation status on the sheet (owner request) --------------
+   While the account read or the draft is running, the wait is portaled to the
+   top of the paper mount — where the words will land — instead of standing
+   empty. Sticky, so it stays in view if the officer scrolls mid-run; it
+   unmounts the moment the letter portals in. Plain card, the panel's own
+   dots and comet bar, no new motion: reduced-motion rules already still
+   those two everywhere they are used.
+   The band-hiding rule above keys on the letter dock (not `:empty`), so the
+   form's own narrative stays on screen behind this pill while it works. */
+.ai-sheet-float {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 5;
+  margin: 0 auto 0.75rem;
+  max-width: 26rem;
+  padding: 0.65rem 0.9rem 0.75rem;
+  background: var(--panel, #fff);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+}
+.ai-sheet-float__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.ai-sheet-float__head {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 /* ---- The sheet edits read as the document, not as fields -----------------
    The editable sheet works like Word — no boxes, no dotted outlines, ever.

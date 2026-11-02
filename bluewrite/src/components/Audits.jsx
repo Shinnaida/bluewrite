@@ -77,6 +77,8 @@ const CHAT_FILTERS = { ...EMPTY_FILTERS, action: 'ai.terminology.ask' };
 // entry-number margin, then Time, Who, Action, On, Details, IP. Named rather
 // than written as a literal because the heading has to match the header row
 // exactly, and a column added in one place only would silently unpick the rule.
+// The chatbot-questions view drops Action (every row is the one action the tab
+// names), so the component reads one fewer — see `columns` below.
 const COLUMNS = 7;
 
 export default function Audits({ notify, onConnError }) {
@@ -141,9 +143,21 @@ export default function Audits({ notify, onConnError }) {
     setPage(1);
   }
 
+  // NO APPLY BUTTON (owner request): picking a value IS applying it — the
+  // draft and the live filters move together, so the trail answers at once.
+  function updateFilter(key, value) {
+    const next = { ...draftFilters, [key]: value };
+    setDraftFilters(next);
+    setFilters(next);
+    setPage(1);
+  }
+
   const hasFilters = Object.values(filters).some((v) => v !== '' && v !== 0);
-  const hasDraft = Object.values(draftFilters).some((v) => v !== '' && v !== 0);
   const onChatView = filters.action === CHAT_FILTERS.action;
+  // The chatbot view is already narrowed to its one action, so the Action
+  // column would repeat the tab's own label on all 25 rows — it is left out
+  // here, and the day rule spans one fewer.
+  const columns = onChatView ? COLUMNS - 1 : COLUMNS;
 
   function showChatView() {
     setDraftFilters(CHAT_FILTERS);
@@ -301,14 +315,30 @@ export default function Audits({ notify, onConnError }) {
           )}
         </div>
       </div>
-      <form className="reports-toolbar register-filters audits-filterbar" id={filtersId} hidden={!filtersOpen} onSubmit={applyFilters}>
-        <div className="reports-filters">
+      <div className="reports-toolbar register-filters audits-filterbar" id={filtersId} hidden={!filtersOpen}>
+        <div className="audits-filterbar__head">
+          <div>
+            <p className="audits-filterbar__title">Refine the trail</p>
+            <p className="audits-filterbar__hint">Filters apply instantly — no Apply needed.</p>
+          </div>
+          <div className="audits-filterbar__side">
+            {pagination && (
+              <span className="audits-filterbar__count" role="status">
+                {pagination.total} {pagination.total === 1 ? 'entry' : 'entries'}
+              </span>
+            )}
+            {hasFilters && (
+              <button type="button" className="reports-filter__clear" onClick={clearFilters}>Clear filters</button>
+            )}
+          </div>
+        </div>
+        <div className="reports-filters audits-filterbar__grid">
           <label className="reports-filter">
             <span className="reports-filter__label">Action</span>
             <select
               aria-label="Filter by action"
               value={draftFilters.action}
-              onChange={(e) => setDraftFilters((f) => ({ ...f, action: e.target.value }))}
+              onChange={(e) => updateFilter('action', e.target.value)}
             >
               <option value="">All actions</option>
               {actions.map((a) => (
@@ -321,7 +351,7 @@ export default function Audits({ notify, onConnError }) {
             <select
               aria-label="Filter by user"
               value={draftFilters.user_id}
-              onChange={(e) => setDraftFilters((f) => ({ ...f, user_id: e.target.value }))}
+              onChange={(e) => updateFilter('user_id', e.target.value)}
             >
               <option value="">All users</option>
               {(audits ?? [])
@@ -340,7 +370,7 @@ export default function Audits({ notify, onConnError }) {
               aria-label="From date"
               title="From date"
               value={draftFilters.date_from}
-              onChange={(e) => setDraftFilters((f) => ({ ...f, date_from: e.target.value }))}
+              onChange={(e) => updateFilter('date_from', e.target.value)}
             />
           </label>
           <label className="reports-filter">
@@ -350,15 +380,11 @@ export default function Audits({ notify, onConnError }) {
               aria-label="To date"
               title="To date"
               value={draftFilters.date_to}
-              onChange={(e) => setDraftFilters((f) => ({ ...f, date_to: e.target.value }))}
+              onChange={(e) => updateFilter('date_to', e.target.value)}
             />
           </label>
-          <button type="submit" className="primary">Apply</button>
-          {hasDraft && (
-            <button type="button" className="reports-filter__clear" onClick={clearFilters}>Clear filters</button>
-          )}
         </div>
-      </form>
+      </div>
 
       {error && <div className="form-error" role="alert">{error}</div>}
 
@@ -375,6 +401,19 @@ export default function Audits({ notify, onConnError }) {
         <>
           <div className="table-wrap">
             <table className="audits-table">
+              {/* Each column owns its width: the margin and the stamps pin to
+                  their content, Details absorbs the slack and is the one cell
+                  allowed to wrap. A <col> per column (not nth-child) so the
+                  chatbot view — which hides Action — keeps the same measures. */}
+              <colgroup>
+                <col className="audit-col--entry" />
+                <col className="audit-col--when" />
+                <col className="audit-col--who" />
+                {!onChatView && <col className="audit-col--action" />}
+                <col className="audit-col--entity" />
+                <col className="audit-col--detail" />
+                <col className="audit-col--ip" />
+              </colgroup>
               <thead>
                 <tr>
                   {/* The margin is unheaded, the way a bound blotter's numbered
@@ -383,7 +422,7 @@ export default function Audits({ notify, onConnError }) {
                   <th scope="col"><span className="sr-only">Entry</span></th>
                   <th scope="col">Time</th>
                   <th scope="col">Who</th>
-                  <th scope="col">Action</th>
+                  {!onChatView && <th scope="col">Action</th>}
                   <th scope="col">On</th>
                   <th scope="col">Details</th>
                   <th scope="col">IP</th>
@@ -399,12 +438,12 @@ export default function Audits({ notify, onConnError }) {
                         does not depend on it — each Time cell carries its own day
                         for screen readers (see below). */}
                     <tr className="blotter-date">
-                      <th colSpan={COLUMNS}>{group.label}</th>
+                      <th colSpan={columns}>{group.label}</th>
                     </tr>
                     {group.entries.map((a) => (
                       <tr key={a.id}>
-                        <td className="audit-entry">{String(a.id).padStart(4, '0')}</td>
-                        <td className="audit-when" title={a.created_at}>
+                        <td className="audit-entry" data-label="Entry">{String(a.id).padStart(4, '0')}</td>
+                        <td className="audit-when" data-label="Time" title={a.created_at}>
                           {/* The visible cell is a time only, because the day is
                               ruled above it. A screen reader has no rule to read,
                               so the day is stated here instead of being left in
@@ -413,19 +452,21 @@ export default function Audits({ notify, onConnError }) {
                           <span className="sr-only">{dayOf(a.created_at).label} </span>
                           {formatTime(a.created_at)}
                         </td>
-                        <td>{a.user_name ?? <span className="audit-system">system</span>}</td>
-                        <td>
-                          <span className={`audit-action ${actionClass(a.action)}`}>
-                            {ACTION_LABELS[a.action] ?? a.action}
-                          </span>
-                        </td>
-                        <td className="audit-entity">
+                        <td data-label="Who">{a.user_name ?? <span className="audit-system">system</span>}</td>
+                        {!onChatView && (
+                          <td data-label="Action">
+                            <span className={`audit-action ${actionClass(a.action)}`}>
+                              {ACTION_LABELS[a.action] ?? a.action}
+                            </span>
+                          </td>
+                        )}
+                        <td className="audit-entity" data-label="Record">
                           {a.entity_type === 'report' && a.entity_id
                             ? `BW-${String(a.entity_id).padStart(4, '0')}`
                             : a.entity_id ?? '—'}
                         </td>
-                        <td className="audit-detail">{a.detail ?? '—'}</td>
-                        <td className="audit-ip">{a.ip_address ?? '—'}</td>
+                        <td className="audit-detail" data-label="Details">{a.detail ?? '—'}</td>
+                        <td className="audit-ip" data-label="IP address">{a.ip_address ?? '—'}</td>
                       </tr>
                     ))}
                   </Fragment>

@@ -585,11 +585,11 @@ final class ReportRules
             }
             $value = match ($spec[0]) {
                 'length' => (string) count($rows),
-                'injury' => (string) count(array_filter(
+                'injury' => self::countOrBlank(array_filter(
                     $rows,
                     static fn (array $r): bool => trim((string) ($r['injury_status'] ?? '')) === $spec[2],
                 )),
-                'injured' => (string) count(array_filter(
+                'injured' => self::countOrBlank(array_filter(
                     $rows,
                     static function (array $r): bool {
                         $status = trim((string) ($r['injury_status'] ?? ''));
@@ -603,6 +603,20 @@ final class ReportRules
             }
         }
         return $ts;
+    }
+
+    /**
+     * A casualty count, or blank when there is nothing to count. A zero
+     * death/injury count is the absence of a row, not a recorded fact: writing
+     * "0" would put a Fatalities line on the sheet the account never stated
+     * (owner request). Only a real count mirrors.
+     *
+     * @param array $rows the filtered rows
+     */
+    private static function countOrBlank(array $rows): string
+    {
+        $n = count($rows);
+        return $n === 0 ? '' : (string) $n;
     }
 
     /**

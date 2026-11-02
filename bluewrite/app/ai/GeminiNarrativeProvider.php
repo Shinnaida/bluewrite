@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Ai;
 
+use App\Core\IncidentTypes;
 use App\Core\LanguageRegistry;
 
 /**
@@ -225,7 +226,16 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             );
         }
 
-        return self::normaliseClassification($parsed, $types);
+        $fields = self::normaliseClassification($parsed, $types, $account);
+        if ($fields['incident_category'] === '') {
+            // The model answers a LIST type, so the blotter's own legal words
+            // have nowhere to go in its answer — but the sheet quotes them,
+            // not the list type. Read them deterministically off the account
+            // (never modeled, never paraphrased) so "OTHER INCIDENT" can
+            // never stand in for words the blotter states.
+            $fields['incident_category'] = self::extractIncidentTitle($account);
+        }
+        return $fields;
     }
 
     /**
@@ -376,6 +386,92 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
     }
 
     /**
+     * Enhance Wording — improve the wording of the officer's own report without
+     * changing its facts, structure or field labels.
+     *
+     * A separate instruction and a separate, tiny schema on purpose: the
+     * narrative prompt writes a NEW formal narrative from structured fields,
+     * which is the other mode's job. This call edits the supplied document and
+     * returns it whole, labels included; the client then applies the shared
+     * bold-label formatter.
+     */
+    public function enhanceReport(string $account): string
+    {
+        if ($this->apiKey === '') {
+            throw new AiProviderException('Gemini API key is not configured.', retryable: false);
+        }
+        $account = trim($account);
+        if ($account === '') {
+            throw new AiProviderException('No report text was sent with the request.', retryable: false);
+        }
+
+        $body = [
+            'contents' => [
+                ['role' => 'user', 'parts' => [['text' => $account]]],
+            ],
+            'generationConfig' => [
+                // Editing, not writing: keep the model close to the source.
+                'temperature' => 0.1,
+                // An enhanced report is the source's length plus a little; the
+                // default narrative ceiling is too tight for a long account.
+                'maxOutputTokens' => max($this->maxOutputTokens, 8192),
+                'responseMimeType' => 'application/json',
+                'responseSchema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'report' => ['type' => 'string'],
+                    ],
+                    'required' => ['report'],
+                ],
+            ],
+        ];
+        if ($this->thinkingLevel !== '') {
+            $body['generationConfig']['thinkingConfig'] = ['thinkingLevel' => $this->thinkingLevel];
+        }
+        $body = self::attachInstruction($body, null, self::enhanceInstruction());
+
+        $decoded = json_decode($this->post($body), true);
+        if (!is_array($decoded)) {
+            throw new AiProviderException('Gemini returned a non-JSON response.');
+        }
+        $text = self::answerText($decoded);
+        if ($text === '') {
+            $reason = $decoded['candidates'][0]['finishReason'] ?? 'unknown';
+            throw new AiProviderException("Gemini returned no enhanced report (finishReason: {$reason}).");
+        }
+        $parsed = self::parseNarrativeJson($text);
+        if (!is_array($parsed) || !isset($parsed['report']) || !is_string($parsed['report'])) {
+            $reason = $decoded['candidates'][0]['finishReason'] ?? 'unknown';
+            throw new AiProviderException(
+                "Gemini enhance payload did not match the response schema (finishReason: {$reason}). Raw text head: "
+                . substr($text, 0, 200)
+            );
+        }
+        return trim($parsed['report']);
+    }
+
+    /**
+     * The Enhance Wording instruction (resources/ai/enhance_report_prompt.txt).
+     * Public for tests; maintainer '#' comment lines are stripped.
+     */
+    public static function enhanceInstruction(): string
+    {
+        $file = dirname(__DIR__, 2) . '/resources/ai/enhance_report_prompt.txt';
+        if (is_file($file)) {
+            $raw = (string) file_get_contents($file);
+            $lines = preg_grep('/^\s*#/', explode("\n", $raw), PREG_GREP_INVERT) ?: [];
+            $trimmed = trim(implode("\n", $lines));
+            if ($trimmed !== '') {
+                return $trimmed;
+            }
+        }
+        return 'Improve the grammar, punctuation and clarity of the supplied police incident report. '
+            . 'Preserve every fact, name, date, time, number, identifier and field label exactly. '
+            . 'Preserve the incident title exactly as written; invent no title and no offense classification. '
+            . 'Add no label, section or fact, and return only the enhanced report text.';
+    }
+
+    /**
      * The transcription instruction. Public for tests, like the
      * classification instruction: what the model is told to do with the
      * photo is assembled here, in one place, rather than at the call.
@@ -388,7 +484,8 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             . 'output only the transcription. '
             . 'Return plain narrative text only: no tables, no grid or box characters, no markdown, '
             . 'and no special characters beyond ordinary sentence punctuation '
-            . '(periods, commas, colons, apostrophes, hyphens, parentheses and question marks). '
+            . '(periods, commas, colons, apostrophes, hyphens, parentheses and question marks) '
+            . 'and the # sign — transcribe labels like plate # exactly as written, hash sign included. '
             . 'If no text is readable, output nothing.';
     }
 
@@ -817,15 +914,23 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
     /**
      * The provider's answer, in the report's own field names.
      *
-     * Every string is capped at the length the API accepts for that column, and
-     * two things are REJECTED rather than repaired:
+     * Every string is capped at the length the API accepts for that column.
+     * A type that is not on the station's list is FOLDED to its closest
+     * canonical type (IncidentTypes::closestType — the same rule the form and
+     * the API apply to a typed box), and the answer's own words ride along as
+     * incident_category (the "Reported as" line): a blotter read that names
+     * the incident in legal words still settles the right folder, with the
+     * exact words kept. An "Other" answer whose account folds to a concrete
+     * type follows the account — a reckless-imprudence traffic blotter files
+     * as Traffic Accident, its charge kept as the Category. Comparison is
+     * case-insensitive so an answer the model capitalised differently still
+     * lands, and what is returned is the
+     * STATION's spelling — the string that POST /reports will accept. A text
+     * with no real signal still reads as EMPTY, never invented.
      *
-     *   * a type that is not on the station's list. Comparison is
-     *     case-insensitive so an answer the model capitalised differently still
-     *     lands, and what is returned is the STATION's spelling — the string
-     *     that POST /reports will accept.
-     *   * a datetime that is not YYYY-MM-DDTHH:MM. A bare date, a bare time or a
-     *     sentence is not a datetime, and an empty one is honest.
+     * REJECTED rather than repaired: a datetime that is not YYYY-MM-DDTHH:MM.
+     * A bare date, a bare time or a sentence is not a datetime, and an empty
+     * one is honest.
      *
      * A party with no name is dropped — a role is not a person — and a role
      * outside the list reads as 'other', which is what the report calls it too.
@@ -833,20 +938,43 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
      * @param array<string,mixed> $parsed @param string[] $types
      * @return array<string,mixed>
      */
-    public static function normaliseClassification(array $parsed, array $types): array
+    public static function normaliseClassification(array $parsed, array $types, string $account = ''): array
     {
         $str = static function (mixed $v, int $max = 500): string {
             return is_string($v) ? mb_substr(trim($v), 0, $max) : '';
         };
 
         $type = '';
-        $answerType = $str($parsed['incidentType'] ?? '', 60);
+        $category = '';
+        // Read long: the answer's own words ride along as the Category when
+        // they fold, and a legal phrase does not fit in 60 characters.
+        $answerType = $str($parsed['incidentType'] ?? '', 200);
         if ($answerType !== '') {
             foreach ($types as $t) {
                 if (mb_strtolower($t) === mb_strtolower($answerType)) {
                     $type = $t;
                     break;
                 }
+            }
+            if ($type === '') {
+                $closest = IncidentTypes::closestType($answerType, $types);
+                if ($closest !== null) {
+                    $type = $closest;
+                    $category = $answerType;
+                }
+            }
+        }
+        // An "Other" answer is the model saying the account is too thin —
+        // but a blotter states its charge in legal words the list never
+        // carries ("RECKLESS IMPRUDENCE RESULTING TO ..."), so the model
+        // lands on Other for a traffic account it actually described. When
+        // the account itself folds to a concrete type, the folder follows
+        // the sheet, not the shrug: the title still rides as the Category
+        // (filled by the caller off the same account), so no words change.
+        if ($type !== '' && preg_match('/^other(\s|$)/i', $type) === 1 && trim($account) !== '') {
+            $better = IncidentTypes::closestType($account, $types);
+            if ($better !== null && preg_match('/^other(\s|$)/i', $better) !== 1) {
+                $type = $better;
             }
         }
 
@@ -881,6 +1009,7 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
 
         return [
             'incident_type' => $type,
+            'incident_category' => $category,
             'incident_datetime' => $datetime,
             'incident_time_approximate' => !empty($parsed['timeApproximate']),
             'location' => $str($parsed['location'] ?? ''),
@@ -891,6 +1020,97 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             'parties' => $parties,
             'unstated' => $unstated,
         ];
+    }
+
+    /**
+     * The blotter's own incident title, read DETERMINISTICALLY off the account
+     * text — twin of extractIncidentTitle() in src/lib/blotterText.js (and the
+     * phone app's twin in blotter_text.dart). The model must pick a type from
+     * the station's list, so a blotter that states its legal charge
+     * ("RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL
+     * INJURY") is answered as a list type ("Other Incident", "Traffic
+     * Accident") with no field for the legal words — and the sheet would then
+     * quote the list type instead of what was written. This reads the words
+     * straight off the text instead, so the quoted title follows the blotter,
+     * never a predetermined label:
+     *   1. a quoted standalone line (the scanned certification's own heading);
+     *   2. the words between the reported time and "PLACE OF INCIDENT".
+     * Returns '' when nothing title-like is found; never invented. Public for
+     * tests: the title it returns is what the sheet quotes.
+     */
+    public static function extractIncidentTitle(string $text): string
+    {
+        if (preg_match('/^["\'\x{201C}\x{201D}]([A-Z][^"\'\x{201C}\x{201D}\n]{9,139})["\'\x{201C}\x{201D}]\s*$/mu', $text, $m)) {
+            if (self::isTitleLike($m[1])) {
+                return trim($m[1]);
+            }
+        }
+        if (preg_match('/\b\d{1,2}:\d{2}\s*(?:AM|PM)\b\s+([\s\S]+?)\s+PLACE OF INCIDENT\b/iu', $text, $m)) {
+            $cand = (string) preg_replace('/^(?:OF|DATED?)\s+\S+\s+/iu', '', $m[1]);
+            $cand = trim((string) preg_replace('/^["\'\x{201C}\x{201D}\s]+|["\'\x{201C}\x{201D}\s]+$/u', '', $cand));
+            if (self::isTitleLike($cand)) {
+                return $cand;
+            }
+        }
+        // A reordered account states its charge anywhere — after the facts,
+        // before REMARKS, near the end. Read every line by MEANING; position is
+        // never evidence. Field labels, vehicle/person rows, times/dates,
+        // certification and prose are excluded, then a charge-bearing line wins
+        // over a merely uppercase one.
+        $candidates = [];
+        foreach (preg_split('/\r\n|\r|\n/', $text) ?: [] as $rawLine) {
+            $line = trim($rawLine);
+            if ($line === '' || !self::isTitleLike($line)) {
+                continue;
+            }
+            if (preg_match('/[:：]/u', $line) === 1) {
+                continue; // a label/value pair or a clock, never a standalone charge
+            }
+            if (preg_match('/^(?:THIS CERTIFICATION|UPON REACHING|INVESTIGATION|THE|A|AN|HE|SHE|IT|THEY|WE|I)\b/iu', $line) === 1) {
+                continue;
+            }
+            if (preg_match('/^V\d+\b/iu', $line) === 1) {
+                continue;
+            }
+            if (preg_match('/^(?:BACKRIDER|DRIVER|VICTIMS?|SUSPECTS?|RESPONDENTS?|COMPLAINANTS?|WITNESS(?:ES)?|OWNER|REPORTER|PASSENGER|RIDER)\b/iu', $line) === 1) {
+                continue;
+            }
+            if (preg_match('/^(?:FACTS|REMARKS|PLACE OF INCIDENT|T\/D OF INCIDENT|VEHICLES? INVOLVED|PERSONS? INVOLVED|RECORDED BY)\b/iu', $line) === 1) {
+                continue;
+            }
+            $candidates[] = $line;
+        }
+        if ($candidates !== []) {
+            foreach ($candidates as $candidate) {
+                if (preg_match('/\b(RECKLESS|IMPRUDENCE|NEGLIGENCE|THEFT|ROBBERY|ASSAULT|INJURY|DAMAGE|HOMICIDE|MURDER|RAPE|VIOLENCE|FRAUD|ESTAFA|CARNAPPING|KIDNAPPING|DRUGS?|GAMBLING|ARSON|TRESPASS|THREAT|ABUSE|MISSING|LOST|VEHICULAR|ACCIDENT|PROPERTY)\b/iu', $candidate) === 1) {
+                    return $candidate;
+                }
+            }
+            return $candidates[0];
+        }
+        return '';
+    }
+
+    /**
+     * Title-like: long enough to be a charge, short enough to be a title, in
+     * the blotter's own caps — never a stray sentence. Twin of the JS twin's
+     * isTitleLike().
+     */
+    public static function isTitleLike(string $s): bool
+    {
+        $t = trim($s);
+        if (mb_strlen($t) < 10 || mb_strlen($t) > 150) {
+            return false;
+        }
+        if (count((array) preg_split('/\s+/', $t)) < 3) {
+            return false;
+        }
+        $letters = (string) preg_replace('/[^A-Za-z]/', '', $t);
+        if (strlen($letters) < 8) {
+            return false;
+        }
+        $upper = strlen((string) preg_replace('/[^A-Z]/', '', $t));
+        return $upper / strlen($letters) >= 0.5;
     }
 
     /**

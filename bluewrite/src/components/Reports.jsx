@@ -1289,7 +1289,6 @@ const REVIEW_INPUTS = {
   },
 
   location: { placeholder: 'Specific address or intersection' },
-  ioc_name: { placeholder: 'Name of the officer handling the case' },
 };
 
 /**
@@ -1784,22 +1783,8 @@ function ReportReview({ draft, user, complete, onGoToSection, edit }) {
       <section className="ir-review-section">
         <ReviewHeading index={4} complete={complete} onGoToSection={onGoToSection} />
         <div className="ir-review-rows">
-          <ReviewRow
-            label="Action Taken / Status"
-            value={draft.action_taken}
-            wide
-            required
-            {...editable('action_taken')}
-          />
-          <ReviewRow
-            label="Investigator-on-Case (IOC)"
-            value={draft.ioc_name}
-            required
-            {...editable('ioc_name')}
-          />
-          {/* Read-back only: edited in Panel IV beside the IOC (see above) —
-              ReviewFieldEditor only handles report-level fields, and a second
-              editing path for one ts key is not worth it. */}
+          {/* Action Taken / IOC hidden by owner request (2026-11-02). */}
+          {/* Read-back only: the blotter's recorder, typed in Panel IV. */}
           <ReviewRow
             label="Recorded by"
             value={draft.type_specific?.recorded_by}
@@ -2546,7 +2531,7 @@ export function ReportEditor({
   // because the menu that sets it and this component that answers it must not
   // each keep their own idea of the set. Only the two format-specific answers
   // are asked below; everything else about the editor is format-agnostic.
-  formFormat = 'document',
+  formFormat = 'sheet',
   // Shell hands these down so a sign-out can save the open draft first (see the
   // registration effect below and Shell.flushPending) and so Ctrl+S reaches
   // whichever copy of the editor is on screen.
@@ -2681,7 +2666,7 @@ export function ReportEditor({
   // neither be focused nor scrolled to.
   //
   // Sheet is the only format that still draws the whole report at once.
-  const deck = stepped || formFormat === 'document';
+  const deck = stepped; // legacy 'document' also decks, but is no longer offered;
   // ---- The sheet form format (Profile ▸ Preferences) ----------------------
   // The third format, and deliberately not a third tree: it renders the same
   // cards through the same fields and the same rules, and differs only in the
@@ -3114,8 +3099,9 @@ export function ReportEditor({
 
   // The Incident Details type box is TYPABLE (see Panel II's dropdown): the
   // station's types are its suggestions, and anything else the officer types is
-  // recorded as an "Other Incident" whose Category is that text — where such a
-  // report already keeps its specification, so no field is added or revealed.
+  // folded to the closest canonical type with the exact words kept as its
+  // Category — where such a report already keeps its specification, so no
+  // field is added or revealed.
   // What the text RESOLVES to is a pure rule of its own (resolveIncidentTypeInput,
   // covered by node:test); this only writes it.
   //
@@ -3126,7 +3112,7 @@ export function ReportEditor({
   // type on the list.
   function setIncidentTypeTyped(text) {
     const { type, custom } = resolveIncidentTypeInput(text, typeOptions);
-    if (type !== CUSTOM_TYPE) {
+    if (custom === null) {
       // A real type on the list, or the box cleared. The specific fields belong
       // to the OLD type, which is exactly what changeType has always ruled — so
       // this reuses it rather than restating the rule. Skipped when nothing
@@ -3135,13 +3121,16 @@ export function ReportEditor({
       if (String(draftRef.current?.incident_type ?? '') !== type) changeType(type);
       return;
     }
-    // Not a type on this station's list: an Other Incident, specified. Its
-    // Category IS the specification (a required field of that type), so the text
-    // lands where such a report already keeps it and no field is revealed.
+    // Free text: the closest canonical type, with the officer's exact words
+    // kept as its Category (the "Reported as" line). The folders, the
+    // dashboard and the field blocks read the report under its main incident;
+    // the exact phrasing is never thrown away. changeType is NOT used here:
+    // it wipes the type-specific fields, and per-keystroke that would eat the
+    // officer's answers while they are still typing.
     dirtyRef.current = true;
     setDraft((d) => ({
       ...d,
-      incident_type: CUSTOM_TYPE,
+      incident_type: type,
       type_specific: { ...d.type_specific, incident_category: custom },
     }));
     if (errors.incident_type) setErrors((e) => ({ ...e, incident_type: undefined }));
@@ -4926,7 +4915,9 @@ export function ReportEditor({
             covers the whole section instead of one card of it.
 
             Neither card carries `wide`: inside `.ir-card-row` that modifier
-            would span the row and put them back one above the other. */}
+            would span the row and put them back one above the other.
+            Hidden by owner request (2026-11-02). */}
+        {false && (
         <div className="ir-card-row">
           {/* Action Taken / Status is a required document block: the narrative
               generator receives it as context, and the report cannot be
@@ -5023,6 +5014,7 @@ export function ReportEditor({
             </div>
           </IrCard>
         </div>
+        )}
 
         {/* AI assistance — where the document format keeps the writing
             assistant (see `aiPanel` above), and why it is HERE rather than
@@ -5199,7 +5191,7 @@ export function ReportEditor({
             Not in the sheet format (a page has no way forward) and not in the
             stepped format, which carries its own row because it has one more
             step to walk: Review. */}
-        {formFormat === 'document' && (
+        {false && formFormat === 'document' && (
           <div className="ir-doc-nav">
             {/* Save is in the case bar (see above), not here: this row is the
                 document's NAVIGATION — where you are going — and it now carries
@@ -6071,7 +6063,7 @@ export function ReportsTable({
   initialDateFrom = '',
   initialDateTo = '',
   initialType = '',
-  formFormat = 'document',
+  formFormat = 'sheet',
   // Forwarded to the editor this list opens, for the same reason formFormat is
   // (see Shell): a sign-out must save the open draft however it was opened, and
   // Ctrl+S must reach a report opened from the list as well as one opened from
@@ -6186,10 +6178,9 @@ export function ReportsTable({
   // The list's own name, for the breadcrumb: the page head shouts it, the trail
   // states it.
   const listTitle = user.role === 'Admin' ? 'All Reports' : 'Reports';
-  // WHICH VOCABULARY THIS REGISTER PRINTS (owner request, 2026-10-13): the
-  // officer's screens never say "submitted" — a report that has gone forward is
-  // FINALIZED — while All Reports keeps the three statuses apart, because the
-  // Admin's review queue is the difference between them (see FINALIZED_LABEL).
+  // WHICH VOCABULARY THIS REGISTER PRINTS (owner request, 2026-10-13, extended
+  // to All Reports 2026-10-30): no screen says "submitted" — a report that has
+  // gone forward is FINALIZED (see FINALIZED_LABEL).
   // ONE flag, read by the shelf tab, the row badges, the sheet's badge and the
   // Status filter, so the four cannot disagree.
   const officer = user.role !== 'Admin';
@@ -6288,6 +6279,8 @@ export function ReportsTable({
         if (v !== '' && !(k === 'page' && v === 1)) params.set(k, String(v));
       }
     }
+    // Ten rows per page, every page: the register reads as 1–10, then 11–20.
+    params.set('per_page', '10');
     for (const [k, v] of Object.entries(extra)) {
       if (v === null || v === undefined || v === '') continue;
       params.set(k, String(v));
@@ -6752,30 +6745,16 @@ export function ReportsTable({
           >
             <option value="">All statuses</option>
             <option value="draft">Draft</option>
-            {/* THE OFFICER IS OFFERED TWO STATES, NOT THREE (owner request,
-                2026-10-13: "remove submitted — all data in it should be in
-                finalized"). Their `Finalized` sends `filed`, which the server
-                reads as the bucket itself — submitted AND finalized — so the
-                option answers for the set the shelf tab above it holds, and the
-                word `Submitted` is not offered at all. The Admin keeps the
-                three, because a review queue is the difference between them. */}
-            {officer ? (
-              <option value="filed">{FINALIZED_LABEL}</option>
-            ) : (
-              <>
-                <option value="submitted">Submitted</option>
-                <option value="finalized">Finalized</option>
-              </>
-            )}
-            {/* Open work is the filter an officer actually needs, and it
-                was Admin-only. The server never restricted it: `attention`
-                is a plain `status != 'finalized'` on the same own-reports
-                scope, so an officer's queue is their own queue. */}
-            <option value="attention">
-              {officer
-                ? 'Needs attention (draft + not finalized)'
-                : 'Needs attention (draft + submitted)'}
-            </option>
+            {/* TWO STATES, NOT THREE (owner request, 2026-10-13: "remove
+                submitted — all data in it should be in finalized"; extended to
+                the Admin's All Reports 2026-10-30). `Finalized` sends `filed`,
+                which the server reads as the bucket itself — submitted AND
+                finalized — so the option answers for the set the shelf tab
+                above it holds, and the word `Submitted` is not offered at all. */}
+            <option value="filed">{FINALIZED_LABEL}</option>
+            {/* Open work is the filter for what still needs filing — drafts plus
+                anything not yet finalized. */}
+            <option value="attention">Needs attention (draft + not finalized)</option>
           </select>
         </label>
         <label className="reports-filter">

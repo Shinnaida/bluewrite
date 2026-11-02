@@ -50,7 +50,13 @@ import SpecularButton from '../shared/SpecularButton.jsx';
 // private function here because the account form uses the same marker for the sentences
 // under its fields — see InfoHint.jsx for the whole of its contract.
 import InfoHint from '../shared/InfoHint.jsx';
-import { buildArrangeDraft } from '../../lib/arrangeDraft.js';
+import { buildArrangeDraft, buildEnhancedDraft } from '../../lib/arrangeDraft.js';
+import {
+  formatIncidentReportHtml,
+  reportHtmlToPlain,
+  stripAddedFieldRows,
+  unsupportedFieldLabels,
+} from '../../lib/reportFormat.js';
 import { useRotatingStatus, holdVerifyPhase, VERIFY_PHRASE, THINKING_PHRASES } from '../../lib/useRotatingStatus.js';
 // Phase 6 Stage 4/5 — the language vocabulary all comes from the registry
 // (never a list held here), and the one wording for a language whose AI
@@ -319,18 +325,23 @@ const normaliseLineSet = (lines) =>
     .sort()
     .join('\n');
 
-// Session persistence (per tab): the AI draft survives navigation and
-// reloads within the same browser tab. Keyed by report id so opening a
-// different report never shows another report's draft.
-const draftStoreKey = (rid) => `bw-ai-draft-${rid ?? 'new'}`;
-function loadStoredDraft(rid) {
+// AI DRAFT PERSISTENCE IS OFF (owner request, 2026-11-02). The panel used to
+// mirror its draft into the tab session and restore it on the next visit, which
+// could bring a stale arranged/enhanced draft back over a page the officer had
+// already arranged — one report ended up holding its own text twice. Nothing is
+// stored any more, and every copy an earlier session left behind is DELETED on
+// mount. A draft now lives only in memory, for as long as this panel is open.
+const DRAFT_STORE_PREFIX = 'bw-ai-draft-';
+function purgeStoredDrafts() {
   try {
-    const raw = window.sessionStorage.getItem(draftStoreKey(rid));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed.narrative === 'string' ? parsed : null;
+    const stale = [];
+    for (let i = 0; i < window.sessionStorage.length; i += 1) {
+      const key = window.sessionStorage.key(i);
+      if (key && key.startsWith(DRAFT_STORE_PREFIX)) stale.push(key);
+    }
+    for (const key of stale) window.sessionStorage.removeItem(key);
   } catch {
-    return null;
+    // storage unavailable — nothing to clear
   }
 }
 
@@ -499,7 +510,7 @@ export default function AiNarrativePanel({
   const [feedback, setFeedback] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [message, setMessage] = useState(null);
-  // What "Try again" repeats: `{ kind: 'generate' | 'arrange' | 'tighten', feedback? }`,
+  // What "Try again" repeats: `{ kind: 'generate' | 'arrange' | 'enhance' | 'tighten', feedback? }`,
   // set at the top of each entry point so a failed generate retries a generate
   // and a failed tighten retries a tighten — the two are not interchangeable
   // (one writes the officer's report, the other edits their own text), and a
@@ -646,25 +657,12 @@ export default function AiNarrativePanel({
     };
   }, []);
 
-  // Restore a draft generated earlier in this tab for THIS report (e.g.
-  // after the page reloaded while the officer was on another tab).
+  // No draft is restored from the browser any more: the panel always opens
+  // empty, so it can never put an old arranged/enhanced page back on top of
+  // the one the officer is working on. Whatever an earlier session stored is
+  // removed here, once per mount.
   useEffect(() => {
-    const stored = loadStoredDraft(reportId);
-    if (stored) {
-      // A restored draft is review-only until Kept: the paper does not hold
-      // it (the form is whatever was saved), so the arrival above must not
-      // fire for it.
-      if (sheet) setProvisionalState('pending');
-      setDraft(stored);
-      setResidual(stored.residualRisk ?? []);
-      // The page comes back with it, because the page IS the draft (see
-      // `sheeted`) — a reload is not the thing that takes the officer's letter
-      // out of the assistance field. It arrives whole rather than typing itself
-      // out a second time: `sheetTyped` stays true and `revealPending` keeps the
-      // sheet from replaying the sequence (see the render below).
-      setMode('done');
-      setPanelOpen(true);
-    }
+    purgeStoredDrafts();
   }, [reportId]);
 
   // Single source of truth for whether the draft body is actually VISIBLE.
@@ -680,19 +678,8 @@ export default function AiNarrativePanel({
   const runningKind =
     lastPress?.kind === 'tighten' || !guidedIsTerminal(guided) ? 'tighten' : 'generate';
 
-  // Keep the session store in sync with the current draft; clear it when
-  // the draft is discarded (null).
-  useEffect(() => {
-    try {
-      if (draft && reportId != null) {
-        window.sessionStorage.setItem(draftStoreKey(reportId), JSON.stringify(draft));
-      } else {
-        window.sessionStorage.removeItem(draftStoreKey(reportId));
-      }
-    } catch {
-      // Storage full/blocked — persistence is best-effort only.
-    }
-  }, [draft, reportId]);
+  // Nothing is written back to the browser: the draft is kept in this
+  // component's own state only (persistence is off, see purgeStoredDrafts).
 
   // SHEET provisional arrival: a plain result ('idle' only) is written into
   // the form on landing. Guided results stay proposals; restored drafts are
@@ -898,9 +885,12 @@ export default function AiNarrativePanel({
     return id ?? null;
   };
 
-  // ONE reader for both Generate paths (2026-10-24): the account read plus the
-  // busy-server retry, owned here so generate() and arrangeReport() cannot drift.
-  const runAccountRead = async (accountText) => {
+  // ONE reader for every Generate path (2026-10-24): the account read plus the
+  // busy-server retry, owned here so generate(), arrangeReport() and
+  // enhanceReport() cannot drift.
+  // Arrange-only passes { arrangeOnly: true } so the sheet adds no field
+  // labels the account never stated — type/date/place only, no type-details.
+  const runAccountRead = async (accountText, opts = {}) => {
     // The AI reads words, never ink: a formatted blotter is stripped to its
     // text before the account read (one choke point for generate + arrange).
     accountText = richTextToPlain(accountText);
@@ -913,11 +903,11 @@ export default function AiNarrativePanel({
     // press must not decide what the save-failure message says.
     let done = null;
     try {
-      let receipt = await onReadAccount(accountText);
+      let receipt = await onReadAccount(accountText, opts);
       for (let attempt = 2; receipt && receipt.retryable && attempt <= READ_ATTEMPTS; attempt++) {
         setMessage('The AI service is busy - trying again (' + attempt + ' of ' + READ_ATTEMPTS + ')...');
         await new Promise((r) => setTimeout(r, READ_RETRY_WAIT_MS));
-        receipt = await onReadAccount(accountText);
+        receipt = await onReadAccount(accountText, opts);
       }
       if (receipt) {
         setFillNote(receipt);
@@ -1168,6 +1158,125 @@ export default function AiNarrativePanel({
     }
   };
 
+  // SHEET FORMAT — Enhance Wording Generate Report (2026-11-02).
+  //
+  // The other of the two modes, and the only one that calls the model. It
+  // improves grammar, punctuation, clarity and register while preserving every
+  // fact, identifier, hedge and field label. The enhanced text comes back plain;
+  // the SAME shared formatter Arrange uses lays it out and bolds only the
+  // labels the SOURCE carried, so an invented heading can never become a bold
+  // field. Findings and Action Taken are left alone: this mode edits the report
+  // text, not the record's own fields.
+  const enhanceReport = async ({ fromArranged = false } = {}) => {
+    setLastPress({ kind: 'enhance' });
+    let accountText = richTextToPlain(String(narrative || ''));
+    if (accountText.trim() === '') {
+      if (onBeforeGenerate && !onBeforeGenerate()) {
+        return;
+      }
+      setMessage('Write what happened first — there is nothing yet to enhance.');
+      setMode('error');
+      setPanelOpen(true);
+      return;
+    }
+    try {
+      // FROM AN ARRANGED RESULT (owner request, 2026-11-02): the officer has
+      // already pressed Arrange, read the page and now wants its wording
+      // polished. That run is not rewound — the arranged document ON THE PAPER
+      // is the text to enhance — and neither the account read nor the save is
+      // repeated, because Arrange already did both. Everything below therefore
+      // runs on the arranged page itself.
+      const restoredRun = fromArranged ? {} : beginFreshRun(false);
+      if (restoredRun.narrative !== undefined) accountText = richTextToPlain(String(restoredRun.narrative));
+      // THE SAME READ ARRANGE ONLY MAKES (owner request, 2026-11-02):
+      // type/date/place and NOTHING ELSE. The read filled the type's own fields
+      // here, which is where the sheet grew a `Vehicle 1:` row and a
+      // `Suspected Cause:` line the account never stated — the arranged page
+      // reads without them, and enhance must not add them back. This is also
+      // what "Enhance = Arrange Only + wording" means in code: one read, one
+      // field set, one page.
+      if (!fromArranged && onReadAccount) {
+        await runAccountRead(accountText, { arrangeOnly: true });
+      }
+      if (!fromArranged && onBeforeGenerate && !onBeforeGenerate()) {
+        return;
+      }
+      if (!fromArranged) {
+        try {
+          setMessage('Preparing the report so its wording can be enhanced...');
+          await resolveReportId();
+        } catch {
+          // Like Arrange: the enhancement never depends on the save.
+        }
+      }
+      setLastSource({ kind: 'notes', text: accountText, language: 'en' });
+      // ARRANGE FIRST, THEN ENHANCE (owner request, 2026-11-02): the model is
+      // handed the ALREADY-ARRANGED report, not the officer's raw account, so
+      // its only job is wording. It cannot reorder the parts, invent a section
+      // or drop one, because the layout it receives is the document the officer
+      // is already looking at — the same deterministic text Arrange produces.
+      const arrangedText = reportHtmlToPlain(
+        formatIncidentReportHtml(accountText, { sentenceCase: true }),
+      ).trim();
+      const sourceText = arrangedText === '' ? accountText : arrangedText;
+      setMode('loading');
+      setThinkPhase('waiting');
+      setMessage(null);
+      setPanelOpen(true);
+
+      let out = null;
+      try {
+        out = await api('/ai/enhance', { method: 'POST', body: { account: sourceText } });
+      } catch (err) {
+        // One retry for the same busy-server condition Generate handles with
+        // its queued-retry model. A persistent failure ends in the normal
+        // manual/error state rather than a press that did nothing.
+        if (err && err.status === 503) {
+          setMessage('The AI service is busy - trying again...');
+          await new Promise((r) => setTimeout(r, 2000));
+          out = await api('/ai/enhance', { method: 'POST', body: { account: sourceText } });
+        } else {
+          throw err;
+        }
+      }
+
+      // ROWS THE MODEL ADDED ARE DROPPED BEFORE ANYTHING ELSE (owner request,
+      // 2026-11-02): Enhance Wording fixes wording, grammar and punctuation —
+      // it does not get to hand the officer a new `Vehicle 1:` row or a
+      // `Suspected Cause:` heading that was never in the arranged report. Only
+      // rows opening with a label the source does not carry are removed (see
+      // stripAddedFieldRows); every other line is left exactly as written.
+      const enhanced = stripAddedFieldRows(String((out && out.report) || ''), sourceText);
+      if (enhanced === '') {
+        throw new Error('The AI returned an empty enhancement, so your report is unchanged.');
+      }
+      // A label the source never carried, or one the answer dropped, makes the
+      // answer a different document — discard it rather than present it.
+      const labelAudit = unsupportedFieldLabels(enhanced, sourceText);
+      if (labelAudit.invented.length > 0 || labelAudit.missing.length > 0) {
+        throw new Error('The enhanced wording did not keep the report\'s own field labels, so it was discarded. Your report is unchanged.');
+      }
+      // The enhanced page REPLACES the arranged one in the same panel: the
+      // arrival effect writes it onto the paper, because the draft is back to
+      // 'idle' while the officer's pre-arrange words stay snapshotted for
+      // Discard.
+      if (fromArranged) setProvisionalState('idle');
+      setDraft(buildEnhancedDraft({ enhancedText: enhanced, sourceText }));
+      setResidual([]);
+      presentDraftResult();
+    } catch (err) {
+      setThinkPhase('waiting');
+      if (err && (err.status === 503 || err.manual_mode)) {
+        setMode('manual');
+        setMessage(err.message);
+      } else {
+        setMode('error');
+        setMessage((err && err.message) || 'The wording could not be enhanced — your report is unchanged.');
+      }
+      setPanelOpen(true);
+    }
+  };
+
   // SHEET FORMAT — Arrange-only Generate Report (2026-10-23).
   // Organizes the officer's own account into the capstone police report format
   // WITHOUT rewording: runs the same account read as Generate (Gemini fills
@@ -1208,7 +1317,9 @@ export default function AiNarrativePanel({
       const runFindings = String(restoredRun.findings ?? notableFindings ?? '');
       const runActionTaken = String(restoredRun.actionTaken ?? actionTaken ?? '');
       if (onReadAccount) {
-        await runAccountRead(accountText);
+        // Arrange only — keep wording, add no labels not in the text:
+        // the read fills type/date/place, never the type's own fields.
+        await runAccountRead(accountText, { arrangeOnly: true });
       }
       if (onBeforeGenerate && !onBeforeGenerate()) {
         return;
@@ -1789,7 +1900,7 @@ export default function AiNarrativePanel({
         <button
           type="button"
           className="ai-retry"
-          onClick={() => (lastPress.kind === 'tighten' ? tighten() : lastPress.kind === 'arrange' ? arrangeReport() : generate(lastPress.feedback, false, true))}
+          onClick={() => (lastPress.kind === 'tighten' ? tighten() : lastPress.kind === 'arrange' ? arrangeReport() : lastPress.kind === 'enhance' ? enhanceReport() : generate(lastPress.feedback, false, true))}
         >
           Try again
         </button>
@@ -1922,7 +2033,7 @@ export default function AiNarrativePanel({
               <label className={"ai-generate-mode" + (generateMode === 'enhance' ? " is-selected" : "")}>
                 <input type="radio" name="generate-mode" value="enhance" checked={generateMode === 'enhance'} onChange={() => setGenerateMode('enhance')} />
                 <span className="ai-generate-mode__title">Enhance wording — AI improves clarity</span>
-                <span className="ai-generate-mode__hint">Formal police wording from the same account. Review before accepting.</span>
+                <span className="ai-generate-mode__hint">The same arranged report — Gemini fixes grammar, spelling, punctuation and wording only. Review before accepting.</span>
               </label>
             </div>
           )}
@@ -1976,7 +2087,7 @@ export default function AiNarrativePanel({
                  press still respond (the app's own states, not the shader's). */
               followMouse={false}
               proximity={0}
-              onClick={() => (onReadAccount && generateMode === 'arrange' ? arrangeReport() : generate())}
+              onClick={() => (generateMode === 'arrange' ? arrangeReport() : enhanceReport())}
               disabled={translationOff}
             >
               {/* THE PILL'S ONE PART: the words alone (owner request,
@@ -2598,23 +2709,26 @@ export default function AiNarrativePanel({
                                 button used to make in the other direction. */}
                             {sheetProvisional ? (tightenDraft ? 'Keep narrative' : 'Keep on the paper') : (tightenDraft ? 'Accept into narrative' : 'Accept into report')}
                           </button>
-                          {/* TASK 9 — the letter is what the officer REVIEWS; this
-                              is what they correct it FROM. The words typed into
-                              the bondpaper above are the same draft, so the boxes
-                              behind this button hold it verbatim — nothing is
-                              re-derived from the page, and no keystroke here is
-                              written into the report until Accept. Offered in
-                              both non-guided results: a generated draft and a
-                              tightened one are equally the officer's to change. */}
-                          {sheeted && !boxesOpen && (!sheetProvisional || provisionalState === 'pending') && (
+                          {/* ARRANGE, THEN ENHANCE (owner request, 2026-11-02): an
+                              arranged page can be settled with as it is, or its
+                              wording polished from HERE — the arranged result
+                              itself, not another button in the sidebar. The
+                              enhanced page replaces this one in the same panel
+                              and on the same paper, so the officer keeps
+                              reading one document. Grammar, spelling, clarity
+                              and police register only: same parts, same labels,
+                              no new fact (see enhance_report_prompt.txt). */}
+                          {draft?.arranged && (
                             <button
                               type="button"
-                              onClick={openDraftBoxes}
-                              title="Shows this draft as its three editable boxes under the page — the same text, so it can be corrected before accepting."
+                              onClick={() => enhanceReport({ fromArranged: true })}
+                              title="Corrects grammar and sharpens the wording of this arranged page — same parts, same labels, no new facts."
                             >
-                              Edit the draft
+                              Enhance writing
                             </button>
                           )}
+                          {/* Edit the draft removed by owner request: corrections happen
+                              on the sheet itself, not in boxes under the letter. */}
                           {/* Each result offers to repeat ITSELF: a generated draft
                               regenerates from the report, a tightened draft is
                               tightened again, an arranged draft is arranged again.
@@ -2630,6 +2744,12 @@ export default function AiNarrativePanel({
                               onClick={() => arrangeReport()}
                               title="Re-arranges your current account text into the report format — your wording is kept exactly as written."
                             >Arrange again</button>
+                          ) : draft?.enhanced ? (
+                            <button
+                              type="button"
+                              onClick={() => enhanceReport()}
+                              title="Enhances your current account text again — grammar and clarity only, with every fact and label preserved."
+                            >Enhance again</button>
                           ) : (
                             <button type="button" onClick={() => setShowFeedback((v) => !v)}>Regenerate…</button>
                           )}

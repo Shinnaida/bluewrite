@@ -29,51 +29,230 @@
 
   <main>
     <h1>Station Dashboard</h1>
-    <p class="lede">Station-wide reporting activity. Placeholder figures only — replace with live data from the application.</p>
+    <p class="lede">Live station-wide reporting activity, read straight from the records database.</p>
+
+    <form class="card" id="dash-filters" style="margin-bottom:16px">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+        <div class="field" style="min-width:150px">
+          <label for="dash-from">From</label>
+          <input id="dash-from" name="from" type="date">
+        </div>
+        <div class="field" style="min-width:150px">
+          <label for="dash-to">To</label>
+          <input id="dash-to" name="to" type="date">
+        </div>
+        <div class="field" style="min-width:180px">
+          <label for="dash-type">Incident type</label>
+          <select id="dash-type" name="type">
+            <option value="">All types</option>
+          </select>
+        </div>
+        <div class="field" style="min-width:160px">
+          <label for="dash-scope">Scope</label>
+          <select id="dash-scope" name="scope">
+            <option value="all">Whole station</option>
+            <option value="mine">Only my records</option>
+          </select>
+        </div>
+        <button class="btn btn--primary" type="submit">Apply</button>
+        <p class="small" id="dash-meta" aria-live="polite" style="margin:0;color:var(--ink-dim)"></p>
+      </div>
+    </form>
+
+    <p class="notice" id="dash-notice" hidden></p>
 
     <section class="stat-grid" aria-label="Totals">
       <div class="stat">
         <p class="stat__label">Total reports</p>
-        <p class="stat__value">128</p>
-        <p class="stat__note">All time</p>
+        <p class="stat__value" id="stat-total">—</p>
+        <p class="stat__note" id="stat-total-note">In window</p>
       </div>
       <div class="stat">
-        <p class="stat__label">Submitted</p>
-        <p class="stat__value">96</p>
-        <p class="stat__note">Finalized by officers</p>
+        <p class="stat__label">Drafts</p>
+        <p class="stat__value" id="stat-drafts">—</p>
+        <p class="stat__note">Not yet submitted</p>
       </div>
       <div class="stat">
-        <p class="stat__label">For review</p>
-        <p class="stat__value">21</p>
-        <p class="stat__note">Waiting on a supervisor</p>
+        <p class="stat__label">Awaiting finalization</p>
+        <p class="stat__value" id="stat-submitted">—</p>
+        <p class="stat__note">In the review queue</p>
       </div>
       <div class="stat">
-        <p class="stat__label">Officers</p>
-        <p class="stat__value">34</p>
-        <p class="stat__note">Active accounts</p>
+        <p class="stat__label">Finalized</p>
+        <p class="stat__value" id="stat-finalized">—</p>
+        <p class="stat__note" id="stat-finalized-note">Locked records</p>
       </div>
     </section>
 
     <div class="panel-grid">
       <section class="card" aria-labelledby="by-type-title">
         <h2 id="by-type-title">Reports by type</h2>
-        <div class="bar-row"><span>Theft</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 64%"></span></span><span class="bar-row__count">41</span></div>
-        <div class="bar-row"><span>Traffic incident</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 48%"></span></span><span class="bar-row__count">31</span></div>
-        <div class="bar-row"><span>Assault</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 28%"></span></span><span class="bar-row__count">18</span></div>
-        <div class="bar-row"><span>Other</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 20%"></span></span><span class="bar-row__count">13</span></div>
+        <div id="dash-types-body"><p class="stat__note">Loading…</p></div>
       </section>
 
       <section class="card" aria-labelledby="by-status-title">
         <h2 id="by-status-title">Reports by status</h2>
-        <div class="bar-row"><span>Submitted</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 75%"></span></span><span class="bar-row__count">96</span></div>
-        <div class="bar-row"><span>For review</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 16%"></span></span><span class="bar-row__count">21</span></div>
-        <div class="bar-row"><span>Draft</span><span class="bar-row__track"><span class="bar-row__fill" style="width: 9%"></span></span><span class="bar-row__count">11</span></div>
+        <div id="dash-status-body"><p class="stat__note">Loading…</p></div>
       </section>
     </div>
+
+    <section class="card" style="margin-top:16px" aria-labelledby="recent-title">
+      <h2 id="recent-title">Newest reports in this window</h2>
+      <div class="table-wrap" style="border:0">
+        <table style="min-width:0">
+          <thead><tr><th scope="col">Report</th><th scope="col">Place</th><th scope="col">Status</th></tr></thead>
+          <tbody id="dash-recent">
+            <tr><td colspan="3">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </main>
 
   <footer class="site-footer">
     City of Naga Police Station · Public Safety Department
   </footer>
+
+  <script>
+    (function () {
+      var fromEl = document.getElementById('dash-from');
+      var toEl = document.getElementById('dash-to');
+      var typeEl = document.getElementById('dash-type');
+      var scopeEl = document.getElementById('dash-scope');
+      var metaEl = document.getElementById('dash-meta');
+      var noticeEl = document.getElementById('dash-notice');
+
+      // Default window: last 30 days, Manila time — same as the app dashboard.
+      try {
+        var now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+        var to = now.toISOString().slice(0, 10);
+        var fromDate = new Date(now);
+        fromDate.setDate(fromDate.getDate() - 29);
+        toEl.value = to;
+        fromEl.value = fromDate.toISOString().slice(0, 10);
+      } catch (e) {
+        var d = new Date();
+        toEl.value = d.toISOString().slice(0, 10);
+        var f = new Date(d);
+        f.setDate(f.getDate() - 29);
+        fromEl.value = f.toISOString().slice(0, 10);
+      }
+
+      function esc(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      function barRow(name, count, max) {
+        var pct = max > 0 ? Math.round((count / max) * 100) : 0;
+        return '<div class="bar-row"><span>' + esc(name) + '</span>' +
+          '<span class="bar-row__track"><span class="bar-row__fill" style="width:' + pct + '%"></span></span>' +
+          '<span class="bar-row__count">' + count + '</span></div>';
+      }
+
+      function statusLabel(s) {
+        if (s === 'draft') return 'Draft';
+        if (s === 'submitted') return 'Awaiting finalization';
+        if (s === 'finalized' || s === 'final') return 'Finalized';
+        return s;
+      }
+
+      var typeOptionsLoaded = false;
+
+      async function load() {
+        noticeEl.hidden = true;
+        var params = new URLSearchParams();
+        if (fromEl.value) params.set('from', fromEl.value);
+        if (toEl.value) params.set('to', toEl.value);
+        if (typeEl.value) params.set('type', typeEl.value);
+        params.set('scope', scopeEl.value || 'all');
+
+        var res;
+        try {
+          res = await fetch('/api/v1/dashboard/stats?' + params.toString(), { credentials: 'same-origin' });
+        } catch (e) {
+          noticeEl.textContent = 'Cannot reach the BlueWrite server. Start it, then retry.';
+          noticeEl.hidden = false;
+          return;
+        }
+        var body = null;
+        try { body = await res.json(); } catch (e) { /* fall through */ }
+        if (res.status === 401 || res.status === 403) {
+          noticeEl.innerHTML = 'Sign in as an <strong>Admin</strong> to read live records. The dashboard endpoint refused this session (' + res.status + ').';
+          noticeEl.hidden = false;
+          return;
+        }
+        if (!res.ok || !body) {
+          noticeEl.textContent = (body && body.error) || ('Dashboard request failed (' + res.status + ').');
+          noticeEl.hidden = false;
+          return;
+        }
+
+        // Type filter options come from the live database, once.
+        if (!typeOptionsLoaded && Array.isArray(body.meta && body.meta.availableTypes)) {
+          body.meta.availableTypes.forEach(function (t) {
+            var opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = t;
+            typeEl.appendChild(opt);
+          });
+          typeOptionsLoaded = true;
+        }
+
+        var k = body.kpis || {};
+        var total = Number(k.total || 0);
+        document.getElementById('stat-total').textContent = total.toLocaleString();
+        document.getElementById('stat-drafts').textContent = Number(k.pending || 0).toLocaleString();
+        document.getElementById('stat-submitted').textContent = Number(k.submitted || 0).toLocaleString();
+        document.getElementById('stat-finalized').textContent = Number(k.finalized || 0).toLocaleString();
+        document.getElementById('stat-total-note').textContent =
+          (k.periodDeltaPct == null ? 'In window' : ((k.periodDeltaPct >= 0 ? '↑ ' : '↓ ') + Math.abs(k.periodDeltaPct) + '% vs. previous period'));
+        var fin = body.finalizeTime || {};
+        document.getElementById('stat-finalized-note').textContent =
+          (fin.medianMinutes != null ? 'Median draft to final: ' + fin.medianMinutes + 'm · ' : '') +
+          Number(fin.finalizedCount || 0) + ' finalized in window';
+
+        // By type — live categoryBreakdown, widths relative to the busiest type.
+        var cats = Array.isArray(body.categoryBreakdown) ? body.categoryBreakdown : [];
+        var maxCat = cats.reduce(function (m, r) { return Math.max(m, Number(r.count || 0)); }, 0);
+        document.getElementById('dash-types-body').innerHTML = cats.length
+          ? cats.map(function (r) { return barRow(r.type, Number(r.count || 0), maxCat); }).join('')
+          : '<p class="stat__note">No reports in this window. Widen the dates or clear the incident type — older records (e.g. March seed data) fall outside the last 30 days.</p>';
+
+        // By status — live statusBreakdown.
+        var sb = body.statusBreakdown || {};
+        var sRows = [
+          ['Draft', Number(sb.draft || 0)],
+          ['Awaiting finalization', Number(sb.submitted || 0)],
+          ['Finalized', Number(sb.final != null ? sb.final : 0)],
+        ];
+        var maxS = Math.max.apply(null, sRows.map(function (r) { return r[1]; }).concat([0]));
+        document.getElementById('dash-status-body').innerHTML =
+          sRows.map(function (r) { return barRow(r[0], r[1], maxS); }).join('');
+
+        // Newest reports in this window — live recentReports.
+        var rows = Array.isArray(body.recentReports) ? body.recentReports : [];
+        document.getElementById('dash-recent').innerHTML = rows.length
+          ? rows.map(function (r) {
+              var no = 'BW-' + String(r.id).padStart(4, '0');
+              return '<tr><td><strong>' + esc(no) + '</strong><br><span class="stat__note">' + esc(r.type) + ' · ' + esc(r.incident_datetime || '') + '</span></td>' +
+                '<td>' + esc(r.location || '—') + '</td><td>' + esc(statusLabel(r.status)) + '</td></tr>';
+            }).join('')
+          : '<tr><td colspan="3">No reports in this window.</td></tr>';
+
+        var m = body.meta || {};
+        metaEl.textContent = total + ' report' + (total === 1 ? '' : 's') +
+          (m.from && m.to ? ' · ' + m.from + ' to ' + m.to : '') +
+          (m.type ? ' · ' + m.type : '');
+      }
+
+      document.getElementById('dash-filters').addEventListener('submit', function (e) {
+        e.preventDefault();
+        load();
+      });
+      load();
+    })();
+  </script>
 </body>
 </html>

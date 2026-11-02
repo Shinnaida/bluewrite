@@ -2,7 +2,7 @@
 //
 // My Reports / All Reports is a shelf of folders now. A folder is an incident
 // TYPE; the shelf it sits on is the report's own state — Draft while it is still
-// being written, Submitted once it has gone forward. Opening a folder lists the
+// being written, Finalized once it has gone forward. Opening a folder lists the
 // reports inside it.
 //
 // AND ONE SHELF IS NOT FOLDERS AT ALL. All Reports (`ALL_SHELF`) is the whole
@@ -214,12 +214,12 @@ export function sortNote(sort, dir) {
  *
  * TWO SHELVES, NOT THREE, and the question is not "what exact status is this"
  * but "is this still the officer's to finish". A draft is; nothing else is. So
- * `submitted` and `finalized` share the Submitted shelf — a finalized report is
+ * `submitted` and `finalized` share the Finalized shelf — a finalized report is
  * the locked end state of submitted, not a different kind of document.
  *
- * TOTAL on purpose: a status this build has never heard of lands on Submitted
- * rather than vanishing from a view that has no row for it. Hiding a report
- * would be worse than shelving it under a name the officer can still open.
+ * TOTAL on purpose: a status this build has never heard of lands on the filed
+ * shelf rather than vanishing from a view that has no row for it. Hiding a
+ * report would be worse than shelving it under a name the officer can still open.
  */
 export function statusBucket(status) {
   return String(status ?? '').trim().toLowerCase() === 'draft' ? 'draft' : 'submitted';
@@ -228,42 +228,38 @@ export function statusBucket(status) {
 /** The two shelves the ordinary register draws, in the order they are read. */
 export const STATUS_BUCKETS = [
   { key: 'draft', label: 'Draft' },
-  { key: 'submitted', label: 'Submitted' },
+  { key: 'submitted', label: 'Finalized' },
 ];
 
 /**
- * WHAT THE OFFICER'S OWN SCREENS CALL THE END OF A REPORT (owner request,
+ * WHAT EVERY SCREEN CALLS THE END OF A REPORT (owner request,
  * 2026-10-13: "change the submitted to finalized … remove submitted, all data
- * in it should be in finalized").
+ * in it should be in finalized"; extended to the Admin's All Reports
+ * 2026-10-30: "in all reports in admin side … make the submitted to finalized").
  *
- * The database keeps THREE statuses and the officer is shown two. The three are
- * real and stay: the Admin's review queue IS the difference between a report
- * awaiting review (`submitted`) and one locked (`finalized`), which is why
- * neither the status filter nor the shelf bucket for an Admin changes here. But
- * for the officer who wrote it there is one end state, and the register was
- * printing two words for it — a row whose status was `submitted` sat beside one
- * that said `finalized`, while the shelf above them both, and the filter below,
- * offered the pair again.
+ * The database keeps THREE statuses and every screen is shown two. The three are
+ * real and stay: `submitted` rows still exist in old data, but they read as
+ * `finalized` everywhere — the row badge and the sheet's badge (`statusText`),
+ * the shelf tab and the Status filter (`FINALIZED_LABEL`, plus the `filed`
+ * value the server accepts for it). One definition means a report cannot be
+ * "finalized" on a row and "submitted" in the panel it opens.
  *
- * So every officer-facing surface reads its word from here: the row badge and
- * the sheet's badge (`statusText`), the shelf tab and the Status filter
- * (`FINALIZED_LABEL`, plus the `filed` value the server accepts for it). One
- * definition means a report cannot be "finalized" on a row and "submitted" in
- * the panel it opens.
+ * The `officer` flag is kept so existing callers do not break; it no longer
+ * changes the word. The badge's own class stays keyed off the raw value
+ * (styles.css declares one per status) so the colour of a folded `submitted`
+ * badge stays the colour that state has always been.
  */
 export const FINALIZED_LABEL = 'Finalized';
 
 /**
- * The word printed for a report's status, per audience.
+ * The word printed for a report's status.
  *
- * Returns the raw status for everyone else — the Admin needs to read `submitted`
- * and `finalized` apart, and the badge's own class is keyed off the raw value
- * either way (styles.css declares one per status) so the colour of a folded
- * `submitted` badge stays the colour that state has always been.
+ * `submitted` and `finalized` both read as `finalized` — for officers and for
+ * Admins alike (see FINALIZED_LABEL). Anything else reads back as it arrived.
  */
 export function statusText(status, { officer = false } = {}) {
+  void officer;
   const value = String(status ?? '').trim().toLowerCase();
-  if (!officer) return value;
   return value === 'submitted' || value === 'finalized' ? 'finalized' : value;
 }
 
@@ -379,14 +375,13 @@ export function shelvesFor({ archived = false, awaiting = false, sort, dir, offi
   // default: the officer can sort the register now (see ReportTools), and a tab
   // still reading "Newest first" over a list of the oldest three reports would be
   // the register contradicting the screen beneath it.
-  // The second shelf is renamed for the officer, never re-scoped: the bucket
-  // already holds `submitted` AND `finalized` (statusBucket), which is exactly
-  // the set the officer calls finalized, so the tab's own data does not move.
-  return [
-    { ...ALL_SHELF, note: sortNote(sort, dir) },
-    ...STATUS_BUCKETS.map((s) =>
-      officer && s.key === 'submitted' ? { ...s, label: FINALIZED_LABEL } : s),
-  ];
+  // The second shelf is the filed set, never re-scoped: the bucket already
+  // holds `submitted` AND `finalized` (statusBucket), which is exactly the set
+  // every screen calls finalized, so the tab's own data does not move. The
+  // `officer` flag is kept so existing callers do not break; it no longer
+  // changes the labels.
+  void officer;
+  return [{ ...ALL_SHELF, note: sortNote(sort, dir) }, ...STATUS_BUCKETS];
 }
 
 /**

@@ -49,7 +49,10 @@ test('the hour chart is findable, reads the range payload, and keeps one piece o
   assert.ok(chart.length > 500, 'could not find HourChart in Dashboard.jsx');
   // ONE WINDOW: the dashboard's own range, like every other panel on the page.
   assert.match(chart, /function HourChart\(\{ hours \}\)/);
-  assert.match(component, /<HourChart hours=\{data\?\.hourHistogram \?\? \[\]\} \/>/);
+  // REMOVED from the page (owner request, 2026-10-26): the trio replaced the
+  // status/hour row, and the trend's own head already carries the range. The
+  // component stays tested here so a future panel can reuse it.
+  assert.doesNotMatch(component, /<HourChart hours=\{data\?\.hourHistogram \?\? \[\]\} \/>/);
   assert.equal((chart.match(/useState\(/g) ?? []).length, 1, 'the strip keeps exactly one piece of state');
 });
 

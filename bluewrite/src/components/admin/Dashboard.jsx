@@ -38,6 +38,13 @@ import RowMenu from '../shared/RowMenu.jsx';
 // screen that also links to the register.
 import ReportTypeIcon from '../reports/ReportTypeIcon.jsx';
 import { typeHue, typeIcon } from '../../lib/reportFolder.js';
+// The station's own seal and names, for the identity band at the head of the
+// page. The artwork rides in the bundle (the LAN has no internet, so a mark
+// is a file or it is nothing) and the words come from lib/appInfo.js — the
+// same two places the rail and the printed sheet read them from, so the three
+// never disagree on what the station is called.
+import { STATION, SYSTEM_TITLE } from '../../lib/appInfo.js';
+import pnpSeal from '../../assets/pnp-logo.png';
 // The "Search the news" panel: a search of the open web through the server's news
 // proxy, so the API token never reaches the browser (see NewsController.php).
 
@@ -72,7 +79,8 @@ import { typeHue, typeIcon } from '../../lib/reportFolder.js';
  *       them. `medianPct` is null when there is no previous median to compare
  *       against.
  *   recentReports[{id,type,location,incident_datetime,status}]
- *     — the five newest records IN THIS RANGE, for the activity panel.
+ *     — the five newest records IN THIS RANGE, for the activity panel.  *   users{total,byRole{Admin,Officer}} — ACTIVE accounts only, for the
+ *     headcount card in the identity band's row.
  *   finalizeTime{medianMinutes,finalizedCount} · meta{from,to,type,scope,availableTypes}
  */
 
@@ -131,7 +139,7 @@ const PANEL_INFO = {
   status: {
     label: 'How to read the status breakdown',
     title: 'How to read this pie',
-    note: 'Each wedge is one report status, drawn at its share of the reports in this range; a status with none in range is not drawn at all, so a two-wedge pie is not a broken one. The wedges run clockwise from twelve o’clock in workflow order — Final, Submitted, Draft — never by size, so a status stays where the reader learned to find it.',
+    note: 'Each wedge is one report status, drawn at its share of the reports in this range; a status with none in range is not drawn at all, so a two-wedge pie is not a broken one. The wedges run clockwise from twelve o’clock in workflow order — Final, Finalized, Draft — never by size, so a status stays where the reader learned to find it.',
     hint: 'Point at a wedge to lift it and read its count and share under the pie; right-click one to open those reports in the register, copy the breakdown, or pin the readout open.',
   },
   type: {
@@ -242,6 +250,41 @@ export function KpiCard({ label, value, note, delta, valueClass = '', to = null,
   );
 }
 
+/**
+ * THE STATION'S IDENTITY BAND: the police at the head of the page.
+ *
+ * The PNP seal in a gold ring, then the force, the station and the system —
+ * the same lockup order the rail and the printed sheet use (seal, then
+ * letterhead), so the three read the same way round. The seal is decorative
+ * and stated as such: the words beside it are what name the agency, and a
+ * screen reader that heard "PNP seal" first would be read a picture of the
+ * sentence it is about to get.
+ *
+ * The station's own name arrives from Shell's letterhead read (`stationName`)
+ * and falls back to the built-in letterhead when that has not landed yet —
+ * the same fallback the signature line and the sheet use, stated once in
+ * lib/appInfo.js rather than retyped here.
+ *
+ * Exported for the same reason KpiCard is (see the note above it): a band
+ * that renders as an empty plate passes every source-reading test, so the
+ * fixture renders this and reads the markup.
+ */
+export function StationBanner({ stationName }) {
+  const station = String(stationName || '').trim() || STATION;
+  return (
+    <section className="dash-identity" aria-label="Station identity">
+      <span className="dash-identity__seal" aria-hidden="true">
+        <img src={pnpSeal} alt="" />
+      </span>
+      <span className="dash-identity__text">
+        <span className="dash-identity__force">Philippine National Police</span>
+        <span className="dash-identity__station">{station}</span>
+        <span className="dash-identity__system">{SYSTEM_TITLE}</span>
+      </span>
+    </section>
+  );
+}
+
 /** "↑ 12% vs. previous period" — the one wording for a change against the period
  *  before, shared by every card that carries one. `pct` null/undefined means
  *  there was nothing to compare: no line. */
@@ -285,9 +328,19 @@ function BarsMark() {
  *  the workflow, in the same words the register's shelves use. */
 const ACTIVITY_STATUS = {
   draft: 'Draft',
-  submitted: 'Awaiting Finalization',
+  submitted: 'Finalized',
   finalized: 'Finalized',
 };
+
+/** The headcount's split by role, in the roster's own order. */
+function usersNote(byRole) {
+  const r = byRole ?? {};
+  const parts = [
+    [Number(r.Admin ?? 0), 'admin'],
+    [Number(r.Officer ?? 0), 'officer'],
+  ];
+  return parts.map(([n, w]) => `${fmt.format(n)} ${w}${n === 1 ? '' : 's'}`).join(' · ');
+}
 
 /** "12 Oct 2026, 18:42" — the day AND the minute, because a list of what just
  *  happened is read by the minute. Built from the same `YYYY-MM-DD HH:MM:SS`
@@ -299,6 +352,29 @@ function activityWhen(dbStamp) {
   const day = then.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   const time = then.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   return `${day}, ${time}`;
+}
+
+/** The register's own file logo (see FileLogo in ReportList.jsx): the
+ * yellow-to-orange page with its corner folded down and three ruled bars —
+ * the same drawing a row of All Reports wears, so a record reads as the same
+ * file here as there. Purely drawn, aria-hidden: the row names the report. */
+function ActivityFileLogo({ className }) {
+  const gradientId = useId();
+  return (
+    <svg className={className} viewBox="0 0 24 28" fill="none" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id={gradientId} x1="12" y1="1" x2="12" y2="27" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#FFC93C" />
+          <stop offset="1" stopColor="#F29B00" />
+        </linearGradient>
+      </defs>
+      <path d="M5 1h9.6L22 8.4V24a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V4a3 3 0 0 1 3-3z" fill={`url(#${gradientId})`} />
+      <path d="M14.6 1 22 8.4h-5.4a2 2 0 0 1-2-2V1z" fill="#E1860A" />
+      <rect x="5.5" y="12" width="13" height="2" rx="1" fill="#DD7A01" />
+      <rect x="5.5" y="15.6" width="10.4" height="2" rx="1" fill="#DD7A01" />
+      <rect x="5.5" y="19.2" width="7.2" height="2" rx="1" fill="#DD7A01" />
+    </svg>
+  );
 }
 
 /**
@@ -353,6 +429,9 @@ export function RecentActivity({ reports, loading, onOpen, onViewAll }) {
                 onClick={() => onOpen?.(r.id)}
                 title={`Open report BW-${String(r.id).padStart(4, '0')}`}
               >
+                <span className="dash-activity__file" aria-hidden="true">
+                  <ActivityFileLogo className="dash-activity__filemark" />
+                </span>
                 <span className="dash-activity__text">
                   <span className={`dash-activity__type dash-activity__type--${typeHue(r.type)}`}>
                     <ReportTypeIcon name={typeIcon(r.type)} className="dash-activity__type-mark" aria-hidden="true" />
@@ -400,9 +479,12 @@ export default function Dashboard({
   // card simply stops sharing its line with the activity panel.
   const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState(null);
-  const [preset, setPreset] = useState(30);
+  // The dashboard opens on the whole register (All time), so its totals match
+  // All Reports. Empty dates mean All time: the server derives the window from
+  // the data itself and echoes it back in meta.
+  const [preset, setPreset] = useState('all');
   const [scope, setScope] = useState('all'); // meaningful for Admin only
-  const [{ from, to }, setDates] = useState(datesForPreset(30));
+  const [{ from, to }, setDates] = useState({ from: '', to: '' });
   const [type, setType] = useState('');
   const [updatedAt, setUpdatedAt] = useState(null);
   // The open self-service recovery requests (Phase 1, S-04), read from their own
@@ -425,6 +507,9 @@ export default function Dashboard({
     const params = new URLSearchParams();
     if (from) params.set('from', from);
     if (to) params.set('to', to);
+    // No dates means All time: ask for the whole register, not the fallback
+    // window the server applies when the range is simply absent.
+    if (!from && !to) params.set('range', 'all');
     if (type) params.set('type', type);
     params.set('scope', scope);
 
@@ -505,7 +590,7 @@ export default function Dashboard({
 
   const applyPreset = (days) => {
     setPreset(days);
-    setDates(datesForPreset(days));
+    setDates(days === 'all' ? { from: '', to: '' } : datesForPreset(days));
   };
 
   const clearPreset = () => {
@@ -549,7 +634,7 @@ export default function Dashboard({
   const chartTypes = useMemo(() => orderForDisplay(data?.seriesByType), [data?.seriesByType]);
 
   return (
-    <div className="dash">
+    <div className="dash dash--admin">
       {/* ---- Sign-in health (migration 018 / S-01) -------------------------
           The second factor's preflight, so the station can see its factor is
           healthy BEFORE a shift starts rather than when an officer is already
@@ -623,13 +708,20 @@ export default function Dashboard({
         </div>
       )}
 
+      {/* ---- Identity: the police at the head of the page (owner request) ---
+          The PNP seal and the station's own name open the dashboard, so an
+          Admin lands on whose house this is before the numbers. */}
+      <StationBanner stationName={stationName} />
+
       {/* ---- Head: readings beside the clock (owner request) ----------------
-          THREE CARDS, each saying one thing about the range being read (owner
+          FOUR CARDS, each saying one thing about the range being read (owner
           request, 2026-10-12): the caption, the number, and one line under it —
-          the number the hero of each card. The readings, their order and
-          their sub-lines are the reference's own. (A fourth card, Needs
+          the number the hero of each card. The first three readings, their order
+          and their sub-lines are the reference's own. (A fourth card, Needs
           attention, was removed on request — the queue it opened lives in All
-          Reports.) The strip shares its row with the clock rather than stacking
+          Reports.) The fourth card now is the headcount: how many active
+          accounts can open the register, with the split by role under it. The
+          strip shares its row with the clock rather than stacking
           above the charts: the numbers and the moment they were read belong
           together, and the row below starts on the work itself. */}
       <div className="dash-head">
@@ -652,6 +744,12 @@ export default function Dashboard({
           loading={loading}
           label="Finalized"
           value={k ? fmt.format(k.finalized) : '—'}
+        />
+        <KpiCard
+          loading={loading}
+          label="Total users"
+          value={data?.users ? fmt.format(data.users.total) : '—'}
+          note={data?.users ? usersNote(data.users.byRole) : ''}
         />
       </section>
       {/* The clock keeps the row's right end: date, time and greeting beside the
@@ -1542,7 +1640,7 @@ function Peek({ at, children }) {
 // order stays put.
 const STATUS_SLICES = [
   { key: 'final', label: 'Final' },
-  { key: 'submitted', label: 'Submitted' },
+  { key: 'submitted', label: 'Finalized' },
   { key: 'draft', label: 'Draft' },
 ];
 

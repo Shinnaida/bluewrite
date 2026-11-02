@@ -107,7 +107,7 @@ test('a chathead says who it is, and that is its accessible name too', () => {
   // Nothing to say about the role, or nothing to say about the age: the sentence
   // loses a clause rather than printing a placeholder.
   assert.equal(chatheadTitle({ full_name: 'Maria Santos' }), 'Maria Santos · active just now');
-  assert.equal(chatheadTitle({ full_name: 'Maria Santos', role: 'Staff', idle_seconds: Number.NaN }), 'Maria Santos — Staff');
+  assert.equal(chatheadTitle({ full_name: 'Maria Santos', role: 'Officer', idle_seconds: Number.NaN }), 'Maria Santos — Officer');
   // A nameless entry still announces something a screen reader can use.
   assert.equal(chatheadTitle({}), 'Signed-in account · active just now');
 });

@@ -1113,4 +1113,34 @@ final class SystemInstructionTest extends TestCase
         ], []);
         $this->assertStringNotContainsString('SOURCE LANGUAGE:', $english['contents'][0]['parts'][0]['text']);
     }
-}
+
+    /**
+     * No invented issuance (owner request, 2026-11-01): a live enhance run
+     * closed a plain account with an invented requestor name. The blotter-
+     * certification block must forbid writing an issuance line the account
+     * never had — and forbid filling a placeholder name — so the record
+     * rule is requested in the prompt as well as enforced in code
+     * (NarrativeService::stripInventedIssuance).
+     */
+    public function testBlotterCertificationNeverInventsTheIssuance(): void
+    {
+        $instruction = GeminiNarrativeProvider::buildSystemInstruction('Lost Property');
+        $this->assertStringContainsString('NEVER invent the issuance', $instruction);
+        $this->assertStringContainsString('never invent a requestor name', $instruction);
+        $this->assertStringContainsString('name of who requested', $instruction);
+    }
+
+    /**
+     * Formal capitals in the enhanced prose (owner request, 2026-11-02): a
+     * lost-wallet Enhance run returned lowercase months, names and acronyms
+     * ("october", "philippine", "carcar City"). The blotter-
+     * certification block must demand standard capitals for months, proper
+     * names and institutional acronyms — places stay verbatim for the
+     * sheet's conclusive spelling at render.
+     */
+    public function testBlotterCertificationDemandsFormalCapitals(): void
+    {
+        $instruction = GeminiNarrativeProvider::buildSystemInstruction('Lost Property');
+        $this->assertStringContainsString('Formal capitals', $instruction);
+        $this->assertStringContainsString('institutional acronyms', $instruction);
+    }

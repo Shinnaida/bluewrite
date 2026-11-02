@@ -76,8 +76,15 @@ final class IncidentTypes
     }
 
     /**
-     * What the station calls this report's incident: the officer's own words for
-     * a catch-all report, else the type, with several types joined by ' + '.
+     * What the station calls this report's incident: the officer's own words
+     * when the type box (or the camera / blotter read) carried free text that
+     * was folded to a canonical type, else the type — with several types
+     * joined by ' + '.
+     *
+     * A report filed as "Reckless imprudence resulting to damage to property
+     * and physical injury" is STORED under its main incident (so the folders
+     * and the dashboard count it where it belongs) but READS under the exact
+     * words, which ride along in type_specific.incident_category.
      *
      * @param array<string,mixed> $row
      */
@@ -88,15 +95,14 @@ final class IncidentTypes
             return '';
         }
         $typed = self::typedName($row);
-        $names = [];
-        foreach ($types as $type) {
-            $names[] = ($type === self::CUSTOM && $typed !== '') ? $typed : $type;
+        if ($typed !== '') {
+            return $typed;
         }
-        return implode(' + ', $names);
+        return implode(' + ', $types);
     }
 
     /**
-     * The officer's own words for the catch-all type, or ''.
+     * The officer's own words for the report, or ''.
      *
      * `type_specific` arrives as JSON text from a query and as an array from a
      * caller that has already decoded it.
@@ -114,5 +120,93 @@ final class IncidentTypes
             return '';
         }
         return trim((string) ($blob['incident_category'] ?? ''));
+    }
+
+    /**
+     * The closest canonical type for free text — the PHP mirror of
+     * classifyClosestType() in src/lib/incidentTypes.js. Keep the two in
+     * lockstep by review: the form folds while the officer types, and the API
+     * folds again on the way in, so the two must never disagree.
+     *
+     * Scoring, not first-match: every firing rule adds its weight, the highest
+     * total wins, ties break toward the lower rank (Traffic Accident first,
+     * then person before property). A blotter "reckless imprudence resulting
+     * to damage to property and physical injury" is filed as the accident by
+     * WEIGHT, not by the tie-break: the recklessness is the incident and
+     * outranks its own consequence words.
+     * A best score below 2 means "no real signal" → null, so a stray word
+     * like "property" alone invents no classification.
+     *
+     * Only types in $allowed can win. Exact and legacy spellings are honoured
+     * first (case-insensitive).
+     *
+     * @param string[] $allowed the station's configured canonical types
+     */
+    public static function closestType(string $text, array $allowed): ?string
+    {
+        $raw = trim($text);
+        if ($raw === '') {
+            return null;
+        }
+        foreach ($allowed as $t) {
+            if (strcasecmp((string) $t, $raw) === 0) {
+                return (string) $t;
+            }
+        }
+        $legacy = [
+            'Theft' => 'Theft',
+            'Physical Injury' => 'Assault / Physical Injury',
+            'Robbery' => 'Robbery',
+            'Vehicular Accident' => 'Traffic Accident',
+            'Domestic Violence' => 'Domestic Violence',
+            'Drug-related' => 'Drug-Related Incident',
+            'Other' => 'Other Incident',
+        ];
+        foreach ($legacy as $name => $canonical) {
+            if (strcasecmp($name, $raw) === 0 && in_array($canonical, $allowed, true)) {
+                return $canonical;
+            }
+        }
+        $rules = [
+            ['Rape / Sexual Assault', 1, ['/\brape\b/i' => 3, '/sexual assault|sexual abuse|sexual harassment/i' => 3, '/molest\w*|acts? of lasciviousness|lascivious/i' => 3]],
+            ['Domestic Violence', 2, ['/domestic violence|violence against women|\bvawc\b|\bra\s*9262\b/i' => 3, '/\bdomestic\b/i' => 2]],
+            ['Drug-Related Incident', 3, ['/\bshabu\b|methamphetamine|\bmarijuana\b|\bcannabis\b|\becstasy\b/i' => 3, '/buy[- ]?bust|drug den|drug paraphernalia|illegal drugs?\b/i' => 3, '/\bdrugs?\b/i' => 2]],
+            ['Fire Incident', 4, ['/\barson\b|\bsunog\b|\bnasunog\b/i' => 3]],
+            ['Missing Person', 5, ['/missing( person)?\b|\bnawawala\b|whereabouts unknown/i' => 3]],
+            ['Traffic Accident', 6, ['/reckless imprudence|reckless driving/i' => 6, '/traffic( accident)?|vehicular|\bcollision\b|road (crash|accident)|hit-?and-?run|\bbangga\b|\bkarambola\b|overshoot/i' => 3, '/\bvehicle\b|\bmotor\b|tricycle|jeepney|\btruck\b|\bvan\b|\bcrash\b/i' => 2, '/\bnegligen\w+/i' => 1]],
+            ['Burglary / Break-In', 7, ['/burglary|break[- ]?in|forcible entry|unlawful entry|akyat[- ]bahay/i' => 3]],
+            ['Robbery', 8, ['/\brobbery\b|hold[- ]?up|\bsnatch\w*|\bhinablot\b|armed robbery/i' => 3]],
+            ['Theft', 9, ['/\btheft\b|\bstole\b|\bstolen\b|\bsteal\w*|\bnakaw\b|\bninakaw\b|carnap\w*|pickpocket|shoplift\w*/i' => 3]],
+            ['Fraud / Estafa', 10, ['/\bestafa\b|\bfraud\b|\bscam\b|swindl\w*|\bbudol\b|pyramid scam/i' => 3]],
+            ['Assault / Physical Injury', 11, ['/physical injur\w*|physical harm|\bassault\b|\bmauling\b|beat\w* up|beaten up|\bstab\w*|\bshoot\w*|\bhack\w*|\bnanakit\b|\bsinaktan\b|\bbugbog\b|panununtok/i' => 3, '/\binjur\w*|\bwound\w*|\bhurt\b|\bharm\b/i' => 2]],
+            ['Property Damage / Malicious Mischief', 12, ['/damage to property|malicious mischief|\bvandal\w*/i' => 3, '/\bdamage[sd]?\b(?! to property)/i' => 1]],
+            ['Lost Property', 13, ['/\blost\b.{0,40}\b(property|wallet|phone|bag|purse|\bid\b|license|documents?)\b/i' => 2, '/\bmisplaced\b/i' => 2]],
+        ];
+        // "fire" names a Fire Incident — unless the word is "firearm", which
+        // is a weapon mentioned in any violent report, not a burning building.
+        $fireRule = (stripos($raw, 'firearm') === false && preg_match('/\bfire\b/i', $raw) === 1) ? 2 : 0;
+        $best = null;
+        $bestScore = 0;
+        $bestRank = PHP_INT_MAX;
+        foreach ($rules as [$type, $rank, $patterns]) {
+            if (!in_array($type, $allowed, true)) {
+                continue;
+            }
+            $score = 0;
+            foreach ($patterns as $re => $weight) {
+                if (preg_match($re, $raw) === 1) {
+                    $score += $weight;
+                }
+            }
+            if ($type === 'Fire Incident') {
+                $score += $fireRule;
+            }
+            if ($score > $bestScore || ($score === $bestScore && $score > 0 && $rank < $bestRank)) {
+                $best = $type;
+                $bestScore = $score;
+                $bestRank = $rank;
+            }
+        }
+        return $bestScore >= 2 ? $best : null;
     }
 }

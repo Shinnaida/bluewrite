@@ -3108,7 +3108,12 @@ body.users-fab-open .ir-page-head {
   box-shadow: none;
 }
 body.users-fab-open .ir-page-head::after { background: none; }
-body.users-fab-open .users-table thead th { border-bottom: 2px solid var(--ir-gold); }
+body.users-fab-open .users-table thead th { border-bottom: 2px solid var(--ir-border); }
+/* THE SORTED COLUMN IS THE ONE IN BLUE: the directory's order has a control now
+   (the rail's Sort key), so the column that order is read down wears the station
+   blue — ink and rule together — while the rest of the header stays a quiet
+   hairline. The audit trail's own gold rule is untouched (see its shared rule). */
+body.users-fab-open .users-table thead th.is-sorted { border-bottom-color: var(--ir-blue); color: var(--ir-blue); }
 body.users-fab-open .main .users-add.primary { background: var(--ir-gold); border-color: var(--ir-gold); color: var(--ir-navy); }
 body.users-fab-open .main .users-add.primary:hover { background: var(--ir-gold-hi); border-color: var(--ir-gold-hi); }
 body.users-fab-open .users-pager__page { background: var(--ir-gold); color: var(--ir-navy); }
@@ -3135,6 +3140,23 @@ body.users-fab-open .ir-page-head.users-head {
   font-size: 0.72rem;
 }
 .users-name { display: inline-flex; align-items: center; gap: 0.6rem; }
+/* ADD USER IN THE RAIL (owner request): the labelled primary sits with the
+   search and keys at the rail's own height, so the directory's one creation
+   action is found where the directory is read. Gold fill comes from the
+   `.users-add.primary` rule above; this is only the shape. */
+.users-filters .users-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0 0.9rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.users-name .bw-avatar { flex: none; }
 .users-role {
   display: inline-block;
   padding: 0.15rem 0.55rem;
@@ -3227,6 +3249,27 @@ body.users-fab-open .ir-page-head.users-head {
   margin-inline: auto;
 }
 
+/* FLAT READ VIEW, NO CARD BOXES (owner request): the open account sits straight
+   on the page the way Station Settings does — full width, sections separated by
+   hairlines instead of boxed cards. Scoped to `.acct-read` so the edit form,
+   which shares `.acct-page`, keeps its cards. */
+.acct-page.acct-read {
+  max-width: none;
+}
+.acct-page.acct-read .st-block {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  min-width: 0;
+}
+.acct-page.acct-read .st-block + .st-block {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--ir-border);
+}
+
 .acct-head {
   margin-bottom: 1.1rem;
 }
@@ -3256,20 +3299,46 @@ body.users-fab-open .ir-page-head.users-head {
 /* The way back, first on the page and the quietest thing on it: the administrator
    arrived by a double-click and leaves by pressing this, or Escape. */
 .acct-back {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
 }
+/* A PILL, NOT A WHISPER (owner request): the way back is the page's front door,
+   so it reads as a button — admin blue at rest, filled on hover with a small
+   lift. Same 160ms motion language as the settings tool buttons. */
 .acct-back__btn {
-  padding: 0.2rem 0;
-  border: 0;
-  background: none;
-  color: var(--ink-dim, #9CA3AF);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1.1rem;
+  border: 1px solid var(--ir-blue);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ir-blue-ink);
   font-family: var(--font-hud);
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 0.85rem;
+  font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
-.acct-back__btn:hover { color: var(--cyan); }
+.acct-back__btn:hover {
+  background: var(--ir-blue);
+  border-color: var(--ir-blue);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.acct-back__btn:active {
+  transform: none;
+  box-shadow: none;
+}
+.acct-back__btn:focus-visible {
+  outline: 2px solid var(--ir-gold);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .acct-back__btn { transition: none; }
+  .acct-back__btn:hover { transform: none; }
+}
 
 /* The line under the name: role, badge and status, which are the three things that
    decide what this account is. The status chip is the directory's own `.badge`. */
@@ -4619,6 +4688,117 @@ body.users-fab-open .ir-page-head.users-head {
 .ai-draft-edit:focus { outline: none; }
 .ai-draft-edit:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
+/* Arrange-only proofreading (GrammarDraftBox): the officer's own wording
+   keeps a red line under grammar/punctuation slips, and a right-click
+   offers the fix. Two layers in one box — the textarea on top carries the
+   caret with transparent ink, and the aria-hidden twin behind it carries
+   the same words plus the wavy spans. Same box, same font, same wrap, so
+   every line sits exactly under the word it flags. The red is the app's
+   own error token, and the menu is the app's own dark surface — no new
+   palette, no new typeface. */
+.grammar-box { position: relative; }
+.grammar-twin {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font: inherit;
+  font-size: 1.08rem;
+  line-height: 1.85;
+  letter-spacing: 0.01em;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  color: var(--paper);
+  overflow: hidden;
+  pointer-events: none;
+}
+.grammar-area {
+  position: relative;
+  z-index: 1;
+  color: transparent;
+  caret-color: var(--paper);
+  background: transparent;
+}
+.grammar-area::selection { background: rgba(120, 170, 255, 0.35); }
+.grammar-issue {
+  background: var(--red-bg);
+  border-radius: 2px;
+  text-decoration: underline wavy var(--red);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+.grammar-menu {
+  position: absolute;
+  z-index: 5;
+  min-width: 210px;
+  max-width: 290px;
+  padding: 0.65rem 0.7rem 0.55rem;
+  background: #ffffff;
+  color: #1f1f1f;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+.grammar-menu-note {
+  margin: 0 0 0.3rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #6b7280;
+}
+.grammar-menu-fix {
+  display: block;
+  width: 100%;
+  padding: 0.35rem 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: #1f1f1f;
+  font: inherit;
+  font-size: 1.02rem;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.grammar-menu-fix:hover { text-decoration: underline; }
+.grammar-menu-fix:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.grammar-menu-fix-new { color: #0b57d0; }
+.grammar-menu-dismiss {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin-top: 0.3rem;
+  padding: 0.35rem 0;
+  border: 0;
+  background: none;
+  color: #6b7280;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.grammar-menu-dismiss:hover { color: #1f1f1f; }
+.grammar-menu-dismiss:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.grammar-menu-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.45rem 0 0;
+  padding-top: 0.45rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+  font-size: 0.78rem;
+  color: #9aa0a6;
+}
+.grammar-menu-brand-dot {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 50%;
+  background: #c9a227;
+}
+
 /* The draft's two formalised blocks, editable where they are read. They carry
    the same auto-growing contract as the narrative box above them (.ai-draft-edit)
    but a quieter, smaller face: they are the draft's parts, not the draft. The
@@ -4992,56 +5172,80 @@ body.users-fab-open .ir-page-head.users-head {
 .conn-retry:hover { background: var(--amber-bg); }
 .conn-retry:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
-/* Slim banner for an already-loaded workspace that loses the server.
+/* Floating system notices, bottom-right (owner standing direction: every
+   system-level notice — a lost server, a blocked save — floats over that
+   corner instead of sitting in the page flow).
 
-   IT FLOATS (owner request, 2026-10-08). It used to sit in the page's flow at the
-   top of the scroll panel, which is the one place a warning about the server
-   cannot be: `.ir-body` is a scroll container of its own (styles.css: `.main`
-   scrolls, not the document) and the register is a long list, so the sentence that
-   matters — reports can't be loaded or saved until it's back — was scrolled off
-   the top within one flick of the wheel, at exactly the moment it stopped being
-   true that everything was fine. Pinned to the viewport it is on screen for as long
-   as the outage lasts, whatever is being read.
+   IT FLOATS because `.ir-body` is a scroll container of its own (`.main`
+   scrolls, not the document) and the register is a long list: an in-flow
+   sentence about the server scrolled off the top within one flick of the
+   wheel, at exactly the moment it stopped being true that everything was
+   fine. Pinned to the viewport it is on screen for as long as the outage
+   lasts, whatever is being read. BOTTOM-RIGHT and neither word is arbitrary:
+   not the top (the app's own chrome lives there, including the controls that
+   sign you out), and the card keeps a measure of its own rather than spanning
+   the window, so it reads as one notice instead of as a bar across the
+   screen.
 
-   BOTTOM-CENTRE, and neither word is arbitrary:
-     * not the top: the top of the window belongs to the app's own chrome (the bar
-       carrying the wordmark and the profile menu), and a notice floating over the
-       controls that sign you out is the wrong trade;
-     * not the bottom-RIGHT corner: that corner is spoken for — the presence rail
-       and the chatbox (`.dash-dock`) and the transient `.toast` — and the one
-       thing a warning must never do is print itself over a colleague's open
-       conversation.
-   It keeps a measure of its own rather than spanning the window, so it reads as
-   one sentence instead of as a bar across the screen.
+   THE BACKGROUND IS OPAQUE: `--amber-bg` alone is a 10% wash (rgba), which
+   was fine on a panel in the flow and is a smudge over the register once the
+   thing floats. The same wash is laid over the panel colour the toast already
+   uses, so it is opaque in both themes.
 
-   THE BACKGROUND IS OPAQUE, which the in-flow version never had to be: `--amber-bg`
-   alone is a 10% wash (rgba), and a floating bar you can read the register through
-   is a smudge rather than a notice. The same wash is laid over the panel colour the
-   toast already uses, so it is opaque in both themes.
-
-   z-index 30 is the deliberate middle, the same reason `.dash-dock` documents its
-   40: above the workspace and its content (`.main` is z-index 1), below the dock,
-   the dialogs (40) and the docked panels (95+) — a connection problem is not more
-   urgent than the officer's own confirmation dialog. */
+   z-index 30 is the deliberate middle, the same reason `.dash-dock` documents
+   its 40: above the workspace and its content (`.main` is z-index 1), below
+   the dock, the transient `.toast` (50), the dialogs (40) and the docked
+   panels (95+) — a connection problem is not more urgent than the officer's
+   own confirmation dialog, and a transient confirmation briefly paints over
+   the corner rather than beside it. The corner coincidence is a covered card
+   for one toast-lifetime, never a lost message: the outage card persists
+   underneath and re-emerges. */
 .conn-banner {
   position: fixed;
-  left: 50%;
+  right: 1.25rem;
   bottom: 1.1rem;
-  transform: translateX(-50%);
   z-index: 30;
-  width: min(48rem, calc(100vw - 1.5rem));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.5rem;
-  padding: 0.55rem 0.9rem;
+  width: min(24rem, calc(100vw - 1.5rem));
+  padding: 0.7rem 0.85rem;
   border: 1px solid var(--amber-line);
   border-left-width: 4px;
   background: linear-gradient(var(--amber-bg), var(--amber-bg)), var(--panel-raised);
   box-shadow: var(--shadow-md);
-  font-size: 0.85rem;
   color: var(--paper);
+}
+.conn-banner-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.conn-banner-title {
+  margin: 0;
+  flex: 1;
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+.conn-banner-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  color: var(--steel);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.conn-banner-close:hover { color: var(--paper); }
+.conn-banner-close:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.conn-banner-text {
+  margin: 0.45rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 .conn-banner-dot {
   align-self: center;
@@ -5051,6 +5255,92 @@ body.users-fab-open .ir-page-head.users-head {
   background: var(--amber);
   animation: conn-pulse 1.6s ease-in-out infinite;
 }
+
+/* Screen-owned floating cards (station settings errors, the migration gate).
+   Same corner and grammar as the connection card above, stacked in one fixed
+   column so two notices never print over each other. z-index 31 sits just
+   over the connection card: the two coincide only when an outage strikes a
+   screen that already has something to say, and the screen's own notice is
+   the one naming the un-savable form. */
+.st-floats {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.1rem;
+  z-index: 31;
+  width: min(26rem, calc(100vw - 1.5rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.float-card {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--amber-line);
+  border-left-width: 4px;
+  background: linear-gradient(var(--amber-bg), var(--amber-bg)), var(--panel-raised);
+  box-shadow: var(--shadow-md);
+  color: var(--paper);
+}
+.float-card--error {
+  border-color: var(--danger-line, #e5a3a3);
+  background: linear-gradient(var(--danger-bg, rgba(220, 60, 60, 0.08)), var(--danger-bg, rgba(220, 60, 60, 0.08))), var(--panel-raised);
+}
+.float-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.float-card__title {
+  margin: 0;
+  flex: 1;
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+.float-card--error .float-card__title { color: var(--danger, #d43d3d); }
+.float-card__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  color: var(--steel);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.float-card__close:hover { color: var(--paper); }
+.float-card__close:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.float-card__text {
+  margin: 0.45rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.float-card__text code {
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+.float-card__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+}
+.float-card__action {
+  padding: 0;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--amber);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.float-card--error .float-card__action { color: var(--danger, #d43d3d); }
+.float-card__action:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 .conn-banner button {
   padding: 0;
   font: inherit;
@@ -5068,6 +5358,51 @@ body.users-fab-open .ir-page-head.users-head {
 @media (prefers-reduced-motion: reduce) {
   .conn-banner-dot { animation: none; }
 }
+
+/* ---- Outage layout guards: the design must not depend on network bytes ----
+   A connection failure costs FRESH DATA, never the screen. Three rules hold
+   that while a request hangs, fails or retries behind the floating banner:
+     1. pictures keep their box (a photograph that cannot load leaves its
+        frame and its fallback ground, not a torn glyph that re-flows text);
+     2. lists keep their height (skeletons hold the rows' room, so a retry
+        does not jump the page);
+     3. a panel that throws is fenced to a card (ErrorBoundary), never a
+        blank page. */
+img { max-width: 100%; }
+img[src=""], img:not([src]) { display: none; }
+.la-photo, .ir-home-hero-photo, .ir-case-panel > .ir-page-head {
+  background: var(--ir-navy, #0b1220);
+}
+.la-photo img, .ir-home-hero-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.reports-table-wrap, .dash-grid, .users-table-wrap { min-height: 12rem; }
+.error-fence {
+  margin: 1rem auto;
+  max-width: 34rem;
+  padding: 1rem 1.1rem;
+  border-left: 4px solid var(--amber);
+  background: var(--panel-raised);
+  box-shadow: var(--shadow-md);
+}
+.error-fence-title { margin: 0; font-size: 0.95rem; font-weight: 700; }
+.error-fence-text { margin: 0.35rem 0 0; font-size: 0.85rem; color: var(--steel); }
+.error-fence-retry {
+  margin-top: 0.7rem;
+  padding: 0.4rem 0.9rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--paper);
+  background: transparent;
+  border: 1px solid var(--amber-line);
+  cursor: pointer;
+}
+.error-fence-retry:hover { background: var(--amber-bg); }
+.error-fence-retry:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
 /* Small in-view note when the workspace banner already explains the
    outage but this particular list may be stale. */
@@ -5223,6 +5558,188 @@ body.audits-white .ir-page-head::after { background: none; }
    the ordinary page. */
 body.register-white .main.ir-body { background: #ffffff; }
 body.audits-white .audits-table thead th { border-bottom: 2px solid var(--ir-gold); }
+/* WHITE PAGE for Station Settings (capstone UI pass): the settings sit on the
+   same white User Management and the Audit Trail sit on — no blue gradient —
+   scoped to the class StationSettings.jsx publishes for its lifetime. */
+body.station-white .main.ir-body { background: #ffffff; }
+body.station-white .ir-page-head {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+body.station-white .ir-page-head::after { background: none; }
+/* Station settings on white: the shared st- cards keep their shape, but the
+   blocks read as white cards with a navy step, a gold rule under the head,
+   and quieter leads — the same dressing the other admin screens wear. Scoped
+   to .st-page so the account form's own st-block sections are untouched. */
+/* Flat sections, no card boxes (owner request): the blocks sit straight on the
+   white page separated by hairlines, so the form breathes at full width. */
+body.station-white .st-page { max-width: none; }
+/* One section on screen at a time, like the register's shelves — flat on the
+   white page, no card boxes. */
+body.station-white .st-page .st-stack { display: block; }
+body.station-white .st-page .st-block {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  min-width: 0;
+}
+body.station-white .st-page .st-block-head h2 { color: var(--ir-navy); font-size: 1.02rem; }
+body.station-white .st-page .st-block-head {
+  border-bottom: 2px solid var(--ir-gold);
+  padding-bottom: 0.7rem;
+  margin-bottom: 1rem;
+}
+/* The shelf tabs read from the register's own classes, so the settings switch
+   exactly the way All Reports does. */
+body.station-white .st-page .folder-tabs { margin-bottom: 1.25rem; }
+/* Numbered steps and the unsaved-changes pill in each block head. */
+body.station-white .st-step {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--ir-navy);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  vertical-align: 2px;
+}
+body.station-white .st-block-head h2 { display: inline; }
+body.station-white .st-dirty {
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ir-blue-ink);
+  background: var(--ir-gold-soft, #fdf3d7);
+  border: 1px solid var(--ir-gold);
+  border-radius: 999px;
+  padding: 2px 10px;
+  vertical-align: 3px;
+}
+/* The field's own character budget, under its input. */
+body.station-white .st-field-count {
+  display: block;
+  margin-top: 4px;
+  text-align: right;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ir-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Toolbar rows: search + bulk actions over the types, search + roster link
+   over the personnel. */
+body.station-white .st-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 0.8rem;
+}
+body.station-white .st-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 200px;
+  max-width: 340px;
+  background: #ffffff;
+  border: 1px solid var(--ir-border);
+  border-radius: 8px;
+  padding: 7px 12px;
+}
+body.station-white .st-search svg { width: 15px; height: 15px; flex: none; color: var(--ir-muted); }
+body.station-white .st-search input {
+  border: 0;
+  outline: none;
+  background: transparent;
+  width: 100%;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--ir-text);
+}
+body.station-white .st-search:focus-within { border-color: var(--ir-blue); }
+body.station-white .st-offered { font-size: 0.8rem; font-weight: 700; color: var(--ir-blue-ink); font-variant-numeric: tabular-nums; }
+/* The dashboard's own page column, edge to edge (owner request, 2026-10-30):
+   the shell's fluid padding and dark backdrop would leave blank sides around
+   the dashboard, so while the dashboard is mounted the column carries the
+   same blue-white background as the dashboard itself — one continuous wash. */
+body.dash-full .main.ir-body {
+  padding: 0;
+  background: #F3F6FB;
+}
+body.station-white .st-tools__buttons { display: flex; gap: 8px; margin-left: auto; }
+body.station-white .st-toolbtn {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ir-navy);
+  background: #ffffff;
+  border: 1px solid var(--ir-border);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+body.station-white .st-toolbtn:hover:not(:disabled) { border-color: var(--ir-blue); transform: translateY(-1px); }
+body.station-white .st-toolbtn:disabled { opacity: 0.55; cursor: default; }
+body.station-white .st-toolbtn.is-primary { background: var(--ir-navy); border-color: var(--ir-navy); color: #ffffff; }
+/* The personnel directory: a face, a name, and the role it signs as. */
+body.station-white .st-person { list-style: none; margin: 0; padding: 0; border: 1px solid var(--ir-border); border-radius: 8px; overflow: hidden; }
+body.station-white .st-person li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--ir-border);
+  background: #ffffff;
+}
+body.station-white .st-person li:last-child { border-bottom: 0; }
+body.station-white .st-person__face {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--ir-navy);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+body.station-white .st-person__who { display: flex; flex-direction: column; min-width: 0; }
+body.station-white .st-person__who strong { font-size: 0.88rem; color: var(--ir-navy); }
+body.station-white .st-person__who span { font-size: 0.76rem; color: var(--ir-muted); }
+body.station-white .st-role {
+  margin-left: auto;
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 3px 11px;
+  background: var(--ir-raised);
+  border: 1px solid var(--ir-border);
+  color: var(--ir-muted);
+}
+body.station-white .st-role--admin { background: #e6eefc; border-color: #1f5fd0; color: #133e87; }
+body.station-white .st-role--officer { background: #dcf5e6; border-color: #15803d; color: #15803d; }
+@media (max-width: 640px) {
+  body.station-white .st-tools__buttons { margin-left: 0; }
+  body.station-white .st-search { max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.station-white .st-toolbtn { transition: none; }
+  body.station-white .st-toolbtn:hover:not(:disabled) { transform: none; }
+}
 /* THE REGISTER'S OWN HEAD (owner request): the shelf strip and the search rail
    share one row over the strip's own hairline, and the labelled filter grid
    stands on the line under it — the same classes All Reports draws from
@@ -5238,6 +5755,97 @@ body.audits-white .audits-table thead th { border-bottom: 2px solid var(--ir-gol
 .audits-page { margin-top: calc(0.02cm - var(--ir-gutter-top)); }
 .audits-head { margin-bottom: 0.1cm; transform: translateY(-22%); }
 .audits-filterbar { margin-bottom: 1rem; }
+/* ORGANIZED FILTER PANEL (owner request): a quiet card, not a loose row — one
+   head line (title + live count + clear) over an even 4-up grid where every
+   control is the same height. No Apply: picking a value filters at once. */
+.audits-page .audits-filterbar:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem 1rem;
+  background: var(--ir-raised);
+  border: 1px solid var(--ir-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.audits-filterbar__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+}
+.audits-filterbar__title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--ir-navy);
+}
+.audits-filterbar__hint {
+  margin: 0.1rem 0 0;
+  font-size: 0.76rem;
+  color: var(--ir-muted);
+}
+.audits-filterbar__side {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+}
+.audits-filterbar__count {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ir-blue-ink);
+  background: var(--ir-blue-tint);
+  white-space: nowrap;
+}
+.audits-page .audits-filterbar__grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.audits-page .audits-filterbar .reports-filter__label {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ir-navy);
+}
+.audits-page .audits-filterbar .reports-filter select,
+.audits-page .audits-filterbar .reports-filter input {
+  height: 44px;
+  font-size: 0.88rem;
+  border-radius: 10px;
+  background: var(--ir-input);
+}
+.audits-page .audits-filterbar .reports-filter__clear {
+  align-self: center;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ir-navy);
+  background: transparent;
+  cursor: pointer;
+}
+.audits-page .audits-filterbar .reports-filter__clear:hover {
+  border-color: var(--ir-blue);
+  color: var(--ir-blue-ink);
+  background: var(--ir-blue-tint);
+}
+@media (max-width: 900px) {
+  .audits-page .audits-filterbar__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .audits-page .audits-filterbar__grid { grid-template-columns: minmax(0, 1fr); }
+}
 /* HEAD READABILITY (owner request, 2026-10-21): the audit tabs read one step up
    from the register's shelf, the search rail takes a longer field, and the
    Filters key's caption steps down so the key stays compact. Scoped to the page
@@ -5247,6 +5855,15 @@ body.audits-white .audits-table thead th { border-bottom: 2px solid var(--ir-gol
 .audits-page .register-tools__search { flex-basis: 20rem; max-width: 27rem; }
 .audits-page .register-tools__search input { font-size: 0.935rem; }
 .audits-page .register-tool__label { font-size: 0.77rem; }
+/* A LITTLE ZOOMED OUT (owner request): the trail is read at a glance, so the
+   whole page steps down one notch — head and table together, so nothing
+   outgrows anything else. Scoped to the page Audits.jsx publishes. */
+.audits-page .audits-table { table-layout: fixed; font-size: 0.8rem; }
+.audits-page .audits-table th { font-size: 0.64rem; padding-top: 0.4rem; padding-bottom: 0.4rem; }
+.audits-page .audits-table td { padding-top: 0.4rem; padding-bottom: 0.4rem; }
+.audits-page .folder-tab { font-size: 0.88rem; }
+.audits-page .folder-tab__note { font-size: 0.77rem; }
+.audits-page .register-tools__search input { font-size: 0.88rem; }
 /* FULL-WIDTH WHITE TRAIL (owner request): the table runs edge to edge of the
    white page, and the station's navy + gold carry the identity — flat washes
    only, never a gradient. Scoped to .audits-page so All Reports keeps its own
@@ -5360,24 +5977,24 @@ body.audits-white .audits-table thead th { border-bottom: 2px solid var(--ir-gol
 }
 /* The date rules are headings, not records: they take no hover highlight. */
 .audits-table tbody tr:hover:not(.blotter-date) { background: var(--cyan-bg); }
-/* ONE flexible column, and it is Details. The table is `width: 100%` of a panel
-   that now runs the full width of the window, so the leftover has to go
-   somewhere. With every column sized to its content, the browser spreads that
-   remainder proportionally — and a column holding a single "1" ended up
-   carrying a dead band beside it as wide as the value itself, which is the gap
-   that made the rows read as spread out rather than ruled. Naming the column
-   that absorbs the slack puts all of it in the one place whose content actually
-   varies in length, and pushes IP out to the table's right edge where it
-   belongs.
-
-   SIXTH, not fifth: the entry-number margin was added ahead of When, so every
-   position after it moved one to the right. A stale index here would hand the
-   slack to the action chip instead, and starve the one column whose length is
-   not known in advance. */
-.audits-table th:nth-child(6),
-.audits-table td:nth-child(6) {
-  width: 100%;
-}
+/* ONE flexible column, and it is Details. The table runs the full width of the
+   window, so the leftover has to go somewhere — and it goes to the one column
+   whose content actually varies in length, which pushes IP out to the table's
+   right edge where it belongs. Sized by <col> (see Audits.jsx), not by
+   nth-child: the chatbot view hides Action, which would move every position
+   after it and hand the slack to the wrong column. Details is also the one
+   cell allowed to wrap; every other cell stays one line, so a long detail can
+   never squeeze a name or a stamp. */
+.audit-col--entry { width: 3.4rem; }
+.audit-col--when { width: 5.4rem; }
+.audit-col--who { width: 9rem; }
+/* The Action pill is never clipped (owner request, 2026-10-30): 13.5rem holds
+   the longest pill whole — "Asked terminology chatbot" — cell padding
+   included. Details is the flexible column, so it absorbs the width. */
+.audit-col--action { width: 13.5rem; }
+.audit-col--entity { width: 6.5rem; }
+.audit-col--ip { width: 7.5rem; }
+.audits-page .audits-table td.audit-detail { white-space: normal; }
 /* The numbered margin of a bound blotter: the entry number, ruled off from the
    record it numbers. It is the entry's own id — monotonic, never reused — so the
    margin is a real log sequence rather than a row count that restarts at 1 on
@@ -5451,6 +6068,172 @@ body.audits-white .audits-table thead th { border-bottom: 2px solid var(--ir-gol
 .audit-action.red { color: var(--red-text); border-color: var(--red-line); background: var(--red-bg); }
 .audit-action.amber { color: var(--amber); border-color: var(--amber-line); background: var(--amber-bg); }
 .audit-action.green { color: var(--green-ok); border-color: var(--green-line); background: var(--green-bg); }
+/* ---- Admin tables drawn as All Reports file cards ----
+   User Management and the Audit Trail used to be ruled tables (one hairline
+   under every row, hover washing the whole row). All Reports is a stack of
+   white file-card papers instead: one rounded paper per record, a 0.65rem gap
+   down the list, a hairline ring rather than rules, and a row that stays still
+   under the pointer. These rules repaint the two admin tables as that same
+   stack — same paper token (so the dark theme answers), same 10px corner,
+   same ring, same gap, same cyan focus ring — plus a hover lift so a row
+   answers the pointer (owner request). Markup is untouched: the tables keep
+   their captions, scoped headings and row-menu wiring, so the directory's
+   tests keep reading the same structure. */
+.users-table,
+.audits-table {
+  border-collapse: separate;
+  border-spacing: 0 0.65rem;
+}
+/* The heading row is labels, not a card: no paper, no ring, no hover wash. */
+.users-table thead th,
+.audits-table thead th {
+  background: none;
+  border-bottom: 2px solid var(--ir-gold);
+}
+.users-table tbody tr,
+.audits-table tbody tr:not(.blotter-date) {
+  border-left: 0;
+  background: var(--ir-filecard-paper);
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--ir-filecard-ring);
+  transition: background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+/* HOVER ANSWERS THE POINTER (owner request): the row lifts a pixel into a
+   light wash with a brighter ring — and on the directory, a gold inset on the
+   left, so the hovered account reads as selected before it is opened. Rows
+   are controls (Enter opens, Menu acts), so the cursor says so. */
+.users-table tbody tr:hover,
+.audits-table tbody tr:not(.blotter-date):hover {
+  background: var(--cyan-bg);
+  border-left-color: transparent;
+  box-shadow: 0 0 0 1px var(--ir-blue), 0 4px 14px rgba(15, 36, 71, 0.10);
+  transform: translateY(-1px);
+  cursor: pointer;
+}
+.users-table tbody tr:hover {
+  box-shadow: 0 0 0 1px var(--ir-blue), inset 3px 0 0 var(--ir-gold), 0 4px 14px rgba(15, 36, 71, 0.10);
+}
+@media (prefers-reduced-motion: reduce) {
+  .users-table tbody tr,
+  .audits-table tbody tr:not(.blotter-date) { transition: none; }
+  .users-table tbody tr:hover,
+  .audits-table tbody tr:not(.blotter-date):hover { transform: none; }
+}
+.users-table tbody tr:focus-visible,
+.audits-table tbody tr:not(.blotter-date):focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  background: var(--ir-filecard-paper);
+}
+.users-table tbody td,
+.audits-table tbody tr:not(.blotter-date) td {
+  border-bottom: 0;
+  padding: 0.8rem 0.75rem;
+}
+.users-table tbody td:first-child,
+.audits-table tbody tr:not(.blotter-date) td:first-child {
+  padding-left: 1rem;
+  border-radius: 10px 0 0 10px;
+}
+.users-table tbody td:last-child,
+.audits-table tbody tr:not(.blotter-date) td:last-child {
+  padding-right: 1rem;
+  border-radius: 0 10px 10px 0;
+}
+/* NARROW SCREENS: NO MORE CUT CELLS (owner request). Below 640px a seven-column
+   card table cannot fit its columns, so rows stop being rows: the head folds
+   away (visually — it stays in the accessibility tree) and every cell becomes
+   a labelled line inside its own card, reading from its own data-label. The
+   day bands stay full-width bands between the cards. Nothing is hidden and
+   nothing scrolls sideways; a phone-width page reads top to bottom. */
+@media (max-width: 640px) {
+  .users-table,
+  .audits-page .audits-table {
+    table-layout: auto;
+  }
+  .users-table thead,
+  .audits-page .audits-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .users-table tbody tr,
+  .audits-page .audits-table tbody tr:not(.blotter-date) {
+    display: block;
+    padding: 0.7rem 0.9rem;
+  }
+  .users-table tbody td,
+  .audits-page .audits-table tbody tr:not(.blotter-date) td {
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+    border-bottom: 0;
+    border-radius: 0;
+    padding: 0.2rem 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .users-table tbody td::before,
+  .audits-page .audits-table tbody td::before {
+    content: attr(data-label);
+    flex: none;
+    width: 6.5rem;
+    font-family: var(--font-hud);
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--cyan-dim);
+  }
+  .users-table tbody td .users-email {
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+  }
+}
+/* The day bands stay bands: ruled group headers between the cards, never cards
+   themselves, so a date never reads as one more record. */
+.audits-table tbody tr.blotter-date,
+.audits-table tbody tr.blotter-date:hover {
+  background: none;
+  border-left: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+/* The role and factor cells wear the type pill's own geometry (tracked-capital
+   chip, 999px corner), so a column of roles reads the way a column of incident
+   types does on All Reports. */
+.users-role {
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 0.14rem 0.5rem;
+}
+.audit-action {
+  border-radius: 999px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 0.14rem 0.5rem;
+}
+.user-mfa {
+  display: inline-block;
+  padding: 0.14rem 0.5rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.user-mfa--on { color: var(--green-ink); border-color: var(--green-line); background: var(--green-bg); }
+.user-mfa--thin { color: var(--amber); border-color: var(--amber-line); background: var(--amber-bg); }
+.user-mfa--off { color: var(--red-text); border-color: var(--red-line); background: var(--red-bg); }
 /* Placeholder rows for the table screens while their first read is in flight.
    Standalone rather than nested under the audit trail: user management and
    station settings render the same row, and no container had styling of its
@@ -5633,6 +6416,43 @@ button.dash-kpi--link:focus-visible {
   gap: 0.9rem;
   text-align: center;
 }
+/* The arranged seals (Station settings ▸ Letterhead style): swapped trades
+   the slots around the org block; stacked grids both seals above it. The
+   org block keeps its own class, so the type, spacing and color stay put
+   whichever arrangement is on file. */
+.pr-head--swapped > .pr-head-left {
+  order: 3;
+}
+.pr-head--swapped > .pr-org {
+  order: 2;
+}
+.pr-head--swapped > .pr-seal {
+  order: 1;
+}
+.pr-head--stacked {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  align-items: center;
+  column-gap: 0.7rem;
+  row-gap: 0.2rem;
+  grid-template-areas:
+    'left right'
+    'org org';
+}
+.pr-head--stacked > .pr-head-left {
+  grid-area: left;
+  justify-self: end;
+}
+.pr-head--stacked > .pr-seal {
+  grid-area: right;
+  justify-self: start;
+  height: 0.75in;
+  width: auto;
+}
+.pr-head--stacked > .pr-org {
+  grid-area: org;
+}
 .pr-seal {
   height: 0.95in;
   width: auto;
@@ -5742,6 +6562,27 @@ button.dash-kpi--link:focus-visible {
 }
 .pr-fact-value { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 
+/* ---- Blotter-certification paper (owner request): the station's Word
+   template — bold section heads on their own lines, blank lines between
+   sections, tab-indented flowing paragraphs. Vehicle paragraphs open with
+   their own bold V1:/V2: markers; values read formal (sentence case, makes
+   and codes kept). */
+.pr-facts--cert .pr-fact { margin-bottom: 0.55rem; }
+.pr-vehicles { margin-bottom: 0.55rem; min-width: 0; }
+.pr-vehicle-head { margin-bottom: 0.35rem; }
+.pr-vehicle { margin-bottom: 0.2rem; overflow-wrap: anywhere; }
+.pr-vehicle:last-child { margin-bottom: 0; }
+.pr-cert-head { margin: 0 0 0.35rem; }
+.pr-cert-para { text-indent: 0.4in; text-align: left; margin: 0 0 0.2rem; overflow-wrap: anywhere; white-space: pre-line; }
+
+.pr-cert-remarks { margin: 0.35rem 0; overflow-wrap: anywhere; white-space: pre-line; }
+
+/* The paper keeps the account's own line breaks (owner request): the casing
+   pass preserves newlines, and this renders them — words read formally,
+   layout stays exactly as written. */
+.pr-narrative-text { white-space: pre-line; }
+.pr-cert-issuance { text-indent: 0.4in; text-align: left; margin: 0.5rem 0; overflow-wrap: anywhere; }
+
 /* ---- Stolen/Damaged Items block (deep indent, regular-weight TOTAL,
    matching the scan: "TOTAL, - - - 460,120.00") ---- */
 .pr-items { margin: 0.2rem 0 0.3rem; }
@@ -5772,7 +6613,7 @@ button.dash-kpi--link:focus-visible {
    rule for a node that is never rendered is a rule that reads as a feature.) */
 
 .pr-narrative {
-  text-align: justify;
+  text-align: left;
   text-indent: 0;
   margin: 0.85rem 0 0.9rem;
 }
@@ -5801,7 +6642,7 @@ button.dash-kpi--link:focus-visible {
   background: transparent;
   box-shadow: none;
 }
-.pr-narrative-edit { text-align: justify; }
+.pr-narrative-edit { text-align: left; }
 /* Word-like surface (owner request): a small quiet toolbar for the editable
    narrative, on the form and on the letter alike. Findings, action and the
    free canvas stay chrome-free under the one docked ribbon (see
@@ -6142,6 +6983,74 @@ button.dash-kpi--link:focus-visible {
   margin: 0.2rem 0.25rem;
   background: #edebe9;
 }
+/* The letterhead ribbon's own furniture: the two selects ride labels, and
+   the color palette is a row of swatches exactly like Word's font-color
+   well — pick a swatch, and only the highlighted words take the ink. */
+.rt-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.rt-toolbar select {
+  font: inherit;
+  font-size: 0.85em;
+  padding: 0.2rem 0.3rem;
+  border: 1px solid #8a8886;
+  border-radius: 0.25rem;
+  background: #fff;
+  color: inherit;
+  max-width: 10rem;
+}
+.rt-swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.rt-swatch {
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border: 1px solid #8a8886;
+  border-radius: 0.2rem;
+  cursor: pointer;
+}
+.rt-swatch:hover {
+  outline: 2px solid #1F5FD0;
+  outline-offset: 1px;
+}
+.rt-swatch:focus-visible {
+  outline: 2px solid #1F5FD0;
+  outline-offset: 1px;
+}
+.rt-auto {
+  font-weight: 700;
+}
+/* Per-word letter ink (Station settings ▸ the letterhead canvas): utility
+   classes the freed-letter sanitizer keeps on both sides of the wire, so a
+   colored word survives the save and prints as colored. One prefix per
+   property, so re-coloring a sized word keeps its size. */
+.lh-c-navy { color: #0F1F3D; }
+.lh-c-blue { color: #1D4ED8; }
+.lh-c-red { color: #C0392B; }
+.lh-c-green { color: #1E7E34; }
+.lh-c-gold { color: #B8860B; }
+.lh-c-orange { color: #E1860A; }
+.lh-c-black { color: #111111; }
+.lh-c-gray { color: #5B6B84; }
+.lh-s-10 { font-size: 10px; }
+.lh-s-11 { font-size: 11px; }
+.lh-s-12 { font-size: 12px; }
+.lh-s-13 { font-size: 13px; }
+.lh-s-14 { font-size: 14px; }
+.lh-s-15 { font-size: 15px; }
+.lh-s-16 { font-size: 16px; }
+.lh-s-18 { font-size: 18px; }
+.lh-s-20 { font-size: 20px; }
+.lh-s-22 { font-size: 22px; }
+.lh-f-verdana { font-family: Verdana, Geneva, sans-serif; }
+.lh-f-georgia { font-family: Georgia, serif; }
+.lh-f-times { font-family: 'Times New Roman', Times, serif; }
+.lh-f-courier { font-family: 'Courier New', Courier, monospace; }
 
 
 .rt-wrap { position: relative; }
@@ -6586,6 +7495,7 @@ select.pr-edit--inline { padding-right: 0.1rem; }
   /* The long poles set tighter leading: body ink is single-spaced on the
      official page, and the org block drops a step with it. */
   .print-sheet .pr-org { font-size: 9pt; line-height: 1.25; }
+  .print-sheet .pr-contact { font-size: 8pt; }
   .print-sheet .pr-facts,
   .print-sheet .pr-narrative,
   .print-sheet .pr-entry,
@@ -6629,6 +7539,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   th, td { padding: 0.5rem 0.5rem; }
   .row-menu-item { padding: 0.5rem 0.6rem; font-size: 0.8rem; }
   .toast { left: 0.75rem; right: 0.75rem; bottom: 0.75rem; }
+  .conn-banner, .st-floats { left: 0.75rem; right: 0.75rem; bottom: 0.75rem; width: auto; }
   .print-overlay { padding: 0.5rem; }
   .pr-org { font-size: 9pt; }
   .pr-title { letter-spacing: 0.2em; }
@@ -6654,34 +7565,62 @@ body.print-sheet-open .print-overlay { z-index: 200; }
      navy + gold pairing as the situation boards — so the white panels read as
      cards on an official surface. Scoped to .dash so no other screen moves. */
   position: relative;
-  overflow: hidden;
-  border-radius: 18px;
-  background:
-    radial-gradient(520px 260px at 88% -60px, rgba(230, 168, 23, 0.28), transparent 65%),
-    radial-gradient(640px 320px at -80px 240px, rgba(230, 168, 23, 0.14), transparent 60%),
-    linear-gradient(160deg, #143063 0%, #10294f 48%, #0b1f42 100%);
-  box-shadow: var(--shadow-sm);
-}
-.dash::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(115deg, transparent 62%, rgba(230, 168, 23, 0.16) 62.2%, rgba(230, 168, 23, 0.16) 64%, transparent 64.2%),
-    linear-gradient(115deg, transparent 68%, rgba(230, 168, 23, 0.10) 68.2%, rgba(230, 168, 23, 0.10) 69%, transparent 69.2%);
-}
-.dash::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, var(--ir-gold) 22%, var(--ir-gold) 78%, transparent);
-  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: transparent;
+  box-shadow: none;
 }
 .dash > * { position: relative; z-index: 1; }
+
+/* THE STATION'S IDENTITY BAND: the police at the head of the dashboard. The
+   PNP seal in a gold ring, then the force, the station and the system — a
+   navy band with gold accents in the department's own colors. Fixed values
+   like the readings band below it: the band is a known navy in both themes. */
+.dash-identity {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 22px;
+  border-radius: 16px;
+  background: linear-gradient(120deg, var(--ir-navy) 0%, var(--ir-navy-hi) 100%);
+  border-bottom: 3px solid var(--ir-gold);
+  box-shadow: var(--shadow-sm);
+}
+.dash-identity__seal {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px solid var(--ir-gold);
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 0 0 3px rgba(240, 180, 41, 0.25);
+}
+.dash-identity__seal img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dash-identity__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dash-identity__force {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ir-gold-hi);
+}
+.dash-identity__station {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  color: #fff;
+}
+.dash-identity__system { font-size: 13px; color: rgba(255, 255, 255, 0.72); }
+@media (max-width: 640px) {
+  .dash-identity { gap: 12px; padding: 14px 16px; }
+  .dash-identity__seal { width: 48px; height: 48px; }
+  .dash-identity__station { font-size: 20px; }
+}
 
 /* ONE ROW FOR THE READINGS AND THE CLOCK (owner request): the three cards take
    the row and the clock keeps its right end; narrow windows stack them, cards
@@ -6691,10 +7630,10 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   position: relative;
   overflow: hidden;
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 22px;
+  gap: 20px;
+  margin-bottom: 0;
   /* THE SITUATION BOARD (owner request, 2026-10-21): the readings ride a navy
      band — the department's own chrome (--ir-navy states its own value per
      theme, and white on either clears AA past 12:1) — closed with a gold seam.
@@ -6719,12 +7658,11 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   min-width: 0;
   margin-bottom: 0;
 }
-/* RUNNING GOLD SEAM (owner request) — the AI assistance's orbit border, as a
-   seam: a bright comet slides along the gold edge forever. Same idea (a
-   translating shine, GPU-composited, zero layout work), restated as a
-   horizontal run because the seam is a line, not a loop. */
-.dash-head::after,
-.dash-grid-main::after {
+/* STATIC GOLD SEAM — the one memorable line: the navy hero band closes with a
+   quiet gold rule. Static on purpose: the page already arrives once
+   (dash-arrive below), and a forever-running shine on every row turned the
+   station's own accent into ambient motion. */
+.dash-head::after {
   content: '';
   position: absolute;
   left: 0;
@@ -6732,17 +7670,11 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   bottom: 0;
   height: 3px;
   pointer-events: none;
-  background: linear-gradient(90deg, transparent 0%, var(--ir-gold) 25%, #ffe9a8 50%, var(--ir-gold) 75%, transparent 100%);
-  background-size: 200% 100%;
-  animation: dash-gold-run 3.5s linear infinite;
+  background: linear-gradient(90deg, transparent 0%, var(--ir-gold) 22%, var(--ir-gold) 78%, transparent);
 }
 @keyframes dash-gold-run {
   from { background-position: 200% 0; }
   to { background-position: -100% 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dash-head::after,
-  .dash-grid-main::after { animation: none; }
 }
 .dash-head .dash-topbar { margin-bottom: 0; }
 .dash-topbar {
@@ -6759,12 +7691,17 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  justify-content: center;
   gap: 2px;
-  padding-left: 16px;
-  border-left: 1px solid var(--line);
+  padding: 4px 0 4px 20px;
+  border-left: 1px solid rgba(255, 255, 255, 0.22);
   text-align: right;
+  min-width: 13rem;
 }
 .dash-clock__date { font-size: 13px; font-weight: 600; color: var(--paper); }
+/* The admin head reads the date on the navy band (owner request, 2026-10-30):
+   explicit white so the weekday line stays readable on the gradient. */
+.dash--admin .dash-clock__date { color: #fff; }
 .dash-clock__time { font-size: 24px; font-weight: 700; color: var(--paper); font-variant-numeric: tabular-nums; }
 .dash-clock__greet { font-size: 12px; color: var(--steel); }
 
@@ -6785,6 +7722,91 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   box-shadow: 0 0 0 3px var(--green-bg);
 }
 .dash-updated { color: var(--cyan-dim); font-variant-numeric: tabular-nums; }
+
+/* EXECUTIVE SUMMARY (owner request): the admin's station-at-a-glance. A white
+   card with the station's gold seam — the greeting names the reader, the
+   sub-line names the station + range + freshness, four tinted tiles say where
+   the work STANDS, and three doors open the register. Scoped to .dash. */
+.dash-exec {
+  padding: 20px 22px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--ir-gold);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.dash-exec__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 20px;
+  flex-wrap: wrap;
+}
+.dash-exec__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ir-blue-ink);
+}
+.dash-exec__title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ir-navy);
+}
+.dash-exec__sub { margin: 4px 0 0; font-size: 13px; color: var(--steel); }
+.dash-exec__actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.dash-exec__action {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--ir-border);
+  background: var(--ir-raised);
+  color: var(--ir-navy);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dash-exec__action:hover { border-color: var(--ir-blue); color: var(--ir-blue-ink); background: var(--ir-blue-tint); }
+.dash-exec__action--primary { background: var(--ir-navy); border-color: var(--ir-navy); color: #fff; }
+.dash-exec__action--primary:hover { background: var(--ir-navy-hi); border-color: var(--ir-navy-hi); color: #fff; }
+.dash-exec__tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.dash-exec__tiles--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dash-exec__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-raised);
+  border-left: 4px solid var(--ir-border);
+}
+.dash-exec__tile--amber { border-left-color: var(--amber); }
+.dash-exec__tile--blue { border-left-color: var(--ir-blue); }
+.dash-exec__tile--green { border-left-color: var(--green-ok); }
+.dash-exec__tile--violet { border-left-color: var(--violet, #7c6cf0); }
+.dash-exec__tile-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ir-muted); }
+.dash-exec__tile-value { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ir-navy); }
+.dash-exec__tile-note { font-size: 12px; color: var(--steel); }
+@media (max-width: 900px) {
+  .dash-exec__tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .dash-exec__tiles { grid-template-columns: minmax(0, 1fr); }
+  .dash-exec__title { font-size: 22px; }
+}
 
 /* THE RANGE CARD — the three fields, the presets and the scope on one raised
    plate at the head of the page (see Dashboard.jsx for why the fields come
@@ -6911,16 +7933,18 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash-kpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  gap: 16px;
-  margin-bottom: 18px;
+  gap: 14px;
+  margin-bottom: 0;
+  align-items: stretch;
 }
 .dash-kpi {
   position: relative;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-top: 3px solid var(--ir-gold, #c9a227);
+  border-radius: 12px;
   box-shadow: var(--shadow-subtle);
-  padding: 18px 20px;
+  padding: 16px 20px 18px;
   display: flex;
   align-items: flex-start;
   gap: 14px;
@@ -6949,7 +7973,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    yellow ink, measured per theme (light #B26A00, dark #D9A03F) so the words
    stay legible on the cards in both. */
 .dash-kpi__label { font-size: 12px; font-weight: 600; color: var(--amber); text-transform: uppercase; letter-spacing: 0.06em; }
-.dash-kpi__value { font-size: 36px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; color: var(--paper); font-variant-numeric: tabular-nums; }
+.dash-kpi__value { font-size: 34px; font-weight: 750; line-height: 1.05; letter-spacing: -0.02em; color: var(--paper); font-variant-numeric: tabular-nums; }
 .dash-kpi:hover { box-shadow: var(--shadow-sm); }
 .dash-kpi__value--time { font-size: 27px; }
 .dash-kpi__delta,
@@ -6961,10 +7985,46 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash-panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: var(--shadow-subtle);
-  padding: 18px 20px;
+  padding: 20px 22px;
 }
+/* Notices sit above the hero in document order: sign-in health and account
+   requests are organized as quiet notice cards — same radius and rhythm as
+   the panels, amber wash with a gold leading edge, never raw unstyled divs. */
+.dash-signin-alert,
+.dash-requests,
+.dash-alert {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--ir-gold, #c9a227);
+  border-radius: 12px;
+  box-shadow: var(--shadow-subtle);
+  padding: 14px 18px;
+  margin-bottom: 0;
+  font-size: 13.5px;
+  color: var(--steel);
+}
+.dash-signin-alert strong,
+.dash-requests > strong { color: var(--paper); font-size: 14px; }
+.dash-signin-alert ul,
+.dash-requests-list { margin: 8px 0 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 6px; }
+.dash-request {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  list-style: none;
+}
+.dash-requests-list { list-style: none; padding-left: 0; }
+.dash-request:first-child { border-top: 0; padding-top: 0; }
+.dash-request-handle {
+  border: 1px solid var(--line-bright);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  padding: 4px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.dash-request-handle:hover { border-color: var(--cyan); color: var(--cyan); }
 .dash-panel__head {
   display: flex;
   justify-content: space-between;
@@ -7044,30 +8104,34 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash-expand:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 /* ---- Recent activity -------------------------------------------------------
-   One row per record: the type's mark, what and where and when, and where the
-   record stands in the workflow. The row is the button — the whole row opens the
-   report, the way a register row does — and nothing inside it is a second
-   control, so there is one target per line and no nested buttons. */
-.dash-activity__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+   One COMPACT card per record (owner request, 2026-10-30): the orange file,
+   the type's pill in its own hue, the bold case number, and where the record
+   stands in the workflow — each card fitting its contents, no oversized field.
+   The row is the button — the whole row opens the report, the way a register
+   row does — and nothing inside it is a second control, so there is one target
+   per line and no nested buttons. */
+.dash-activity__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .dash-activity__row {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 11px 4px;
-  /* The rows are separated by the hairline BETWEEN them rather than by a box
-     around each one: a list of five records is one card, not five. */
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: none;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background:
+    linear-gradient(var(--panel), var(--panel)) padding-box,
+    linear-gradient(135deg, #1d4ed8 0%, #38bdf8 50%, #1d4ed8 100%) border-box;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.dash-activity__list > li:last-child .dash-activity__row { border-bottom: 0; }
-.dash-activity__row:hover { background: var(--panel-sunken); }
+.dash-activity__row:hover {
+  background:
+    linear-gradient(var(--panel-sunken), var(--panel-sunken)) padding-box,
+    linear-gradient(135deg, #1d4ed8 0%, #60a5fa 50%, #1d4ed8 100%) border-box;
+}
 .dash-activity__row:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
 
 /* The type's mark, tinted by the SAME hue family the register's own type pill
@@ -7088,6 +8152,27 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash-activity__mark--violet { background: var(--violet-bg); color: var(--violet); }
 .dash-activity__mark--red { background: var(--red-bg); color: var(--red-text); }
 .dash-activity__glyph { width: 19px; height: 19px; }
+/* The register's own file logo on every record row (owner request,
+   2026-10-30): the same yellow-to-orange page All Reports wears, while the
+   pill beside it says which kind. */
+.dash-activity__doc,
+.dash-activity__file {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+.dash-activity__doc .dash-activity__glyph { width: 20px; height: 20px; }
+.dash-activity__filemark {
+  display: block;
+  width: 24px;
+  height: auto;
+  filter: drop-shadow(0 1px 2px rgba(11, 37, 69, 0.22));
+}
 
 /* THE TYPE AS A PILL — the register's own chip (owner request): the incident
    type's glyph plus its tracked capitals on a wash of the same hue family
@@ -7119,14 +8204,13 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 
 .dash-activity__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
 .dash-activity__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   font-size: 14px;
   font-weight: 600;
   color: var(--paper);
-  /* One line per row: a long type name is clipped rather than allowed to push
-     the status chip off the row's right edge. */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .dash-activity__meta {
   font-size: 12.5px;
@@ -7173,21 +8257,20 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 
 .dash-grid-main {
   position: relative;
-  overflow: hidden;
   display: grid;
   grid-template-columns: 1.6fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
-  /* SAME SITUATION BOARD as the head (owner request): each chart row rides the
-     navy band closed with a gold seam, holding white panels — the header's own
-     pairing, so the trend / activity and status / hour rows read as the same
-     official surface as the readings above them. */
-  padding: 18px 20px;
-  border-radius: 16px;
-  background: linear-gradient(120deg, var(--ir-navy) 0%, var(--ir-navy-hi) 100%);
-  border-bottom: 3px solid var(--ir-gold);
-  box-shadow: var(--shadow-sm);
+  gap: 20px;
+  margin-bottom: 0;
+  /* QUIET ROWS under the hero: transparent, so the white panels carry the
+     hierarchy instead of a second and third navy band. One official surface
+     (the head) is the memorable thing; the rows stay disciplined around it. */
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
+.dash-grid-main::after { content: none; }
 /* The pie's row: the status card hugs its drawing against the row's LEFT EDGE —
    which is the trend panel's own edge above it — and the hour chart beside it
    takes everything else.
@@ -7212,6 +8295,632 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    resolves to, and it exists only to hold the column steady until data lands. */
 .dash-grid-main--pie > .is-skeleton:first-child { width: 300px; }
 
+/* ---- Command theme, LIGHT (owner request, 2026-10-30) ------------------------
+   The dashboard wears the reference's layout — hero, four tinted-disc cards,
+   trend beside activity, bottom trio — but on the app's own light
+   official-document surface: white panels, ink text, one blue accent. Everything
+   in this block is scoped under `.dash--cmd` (the page root), so no rule here
+   can leak onto another screen. Where the light base rules already say it
+   (panel surface, chips, activity rows), there is no override at all. */
+.dash--cmd {
+  --cmd-line: var(--line);
+  --cmd-ink: var(--paper);
+  --cmd-muted: var(--steel);
+  --cmd-blue: var(--cyan);
+  --cmd-gold: var(--amber);
+  --cmd-green: var(--green-ok);
+  --cmd-violet: var(--violet);
+  position: relative;
+  isolation: isolate;
+  max-width: none;
+  margin: 0;
+  padding: 20px 28px 48px;
+  border-radius: 0;
+  border: 0;
+  color: var(--cmd-ink);
+  background: #F3F6FB;
+  box-shadow: none;
+}
+/* ---- Admin dashboard root: plain light, no photo, no art (owner request) --- */
+.dash--admin {
+  border-radius: 12px;
+  padding: 20px 22px;
+  background: #F0F4F8;
+}
+/* ---- Admin vibe: the officer-home pairing (owner request) ------------------
+   Navy + gold, copied from Home's own furniture (see incident-report.css):
+   the stat cards wear the angled-stripe deco and navy figures, section heads
+   read as small-caps navy titles closed by the short gold dash, View-all
+   links are navy ink, and the frequency bars are gold. Everything scoped
+   under `.dash--admin` so no other screen inherits it. */
+.dash--admin .dash-kpi { overflow: hidden; }
+.dash--admin .dash-kpi::after {
+  content: '';
+  position: absolute;
+  top: -30%;
+  bottom: -30%;
+  right: -3rem;
+  width: 9rem;
+  background: linear-gradient(
+    104deg,
+    transparent,
+    rgba(11, 37, 69, 0.06) 38%,
+    rgba(11, 37, 69, 0.12) 62%,
+    transparent
+  );
+  transform: skewX(-18deg);
+  pointer-events: none;
+}
+.dash--admin .dash-kpi__label { color: var(--ir-navy); }
+.dash--admin .dash-kpi__value { color: var(--ir-navy); }
+.dash--admin .dash-panel__title {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ir-navy);
+}
+.dash--admin .dash-panel__title::after {
+  content: '';
+  flex: none;
+  width: 2rem;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ir-gold);
+}
+.dash--admin .dash-viewall { color: var(--ir-navy); font-weight: 800; }
+.dash--admin .dash-types__bar { background: var(--ir-gold); }
+/* ---- Command hero: the greeting, the station, and the moment it was read ---
+   The station's own photograph rides the panel's right edge, masked into the
+   white rather than pasted beside the words; the station name sits over it as a
+   watermark. The clock is a light pill with its own hairline. */
+.dash--cmd .cmd-hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(47, 107, 237, 0.5);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(47, 107, 237, 0.08), 0 0 16px rgba(47, 107, 237, 0.14);
+  box-shadow: 0 0 0 1px rgba(47, 107, 237, 0.12), 0 0 18px rgba(47, 107, 237, 0.18), 0 10px 24px -16px rgba(37, 99, 235, 0.4);
+  padding: 22px 24px;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.dash--cmd .cmd-hero__photo {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: min(58%, 620px);
+  pointer-events: none;
+}
+.dash--cmd .cmd-hero__photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 45%;
+  -webkit-mask-image: linear-gradient(to left, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 95%);
+  mask-image: linear-gradient(to left, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 95%);
+  opacity: 1;
+}
+.dash--cmd .cmd-hero__wash {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.82) 38%, rgba(255, 255, 255, 0.35) 62%, transparent 85%);
+}
+.dash--cmd .cmd-hero__station {
+  position: absolute;
+  right: 18px;
+  bottom: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: rgba(15, 31, 61, 0.5);
+  white-space: nowrap;
+}
+.dash--cmd .cmd-hero__text { position: relative; min-width: 0; margin-right: auto; display: flex; flex-direction: column; gap: 2px; }
+.dash--cmd .cmd-hello { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.01em; color: #0f1f3d; }
+.dash--cmd .cmd-hello span { color: #1d4ed8; }
+.dash--cmd .cmd-sub { margin: 2px 0 0; font-size: 13.5px; color: #5b6b84; }
+.dash--cmd .cmd-clock {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  gap: 2px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
+.dash--cmd .cmd-clock__date { font-size: 15px; font-weight: 800; color: #0f1f3d; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dash--cmd .cmd-clock__day { font-size: 12.5px; font-weight: 600; color: #5b6b84; white-space: nowrap; }
+.dash--cmd .cmd-clock__time { font-size: 22px; font-weight: 800; letter-spacing: 0.02em; color: #1d4ed8; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* ---- Metric cards: the bold caption, the hero number, one line -----------
+   Four tones, one shape: the number's echo wears the card's own family, and
+   the hairline stays the same everywhere. */
+.dash--cmd .dash-kpis.cmd-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+  /* The navy strip behind the readings is removed (owner request, 2026-10-30):
+     the cards sit on the page itself, each keeping only its own tone accent. */
+  background: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+.dash--cmd .cmd-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(47, 107, 237, 0.5);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px rgba(47, 107, 237, 0.08), 0 0 16px rgba(47, 107, 237, 0.16);
+  padding: 16px 18px;
+  min-width: 0;
+}
+/* Each reading's own highlight (owner request, 2026-10-30): a gradient accent
+   bar across the card's top edge over a soft wash of the same family, so the
+   tone tells the cards apart without repainting the white plates. */
+.dash--cmd .cmd-card--blue { --cmd-hi: var(--cmd-blue); }
+.dash--cmd .cmd-card--gold { --cmd-hi: var(--cmd-gold); }
+.dash--cmd .cmd-card--green { --cmd-hi: var(--cmd-blue); }
+.dash--cmd .cmd-card--violet { --cmd-hi: var(--cmd-gold); }
+.dash--cmd .cmd-card::before,
+.dash--cmd .cmd-card::after { content: none; }
+.dash--cmd .cmd-card__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dash--cmd .cmd-card__label { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; color: var(--paper); white-space: nowrap; }
+.dash--cmd .cmd-card__value { font-size: 30px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; color: var(--paper); font-variant-numeric: tabular-nums; }
+.dash--cmd .cmd-card__value-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: nowrap; }
+.dash--cmd .cmd-card__foot { font-size: 12px; color: var(--cmd-muted); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.dash--cmd .cmd-card__foot .dash-kpi__delta { color: var(--cmd-muted); }
+.dash--cmd .cmd-card__foot .dash-kpi__delta.is-up { color: var(--green-ink); }
+.dash--cmd .cmd-card__foot .dash-kpi__delta.is-down { color: var(--red-text); }
+.dash--cmd .cmd-foot-note { display: inline-flex; align-items: center; gap: 5px; }
+.dash--cmd .cmd-foot-note svg { width: 13px; height: 13px; }
+/* The headcount's split (owner request, 2026-10-30): yellow only, sitting
+   beside the number — the words name the roles, so the colour is emphasis
+   rather than the signal. */
+.dash--cmd .cmd-role-line { display: inline-flex; align-items: center; gap: 6px; }
+.dash--cmd .cmd-role { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; white-space: nowrap; }
+.dash--cmd .cmd-role svg { width: 13px; height: 13px; flex: none; }
+.dash--cmd .cmd-role--yellow { color: var(--cmd-gold); }
+.dash--cmd .cmd-role--admin { color: var(--cmd-gold); }
+.dash--cmd .cmd-role--officer { color: var(--cmd-gold); }
+.dash--cmd .cmd-role-sep { color: var(--cmd-muted); font-weight: 400; }
+
+
+/* ---- The shared range control, in the trend head ----------------------------
+   A quiet select: it governs the whole page, so it sits in the head of the
+   panel the page is read by, beside the colour key. */
+.dash--cmd .dash-range select {
+  background: var(--panel);
+  border: 1px solid var(--cmd-line);
+  border-radius: 9px;
+  color: var(--cmd-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.dash--cmd .dash-viewall { color: var(--cyan); }
+.dash--cmd .dash-viewall:hover { background: var(--cyan-bg); }
+/* Blue-and-yellow accents (owner request, 2026-10-30). Everything below is
+   scoped under `.dash--cmd` so no rule leaks onto another screen. Borders
+   stay on the fields — only the outer page plate is borderless. */
+.dash--cmd .cmd-sys__box.is-online { border-color: color-mix(in srgb, var(--cmd-blue) 45%, var(--cmd-line)); }
+.dash--cmd .cmd-sys__state { color: var(--cmd-blue); }
+.dash--cmd .cmd-sys__box.is-warn .cmd-sys__state { color: var(--amber); }
+.dash-grid-trio { gap: 12px; margin-top: 12px; }
+
+/* ---- The bottom trio: one grid, three answers -------------------------------
+   Three equal panels under the trend row: the composition, where it happened,
+   and the station's own pulse. One column each on a wide window, stacked on a
+   narrow one. */
+.dash-grid-trio {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+/* The donut: the three busiest types in the trend's own ramp order, everything
+   else as one grey Others — counts AND shares beside every name, because a
+   slice says nothing about how many reports it is. */
+.dash--cmd .cmd-donut { display: flex; align-items: center; gap: 18px; }
+.dash--cmd .cmd-donut__svg { flex: none; width: 148px; height: 148px; }
+.dash--cmd .cmd-donut__track { fill: none; stroke: var(--line); stroke-width: 16; }
+.dash--cmd .cmd-donut__slice { fill: none; stroke-width: 16; }
+.dash--cmd .cmd-donut__total { fill: var(--paper); font-size: 22px; font-weight: 800; }
+.dash--cmd .cmd-donut__caption { fill: var(--cmd-muted); font-size: 11px; }
+.dash--cmd .cmd-donut__legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; font-size: 13px; min-width: 0; flex: 1; }
+.dash--cmd .cmd-donut__legend li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
+.dash--cmd .cmd-donut__dot { width: 10px; height: 10px; border-radius: 50%; }
+.dash--cmd .cmd-donut__name { color: var(--cmd-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash--cmd .cmd-donut__count { color: var(--paper); font-weight: 700; font-variant-numeric: tabular-nums; }
+.dash--cmd .cmd-donut__pct { color: var(--cmd-muted); font-variant-numeric: tabular-nums; }
+/* Top locations: one row per place, each bar a share of the busiest street. */
+.dash--cmd .cmd-places { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
+.dash--cmd .cmd-places li { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 13px; }
+.dash--cmd .cmd-places__name { color: var(--cmd-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash--cmd .cmd-places__track { display: block; height: 8px; border-radius: 999px; background: var(--panel-raised); border: 1px solid var(--line); overflow: hidden; }
+.dash--cmd .cmd-places__bar { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--cyan), #60a5fa); }
+.dash--cmd .cmd-places__count { color: var(--paper); font-weight: 700; font-variant-numeric: tabular-nums; min-width: 1.5em; text-align: right; }
+/* System status: four boxes, each naming its state (owner request,
+   2026-10-30 — Online in green when healthy). Anything but online paints
+   amber, so trouble still reads at a glance. Each box fits its contents. */
+.dash--cmd .cmd-sys__dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.dash--cmd .cmd-sys__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dash--cmd .cmd-sys__box {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "icon label" "icon state";
+  column-gap: 10px;
+  align-items: center;
+  background: var(--panel-raised);
+  border: 1px solid var(--cmd-line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.dash--cmd .cmd-sys__box.is-warn { border-color: var(--amber); }
+.dash--cmd .cmd-sys__icon { grid-area: icon; width: 30px; height: 30px; display: inline-grid; place-items: center; border-radius: 8px; background: var(--cyan-bg); color: var(--cyan); }
+.dash--cmd .cmd-sys__icon svg { width: 16px; height: 16px; }
+.dash--cmd .cmd-sys__label { grid-area: label; font-size: 12.5px; font-weight: 600; color: var(--cmd-ink); }
+.dash--cmd .cmd-sys__state { grid-area: state; display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: var(--green-ink); }
+.dash--cmd .cmd-sys__box.is-online { border-color: color-mix(in srgb, var(--green-ok) 45%, var(--cmd-line)); }
+.dash--cmd .cmd-sys__box.is-online .cmd-sys__state { color: var(--green-ink); }
+.dash--cmd .cmd-sys__box.is-warn .cmd-sys__state { color: var(--amber); }
+/* The hand-drawn charts keep the light base ink (chart-grid, chart-axis and the
+   1px stack-band seams); the page adds nothing over them. Activity rows and
+   status chips likewise wear the base light rules — except the System chip,
+   which the base sheet never named. */
+.dash--cmd .dash-status--system { background: var(--cyan-bg); color: var(--cyan); }
+@media (max-width: 1200px) {
+  .dash--cmd .dash-kpis.cmd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-grid-trio { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .dash--cmd .dash-kpis.cmd-kpis { grid-template-columns: minmax(0, 1fr); }
+  .dash--cmd .cmd-hero { flex-direction: column; align-items: flex-start; }
+  .dash--cmd .cmd-hero__photo { width: 100%; opacity: 0.35; }
+  .dash--cmd .cmd-donut { flex-direction: column; }
+  .dash--cmd .dash-toolbar { flex-direction: column; align-items: stretch; }
+  .dash--cmd .dash-search { max-width: none; }
+  .dash-grid-duo { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---- Command toolbar, cards-as-links, chips, duo row, AI ------------------
+   Page furniture for an Admin's dashboard: the search and the quick actions
+   sit between the hero and the readings; the cards open the register
+   pre-filtered; the trend carries visible type chips; status and AI share the
+   row above the trio. All motion on the 160ms beat, gated like the rest. */
+.dash--cmd .cmd-pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; padding: 0; }
+.dash--cmd .cmd-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: rgba(47, 107, 237, 0.08);
+  border: 1px solid rgba(47, 107, 237, 0.4);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+.dash--cmd .cmd-pills .cmd-pill + .cmd-pill {
+  background: rgba(47, 107, 237, 0.08);
+  border-color: rgba(47, 107, 237, 0.4);
+  color: #1d4ed8;
+}
+.dash--cmd .dash-toprow {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.dash--cmd .dash-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 0;
+}
+.dash--cmd .dash-toprow .dash-kpis.cmd-kpis {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.dash--cmd .dash-toprow .cmd-card { padding: 10px 12px; border-radius: 10px; gap: 8px; }
+.dash--cmd .dash-toprow .cmd-card__label { font-size: 12px; font-weight: 700; }
+.dash--cmd .dash-toprow .cmd-card__value { font-size: 20px; }
+.dash--cmd .dash-toprow .cmd-card__foot { font-size: 11px; }
+.dash--cmd .dash-toprow .dash-quick { flex-direction: column; align-items: stretch; margin-left: 0; }
+.dash--cmd .dash-toprow .dash-quick__btn { white-space: nowrap; }
+@media (max-width: 1100px) {
+  .dash--cmd .dash-toprow { flex-direction: column; }
+  .dash--cmd .dash-toprow .dash-quick { flex-direction: row; flex-wrap: wrap; }
+}
+.dash--cmd .dash-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 220px;
+  max-width: 380px;
+  background: #ffffff;
+  border: 1px solid rgba(47, 107, 237, 0.5);
+  border-radius: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 0 12px rgba(47, 107, 237, 0.12);
+}
+.dash--cmd .dash-search svg { width: 16px; height: 16px; flex: none; color: var(--cmd-muted); }
+.dash--cmd .dash-search input {
+  border: 0;
+  outline: none;
+  background: transparent;
+  width: 100%;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--cmd-ink);
+}
+.dash--cmd .dash-search:focus-within { border-color: var(--cmd-blue); }
+.dash--cmd .dash-quick { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.dash--cmd .dash-quick__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f1f3d;
+  background: #ffffff;
+  border: 1px solid rgba(47, 107, 237, 0.5);
+  border-radius: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(47, 107, 237, 0.12);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+.dash--cmd .dash-quick__btn svg { width: 15px; height: 15px; }
+.dash--cmd .dash-quick__btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-subtle); border-color: var(--cmd-blue); }
+.dash--cmd .dash-quick__btn.is-primary { background: #1d4ed8; border-color: rgba(29, 78, 216, 0.8); color: #fff; box-shadow: 0 0 14px rgba(29, 78, 216, 0.35); }
+/* A card that opens the register: the reading keeps its shape, the anchor
+   carries the lift. */
+.dash--cmd .dash-panel {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(47, 107, 237, 0.5);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px rgba(47, 107, 237, 0.08), 0 0 16px rgba(47, 107, 237, 0.14);
+  padding: 20px 22px;
+}
+.dash--cmd .dash-panel h2,
+.dash--cmd .dash-panel__title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: #0f1f3d;
+}
+/* ---- Command vibe: the officer-home pairing (owner request) ----------------
+   Navy + gold on THIS dashboard (hero, quick actions, small cards, Reports
+   Overview, Recent Activity): angled-stripe deco on the stat cards, navy
+   figures, small-caps navy panel titles closed by the gold dash, navy
+   View-all links, gold Top-Locations bars. Same furniture as Home. */
+.dash--cmd .cmd-card__label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ir-navy);
+}
+.dash--cmd .cmd-card__value { color: var(--ir-navy); }
+.dash--cmd .dash-panel h2,
+.dash--cmd .dash-panel__title {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ir-navy);
+}
+.dash--cmd .dash-panel h2::after,
+.dash--cmd .dash-panel__title::after {
+  content: '';
+  flex: none;
+  width: 2rem;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ir-gold);
+}
+.dash--cmd .dash-viewall { color: var(--ir-navy); font-weight: 800; }
+.dash--cmd .cmd-places__bar { background: linear-gradient(90deg, var(--ir-gold), var(--ir-gold-hi)); }
+/* ---- Minimal calm (owner request): flat light, hairline borders, no glow ---
+   The reference home screen is quiet surfaces + thin grey borders; the blue
+   halos come off everywhere, leaving white cards on flat #F3F6FB. Navy
+   titles, gold dashes and gold bars stay — they are the reference's own
+   accents, not decoration. */
+.dash--cmd .cmd-hero,
+.dash--cmd .cmd-card,
+.dash--cmd .dash-panel,
+.dash--cmd .dash-search,
+.dash--cmd .dash-quick__btn {
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 2px rgba(15, 31, 61, 0.06);
+}
+.dash--cmd .cmd-cardlink:hover .cmd-card,
+.dash--cmd .cmd-cardlink:focus-visible .cmd-card {
+  box-shadow: 0 4px 12px rgba(15, 31, 61, 0.08);
+  border-color: #cbd5e1;
+}
+.dash--cmd .dash-quick__btn:hover { box-shadow: 0 1px 2px rgba(15, 31, 61, 0.06); }
+/* ---- Clock in white, for the dark backdrop (owner request) ----------------
+   The date, day and time sit on the navy lines now, so all three read white. */
+.dash--cmd .cmd-clock__date { color: #0f1f3d; }
+.dash--cmd .cmd-clock__day { color: #5b6b84; }
+.dash--cmd .cmd-clock__time { color: #1d4ed8; }
+.dash--cmd .dash-panel__sub { color: #5b6b84; }
+.dash--cmd .dash-panel__mark {
+  background: rgba(47, 107, 237, 0.1);
+  color: #1d4ed8;
+  box-shadow: none;
+}
+.dash--cmd .dash-activity__row {
+  border-color: rgba(47, 107, 237, 0.35);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 0 10px rgba(47, 107, 237, 0.08);
+}
+.dash--cmd .dash-activity__row:hover {
+  border-color: rgba(47, 107, 237, 0.6);
+  background: #ffffff;
+  box-shadow: 0 0 14px rgba(47, 107, 237, 0.18);
+}
+.dash--cmd .cmd-statuspill {
+  background: #ffffff;
+  border: 1px solid rgba(47, 107, 237, 0.4);
+  box-shadow: 0 0 10px rgba(47, 107, 237, 0.1);
+}
+.dash--cmd .cmd-cardlink { display: block; border-radius: 12px; color: inherit; text-decoration: none; }
+.dash--cmd .cmd-cardlink .cmd-card { transition: box-shadow 160ms ease, border-color 160ms ease; }
+.dash--cmd .cmd-cardlink:hover .cmd-card,
+.dash--cmd .cmd-cardlink:focus-visible .cmd-card { box-shadow: 0 0 18px rgba(47, 107, 237, 0.25); border-color: rgba(47, 107, 237, 0.7); }
+/* Visible type chips under the trend head — the right-click "Show only" made
+   visible, answering to the same `type` every fetch reads. */
+/* The type chips above the trend are removed (owner request, 2026-10-30): each
+   band tall enough to hold it carries its incident type, written inside the
+   column, and the right-click menu still filters the dashboard by type. */
+/* The trend panel hugs its plot (owner request, 2026-10-30): the card's own
+   bottom padding is trimmed so no empty band sits under the axis labels. */
+.dash--cmd .dash-grid-main--split > .dash-panel:first-child { padding-bottom: 8px; }
+/* The status split under the trend (owner request, 2026-10-30): Draft and
+   Finalized as two pills over a hairline — dot, label, count and share each —
+   fitting their contents in one row. Draft wears the register's amber,
+   Finalized its green. */
+.dash--cmd .cmd-statuspills {
+  list-style: none;
+  margin: 12px 0 2px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--cmd-line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.dash--cmd .cmd-statuspill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel-raised);
+  border: 1px solid var(--cmd-line);
+  border-radius: 999px;
+  padding: 6px 14px 6px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.dash--cmd .cmd-statuspill__dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; flex: none; }  .dash--cmd .cmd-statuspill--draft { color: var(--cmd-gold); }
+  .dash--cmd .cmd-statuspill--finalized { color: var(--cmd-blue); }
+.dash--cmd .cmd-statuspill__label { font-weight: 700; color: var(--cmd-ink); }
+.dash--cmd .cmd-statuspill__count { color: var(--cmd-muted); font-variant-numeric: tabular-nums; }
+/* AI INSIGHTS — THE ANALYST'S BRIEF (owner request, 2026-10-30) -------------
+   The one panel on the page that is not the register speaking, so it is the
+   one panel allowed its own look: a violet-tinted brief, not another white
+   card. Violet already belongs to this page (the headcount card wears it),
+   and every value below rides a theme token, so the brief reads in both
+   themes. Each advisory is a slip with the analyst's violet tab at its edge;
+   the register filter it offers reads as an instruction stamped on the slip.
+   Quiet everywhere else, so this one voice carries. */
+.dash--cmd .dash-panel--ai {
+  margin-top: 20px;
+  background:
+    radial-gradient(420px 160px at 100% 0%, color-mix(in srgb, var(--violet) 14%, transparent), transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--violet) 7%, var(--panel)), var(--panel) 62%);
+  border-color: color-mix(in srgb, var(--violet) 32%, var(--cmd-line));
+}
+.dash--cmd .cmd-ai__note { font-size: 12.5px; color: var(--cmd-muted); background: var(--panel-raised); border: 1px dashed var(--cmd-line); border-radius: 10px; padding: 8px 12px; margin: 0 0 8px; }
+.dash--cmd .cmd-ai__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.dash--cmd .cmd-ai__list li {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px solid var(--cmd-line);
+  border-radius: 10px;
+  padding: 10px 12px 10px 17px;
+}
+.dash--cmd .cmd-ai__list li::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: linear-gradient(180deg, var(--violet), color-mix(in srgb, var(--violet) 40%, transparent));
+}
+.dash--cmd .cmd-ai__list strong { font-size: 13.5px; font-weight: 750; letter-spacing: -0.005em; color: var(--cmd-ink); }
+.dash--cmd .cmd-ai__list span { font-size: 12.5px; color: var(--cmd-muted); }
+.dash--cmd .cmd-ai__filter {
+  align-self: flex-start;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--violet);
+  background: color-mix(in srgb, var(--violet) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--violet) 35%, transparent);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.dash--cmd .cmd-ai__filter:hover { background: color-mix(in srgb, var(--violet) 18%, transparent); }
+.dash--cmd .cmd-ai__filter:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+.dash--cmd .cmd-ai__advisory {
+  font-size: 11.5px;
+  color: var(--cmd-muted);
+  margin: 12px 0 0;
+  padding-top: 8px;
+  border-top: 1px dashed var(--cmd-line);
+}
+/* The case number on an activity row: bold ink beside the type pill, the way
+   the reference draws it — no chip, the pill already carries the colour. */
+.dash--cmd .dash-activity__id {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--paper);
+  white-space: nowrap;
+}
+.dash--cmd .dash-empty--action { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.dash--cmd .dash-empty__btn {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--cmd-blue);
+  border: 1px solid var(--cmd-blue);
+  border-radius: 9px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: filter 160ms ease, transform 160ms ease;
+}
+.dash--cmd .dash-empty__btn:hover { filter: brightness(0.94); transform: translateY(-1px); }
+@media (prefers-reduced-motion: reduce) {
+  .dash--cmd .dash-quick__btn,
+  .dash--cmd .cmd-cardlink .cmd-card,
+  .dash--cmd .dash-empty__btn { transition: none; }
+  .dash--cmd .dash-quick__btn:hover,
+  .dash--cmd .cmd-cardlink:hover .cmd-card,
+  .dash--cmd .dash-empty__btn:hover { transform: none; }
+}
+
 
 /* ---- Chart ink ----------------------------------------------------------
    The charts are hand-drawn SVG, and an SVG PRESENTATION ATTRIBUTE
@@ -7232,7 +8941,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    is in turn what lets the ramp stay a coherent progression instead of buying
    contrast with hue on a band 15px tall. */
 .dash-plot-wrap { position: relative; }
-.dash-plot { width: 100%; height: 220px; overflow: visible; display: block; }
+.dash-plot { width: 100%; height: 300px; overflow: visible; display: block; }
 .dash-seg { stroke: var(--panel); stroke-width: 1; }
 .dash-seg--1 { fill: var(--cat-1); }
 .dash-seg--2 { fill: var(--cat-2); }
@@ -7270,11 +8979,26 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    that is the same instruction read correctly on both surfaces. A scrim would be
    right in one theme and plainly wrong in the other. */
 .dash-seg.is-muted { opacity: 0.4; }
+/* The incident type, written inside its own band now that the chips above the
+   chart are gone: white on the ramp with a dark halo, flat or turned sideways,
+   and never taking the pointer — the rect under it stays the hover target. It
+   dims with its band because it IS its band's label. */
+.dash-seg__tag {
+  fill: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  paint-order: stroke;
+  stroke: rgba(6, 12, 24, 0.5);
+  stroke-width: 2.5px;
+  pointer-events: none;
+}
+.dash-seg__tag.is-muted { opacity: 0.4; }
 /* The change of state fades only for readers who have not asked for less motion.
    The dim ITSELF is a state, not an animation, so it always applies — it just
    snaps instead of fading. */
 @media (prefers-reduced-motion: no-preference) {
-  .dash-seg { transition: opacity 140ms ease; }
+  .dash-seg, .dash-seg__tag { transition: opacity 140ms ease; }
   .dash-hour { transition: background-color 140ms ease; }
   .dash-hour__bar { transition: opacity 140ms ease; }
   .dash-peek { animation: dash-peek-in 110ms ease-out; }
@@ -7766,8 +9490,10 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   .dash-grid-main { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
-  .dash { padding: 16px 14px 40px; }
+  .dash { padding: 16px 14px 32px; gap: 14px; }
+  .dash-head { padding: 16px; }
   .dash-kpis { grid-template-columns: 1fr; }
+  .dash-panel { padding: 16px; }
 }
 
 /* ============================================================
@@ -7896,7 +9622,6 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 }
 /* ACTION TAKEN / STATUS entries are flush-left (no dash, no hanging indent). */
 .pr-actions .pr-entry { margin-left: 0; padding-left: 0; text-indent: 0; }
-.pr-recorded strong { font-style: italic; }
 
 /* ---- Print review overlay: the sheet scrolls, the bar stays docked ----
    .print-overlay--review is the on-screen review step that replaced the

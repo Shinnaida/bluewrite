@@ -48,8 +48,11 @@ const lib = readFileSync(new URL('../../src/lib/categoryRank.js', import.meta.ur
 
 test('the panel drew the rank chart, and owes its rules to the module that owns them', () => {
   assert.ok(chart.length > 500, 'could not find CategoryRank in Dashboard.jsx');
-  assert.match(component, /<Panel title="Incident categories" info=\{<PanelInfo \{\.\.\.PANEL_INFO\.categories\} \/>\}>/);
-  assert.match(component, /<CategoryRank\n\s+series=\{data\?\.seriesOverTime \?\? \[\]\}/);
+  // REMOVED from the page (owner request, 2026-10-26): the trio replaced the
+  // rank chart, and Incident Types answers the kind question now. The component
+  // stays tested here so a future panel can reuse it.
+  assert.doesNotMatch(component, /<Panel title="Incident categories"/);
+  assert.doesNotMatch(component, /<CategoryRank\n\s+series=\{data\?\.seriesOverTime/);
   // The rank chart is the ONLY consumer of the ranked payload: the old bar list is gone,
   // and with it the panel's use of the top-8 breakdown.
   assert.ok(!component.includes('function BarRows('), 'the category bar list has been replaced, not kept alongside');
@@ -180,8 +183,9 @@ test('the cut the chart applied is stated under it, not implied', () => {
   assert.match(chart, /const \{ drawn, omitted \} = chooseDrawn\(perType\)/);
   assert.match(chart, /\{omitted > 0 && \(/);
   assert.match(chart, /more type\{omitted === 1 \? '' : 's'\} had reports here, too few to rank across the range/);
-  // The panel head has no aside about it any more.
-  assert.match(component, /<Panel title="Incident categories" info=\{<PanelInfo \{\.\.\.PANEL_INFO\.categories\} \/>\}>/);
+  // The panel itself is gone (owner request, 2026-10-26) — the cut is still
+  // stated by the component, which stays tested here for reuse.
+  assert.doesNotMatch(component, /<Panel title="Incident categories"/);
 });
 
 test('the plot says it is a rank chart, in its own aria-label', () => {

@@ -134,4 +134,24 @@ interface AiNarrativeProvider
      *         out, or returns an unusable payload.
      */
     public function transcribeImage(string $imageBytes, string $mimeType): string;
+
+    /**
+     * Enhance Wording — improve the grammar, punctuation, clarity and register
+     * of an incident report the officer supplied, WITHOUT changing its facts,
+     * its structure, or its field labels.
+     *
+     * Unlike generate(), this is not a narrative written from a structured
+     * report: the account IS the document, labels and all, and the answer is
+     * that same document with better wording. It must preserve every name,
+     * date, time, place, number, plate/OR/CR/licence identifier, hedge and
+     * field label exactly, add no section the source does not carry, and leave
+     * missing details missing.
+     *
+     * @param string $account the officer's report text, as typed
+     * @return string the enhanced report text (plain; the client applies the
+     *   shared bold-label formatting)
+     * @throws AiProviderException when the provider is unreachable, times out,
+     *   or returns an unusable payload
+     */
+    public function enhanceReport(string $account): string;
 }

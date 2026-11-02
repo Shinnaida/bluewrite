@@ -189,7 +189,9 @@ final class OcrController
             "\u{2019}" => "'",
             "\u{2026}" => '...',
         ]);
-        $text = (string) preg_replace('/[|`_#*~^+=<>{}\[\]@$&\\\\\x{2500}-\x{257F}]+/u', '', $text);
+        // The # sign survives: blotter labels write plate # with it, and the
+        // vision instruction transcribes it exactly as written.
+        $text = (string) preg_replace('/[|`_*~^+=<>{}\[\]@$&\\\\\x{2500}-\x{257F}]+/u', '', $text);
         $lines = explode("\n", $text);
         $kept = [];
         foreach ($lines as $line) {

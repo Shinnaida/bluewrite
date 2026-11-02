@@ -22,6 +22,47 @@ final class ReportsTest extends BaseApiTestCase
         $this->assertSame(422, $res['status']);
     }
 
+    /**
+     * The incident type is not fixed: an officer (or a blotter read) may file
+     * the incident in the blotter's own legal words, and the API folds them to
+     * the closest canonical type instead of refusing them. The exact words are
+     * kept as the Category (the "Reported as" line), so the folder, the
+     * filters and the dashboard read the report under its main incident and
+     * nothing the blotter said is lost.
+     */
+    public function testCreateReportFoldsFreeTextIncidentTypeToItsClosestType(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $words = 'Reckless imprudence resulting to damage to property and physical injury';
+        $report = $this->createReport($cookie, $csrf, ['incident_type' => $words]);
+        $id = (int) $report['id'];
+
+        $row = $this->db()->query(
+            "SELECT incident_type, type_specific FROM bluewrite_test.reports WHERE id = {$id}"
+        )->fetch(\PDO::FETCH_ASSOC);
+        $this->assertSame('Traffic Accident', $row['incident_type'], 'the report is filed under its main incident');
+        $stored = json_decode((string) $row['type_specific'], true);
+        $this->assertSame($words, $stored['incident_category'] ?? null, 'the blotter’s own words are kept');
+
+        // …and the folder shelf counts it where it was filed.
+        $folders = $this->request('GET', '/reports/folders', null, $cookie);
+        $this->assertSame(200, $folders['status'], json_encode($folders['body']));
+        $this->assertSame(1, $this->folderTally($folders['body']['folders'])['draft|Traffic Accident'] ?? null);
+    }
+
+    /** A phrase with no real signal is still refused, never invented. */
+    public function testCreateReportStillRefusesAPhraseWithNoSignal(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $res = $this->request('POST', '/reports', [
+            'incident_type' => 'Alien Invasion',
+            'incident_datetime' => '2026-09-01T08:30',
+            'location' => 'Test Location',
+            'narrative' => 'n',
+        ], $cookie, $csrf);
+        $this->assertSame(422, $res['status']);
+    }
+
     public function testCreateReportRejectsMissingLocation(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');

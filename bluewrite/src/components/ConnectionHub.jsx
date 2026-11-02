@@ -3,13 +3,13 @@ import { api } from '../lib/api.js';
 import './ConnectionHub.css';
 
 /**
- * ConnectionHub — who is on the station right now, drawn as beams converging on
- * a hub. Each signed-in account is a node; the beams carry the eye to the centre,
- * and the list under the drawing names them.
+ * ConnectionHub — who is on the station right now, drawn as nodes on rings
+ * around a hub. Each signed-in account is a node, and the list under the
+ * drawing names them.
  *
  * "Connected" means the server saw the account active within ACTIVE_WINDOW_MS
  * (`users.last_seen_at`, refreshed every thirty seconds by PresenceBeat). It is a
- * presence signal, not a shift record, and the copy says so.
+ * presence signal, not a shift record.
  *
  * THE PANEL IS NOT ON THE DASHBOARD ANY MORE. It was, and the Dashboard is read for
  * a different question (the register's volume and state) by an administrator who is
@@ -26,7 +26,7 @@ import './ConnectionHub.css';
  */
 
 const ACTIVE_WINDOW_MS = 5 * 60 * 1000;
-/** The same window, in words, for the sentence under the title. */
+/** The same window, in words, for the empty state's sentence. */
 const ACTIVE_WINDOW_WORDS = 'five minutes';
 const MAX_NODES = 8;
 const VIEW = { w: 700, h: 240 };
@@ -36,6 +36,7 @@ const ORBIT = { x: 0.36, y: 0.30 };
 const NODE_R = 20;
 /** The rings drawn around the hub, in user units. */
 const RINGS = [62, 104, 146];
+
 
 function parseStamp(value) {
   if (!value) return null;
@@ -63,6 +64,18 @@ function initials(user) {
   if (parts.length === 0) return '?';
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+/**
+ * THE NODE'S INK, read off the account's role: blue for an Admin, gold for an
+ * Officer, the neutral ring for anything else. One home for it, so the drawing
+ * and the roster below cannot disagree about what a role wears — and
+ * the legend reads from this same pair.
+ */
+function roleInk(u) {
+  if (u.role === 'Admin') return 'is-admin';
+  if (u.role === 'Officer') return 'is-officer';
+  return '';
 }
 
 /**
@@ -128,19 +141,28 @@ export default function ConnectionHub({ users: usersProp }) {
     <section className="conn-hub" aria-labelledby="conn-hub-title">
       <div className="conn-hub__head">
         <div className="conn-hub__heading">
-          <span className="conn-hub__eyebrow">Station presence</span>
-          <h2 id="conn-hub-title">Connected now</h2>
+          <h2 id="conn-hub-title">Connected <span className="conn-hub__now">now</span></h2>
+          <p className="conn-hub__sub">Real-time view of all active users in the system.</p>
         </div>
         <span className={`conn-hub__count${active.length === 0 ? ' is-empty' : ''}`}>
-          <span className="conn-hub__count-dot" aria-hidden="true" />
+          <svg className="conn-hub__count-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
           {countText}
+          <span className="conn-hub__count-dot" aria-hidden="true" />
         </span>
       </div>
 
-      <p className="conn-hub__note">
-        A colleague is connected while the server has seen their workspace active in the
-        last {ACTIVE_WINDOW_WORDS}. Signed-in accounts only; a hidden tab stops reporting.
-      </p>
+      {/* THE LEGEND. The drawing's ink is a code — blue for an Admin, gold for an
+          Officer — and a code without its key is decoration. Two swatches, no
+          counts: the pill above already says how many are on. */}
+      <ul className="conn-hub__legend" aria-label="Role colours">
+        <li><span className="conn-hub__swatch is-admin" aria-hidden="true" />Admin</li>
+        <li><span className="conn-hub__swatch is-officer" aria-hidden="true" />Officer</li>
+      </ul>
 
       {/* THE STAGE IS WHAT FRAMES THE DRAWING. The panel is as wide as the directory
           table and the drawing is not: left to fill that width the rings and labels
@@ -164,25 +186,15 @@ export default function ConnectionHub({ users: usersProp }) {
           ))}
         </g>
 
+        {/* NO ORBIT RING (owner request): the dashed ellipse read as another
+            broken line, so the rings alone floor the drawing. */}
+        {/* NO BEAMS (owner request): the dashed lines from the hub to each
+            node read as broken wires, so a connected account is a node on
+            the rings and a row in the roster — nothing strung between. */}
         {shown.map((u, i) => {
           const p = positionFor(i, shown.length);
           return (
-            <line
-              key={`beam-${u.id}`}
-              className="conn-hub__beam"
-              style={{ animationDelay: `${(i * 0.35).toFixed(2)}s` }}
-              x1={p.x}
-              y1={p.y}
-              x2={HUB.x}
-              y2={HUB.y}
-            />
-          );
-        })}
-
-        {shown.map((u, i) => {
-          const p = positionFor(i, shown.length);
-          return (
-            <g key={`node-${u.id}`} className="conn-hub__node" transform={`translate(${p.x} ${p.y})`}>
+            <g key={`node-${u.id}`} className={`conn-hub__node${roleInk(u) ? ` ${roleInk(u)}` : ''}`} transform={`translate(${p.x} ${p.y})`}>
               {/* A photograph would be the honest face here, and this drawing is
                   deliberately initials: the panel is read at a glance from across a
                   room, and a 40px circle is where a photograph becomes a smudge. The
@@ -199,6 +211,8 @@ export default function ConnectionHub({ users: usersProp }) {
           <circle className="conn-hub__pulse" r="26" />
           <circle r="22" />
           <text y="5" textAnchor="middle">BW</text>
+          <rect className="conn-hub__core-tag" x="-52" y="28" width="104" height="20" rx="10" />
+          <text className="conn-hub__core-tag-text" y="42" textAnchor="middle">BlueWrite</text>
         </g>
       </svg>
       </div>
@@ -207,12 +221,13 @@ export default function ConnectionHub({ users: usersProp }) {
         <ul className="conn-hub__roster">
           {shown.map((u) => (
             <li key={u.id} className="conn-hub__person">
-              <span className="conn-hub__avatar" aria-hidden="true">{initials(u)}</span>
+              <span className={`conn-hub__avatar${roleInk(u) ? ` ${roleInk(u)}` : ''}`} aria-hidden="true">{initials(u)}</span>
               <span className="conn-hub__who">
                 <span className="conn-hub__name">{u.full_name || u.username}</span>
                 {u.role ? <span className="conn-hub__role">{u.role}</span> : null}
               </span>
               <span className="conn-hub__seen" title={u.last_seen_at ? `Server time of last activity: ${u.last_seen_at}` : undefined}>
+                <span className="conn-hub__seen-dot" aria-hidden="true" />
                 {seenLabel(u.seen, now)}
               </span>
             </li>
@@ -229,7 +244,7 @@ export default function ConnectionHub({ users: usersProp }) {
         </ul>
       ) : (
         <p className="conn-hub__empty">
-          Nobody has been active in the last five minutes. A workspace reports in from the
+          Nobody has been active in the last {ACTIVE_WINDOW_WORDS}. A workspace reports in from the
           moment it is signed in, whenever its tab is on screen.
         </p>
       )}

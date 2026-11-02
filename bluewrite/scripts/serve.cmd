@@ -6,9 +6,13 @@ REM  BlueWrite — bring the local stack up.
 REM
 REM  THREE THINGS, THREE PORTS, and the app needs all of them:
 REM
-REM    * the API, `php -S 127.0.0.1:8099`  — the JSON front controller. It ALSO
+REM    * the API, `php -S 0.0.0.0:8099`  — the JSON front controller. It ALSO
 REM      serves the built app from public/, so http://127.0.0.1:8099/ is a
 REM      complete copy of BlueWrite on its own (no dev server involved).
+REM      ALL INTERFACES ON PURPOSE: the phone app reaches this port over the
+REM      station Wi-Fi (see docs\LAN_SETUP.md). Windows Firewall rule
+REM      "BlueWrite LAN 8099" guards who may come in — never rebind this to
+REM      loopback or the phone goes blind.
 REM    * the dev server, Vite on 127.0.0.1:5180 — the live-reload URL, which
 REM      proxies /api to the API above (see vite.config.js).
 REM    * MySQL on 3306 — without it every request answers "Database connection

@@ -36,6 +36,12 @@ final class DashboardTest extends BaseApiTestCase
             $this->assertArrayHasKey($key, $b);
         }
         $this->assertSame(['total', 'pending', 'submitted', 'finalized', 'periodDeltaPct'], array_keys($b['kpis']));
+        // The headcount card: ACTIVE accounts only, split by role. The seed
+        // holds one Admin, two Officers and one Staff, plus one deactivated
+        // account that must not count.
+        $this->assertArrayHasKey('users', $b);
+        $this->assertSame(4, $b['users']['total']);
+        $this->assertSame(['Admin' => 1, 'Officer' => 2, 'Staff' => 1], $b['users']['byRole']);
         $this->assertSame(1, $b['kpis']['total']);
         $this->assertSame(1, $b['kpis']['pending']);
         $this->assertSame(0, $b['kpis']['submitted']);
@@ -69,6 +75,32 @@ final class DashboardTest extends BaseApiTestCase
 
         // Trend vs. previous (empty) period: +100%.
         $this->assertSame(100, $res['body']['kpis']['periodDeltaPct']);
+    }
+
+    /**
+     * The three hero cards read the REGISTER, not the window (owner request,
+     * 2026-10-30): Total, Drafts and Finalized match All Reports whatever
+     * range the trend is reading. A report older than the default 30-day
+     * window counts in registerTotals but not in the windowed kpis.
+     */
+    public function testHeroCardsReadTheWholeRegister(): void
+    {
+        [$cookie, $csrf] = $this->login('t.admin');
+        $today = date('Y-m-d\\TH:i');
+        $old = date('Y-m-d\\TH:i', strtotime('-60 days'));
+        $this->createReport($cookie, $csrf, ['incident_datetime' => $today]);
+        $this->createReport($cookie, $csrf, ['incident_datetime' => $old]);
+
+        $res = $this->request('GET', '/dashboard/stats', null, $cookie);
+        $this->assertSame(200, $res['status'], json_encode($res['body']));
+        $b = $res['body'];
+        $this->assertArrayHasKey('registerTotals', $b);
+        $this->assertSame(['total', 'pending', 'submitted', 'finalized'], array_keys($b['registerTotals']));
+        // The window holds only the recent report; the register holds both.
+        $this->assertSame(1, $b['kpis']['total']);
+        $this->assertSame(2, $b['registerTotals']['total']);
+        $this->assertSame(2, $b['registerTotals']['pending']);
+        $this->assertSame(0, $b['registerTotals']['finalized']);
     }
 
     public function testTypeFilterNarrowsAllSections(): void
@@ -216,6 +248,60 @@ final class DashboardTest extends BaseApiTestCase
         $this->assertSame(100, $b['periodDeltas']['attentionPct']);
         $this->assertSame(100, $b['periodDeltas']['finalizedPct']);
         $this->assertNull($b['periodDeltas']['medianPct']);
+    }
+
+    /**
+     * The command-center's own readings: per-day workflow states for the
+     * metric minis, the top-5 location tally, and the system grid — all from
+     * the same range and scope as the totals, so no panel can disagree.
+     */
+    public function testStatsCarryStatusSeriesLocationsAndSystemHealth(): void
+    {
+        [$cookie, $csrf] = $this->login('t.admin');
+        $today = date('Y-m-d\TH:i');
+        $this->createReport($cookie, $csrf, ['incident_datetime' => $today, 'location' => 'National Highway']);
+        $this->createReport($cookie, $csrf, ['incident_datetime' => $today, 'location' => 'National Highway']);
+        $fin = $this->createReport($cookie, $csrf, ['incident_datetime' => $today, 'location' => 'Poblacion']);
+        $this->patchReport($cookie, $csrf, (int) $fin['id'], ['status' => 'finalized']);
+
+        $res = $this->request('GET', '/dashboard/stats', null, $cookie);
+        $this->assertSame(200, $res['status'], json_encode($res['body']));
+        $b = $res['body'];
+
+        // Per-day states ride the same zero-filled days as the totals.
+        $this->assertArrayHasKey('statusSeries', $b);
+        $this->assertCount(count($b['seriesOverTime']), $b['statusSeries'], 'one status point per day, no more');
+        $this->assertSame(
+            array_column($b['seriesOverTime'], 'date'),
+            array_column($b['statusSeries'], 'date'),
+            'the mini days must line up with the chart days'
+        );
+        $last = $b['statusSeries'][array_key_last($b['statusSeries'])];
+        $this->assertSame(['date', 'draft', 'submitted', 'finalized'], array_keys($last));
+        $this->assertSame(2, $last['draft']);
+        $this->assertSame(1, $last['finalized']);
+        $this->assertSame(
+            array_sum(array_column($b['statusSeries'], 'draft')),
+            $b['kpis']['pending'],
+            'the draft mini must sum to the draft KPI'
+        );
+
+        // Top locations: blanks excluded, five at most, honours the filter.
+        $this->assertArrayHasKey('locationBreakdown', $b);
+        $this->assertSame('National Highway', $b['locationBreakdown'][0]['location']);
+        $this->assertSame(2, $b['locationBreakdown'][0]['count']);
+        $this->assertLessThanOrEqual(5, count($b['locationBreakdown']));
+        foreach ($b['locationBreakdown'] as $row) {
+            $this->assertNotSame('', trim($row['location']), 'a blank place is a gap, not a bar');
+        }
+
+        // System health: measured server-side, never invented client-side.
+        $this->assertArrayHasKey('system', $b);
+        $this->assertSame(['database', 'storage', 'ai', 'notifications'], array_keys($b['system']));
+        $this->assertSame('online', $b['system']['database'], 'this response exists because the queries answered');
+        $this->assertContains($b['system']['storage'], ['online', 'readonly']);
+        $this->assertContains($b['system']['ai'], ['online', 'offline']);
+        $this->assertSame('online', $b['system']['notifications']);
     }
 
     public function testOfficerAndStaffAreForbidden(): void

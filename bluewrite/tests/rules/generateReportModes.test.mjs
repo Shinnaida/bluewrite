@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { cleanAccountText, buildArrangeDraft } from '../../src/lib/arrangeDraft.js';
+import { cleanAccountText, buildArrangeDraft, buildEnhancedDraft } from '../../src/lib/arrangeDraft.js';
+import { formatIncidentReportHtml, reportHtmlToPlain, extractFieldLabels, unsupportedFieldLabels, detectIncidentTitle, stripAddedFieldRows } from '../../src/lib/reportFormat.js';
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const PANEL = read('../../src/components/ai/AiNarrativePanel.jsx');
 const REPORTS = read('../../src/pages/Reports.jsx');
@@ -16,7 +17,7 @@ test('sheet format offers Arrange-only vs Enhance-wording, hidden while translat
 });
 test('sheet primary action reads Generate Report and routes by mode', () => {
   assert.ok(PANEL.includes('Generate Report'), 'Generate Report label missing');
-  assert.ok(PANEL.includes("generateMode === 'arrange' ? arrangeReport() : generate()"), 'mode routing missing');
+  assert.ok(PANEL.includes("generateMode === 'arrange' ? arrangeReport() : enhanceReport()"), 'mode routing missing');
 });
 test('cleanAccountText collapses whitespace but keeps words and order', () => {
   const inp = ['around  10pm,  market.   ', '', '', 'Ana   took   phone.'].join(LF);
@@ -27,7 +28,9 @@ test('cleanAccountText collapses whitespace but keeps words and order', () => {
 });
 test('buildArrangeDraft shapes the proposal with no LLM content', () => {
   const d = buildArrangeDraft({ accountText: 'b  a', notableFindings: ['x', ' y '].join(LF), actionTaken: 'filed' });
-  assert.equal(d.narrative, 'b a');
+  // Arrange applies sentence case: the first word takes a capital, no word is
+  // added or corrected.
+  assert.equal(d.narrative, '<p>B a</p>');
   assert.equal(d.arranged, true);
   assert.deepEqual(d.suggestions, []);
   assert.deepEqual(d.notableFindings, ['x', 'y']);
@@ -55,10 +58,14 @@ test('the receipt lists each filled field once', () => {
 });
 test('one account reader serves both Generate paths, arrange builds via the lib', () => {
   assert.ok(PANEL.includes('const runAccountRead'), 'shared reader missing');
-  const uses = PANEL.split('await runAccountRead(accountText)').length - 1;
-  assert.equal(uses, 2, 'both paths must call the shared reader');
-  const direct = PANEL.split('await onReadAccount(accountText)').length - 1;
+  const uses = PANEL.split('await runAccountRead(accountText').length - 1;
+  assert.equal(uses, 3, 'generate, arrange and enhance must call the shared reader');
+  const direct = PANEL.split('await onReadAccount(accountText').length - 1;
   assert.equal(direct, 2, 'reads happen only inside the shared reader (call + retry)');
+  // Arrange only — keep wording, add no labels not in the text.
+  assert.ok(PANEL.includes('await runAccountRead(accountText, { arrangeOnly: true })'), 'arrange must pass arrangeOnly');
+  assert.ok(REPORTS.includes('arrangeOnly'), 'sheet read must know arrangeOnly');
+  assert.ok(REPORTS.includes("if (afterFirst.incident_type && !arrangeOnly)"), 'arrange must skip type-details');
   assert.ok(PANEL.includes('setDraft(buildArrangeDraft({ accountText, notableFindings: runFindings, actionTaken: runActionTaken }))'), 'arrange must build via the lib');
   assert.ok(PANEL.includes('Arrange is a third run entry'), 'arrange does not rewind before reading');
   assert.ok(!PANEL.includes('const cleaned = accountText'), 'inline cleaner must be gone');
@@ -80,6 +87,92 @@ test('arranged drafts render a visible wording-unchanged receipt', () => {
   assert.ok(PANEL.includes('ai-arranged-note'), 'receipt element missing');
   assert.ok(PANEL.includes('wording unchanged'), 'receipt must say wording is unchanged');
   assert.ok(CSS.includes('.ai-arranged-note'), 'receipt css missing');
+});
+test('Time/Date is a label: it is bolded and named the sheet way', () => {
+  // Owner request, 2026-11-02: the arranged page printed "Time/Date:" as plain
+  // words, because the label vocabulary only knew the long spellings and
+  // "Time/Date" is neither ALL CAPS nor long-form.
+  for (const label of ['TIME/DATE', 'Time/Date', 'TIME / DATE', 'T/D OF INCIDENT', 'T / D']) {
+    const html = formatIncidentReportHtml(`${label}: 8:40 AM of 10-20-26`, { sentenceCase: true });
+    assert.match(html, /^<p><b>Time\/Date:<\/b> /, `"${label}" is not bolded as Time/Date`);
+    assert.equal(extractFieldLabels(`${label}: x`).length, 1, `"${label}" is not read as one label`);
+  }
+  // Spacing around the slash is presentational: every spelling is ONE label, so
+  // an answer that spaces it differently still matches the source's allow-list.
+  assert.deepEqual(extractFieldLabels('Time / Date: x'), extractFieldLabels('Time/Date: x'));
+  // A clock is still a clock: a bare "8:40 AM" line is not a label.
+  assert.equal(formatIncidentReportHtml('8:40 AM of 10-20-26', {}).includes('<b>'), false, 'a time was bolded as a label');
+});
+
+test('Enhance Wording cannot add rows the arranged report never carried', () => {
+  // Owner request, 2026-11-02: the enhanced answer came back with a fresh
+  // `Vehicle 1: Plate 0718SR` row and a `Suspected Cause:` heading lifted out
+  // of the facts. Those read as extra inputs on the sheet, so they are dropped
+  // while every line the source states survives.
+  const source = [
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY',
+    'Place of incident: Brgy Mainit',
+    'Time/Date: 8:40 AM of October 20, 2026',
+    'Vehicles involved:',
+    'V1: Yamaha NMAX with plate #0718SR, driven by Joseph Porol.',
+    'Facts:',
+    "Investigation revealed that both vehicle were traveling in opposite direction, V2 encroached into V1's and accidentally hit left side portion of V1.",
+    'Recorded by: Kainoa',
+  ].join(LF);
+  const answer = [
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY',
+    'Place of incident: Brgy Mainit',
+    'Time/Date: 8:40 AM of October 20, 2026',
+    'Vehicle 1: Plate 0718SR',
+    "Suspected Cause: V2 ENCROACHED INTO V1'S AND ACCIDENTALLY HIT LEFT SIDE PORTION OF - - V1",
+    'Vehicles involved:',
+    'V1: Yamaha NMAX with plate #0718SR, driven by Joseph Porol.',
+    'Facts:',
+    "Investigation revealed that both vehicles were traveling in opposite directions, with V2 encroaching into V1's lane and accidentally hitting the left side portion of V1.",
+    'Recorded by: Kainoa',
+  ].join(LF);
+  const out = stripAddedFieldRows(answer, source);
+  assert.equal(out.includes('Vehicle 1:'), false, 'the invented vehicle row survived');
+  assert.equal(out.includes('Suspected Cause:'), false, 'the invented cause heading survived');
+  assert.equal(out.includes('Plate 0718SR'), false, 'the invented row\'s value survived as stray ink');
+  // Every real part of the page is still there, word for word.
+  for (const line of source.split(LF).filter((l) => !l.startsWith('Investigation'))) {
+    assert.ok(out.includes(line), 'lost a source line: ' + line);
+  }
+  assert.ok(out.includes('both vehicles were traveling in opposite directions'), 'the corrected facts were dropped');
+  // A row the SOURCE opens is never an addition — V1/V2 markers survive even
+  // when the model rewords them slightly.
+  const reworded = ['V1: Yamaha NMAX, plate 0718SR, driven by Joseph Porol.'].join(LF);
+  assert.equal(stripAddedFieldRows(reworded, source), reworded, 'a source row was treated as an addition');
+});
+
+test('the enhance path strips added rows before it audits labels', () => {
+  const at = PANEL.indexOf('const enhanceReport = async (');
+  assert.notEqual(at, -1, 'enhanceReport is gone');
+  const body = PANEL.slice(at, PANEL.indexOf('// SHEET FORMAT - Arrange-only', at));
+  const strip = body.indexOf('stripAddedFieldRows(');
+  const audit = body.indexOf('unsupportedFieldLabels(');
+  assert.notEqual(strip, -1, 'added rows are no longer stripped');
+  assert.ok(strip < audit, 'the audit runs before the cleanup');
+});
+
+test('an arranged page offers Enhance writing from the same panel', () => {
+  // Owner request, 2026-11-02: after arranging, the officer can settle with the
+  // page OR polish its wording right there. The enhanced page replaces the
+  // arranged one in the SAME panel — no second trip through the sidebar.
+  assert.ok(
+    PANEL.includes('onClick={() => enhanceReport({ fromArranged: true })}'),
+    'the arranged result no longer offers Enhance writing',
+  );
+  assert.ok(PANEL.includes('{draft?.arranged && ('), 'the control is not scoped to an arranged draft');
+  // From an arranged result nothing is rewound and nothing is read or saved
+  // again: the arranged page IS the text being enhanced.
+  const at = PANEL.indexOf('const enhanceReport = async (');
+  assert.notEqual(at, -1, 'enhanceReport is gone');
+  const body = PANEL.slice(at, PANEL.indexOf('// SHEET FORMAT - Arrange-only', at));
+  assert.ok(body.includes('fromArranged ? {} : beginFreshRun(false)'), 'arrange-then-enhance rewinds the paper');
+  assert.ok(body.includes('if (!fromArranged && onReadAccount)'), 'a second account read is run instead');
+  assert.ok(body.includes("if (fromArranged) setProvisionalState('idle')"), 'the enhanced page is never written onto the paper');
 });
 test('retry repeats an arrange press', () => {
   assert.ok(PANEL.includes("lastPress.kind === 'arrange' ? arrangeReport()"), 'retry must handle arrange');
@@ -108,7 +201,7 @@ test('enhance path still marks AI provenance', () => {
 test('both Generate results share one presenter', () => {
   assert.ok(PANEL.includes('const presentDraftResult'), 'shared presenter missing');
   const uses = PANEL.split('presentDraftResult();').length - 1;
-  assert.equal(uses, 2, 'generate and arrange must present through it');
+  assert.equal(uses, 3, 'generate, arrange and enhance must present through it');
 });
 test('sheet home sits on the desk below the form, beside the reveal toggle', () => {
   const bar = REPORTS.indexOf('<div className="ir-sheet-ai ir-sheet-ai--bar">');
@@ -181,4 +274,538 @@ test('sheet provisional arrival writes on landing; Discard restores, Keep confir
   assert.ok(REPORTS.includes('restored.findings'), 'restore does not hand back findings');
   // Hand-edits close the narrative revert, like the fields below.
   assert.ok(REPORTS.includes("Hand-edits close the narrative revert, like the fields below"), 'edits do not close the narrative revert');
+});
+
+test('the shared formatter bolds existing labels only and adds none', () => {
+  const src = [
+    '10-20-26 10:00 AM',
+    '',
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+    '',
+    'PLACE OF INCIDENT : CANGI MUNDONG, INOBURAN, CITY OF NAGA',
+    'T/D OF INCIDENT : MORE OR LESS 8:40 AM OF 10-20-26',
+    'VEHICLES INVOLVED:',
+    'V1 YAMAHA NMAX WITH PLATE 0718SR.',
+    '',
+    'FACTS. INVESTIGATION REVEALED THAT BOTH VEHICLE WERE TRAVELING IN OPPOSITE DIRECTION.',
+    'REMARKS: Settled at the barangay.',
+    'RECORDED BY : PO1 DELA CRUZ',
+  ].join(LF);
+  const html = formatIncidentReportHtml(src);
+  assert.ok(html.includes('<b>PLACE OF INCIDENT:</b> CANGI MUNDONG'), 'place label not bolded');
+  assert.ok(html.includes('<b>T/D OF INCIDENT:</b> MORE OR LESS 8:40 AM'), 't/d label not bolded');
+  assert.ok(html.includes('<b>VEHICLES INVOLVED:</b>'), 'vehicles label not bolded');
+  assert.ok(html.includes('<b>FACTS:</b> INVESTIGATION REVEALED'), 'facts label not bolded');
+  assert.ok(html.includes('<b>REMARKS:</b> Settled at the barangay.'), 'remarks label not bolded');
+  assert.ok(html.includes('<b>RECORDED BY:</b> PO1 DELA CRUZ'), 'recorded-by label not bolded');
+  // The incident title has no separator: it stands as its own bold heading,
+  // never as a field label.
+  assert.ok(html.includes('<p><b>RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY</b></p>'), 'incident title is not a standalone heading');
+  assert.ok(!html.includes('<b>RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY:</b>'), 'standalone incident title was treated as a field');
+  // Nothing was added: the same words, with the vehicle row's V-marker bold
+  // and wearing the label colon.
+  assert.ok(
+    html.includes('<b>V1:</b> YAMAHA NMAX WITH PLATE 0718SR.'),
+    'vehicle wording changed or its marker was not bold with a colon',
+  );
+  assert.ok(html.includes('10-20-26 10:00 AM'), 'date/time wording changed');
+  // A time on its own line is not a field label.
+  const timeOnly = formatIncidentReportHtml('MORE OR LESS 8:40 AM');
+  assert.ok(!timeOnly.includes('<b>'), 'a time was mistaken for a label');
+});
+
+test('enhance formats only labels the source carried', () => {
+  const source = ['PLACE OF INCIDENT : Naga City', 'FACTS. The wallet was lost.'].join(LF);
+  assert.deepEqual(extractFieldLabels(source), ['place of incident', 'facts']);
+  const enhanced = ['PLACE OF INCIDENT : Naga City', 'FACTS: The wallet was lost.', 'VEHICLES INVOLVED: None.'].join(LF);
+  const draft = buildEnhancedDraft({ enhancedText: enhanced, sourceText: source });
+  assert.ok(draft.narrative.includes('<b>PLACE OF INCIDENT:</b>'), 'source label not bolded');
+  assert.ok(draft.narrative.includes('<b>FACTS:</b>'), 'source label not bolded');
+  assert.ok(!draft.narrative.includes('<b>VEHICLES INVOLVED:</b>'), 'invented label was bolded');
+  assert.equal(draft.enhanced, true);
+  assert.deepEqual(draft.notableFindings, [], 'enhance must not propose findings');
+  assert.equal(draft.actionTaken, '', 'enhance must not propose a disposition');
+  assert.deepEqual(
+    unsupportedFieldLabels(enhanced, source),
+    { invented: ['vehicles involved'], missing: [] },
+    'an invented label must be detectable',
+  );
+  assert.deepEqual(
+    unsupportedFieldLabels('FACTS: The wallet was lost.', source),
+    { invented: [], missing: ['place of incident'] },
+    'a dropped label must be detectable',
+  );
+});
+
+// ---- Universal incident-title detection (owner request, 2026-11-02) --------
+// One detector serves Arrange Only and Enhance Wording through the shared
+// formatter: the title comes from the report being read, never from a
+// hardcoded reference.
+
+const REFERENCE = [
+  'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+  '',
+  'PLACE OF INCIDENT : CANGI MUNDONG, INOBURAN, CITY OF NAGA',
+  'T/D OF INCIDENT : MORE OR LESS 8:40 AM OF 10-20-26',
+  'VEHICLES INVOLVED:',
+  'V1 YAMAHA NMAX WITH PLATE 0718SR, OR 0716-819041, CR 0216-25-250349 OWNED AND DRIVEN BY JOSEPH LONTAYO POROL, MALE FILIPINO, 36 YRS OLD.',
+  'V2 HONDA XRM WITH PLATE GF39113, OWNED BY GALEO CABRERE, DRIVEN BY HERO SANORIA CANQUE, 19 YRS OLD. NO DRIVERS LICENSE.',
+  'BACKRIDER VILMA SANORIA CANQUE',
+  '',
+  'FACTS. INVESTIGATION REVEALED THAT BOTH VEHICLE WERE TRAVELING IN OPPOSITE DIRECTION.',
+  'REMARKS. BOTH PARTIES AMICABLY SETTLED THE INCIDENT',
+  'RECORDED BY : HONEY',
+  'This certification is issued upon the request of "BEE" for what ever legal purposes it may serve.',
+].join(LF);
+
+test('the reference source yields its own title, not a field and not a guess', () => {
+  assert.equal(
+    detectIncidentTitle(REFERENCE),
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+    'reference title not detected',
+  );
+  const html = formatIncidentReportHtml(REFERENCE);
+  assert.ok(
+    html.includes('<p><b>RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY</b></p>'),
+    'reference title is not a standalone heading',
+  );
+  assert.ok(!html.includes('INCIDENT TITLE:'), 'an INCIDENT TITLE: label was added');
+});
+
+test('a different incident receives its own title from its own source', () => {
+  const src = [
+    'LOST WALLET WITH IDENTIFICATION CARDS',
+    '',
+    'PLACE OF INCIDENT : PUBLIC MARKET, BARANGAY DAGATAN',
+    'FACTS. THE COMPLAINANT REPORTED THAT HIS WALLET WENT MISSING WHILE BUYING GOODS.',
+    'REMARKS: NONE',
+    'RECORDED BY : PO1 DELA CRUZ',
+  ].join(LF);
+  assert.equal(detectIncidentTitle(src), 'LOST WALLET WITH IDENTIFICATION CARDS');
+  const html = formatIncidentReportHtml(src);
+  assert.ok(html.includes('<p><b>LOST WALLET WITH IDENTIFICATION CARDS</b></p>'));
+  assert.ok(!html.includes('RECKLESS IMPRUDENCE'), 'the reference title leaked into another report');
+});
+
+test('vehicle rows, back-rider lines, times and certifications are not titles', () => {
+  assert.equal(detectIncidentTitle('V1 YAMAHA NMAX WITH PLATE 0718SR.'), '');
+  assert.equal(detectIncidentTitle('BACKRIDER VILMA SANORIA CANQUE'), '');
+  assert.equal(detectIncidentTitle('MORE OR LESS 8:40 AM'), '');
+  assert.equal(detectIncidentTitle('10-20-26 10:00 AM'), '');
+  assert.equal(
+    detectIncidentTitle('This certification is issued upon the request of "BEE" for what ever legal purposes it may serve.'),
+    '',
+    'certification read as a title',
+  );
+  assert.equal(
+    detectIncidentTitle('Investigation revealed that both vehicles were traveling in opposite directions.'),
+    '',
+    'a narrative sentence read as a title',
+  );
+});
+
+test('a one-word incident title heads the report instead of joining the section above it', () => {
+  // "THEFT" is a whole incident name, stated in one word. Before, the title
+  // scan needed two words, so the line fell into the section above it and was
+  // sentence-cased into ordinary prose ("Remarks: None / theft"). It is now
+  // the heading, wherever it sits in the source.
+  const src = [
+    'FACTS. THE COMPLAINANT REPORTED THAT HIS WALLET WAS TAKEN.',
+    'REMARKS: NONE',
+    'THEFT',
+    'PLACE OF INCIDENT : PUBLIC MARKET',
+    'RECORDED BY : Kainoa',
+  ].join(LF);
+  assert.equal(detectIncidentTitle(src), 'THEFT');
+  const html = formatIncidentReportHtml(src, { sentenceCase: true });
+  assert.ok(html.startsWith('<p><b>THEFT</b></p>'), 'the one-word title is not the heading');
+  assert.ok(html.includes('<p><b>Remarks:</b> None</p>'), 'the title was swallowed by the remarks');
+  assert.ok(!/Remarks:<\/b> None<br>/.test(html), 'the title leaked into another section');
+  // A one-word line that is not a known incident name is never promoted.
+  assert.equal(detectIncidentTitle('FACTS. THE VEHICLE SUSTAINED DAMAGE.\nDAMAGE\nREMARKS: NONE'), '');
+});
+
+test('a title wrapped by the source is one heading, not a stray paragraph', () => {
+  // OCR wraps a long charge over two lines. Both fragments are the same title,
+  // so they are emitted once, as one heading, and the second line never
+  // survives as sentence-cased prose in the section below.
+  const src = [
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY',
+    'AND PHYSICAL INJURY',
+    'FACTS. V1 HIT V2.',
+  ].join(LF);
+  assert.equal(
+    detectIncidentTitle(src),
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+  );
+  const html = formatIncidentReportHtml(src, { sentenceCase: true });
+  assert.ok(
+    html.startsWith('<p><b>RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY</b></p>'),
+    'the wrapped title was not joined into one heading',
+  );
+  assert.ok(!html.includes('And physical injury'), 'a title fragment was left behind as prose');
+});
+
+test('no title is invented when the source carries none', () => {
+  const src = [
+    'PLACE OF INCIDENT : PUBLIC MARKET',
+    'FACTS. THE COMPLAINANT REPORTED A MISSING WALLET.',
+  ].join(LF);
+  assert.equal(detectIncidentTitle(src), '');
+  const html = formatIncidentReportHtml(src);
+  assert.ok(!html.includes('<p><b>PUBLIC MARKET'), 'a field value was promoted to a heading');
+  assert.ok(html.includes('<b>PLACE OF INCIDENT:</b>'), 'existing labels still bold');
+});
+
+test('arrange sentence-cases the place without correcting it; enhance keeps it as written', () => {
+  // Arrange Only changes CAPITALISATION only (owner request, 2026-11-02):
+  // CANGI MUNDONG becomes Cangi Mundong, never Cansimundong — the spelling is
+  // the officer's. Enhance Wording keeps its own answer's casing.
+  const src = [
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+    '',
+    'PLACE OF INCIDENT : CANGI MUNDONG, INOBURAN, CITY OF NAGA',
+    'FACTS. INVESTIGATION REVEALED THAT BOTH VEHICLE WERE TRAVELING IN OPPOSITE DIRECTION.',
+  ].join(LF);
+  const arranged = buildArrangeDraft({ accountText: src });
+  assert.ok(
+    arranged.narrative.includes('<b>Place of incident:</b> Cangi Mundong, Inoburan, City of Naga'),
+    'arrange did not sentence-case the recorded place or its label',
+  );
+  assert.ok(!arranged.narrative.includes('Cansimundong'), 'arrange corrected the recorded place');
+  const enhanced = buildEnhancedDraft({ enhancedText: src, sourceText: src });
+  assert.ok(
+    enhanced.narrative.includes('<b>PLACE OF INCIDENT:</b> CANGI MUNDONG, INOBURAN, CITY OF NAGA'),
+    'enhance formatting changed the recorded place wording',
+  );
+});
+
+test('enhance path uses the same title logic as arrange but keeps its own casing', () => {
+  const draft = buildEnhancedDraft({ enhancedText: REFERENCE, sourceText: REFERENCE });
+  assert.ok(
+    draft.narrative.includes('<p><b>RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY</b></p>'),
+    'enhance did not keep the source title as a standalone heading',
+  );
+  assert.ok(
+    draft.narrative.includes('<b>FACTS:</b> INVESTIGATION REVEALED'),
+    'enhance must not be sentence-cased by Arrange Only\'s pass',
+  );
+  const arranged = buildArrangeDraft({ accountText: REFERENCE });
+  assert.ok(
+    arranged.narrative.includes('<p><b>RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY</b></p>'),
+    'arrange lost the same title',
+  );
+  assert.notEqual(arranged.narrative, draft.narrative, 'the two modes must not share one casing pass');
+});
+
+// ---- Arrange Only: formal sentence case (owner request, 2026-11-02) --------
+// Capitalisation is the ONLY thing that changes. The word sequence, spelling,
+// grammar, punctuation, names, numbers and identifiers stay untouched.
+
+test('arrange sentence-cases every all-caps narrative without correcting its words', () => {
+  const arranged = buildArrangeDraft({ accountText: REFERENCE });
+  // The two examples the owner pinned: only the case changes. "vehicle" stays
+  // singular and "direction" stays singular — no grammar correction.
+  // The label is the sheet's own, in sentence case, and the facts follow it
+  // on the next line (owner request, 2026-11-02).
+  assert.ok(
+    arranged.narrative.includes(
+      '<b>Facts:</b><br>Investigation revealed that both vehicle were traveling in opposite direction.',
+    ),
+    'the FACTS narrative was not sentence-cased or does not follow its label',
+  );
+  assert.ok(
+    arranged.narrative.includes('<b>Remarks:</b> Both parties amicably settled the incident'),
+    'the REMARKS narrative was not sentence-cased',
+  );
+  assert.ok(!arranged.narrative.includes('vehicles were'), 'grammar was corrected');
+  assert.ok(!arranged.narrative.includes('directions'), 'grammar was corrected');
+  // A typo is the officer's: sentence case must not correct it.
+  const typo = buildArrangeDraft({
+    accountText: 'FACTS. THEY WERE BROUGT TO NAGA INFIRMARY FOR TREATMENT.',
+  });
+  assert.ok(
+    typo.narrative.includes('They were brougt to Naga Infirmary for treatment.'),
+    'the officer\'s spelling or the facility name was not preserved',
+  );
+  assert.ok(!typo.narrative.includes('brought'), 'a spelling correction slipped in');
+});
+
+test('arrange keeps names, places, vehicle markers and identifiers intact', () => {
+  const full = [
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+    '',
+    'PLACE OF INCIDENT : CANGI MUNDONG, INOBURAN, CITY OF NAGA',
+    'T/D OF INCIDENT : MORE OR LESS 8:40 AM OF 10-20-26',
+    'VEHICLES INVOLVED:',
+    'V1 YAMAHA NMAX WITH PLATE 0718SR, OR 0716-819041, CR 0216-25-250349 OWNED AND DRIVEN BY JOSEPH LONTAYO POROL, MALE FILIPINO, 36 YRS OLD, DOB : 2-25-1990 AND A RESIDENT OF PUROK SAMBAG, INOBURAN, CITY OF NAGA, CEBU. WITH DRIVERS LICENSE G04-16-000471 VALID UNTIL 2-25-2029.',
+    'V2 HONDA XRM WITH PLATE GF39113, OR 0741-206152, CR 258503221, OWNED BY GALEO CABRERE, DRIVEN BY HERO SANORIA CANQUE, MALE, FILIPINO, 19 YRS OLD, DOB: 9-22 - AND A RESIDENT OF PUROK TAL-OT, BRGY. MAIN IT, CITY OF NAGA, CEBU. NO DRIVERS LICENSE.',
+    'BACKRIDER VILMA SANORIA CANQUE',
+    '',
+    'FACTS. INVESTIGATION REVEALED THAT BOTH VEHICLE WERE TRAVELING IN OPPOSITE DIRECTION.',
+    'REMARKS. BOTH PARTIES AMICABLY SETTLED THE INCIDENT',
+    'RECORDED BY : HONEY',
+    'This certification is issued upon the request of "BEE" for what ever legal purposes it may serve.',
+  ].join(LF);
+  const arranged = buildArrangeDraft({ accountText: full });
+  for (const bit of [
+    '<b>Place of incident:</b> Cangi Mundong, Inoburan, City of Naga',
+    '<b>Time/Date:</b> More or less 8:40 AM of 10-20-26',
+    '<b>V1:</b> Yamaha NMAX with plate 0718SR, OR 0716-819041, CR 0216-25-250349',
+    'Joseph Lontayo Porol',
+    'male Filipino',
+    'DOB : 2-25-1990',
+    'Purok Sambag, Inoburan, City of Naga, Cebu',
+    'G04-16-000471',
+    '<b>V2:</b> Honda XRM with plate GF39113, OR 0741-206152, CR 258503221',
+    'Galeo Cabrere',
+    'Hero Sanoria Canque',
+    'Purok Tal-ot, Brgy. Main It, City of Naga, Cebu',
+    'No drivers license.',
+    'Backrider Vilma Sanoria Canque',
+    '<b>Recorded by:</b> Honey',
+    '"Bee"',
+  ]) {
+    assert.ok(arranged.narrative.includes(bit), 'lost source detail: ' + bit);
+  }
+  // Every word is still there, exactly once: the pass is capitalisation only.
+  // The one exception is the label the sheet renames (T/D → Time/Date).
+  const words = (s) => (String(s).toLowerCase().match(/[a-z0-9]+/g) || []).sort();
+  assert.deepEqual(
+    words(reportHtmlToPlain(arranged.narrative)),
+    words(full.replace('T/D OF INCIDENT', 'Time/Date')),
+    'sentence case added, dropped, duplicated or reordered a word',
+  );
+});
+
+test('arrange sentence-cases mixed-case source without flattening correct words', () => {
+  const mixed = buildArrangeDraft({
+    accountText: [
+      'FACTS. The complainant reported THAT HIS WALLET WAS MISSING.',
+      'HE SAID THE wallet WAS LAST SEEN AT THE MARKET.',
+    ].join(LF),
+  });
+  assert.ok(
+    mixed.narrative.includes(
+      '<b>Facts:</b><br>The complainant reported that his wallet was missing.<br>He said the wallet was last seen at the market.',
+    ),
+    'mixed-case source was not brought to consistent sentence case',
+  );
+  // AM is the verb here, not a clock marker; only a time keeps it upper-case.
+  const clock = buildArrangeDraft({
+    accountText: 'FACTS. I AM THE COMPLAINANT AND I WAS AT THE MARKET AT 8:40 AM.',
+  });
+  assert.ok(
+    clock.narrative.includes('I am the complainant and I was at the market at 8:40 AM.'),
+    'AM/PM or the pronoun I was cased wrongly',
+  );
+});
+
+test('arrange handles a non-vehicular report and keeps incomplete identifiers', () => {
+  const lost = buildArrangeDraft({
+    accountText: [
+      'LOST WALLET WITH IDENTIFICATION CARDS',
+      '',
+      'PLACE OF INCIDENT : PUBLIC MARKET, BARANGAY DAGATAN',
+      'FACTS. THE COMPLAINANT REPORTED THAT HIS WALLET WENT MISSING WHILE BUYING GOODS.',
+      'REMARKS: NONE',
+      'RECORDED BY : PO1 DELA CRUZ',
+    ].join(LF),
+  });
+  assert.ok(
+    lost.narrative.includes('<b>Facts:</b><br>The complainant reported that his wallet went missing while buying goods.'),
+    'the lost-property narrative was not sentence-cased',
+  );
+  assert.ok(lost.narrative.includes('<b>Remarks:</b> None'), 'existing remarks were not kept');
+  assert.ok(lost.narrative.includes('<b>Recorded by:</b> PO1 Dela Cruz'), 'recorder name was not cased');
+  assert.ok(!lost.narrative.includes('VEHICLES INVOLVED'), 'a vehicle section was invented');
+  // An incomplete date or identifier is left exactly as supplied.
+  const incomplete = buildArrangeDraft({
+    accountText: 'FACTS. THE DRIVER\'S LICENSE NO. 9-22 - WAS RECORDED WITHOUT A COMPLETE DATE.',
+  });
+  assert.ok(incomplete.narrative.includes('9-22 -'), 'an incomplete value was completed or reformatted');
+});
+
+test('arrange writes every bold field label in sentence case, not all caps', () => {
+  // Owner request, 2026-11-02: the sheet's labels read as words, the T/D
+  // shorthand reads as Time/Date, and the facts narrative follows its label on
+  // the next line. Only the label's own presentation changes.
+  const arranged = buildArrangeDraft({
+    accountText: [
+      'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+      '',
+      'PLACE OF INCIDENT : CANGI MUNDONG, INOBURAN, CITY OF NAGA',
+      'T/D OF INCIDENT : MORE OR LESS 8:40 AM OF 10-20-26',
+      'VEHICLES INVOLVED:',
+      'V1 YAMAHA NMAX WITH PLATE 0718SR.',
+      'FACTS. THE VEHICLES COLLIDED.',
+      'REMARKS. BOTH PARTIES AMICABLY SETTLED THE INCIDENT',
+      'RECORDED BY : HONEY',
+      'PURPOSE: RECORD',
+    ].join(LF),
+  });
+  for (const bit of [
+    '<b>Place of incident:</b> Cangi Mundong, Inoburan, City of Naga',
+    '<b>Time/Date:</b> More or less 8:40 AM of 10-20-26',
+    '<b>Vehicles involved:</b>',
+    '<b>Facts:</b><br>The vehicles collided.',
+    '<b>Remarks:</b> Both parties amicably settled the incident',
+    '<b>Recorded by:</b> Honey',
+    '<b>Purpose:</b> Record',
+  ]) {
+    assert.ok(arranged.narrative.includes(bit), 'label not spelled as the sheet writes it: ' + bit);
+  }
+  for (const shout of ['<b>FACTS', '<b>T/D', '<b>PLACE', '<b>REMARKS', '<b>RECORDED']) {
+    assert.ok(!arranged.narrative.includes(shout), 'an all-caps label survived: ' + shout);
+  }
+});
+
+// ---- Order-independent arrangement (owner request, 2026-11-02) -------------
+// The same report may state its parts in any order; the sheet must find the
+// title and arrange the parts by meaning, never by where they sat.
+
+test('a title stated after the facts is still the report its title', () => {
+  const src = [
+    'PLACE OF INCIDENT : PUBLIC MARKET',
+    'FACTS. THE COMPLAINANT REPORTED A MISSING WALLET.',
+    'LOST WALLET WITH IDENTIFICATION CARDS',
+    'REMARKS: NONE',
+  ].join(LF);
+  assert.equal(detectIncidentTitle(src), 'LOST WALLET WITH IDENTIFICATION CARDS');
+  const html = formatIncidentReportHtml(src);
+  assert.equal(
+    html.indexOf('<p><b>LOST WALLET WITH IDENTIFICATION CARDS</b></p>'),
+    0,
+    'the title is not the leading heading',
+  );
+  assert.ok(html.includes('<b>PLACE OF INCIDENT:</b> PUBLIC MARKET'), 'the place was lost');
+  assert.ok(html.includes('<b>FACTS:</b>'), 'the facts were lost');
+  assert.ok(html.includes('<b>REMARKS:</b>'), 'the remarks were lost');
+  assert.ok(!html.includes('INCIDENT TITLE:'), 'an INCIDENT TITLE: label was added');
+});
+
+test('reordered parts are arranged in the report order without losing a word', () => {
+  const src = [
+    'REMARKS. BOTH PARTIES AMICABLY SETTLED THE INCIDENT',
+    'RECORDED BY : HONEY',
+    'FACTS. THE VEHICLES COLLIDED.',
+    'VEHICLES INVOLVED:',
+    'V1 YAMAHA NMAX WITH PLATE 0718SR.',
+    'PLACE OF INCIDENT : CANGI MUNDONG, INOBURAN, CITY OF NAGA',
+    'T/D OF INCIDENT : MORE OR LESS 8:40 AM OF 10-20-26',
+    '10-20-26 10:00 AM',
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+  ].join(LF);
+  const html = formatIncidentReportHtml(src);
+  const order = [
+    '10-20-26 10:00 AM',
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+    'PLACE OF INCIDENT',
+    'T/D OF INCIDENT',
+    'VEHICLES INVOLVED',
+    'FACTS',
+    'REMARKS',
+    'RECORDED BY',
+  ];
+  // The place / T-D / vehicles block follows the title on every report: the
+  // entry timestamp is the only thing ahead of the title, never between it and
+  // the place line.
+  assert.ok(
+    html.indexOf('10-20-26 10:00 AM') < html.indexOf('RECKLESS IMPRUDENCE'),
+    'the entry timestamp is not at the head of the report',
+  );
+  let last = -1;
+  for (const needle of order) {
+    const at = html.indexOf(needle);
+    assert.ok(at > last, needle + ' is out of report order');
+    last = at;
+  }
+  for (const word of [
+    'BOTH PARTIES AMICABLY SETTLED THE INCIDENT',
+    'HONEY',
+    '<b>V1:</b> YAMAHA NMAX WITH PLATE 0718SR.',
+    'CANGI MUNDONG, INOBURAN, CITY OF NAGA',
+    'MORE OR LESS 8:40 AM OF 10-20-26',
+  ]) {
+    assert.ok(html.includes(word), 'lost source wording: ' + word);
+  }
+});
+
+test('a reordered source yields the same arranged report, not a reordered one', () => {
+  // The SOURCE may be sequence-interchanged; the GENERATED arrangement does
+  // not follow it. Both permutations below produce one identical report.
+  const date = '10-20-26 10:00 AM';
+  const title = 'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY';
+  const place = 'PLACE OF INCIDENT : CANGI MUNDONG, INOBURAN, CITY OF NAGA';
+  const td = 'T/D OF INCIDENT : MORE OR LESS 8:40 AM OF 10-20-26';
+  const vehicles = ['VEHICLES INVOLVED:', 'V1 YAMAHA NMAX WITH PLATE 0718SR.'];
+  const facts = 'FACTS. INVESTIGATION REVEALED THAT BOTH VEHICLE WERE TRAVELING IN OPPOSITE DIRECTION.';
+  const remarks = 'REMARKS. BOTH PARTIES AMICABLY SETTLED THE INCIDENT';
+  const recorded = 'RECORDED BY : HONEY';
+  const sourceA = [date, title, place, td, ...vehicles, facts, remarks, recorded].join(LF);
+  const sourceB = [remarks, recorded, facts, ...vehicles, td, place, title, date].join(LF);
+  assert.equal(
+    formatIncidentReportHtml(sourceA),
+    formatIncidentReportHtml(sourceB),
+    'the generated report followed the source order instead of the report order',
+  );
+});
+
+test('vehicle markers are bold only where the source carries vehicle rows', () => {
+  const html = formatIncidentReportHtml(REFERENCE);
+  assert.ok(html.includes('<b>V1:</b> YAMAHA NMAX WITH PLATE 0718SR'), 'V1: is not bold');
+  assert.ok(html.includes('<b>V2:</b> HONDA XRM'), 'V2: is not bold');
+  // A report with no vehicles gets no vehicle marker.
+  const wallet = formatIncidentReportHtml(
+    'LOST WALLET WITH IDENTIFICATION CARDS\n\nFACTS. NO VEHICLE WAS INVOLVED.',
+  );
+  assert.ok(!/<b>V\d+:<\/b>/.test(wallet), 'a vehicle marker was invented');
+  // A V2 mentioned inside the facts prose is not a vehicle row.
+  const prose = formatIncidentReportHtml('FACTS. UPON REACHING THE PLACE V2 ENCROACHED INTO V1 LANE.');
+  assert.ok(!/<b>V\d+:<\/b>/.test(prose), 'a prose V-marker was bolded as a row');
+});
+
+test('enhance is a copy-edit of the ALREADY-ARRANGED report, never a rearrangement', () => {
+  // Owner request, 2026-11-02: the officer may settle for the arranged report,
+  // or have its wording enhanced. The layout is the application's, so the model
+  // is told to change wording only — no reordering, no new sections, no
+  // restating the record's structured fields. Reusing another report is still
+  // forbidden.
+  const prompt = readFileSync(new URL('../../resources/ai/enhance_report_prompt.txt', import.meta.url), 'utf8');
+  assert.match(prompt, /COPY-EDIT, NOT A REARRANGEMENT/);
+  assert.match(prompt, /Return the SAME lines, in the SAME order, with the SAME labels/);
+  assert.doesNotMatch(prompt, /STANDARD ORDER/);
+  assert.match(prompt, /never reuse[\s\S]{0,80}?another report/i);
+
+  // ONE CONTRACT, TWO MODES (owner request, 2026-11-02): Enhance Wording is
+  // Arrange Only plus a wording pass — the arrangement is not its job. The
+  // prompt must say so, and must not hand the model any ordering permission.
+  assert.match(prompt, /ENHANCE WORDING = ARRANGE ONLY \+ WORDING/);
+  assert.match(prompt, /Everything that\s*\nmode decides is therefore settled/);
+  assert.doesNotMatch(prompt, /order of the parts/i, 'the prompt still lets the model order the parts');
+  assert.doesNotMatch(prompt, /arranged into the standard report order below/i, 'stale ordering instruction is back');
+  assert.match(prompt, /correct wording, grammar,\s*\npunctuation and police register/);
+
+  // The panel arranges FIRST and hands the model that text.
+  const PANEL = readFileSync(new URL('../../src/components/ai/AiNarrativePanel.jsx', import.meta.url), 'utf8');
+  assert.match(
+    PANEL,
+    /formatIncidentReportHtml\(accountText, \{ sentenceCase: true \}\)/,
+    'enhance no longer arranges the report before sending it',
+  );
+  assert.match(
+    PANEL,
+    /body: \{ account: sourceText \}/,
+    'enhance sends something other than the arranged report',
+  );
+
+  // AND THE SAME READ ARRANGE MAKES (owner request, 2026-11-02): type/date/place
+  // only. The full read filled the type's own fields, which is where the sheet
+  // grew a `Vehicle 1:` row and a `Suspected Cause:` line the arranged page
+  // never had — the two the officer asked to be gone.
+  assert.match(
+    PANEL,
+    /if \(!fromArranged && onReadAccount\) \{\s*\n\s*await runAccountRead\(accountText, \{ arrangeOnly: true \}\);/,
+    'enhance runs the full account read again',
+  );
 });

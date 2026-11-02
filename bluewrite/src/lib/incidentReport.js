@@ -131,8 +131,9 @@ export function caseNumber(report, today = new Date()) {
 // through a menu. The station's configured types are its suggestions, but an
 // officer whose incident is not on the list types it in the same box rather than
 // hunting for a second field — and the answer lands where such a report ALREADY
-// keeps it: the Other Incident's "Category" (type_specific.incident_category),
-// which is a required field of that type and is not a new field of any kind.
+// keeps it: the "Category" (type_specific.incident_category), with the stored
+// type folded to the closest canonical one (classifyClosestType) so the folders
+// and the dashboard read the report under its main incident.
 //
 // The one thing the box may NOT do is store a type the server does not know.
 // The incident type is what every downstream reader keys on — the per-type
@@ -140,7 +141,7 @@ export function caseNumber(report, today = new Date()) {
 // block headings — and the API refuses a type outside the station's list, so a
 // report filed as "Illegal Gambling" would have no type-specific fields at all
 // and could not be saved. Hence resolveIncidentTypeInput: free text resolves to
-// the catch-all type, never to a type of the officer's own invention.
+// a canonical type, never to a type of the officer's own invention.
 //
 // Pure functions, no DOM — covered by node:test.
 // ---------------------------------------------------------------------------
@@ -148,22 +149,27 @@ export function caseNumber(report, today = new Date()) {
 /** The catch-all type. A type this station may configure away, hence the guard. */
 export const CUSTOM_TYPE = 'Other Incident';
 
+// Imported AND re-exported here so the type box's callers read one module:
+// the folding rule lives with the type list (incidentTypes.js) and this box
+// applies it. (A bare `export … from` would not bind the name locally, so the
+// box below could not call it.)
+import { classifyClosestType } from './incidentTypes.js';
+export { classifyClosestType };
+
 /**
  * What the Type of Incident box DISPLAYS for a draft.
  *
- * An Other Incident that carries a specification shows the SPECIFICATION, not
- * the catch-all's name: the officer typed "Illegal Gambling" into that box and
- * it has to still read that way when they come back to it — and the Category
- * field in the type-specific block, which shows the same value, is then visibly
- * the same answer rather than a second one.
+ * A report that carries the officer's exact words shows THOSE, not the
+ * canonical type they were folded to: the officer typed "Reckless imprudence
+ * resulting to damage to property and physical injury" into that box and it
+ * has to still read that way when they come back to it. (For Other Incident
+ * the Category field in the type-specific block shows the same value, visibly
+ * the same answer rather than a second one.)
  */
 export function incidentTypeBoxValue(draft) {
-  const type = String(draft?.incident_type ?? '');
-  if (type === CUSTOM_TYPE) {
-    const custom = String(draft?.type_specific?.incident_category ?? '').trim();
-    if (custom !== '') return custom;
-  }
-  return type;
+  const custom = String(draft?.type_specific?.incident_category ?? '').trim();
+  if (custom !== '') return custom;
+  return String(draft?.incident_type ?? '');
 }
 
 /**
@@ -172,14 +178,21 @@ export function incidentTypeBoxValue(draft) {
  * @param {string} typed  exactly what is in the box
  * @param {string[]} types  the station's configured types (the box's suggestions)
  * @returns {{type: string, custom: string|null}} `type` is a canonical type, ''
- *   when the box was cleared, or CUSTOM_TYPE; `custom` is the specification to
- *   store as that type's Category, else null.
+ *   when the box was cleared; `custom` is the officer's exact words to keep as
+ *   that type's Category (the "Reported as" line), else null.
  *
- * A station whose list does not carry the catch-all gets no custom handling: a
- * type it would refuse cannot be handed to it, so unmatched text resolves to
- * nothing and the officer picks from the list. (`typeOptions` falls back to the
- * built-in 14 whenever the station has configured none, and the catch-all is in
- * that list, so this is the guarded edge rather than the ordinary case.)
+ * Free text that names no type on the list is FOLDED to the closest canonical
+ * type (classifyClosestType — "Reckless imprudence resulting to damage to
+ * property and physical injury" lands on its main incident) instead of piling
+ * everything into Other Incident, so the folders, the dashboard and the field
+ * blocks all read the report under what it is mainly about. The exact words
+ * are never thrown away: they ride along as `custom`. Text with no real signal
+ * keeps the old answer — Other Incident specified — and a station whose list
+ * does not carry the catch-all gets no custom handling: a type it would refuse
+ * cannot be handed to it, so unmatched text resolves to nothing and the
+ * officer picks from the list. (`typeOptions` falls back to the built-in 14
+ * whenever the station has configured none, and the catch-all is in that
+ * list, so this is the guarded edge rather than the ordinary case.)
  */
 export function resolveIncidentTypeInput(typed, types) {
   const raw = String(typed ?? '').trim();
@@ -188,6 +201,9 @@ export function resolveIncidentTypeInput(typed, types) {
   const list = Array.isArray(types) ? types : [];
   const known = list.find((t) => String(t).toLowerCase() === raw.toLowerCase());
   if (known) return { type: String(known), custom: null };
+
+  const closest = classifyClosestType(raw, list);
+  if (closest) return { type: closest, custom: raw };
 
   if (!list.includes(CUSTOM_TYPE)) return { type: '', custom: null };
   return { type: CUSTOM_TYPE, custom: raw };

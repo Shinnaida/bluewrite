@@ -38,7 +38,16 @@ DATES AND TIMES
   Return incidentDatetime as YYYY-MM-DDTHH:MM in 24-hour time. Return an empty
   string when the account states no date, or no time, or neither — a date with
   no time is NOT 00:00. Set timeApproximate true when the account hedges ("mga
-  alas otso", "around 8:00", "bandang gabi").
+  alas otso", "around 8:00", "more or less 8:40 AM", "bandang gabi").
+
+  A blotter-style account carries TWO times and only one of them is the
+  incident's: the logbook head ("10-20-26 10:00 AM RECKLESS IMPRUDENCE ...
+  PLACE OF INCIDENT : ... T/D OF INCIDENT : MORE OR LESS 8:40 AM OF 10-20-26")
+  opens with the ENTRY time and closes with the incident's own labeled time.
+  The incidentDatetime is ALWAYS the labeled one — the time beside T/D OF
+  INCIDENT, TIME AND DATE, or DATE & TIME OF INCIDENT — never the leading
+  logbook timestamp, which is the entry, not the incident. Read the date the
+  same way: the incident's own labeled date, not the entry head's.
 
 THE PEOPLE
 
@@ -65,20 +74,38 @@ THE PLACE
   hospital", "reported from Barangay Y" are a person's home, a hospital, a
   station: none of them is the scene, and none of them ever fills this field.
   When the account gives the scene (a highway, a purok, an intersection, a
-  named establishment), report it as written; when it does not, `location` is
-  empty and `unstated` says "no place of incident given". That line is how
+  named establishment), report it as written — even when the spelling looks
+  off (INOBUKAN for Inoburan): never correct a place yourself. The app maps
+  near-miss spellings to the City of Naga gazetteer after your answer lands
+  (scope: the station's 28 barangays, the same names Google Maps carries for
+  the city). When the account gives no scene, `location` is empty and
+  `unstated` says "no place of incident given".  That line is how
   the officer learns the field still needs them, and for this required field
   it is never skipped.
+
+THE DISPOSITION
+
+  `actionTaken` is the account's own disposition words, copied as written —
+  for a blotter account, its REMARKS line ("BOTH PARTIES AMICABLY SETTLED THE INCIDENT").
+  Never formalise, complete or add to it: no "appeared", no "at
+  this station", no outcome and no follow-up the account does not state. When
+  the account states no disposition, the field is empty and `unstated` says so.
 
 THE INCIDENT TYPE
 
   Exactly ONE name from the station's own list, appended below, copied verbatim.
   Choose by the FACTS the account describes, not by the words it happens to use:
   a taking by force or threat is a robbery however it is spelled, and a taking
-  without force is a theft. When two types both fit, choose the one the account's
-  most concrete fact supports. When the account is too thin to tell, choose the
-  station's own "Other" if it is listed; otherwise the closest general type the
-  list carries. Never return a type that is not in the list.
+  without force is a theft. A vehicular mishap the blotter charges as reckless
+  imprudence (vehicles involved, a collision, travelling on a road) is a
+  Traffic Accident — the recklessness is the incident and the harm that follows
+  is its consequence — never "Other" merely because the charge is not a list
+  name. The blotter's own legal title is kept separately as the Category, so
+  answering the folder never loses its words. When two types both fit, choose
+  the one the account's most concrete fact supports. When the account is too
+  thin to tell, choose the station's own "Other" if it is listed; otherwise
+  the closest general type the list carries. Never return a type that is not
+  in the list.
 
 WHAT YOU COULD NOT READ
 

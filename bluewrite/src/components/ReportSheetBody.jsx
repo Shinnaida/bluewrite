@@ -46,6 +46,7 @@ import {
   buildStructuredActions,
   fmtLong,
   properNounsFor,
+  meaningfulValues,
 } from '../lib/sheetFacts.js';
 import { buildActionBlock } from '../lib/printActions.js';
 // Task 2 — the letter's casing layer. `labelCase` spells every bold label in
@@ -53,7 +54,7 @@ import { buildActionBlock } from '../lib/printActions.js';
 // the report's OWN proper nouns) without ever flattening an existing capital or
 // changing a word — so the narrative's wording stays exactly as accepted.
 import { toUpperCase, toSentenceCase, labelCase, properNounMap } from '../lib/printCasing.js';
-import { stripLeadingBlotterRestatement } from '../lib/narrativeText.js';
+import { stripLeadingBlotterRestatement, stripRedundantSheetHeader } from '../lib/narrativeText.js';
 import pnpLogo from '../assets/pnp-logo.png';
 import citySeal from '../assets/city-of-naga-seal.png';
 
@@ -166,7 +167,10 @@ export default function ReportSheetBody({
   // reviewed, the committed narrative otherwise. The blotter-strip and casing
   // are applied to BOTH, so a proposal types already cleaned and formal-cased.
   const narrativeRaw = pendingOn && pending.narrative != null ? pending.narrative : report.narrative;
-  const narrativeText = caseValue(stripLeadingBlotterRestatement(narrativeRaw)) || '—';
+  // Redundant header lines (owner request, 2026-11-02): the account's own
+  // opening date/time and title restate the certification line and the quoted
+  // title, so the sheet skips them — paper only, the record is untouched.
+  const narrativeText = caseValue(stripRedundantSheetHeader(stripLeadingBlotterRestatement(narrativeRaw), reportTitle(report, ts))) || '—';
 
   // NOTABLE FINDINGS / ACTION TAKEN: a generate proposal replaces them; a
   // tighten (or no proposal) leaves the committed values untouched.
@@ -273,12 +277,23 @@ export default function ReportSheetBody({
         other things the following data to wit;
       </p>
 
-      {/* Full caps: the quoted category follows the letter's own convention. */}
-      <p className="pr-incident-type">&ldquo;{toUpperCase(reportTitle(report, ts))}&rdquo;</p>
+      {/* Full caps: the quoted category follows the letter's own convention —
+          the recorded offense caption when typed, else the title the report's
+          own text states, else the incident type. Hidden when blank (owner
+          request, 2026-11-02): no empty quotes. */}
+      {String(reportTitle(report, ts) ?? '').trim() !== '' && (
+        <p className="pr-incident-type">&ldquo;{toUpperCase(reportTitle(report, ts))}&rdquo;</p>
+      )}
 
       {/* ---- Per-type labeled facts — bold chrome LABELS, typed values ---- */}
       <div className="pr-facts">
         {facts.map((entry, i) => {
+          // Owner request (2026-11-02): the account states its own place and
+          // time, so the composed Place and Date & Time lines are omitted on
+          // every incident's sheet — never a duplicate, never a dash.
+          if (entry.label === 'Place' || entry.label === 'Date & Time of Incident') {
+            return null;
+          }
           if (entry.items) {
             // Numbered Stolen/Items block with optional TOTAL.
             return (
@@ -303,14 +318,12 @@ export default function ReportSheetBody({
               </div>
             );
           }
-          const values = (entry.values || []).filter(Boolean);
+          // Blank-line rule (owner request, 2026-11-02): placeholder-only
+          // values ('—', 'N/A', 'None', …) carry nothing recorded, so the
+          // line is omitted on every incident's sheet — never a dash.
+          const values = meaningfulValues(entry.values);
           if (values.length === 0) {
-            return (
-              <div className="pr-fact" key={`fact-${i}`}>
-                <span className="pr-fact-label">{labelCase(entry.label)}:</span>
-                <span className="pr-fact-value">—</span>
-              </div>
-            );
+            return null;
           }
           // One fact per entry: the value span holds every line so any
           // wrap aligns under the FIRST value character (hanging indent).
@@ -380,8 +393,8 @@ export default function ReportSheetBody({
             })()}
       </div>
 
-      {/* Flush-left entries (scanned reference: the action text starts at the
-          same margin as the heading). */}
+      {/* ACTION TAKEN / STATUS hidden by owner request (2026-11-02). */}
+      {false && (
       <div className="pr-section pr-actions">
         <strong>ACTION TAKEN / STATUS:</strong>
         {actionLines.map((act, i) => {
@@ -391,19 +404,10 @@ export default function ReportSheetBody({
           );
         })}
       </div>
+      )}
 
-      {/* ---- Signature block: Recorded by / IOC / Noted by. CHROME. ---- */}
+      {/* ---- Signature block: Noted by only (Recorded by / IOC hidden by owner request). ---- */}
       <div className="pr-footer-block">
-        <p className="pr-recorded">
-          <strong>Recorded by:</strong> {recorderName}
-        </p>
-
-        {String(report.ioc_name || '').trim() !== '' && (
-        <p className="pr-recorded">
-          <strong>IOC:</strong> {String(report.ioc_name || '').trim()}
-        </p>
-        )}
-
         <div className="pr-noted">
           <span className="pr-noted-label">Noted by:</span>
           <span className="pr-noted-name">{NOTED_BY_NAME}</span>

@@ -114,9 +114,9 @@ export default function UserProfileView({
   onBack = () => {},
   onRetry = () => {},
 }) {
-  const twoFactor = user.role === 'Admin' || user.role === 'Officer'
-    ? (user.email ? 'Emailed code required' : 'Required, but there is no address to send it to')
-    : 'Not required for this role';
+  // Every role signs in with an emailed code (migration 021 retired Staff, the
+  // password-only role), so a missing address is always somebody's job to fix.
+  const twoFactor = user.email ? 'Emailed code required' : 'Required, but there is no address to send it to';
 
   return (
     <>

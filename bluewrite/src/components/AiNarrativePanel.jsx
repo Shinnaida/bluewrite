@@ -2298,15 +2298,8 @@ export default function AiNarrativePanel({
                               written into the report until Accept. Offered in
                               both non-guided results: a generated draft and a
                               tightened one are equally the officer's to change. */}
-                          {sheeted && !boxesOpen && (
-                            <button
-                              type="button"
-                              onClick={openDraftBoxes}
-                              title="Shows this draft as its three editable boxes under the page — the same text, so it can be corrected before accepting."
-                            >
-                              Edit the draft
-                            </button>
-                          )}
+                          {/* Edit the draft removed by owner request: corrections happen
+                              on the sheet itself, not in boxes under the letter. */}
                           {/* Each result offers to repeat ITSELF: a generated draft
                               regenerates from the report, a tightened draft is
                               tightened again. Offering "Regenerate" on a tighten

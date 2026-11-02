@@ -5,8 +5,11 @@
 //
 //   1. THE QUOTED TITLE is the offense as the blotter words it
 //      ("RECKLESS IMPRUDENCE RESULTING IN ..."), typed by the officer into
-//      `ts.offense_caption`. Until they do, the incident type stands in — a
-//      vehicle collision no longer auto-titles the sheet "TRAFFIC ACCIDENT".
+//      `ts.offense_caption`. Until they do, the title the report's own text
+//      states stands in (owner request, 2026-11-02) — a vehicle collision
+//      whose account carries its heading no longer auto-titles the sheet
+//      "TRAFFIC ACCIDENT" — then the incident type, then nothing (a blank
+//      title prints no empty quotes).
 //   2. RECORDED BY is who the blotter book names (`ts.recorded_by`), blank
 //      until typed. The signed-in account is never stamped on the paper, and
 //      neither is `created_by_name` (which IS the account).
@@ -48,6 +51,17 @@ test('the quoted title is the blotter wording, falling back to the type', () => 
     'the title still reads the incident type directly',
   );
   assert.match(SHEET, /reportTitle,\n/, 'reportTitle is not imported by the sheet');
+    // Blank titles print nothing — never empty quotes.
+  const titleAt = BODY.indexOf(
+    'pr-incident-type',
+  );
+  assert.ok(
+    titleAt > 0 &&
+      BODY.slice(Math.max(0, titleAt - 120), titleAt).includes(
+      "!== '' && (",
+    ),
+    'a blank title is not hidden',
+  );
 });
 
 test('Recorded by is the record’s recorder, blank until typed', () => {

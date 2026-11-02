@@ -186,6 +186,23 @@ final class NarrativeService
     }
 
     /**
+     * Enhance Wording — improve the officer's own report text.
+     *
+     * A pure pass-through like classifyAccount(): the text is the officer's and
+     * the only source, the answer is that same document with better wording,
+     * and NOTHING is written to the database. The shared bold-label formatter
+     * is applied client-side to both modes, so this call carries no formatting
+     * instruction of its own.
+     *
+     * @param string $account the officer's report text, as typed
+     * @return string the enhanced report text
+     */
+    public function enhanceReport(string $account): string
+    {
+        return $this->provider->enhanceReport($account);
+    }
+
+    /**
      * Photo OCR (owner request): the blotter photo read by the provider's
      * own vision model through the station's already-configured key.
      *
@@ -294,7 +311,7 @@ final class NarrativeService
             // the safety gate exactly like a fresh response — returning it
             // raw would leak bracket tokens into the UI (the §1 sample's
             // "[WITNESS_1] / nknown male" defects).
-            return $this->finalize($pdo, $reportId, $cached, $built['masked'], $built['map'], $built['residualRisk'], $report, true, $hash, $built['refIndex'] ?? []);
+            return $this->finalize($pdo, $reportId, $cached, $built['masked'], $built['map'], $built['residualRisk'], $report, true, $hash, $built['refIndex'] ?? [], $notes);
         }
 
         $queueId = $this->queueStart($pdo, $reportId, $hash);
@@ -333,7 +350,7 @@ final class NarrativeService
                     (string) $reportId,
                     "latency_ms={$result->usage['latency_ms']} tokens={$result->usage['total_tokens']}"
                 );
-                return $this->finalize($pdo, $reportId, $payload, $built['masked'], $built['map'], $built['residualRisk'], $report, false, $hash, $built['refIndex'] ?? []);
+                return $this->finalize($pdo, $reportId, $payload, $built['masked'], $built['map'], $built['residualRisk'], $report, false, $hash, $built['refIndex'] ?? [], $notes);
             } catch (AiProviderException $e) {
                 $lastError = $e->getMessage();
                 if (!$e->retryable) {
@@ -435,7 +452,7 @@ final class NarrativeService
      * @param array<string,int> $refIndex placeholder → the group row it was masked from (see MaskingGateway::buildMaskedPayload)
      * @return array{narrative:string, suggestions:array, possibleGaps:array, notableFindings:string[], actionTaken:string, addedContentWarnings:string[], suspectLines:array<int,array{row:int,line:string}>, cached:bool, residualRisk:string[], economy:array}
      */
-    private function finalize(PDO $pdo, int $reportId, array $payload, array $maskedPayload, array $map, array $residualRisk, array $report, bool $cached, string $hash, array $refIndex = []): array
+    private function finalize(PDO $pdo, int $reportId, array $payload, array $maskedPayload, array $map, array $residualRisk, array $report, bool $cached, string $hash, array $refIndex = [], string $officerNotes = ''): array
     {
         // An unidentified suspect's restored text is the model's OWN written
         // phrase when one came back (suspectPhrases): screened, it replaces
@@ -524,6 +541,31 @@ final class NarrativeService
         // The wrapper no longer adds one (see withReferences), and this strips
         // one the model wrote anyway — code, not the prompt alone.
         $narrative = self::stripLeadingBlotterRestatement($narrative);
+
+        // ---- No invented issuance (owner request, 2026-11-01) ------------
+        // A live enhance run closed a plain account with an invented
+        // requestor name; the prompt forbids it and this enforces it in
+        // code, like the Task 6 strip above. Compared against the OFFICER's
+        // own notes (not the masked copy) so the officer's own line is
+        // never mistaken for the model's.
+        $narrative = self::stripInventedIssuance($narrative, $officerNotes);
+
+        // ---- Blotter certification: no separate blocks (owner request) --
+        // A blotter certification (reckless-imprudence shape) carries its
+        // disposition inside REMARKS and closes with the issuance line —
+        // never a NOTABLE FINDINGS bullet and never an ACTION TAKEN line.
+        // The prompt orders this; this enforces it when the model adds one
+        // anyway (e.g. a wallet-contents summary or an invented verdict).
+        if (preg_match('/this certification is issued upon the request/i', (string) $officerNotes) === 1) {
+            if ($findings !== []) {
+                error_log('[BlueWrite][ai-blotter-cert] dropped invented findings for a blotter certification');
+            }
+            if ($disposition !== '') {
+                error_log('[BlueWrite][ai-blotter-cert] dropped separate disposition for a blotter certification');
+            }
+            $findings = [];
+            $disposition = '';
+        }
 
         // ---- Phase 5 §2: deterministic redundancy analysis ---------------
         // Runs on the text the officer is about to read, and BEFORE the §3
@@ -878,6 +920,11 @@ final class NarrativeService
         // and an intentional removal must not be reported as a lost fact.
         $baseline = self::stripLeadingBlotterRestatement($narrative);
         $candidate = self::stripLeadingBlotterRestatement($candidate);
+        // No invented issuance on the tighten path either: an added closing
+        // line is not economy, and stripping it here keeps it out of the
+        // equality check below and the fact-loss comparison. Compared
+        // against the officer's own text, which is never modified.
+        $candidate = self::stripInventedIssuance($candidate, $narrative);
         if ($candidate === $baseline) {
             if ($baseline !== $narrative) {
                 // The only change is the removal the rule requires: return it as
@@ -1076,6 +1123,114 @@ final class NarrativeService
             1,
         );
         return trim((string) $stripped);
+    }
+
+    /**
+     * No invented issuance (owner request, 2026-11-01) — code enforcement
+     * beside the prompt rule, exactly like stripLeadingBlotterRestatement:
+     * a rule the record depends on is enforced, not merely requested.
+     *
+     * A live enhance run closed a plain account that carried NO issuance
+     * line with "This certification is issued upon the request of VON
+     * NEBRIL ..." — a requestor name from nowhere. The model may keep an
+     * issuance line the officer's own text states, and nothing else:
+     *   - officer notes carry a REAL requestor name: the narrative is
+     *     untouched — but a DIFFERENT name the model wrote is put back to
+     *     the officer's own name (a swapped requestor is invented too);
+     *   - officer notes carry NO issuance line: a model issuance line is
+     *     stripped whole (a closing formula the officer never wrote);
+     *   - officer notes carry an issuance line with NO real name (the
+     *     "name of who requested" placeholder the formatter writes): the
+     *     model's invented name is put back to the placeholder, keeping
+     *     the line the officer already had.
+     *
+     * Pure and offline; covered beside the Task 6 strip.
+     */
+    public static function stripInventedIssuance(string $narrative, string $officerNotes): string
+    {
+        if (!preg_match('/this certification is issued upon the request/i', $narrative)) {
+            return $narrative;
+        }
+        $notesName = self::issuanceRequestor($officerNotes);
+        $modelName = self::issuanceRequestor($narrative);
+        // The officer's own line with the officer's own name: verbatim —
+        // unless the model swapped the name, which is restored below.
+        if (!self::isPlaceholderRequestor($notesName) && !self::isPlaceholderRequestor($modelName)) {
+            if (strcasecmp($notesName, $modelName) === 0) {
+                return $narrative;
+            }
+            $fixed = preg_replace_callback(
+                self::ISSUANCE_NAME_RE,
+                static function (array $m) use ($notesName): string {
+                    return $m[1] . $m[2] . $notesName . $m[4] . $m[5];
+                },
+                $narrative,
+                1,
+            );
+            if (is_string($fixed) && $fixed !== $narrative) {
+                error_log('[BlueWrite][ai-issuance] swapped requestor restored to officer\'s name');
+            }
+            return is_string($fixed) ? $fixed : $narrative;
+        }
+        // No issuance line in the account: the model's closing line is
+        // stripped whole, and the spacing is reflowed.
+        if ($notesName === '' && !preg_match('/this certification is issued upon the request/i', $officerNotes)) {
+            $stripped = (string) preg_replace(
+                '/\n?[ 	]*This certification is issued upon the request of[^\n]*?for\s+what\s*ever\s+legal\s+purposes[^\n.]*(?:\n[^\n.]*)*\./i',
+                '',
+                $narrative,
+            );
+            $stripped = (string) preg_replace('/[ \t]+$/m', '', $stripped);
+            $stripped = (string) preg_replace("/\n{3,}/", "\n\n", $stripped);
+            $stripped = trim($stripped);
+            if ($stripped !== trim($narrative)) {
+                error_log('[BlueWrite][ai-issuance] invented issuance line stripped');
+            }
+            return $stripped;
+        }
+        // The account's line names no one (placeholder): the model's
+        // invented name goes back to the placeholder, keeping its quotes.
+        $fixed = preg_replace_callback(
+            self::ISSUANCE_NAME_RE,
+            static function (array $m): string {
+                if (self::isPlaceholderRequestor(trim($m[3], "\"'\u{201C}\u{201D} \t"))) {
+                    return $m[0];
+                }
+                return $m[1] . $m[2] . 'name of who requested' . $m[4] . $m[5];
+            },
+            $narrative,
+            1,
+        );
+        if (is_string($fixed) && $fixed !== $narrative) {
+            error_log('[BlueWrite][ai-issuance] invented requestor name returned to placeholder');
+        }
+        return is_string($fixed) ? $fixed : $narrative;
+    }
+
+    /**
+     * The requestor an issuance line names ("... upon the request of NAME
+     * for whatever legal purposes ..."), quotes trimmed. '' when the text
+     * carries no issuance line.
+     */
+    private static function issuanceRequestor(string $text): string
+    {
+        if (!preg_match(self::ISSUANCE_NAME_RE, $text, $m)) {
+            return '';
+        }
+        return trim($m[3], "\"'\u{201C}\u{201D} \t");
+    }
+
+    /** Matches issuanceRequestor()'s groups: head, open-quote, name, close-quote, tail. */
+    private const ISSUANCE_NAME_RE = '/(issued upon the request of\s+)(["“”\']?)([^"“”\']+?)(["“”\']?)(\s+for\s+what\s*ever\s+legal\s+purposes)/i';
+
+    /**
+     * No name, or the formatter's own "name of who requested" stand-in:
+     * either way the account names no requestor for the model to keep.
+     */
+    private static function isPlaceholderRequestor(string $name): bool
+    {
+        $t = strtolower(trim($name));
+        return $t === '' || $t === 'name of who requested' || $t === 'name of requestor' || $t === 'name of requester';
     }
 
     // ---- ai_requests queue -------------------------------------------------

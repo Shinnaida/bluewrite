@@ -27,23 +27,36 @@ import InfoHint from './InfoHint.jsx';
 import ConnectionHub from './ConnectionHub.jsx';
 
 /**
- * The three roles this station has, in the order the account form offers them.
+ * The two roles this station has, in the order the account form offers them.
  *
  * ONE HOME for the list: it is the account form's select, the directory's filter,
  * and the two places a role decides what a row may do (Reset verification). A
- * fourth role is a server change (the `roles` table) and a line here; three
- * copies of the three names is how the filter ends up offering a role the form
+ * third role is a server change (the `roles` table) and a line here; two
+ * copies of the two names is how the filter ends up offering a role the form
  * cannot create.
  */
-const ROLES = ['Admin', 'Officer', 'Staff'];
+const ROLES = ['Admin', 'Officer'];
+/** The orders the directory offers, in menu order. Name first: a station
+ *  directory reads alphabetically. Badge number is the station's own identifier
+ *  order; recently signed in answers who was last at a desk. */
+const SORT_ORDERS = [
+  { key: 'name', label: 'Name A–Z' },
+  { key: 'badge', label: 'Badge number' },
+  { key: 'recent', label: 'Recently signed in' },
+];
+/** Server time an account was last seen, for the recent order. An account the
+ *  server has never stamped sorts after every account it has. */
+function seenTime(u) {
+  const t = new Date(String(u.last_seen_at ?? '').replace(' ', 'T')).getTime();
+  return Number.isNaN(t) ? -Infinity : t;
+}
 
 /**
  * The roles that sign in with an emailed code as well as a password.
  *
  * One home for the pair, because three places on this screen already need it: the
  * email field's `required`, the sentence under that field, and the panel beside the
- * form. It is the server's list (EmailOtp::REQUIRED_ROLES), and the directory's own
- * Two-factor column reports on the same two roles.
+ * form. It is the server's list (EmailOtp::REQUIRED_ROLES).
  */
 const CODE_ROLES = ['Admin', 'Officer'];
 
@@ -52,16 +65,13 @@ const usesEmailCode = (role) => CODE_ROLES.includes(role);
 
 /**
  * WHAT EACH ROLE ACTUALLY REACHES, which is the thing this form was silent about: an
- * administrator was asked to pick between three words and had nothing to read.
+ * administrator was asked to pick between two words and had nothing to read.
  *
  * TAKEN FROM THE CODE, NOT FROM THE NAMES. The bar is built from `isAdmin`
  * (AppTopBar), the blotter scopes non-admins to their own reports
- * (ReportsController::index), and finalize and the noting-officer designation are
- * refused to Staff there too (ReportsController::update). If one of those rules moves,
+ * (ReportsController::index). If one of those rules moves,
  * it moves here with it — a panel that promises a reach the server does not honour is
  * worse than a form that says nothing at all.
- *
- * `signIn` states once what a Staff account is: a password and nothing else.
  */
 const ROLE_REACH = {
   Admin: {
@@ -80,14 +90,6 @@ const ROLE_REACH = {
       'May finalize their own report, and name the noting officer',
     ],
   },
-  Staff: {
-    summary: 'An Officer’s workspace without the emailed sign-in code.',
-    reach: [
-      'Home, Write Report and My Reports',
-      'Their own reports only',
-      'Cannot finalize a report: that takes an Officer or an Admin',
-    ],
-  },
 };
 
 const EMPTY_FORM = {
@@ -95,7 +97,7 @@ const EMPTY_FORM = {
   badge_number: '',
   username: '',
   email: '',
-  role: 'Staff',
+  role: 'Officer',
   password: '',
 };
 
@@ -145,7 +147,7 @@ function rowHint(user) {
  * deliberate press from there — the pen on the photograph — and the row menu still
  * carries the direct way in for anyone who already knows what they came to change.
  */
-export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, onMenu = () => {} }) {
+export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, onMenu = () => {}, sortKey = null }) {
   return (
     <div className="table-wrap">
       <table className="users-table">
@@ -156,21 +158,22 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
         </caption>
         <thead>
           <tr>
-            <th scope="col">Full name</th>
-            <th scope="col" className="num">Badge no.</th>
+            {/* THE SORTED COLUMN SAYS SO: the rail's Sort key decides the order, and
+                the column that order is read down wears the blue (see styles.css) —
+                Recent reads newest-first, so it alone sorts descending. */}
+            <th scope="col" aria-sort={sortKey === 'name' ? 'ascending' : undefined} className={sortKey === 'name' ? 'is-sorted' : undefined}>Full name</th>
+            <th scope="col" aria-sort={sortKey === 'badge' ? 'ascending' : undefined} className={sortKey === 'badge' ? 'num is-sorted' : 'num'}>Badge no.</th>
             <th scope="col">Username</th>
             <th scope="col">Email</th>
             <th scope="col">Role</th>
             {/* Centred with its cells (see th.status in styles.css): a chip hard
                 against the left edge read as if it belonged to the column before it. */}
             <th scope="col" className="status">Status</th>
-            <th scope="col" className="num">Last sign-in</th>
+            <th scope="col" aria-sort={sortKey === 'recent' ? 'descending' : undefined} className={sortKey === 'recent' ? 'num is-sorted' : 'num'}>Last sign-in</th>
           </tr>
         </thead>
         <tbody>
           {users.map((u) => {
-            const cell = twoFactorCell(u);
-
             return (
               <tr
                 key={u.id}
@@ -196,16 +199,25 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
                   onMenu(u, { x: box.left + 12, y: box.bottom }, e.currentTarget, true);
                 }}
               >
-                <td>{u.full_name}</td>
-                <td className="num stamp">{u.badge_number}</td>
-                <td className="num">{u.username}</td>
-                <td>
+                {/* THE FACE IN THE DIRECTORY: the account's own photograph where
+                    one was recorded, initials where none was — the same circle
+                    the roster and the account page draw, so the table reads as
+                    people before it reads as values. */}
+                <td data-label="Full name">
+                  <span className="users-name">
+                    <Avatar user={u} size={28} />
+                    {u.full_name}
+                  </span>
+                </td>
+                <td className="num stamp" data-label="Badge no.">{u.badge_number}</td>
+                <td className="num" data-label="Username">{u.username}</td>
+                <td data-label="Email">
                   {u.email
                     ? <span className="users-email" title={u.email}>{u.email}</span>
                     : <span className="users-none">Not recorded</span>}
                 </td>
-                <td>{u.role}</td>
-                <td className="status">
+                <td data-label="Role">{u.role}</td>
+                <td className="status" data-label="Status">
                   <span className={`badge ${u.status}`}>{u.status}</span>
                 </td>
                 {/* The stamp the server sent, verbatim — never a client-side
@@ -214,7 +226,7 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
                     than timestamps (see lib/presence.js). Read in the table's
                     own face like the name beside it, not the machine `stamp`:
                     this column is read down, not scanned for values. */}
-                <td className="num">
+                <td className="num" data-label="Last sign-in">
                   {u.last_login_at ? u.last_login_at.replace('T', ' ') : 'Never'}
                 </td>
               </tr>
@@ -245,6 +257,10 @@ export default function Users({ notify }) {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
+  const [status, setStatus] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sort, setSort] = useState('name');
+  const [sortMenuAt, setSortMenuAt] = useState(null);
   // The open row menu: which account, where the pointer was, and the row it came
   // from. The row is what takes focus back when the menu was opened from the
   // keyboard rather than the mouse (see closeRowMenu).
@@ -543,9 +559,7 @@ export default function Users({ notify }) {
    * administrator comes to this screen to fix (a password, a stuck second
    * factor), then the one that ends it — last, and the only one marked `danger`.
    *
-   * Reset verification is ABSENT for a Staff account rather than disabled: there
-   * is no second factor to clear, and a dead item asks the officer to work out
-   * why. The destructive item never disappears — a deactivated row's menu has to
+   * The destructive item never disappears — a deactivated row's menu has to
    * carry the way back, which is the only thing anyone wants from it.
    */
   function rowItems(u) {
@@ -556,14 +570,10 @@ export default function Users({ notify }) {
       { label: 'View profile', onSelect: () => openProfile(u) },
       { label: 'Edit details', onSelect: () => startEdit(u) },
       { label: 'Reset password', onSelect: () => askResetPassword(u) },
-      ...(u.role === 'Admin' || u.role === 'Officer'
-        ? [
-            // The offline factor (migration 018) sits beside the mailbox one: one
-            // issues a printed way in, the other clears a stuck mailbox code.
-            { label: 'Issue recovery codes', onSelect: () => askRecoveryCodes(u) },
-            { label: 'Reset verification', onSelect: () => askResetMfa(u) },
-          ]
-        : []),
+      // The offline factor (migration 018) sits beside the mailbox one: one
+      // issues a printed way in, the other clears a stuck mailbox code.
+      { label: 'Issue recovery codes', onSelect: () => askRecoveryCodes(u) },
+      { label: 'Reset verification', onSelect: () => askResetMfa(u) },
       u.status === 'active'
         ? { label: 'Deactivate account', danger: true, onSelect: () => askDeactivate(u) }
         : { label: 'Reactivate account', onSelect: () => askReactivate(u) },
@@ -812,12 +822,44 @@ export default function Users({ notify }) {
   const needle = search.trim().toLowerCase();
   const shown = (users ?? []).filter((u) => {
     if (role !== '' && u.role !== role) return false;
+    if (status !== '' && u.status !== status) return false;
     if (needle === '') return true;
     return `${u.full_name} ${u.username} ${u.badge_number} ${u.email ?? ''}`
       .toLowerCase()
       .includes(needle);
   });
-  const filtered = needle !== '' || role !== '';
+  const filtered = needle !== '' || role !== '' || status !== '';
+  // How many of the row's own keys are set: the Filters button wears this while
+  // the row is folded away, so a narrowed list never reads as unfiltered.
+  const filterCount = (role !== '' ? 1 : 0) + (status !== '' ? 1 : 0);
+  // THE DIRECTORY'S ORDERS. Name first: a station directory reads alphabetically.
+  // Badge number is the station's own identifier order; recently signed in answers
+  // who was last at a desk. The server's own arrival order is not offered — the
+  // directory never promised it, so it is not a choice on screen.
+  const sorted = [...shown].sort((a, b) => {
+    if (sort === 'badge') {
+      return String(a.badge_number ?? '').localeCompare(String(b.badge_number ?? ''), undefined, { numeric: true });
+    }
+    if (sort === 'recent') return seenTime(b) - seenTime(a);
+    return String(a.full_name ?? '').localeCompare(String(b.full_name ?? ''), undefined, { sensitivity: 'base' });
+  });
+  const sortOrder = SORT_ORDERS.find((o) => o.key === sort) ?? SORT_ORDERS[0];
+  // The sort menu opens under its button, the way the row's own menu opens where
+  // the officer is pointing: viewport coordinates for a menu portaled to <body>.
+  function openSortMenu(e) {
+    const box = e.currentTarget.getBoundingClientRect();
+    setSortMenuAt({ x: box.left, y: box.bottom + 6 });
+  }
+  const sortItems = SORT_ORDERS.map((o) => ({
+    label: o.label,
+    checked: o.key === sort,
+    onSelect: () => { setSort(o.key); setSortMenuAt(null); },
+  }));
+  function clearFilters() {
+    setSearch('');
+    setRole('');
+    setStatus('');
+  }
 
   // The account being READ, looked up out of the list rather than copied at the moment
   // the row was clicked: `load()` replaces that list after every change, so a name, a
@@ -843,13 +885,7 @@ export default function Users({ notify }) {
     // the table will be instead, so nothing moves when it arrives.
     return (
       <>
-        <div className="ir-page-head">
-          <h1 className="ir-title">USER MANAGEMENT</h1>
-          <div className="ir-meta">
-            <div>LOADING…</div>
-            <div>STATION DIRECTORY</div>
-          </div>
-        </div>
+        <h1 className="sr-only">User management</h1>
         <div aria-hidden="true">
           {Array.from({ length: 6 }, (_, i) => <div key={i} className="skeleton-row" />)}
         </div>
@@ -864,11 +900,18 @@ export default function Users({ notify }) {
   // The count says what is SHOWN and what exists, in that order, so a filtered
   // directory never reads as a station that lost its accounts.
   const totalLine = users ? `${users.length} ACCOUNT${users.length === 1 ? '' : 'S'}` : '';
-  const accountLine = error
-    ? 'UNAVAILABLE'
+  // THE DIRECTORY COUNT FOR THE TOOLBAR CHIP. The page head no longer carries
+  // the count (owner request): the chip beside Who's connected is the one place
+  // that says how many accounts the station holds. Filtered or not, it names the
+  // whole directory — a filtered view never reads as a station that lost accounts.
+  const directoryCount = users ? users.length : 0;
+  const directoryStatus = error
+    ? 'Account list unavailable'
     : users
-      ? (filtered ? `${shown.length} OF ${totalLine}` : totalLine)
-      : 'LOADING…';
+      ? (filtered
+        ? `${shown.length} of ${directoryCount} accounts shown`
+        : `${directoryCount} account${directoryCount === 1 ? '' : 's'}`)
+      : 'Loading accounts…';
 
   return (
     // THE PAGE ITSELF CARRIES `.acct-page` WHILE THE FORM OR AN ACCOUNT IS OPEN, which is
@@ -877,17 +920,15 @@ export default function Users({ notify }) {
     // the left edge is two alignments on one screen, so the title moves in with the form
     // and the whole thing reads as one page. The directory is deliberately left alone —
     // its table is meant to use the whole window, and centring it would narrow the very
-    // thing the screen exists to show.
-    <div className={form || profileUser ? 'acct-page' : undefined}>
-      {/* Same page grammar as every other screen: document title, a
-          right-aligned meta block, then the working surface. */}
-      <div className="ir-page-head">
-        <h1 className="ir-title">USER MANAGEMENT</h1>
-        <div className="ir-meta">
-          <div>{accountLine}</div>
-          <div>STATION DIRECTORY</div>
-        </div>
-      </div>
+    // thing the screen exists to show. The account READ view adds `.acct-read`: it sits
+    // flat on the page with no card boxes, like Station Settings, while the edit form
+    // keeps its cards.
+    <div className={form || profileUser ? `acct-page${profileUser && !form ? ' acct-read' : ''}` : 'users-page'}>
+      {/* NO VISIBLE TITLE. The rail is the head of this screen: it sits 0.02cm
+          under the top bar the way the register's own strip does (owner request),
+          so there is no title block and no gutter between them. The name travels
+          in the heading below, for the document outline and screen readers. */}
+      <h1 className="sr-only">User management</h1>
 
       {error && (
         <div className="alert error" role="alert">
@@ -1140,7 +1181,7 @@ export default function Users({ notify }) {
                         <InfoHint
                           text={usesEmailCode(form.role)
                             ? 'Sign-in codes are sent here, so it is required for an Admin or an Officer. One account per address.'
-                            : 'Optional for Staff, who sign in with a password only. An account can be given a code later by adding the address here.'}
+                            : 'Sign-in codes are sent here.'}
                         />
                       </label>
                       <input
@@ -1279,11 +1320,29 @@ export default function Users({ notify }) {
                 is scoped to this class). */}
             <div className="reports-toolbar-row users-filters">
               {/* The box IS the filter: there is nothing to submit and nothing to
-                  wait for, so there is no Search button beside it. Escape clears
+                  wait for, so the magnifier submits nothing — the list narrows as it is typed, in the register's own dress. Escape clears
                   it, which is the one key a search field is expected to answer. */}
-              <div className="reports-search">
+              <div className="reports-search register-tools__search">
+                <button type="submit" className="reports-search__go" aria-label="Search accounts">
+                  <svg
+                    width="19"
+                    height="19"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z" />
+                    <path d="m16.2 16.2 4.3 4.3" />
+                  </svg>
+                </button>
                 <input
                   type="search"
+                  className="register-tools__input"
                   placeholder="Search name, username, badge no. or email…"
                   aria-label="Search accounts by name, username, badge number or email"
                   value={search}
@@ -1293,27 +1352,83 @@ export default function Users({ notify }) {
                   }}
                 />
               </div>
-              <select
-                aria-label="Filter by role"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
+              {/* The seam between "what you are looking for" and the keys that
+                  narrow and order it — the register's own hairline, not an edge. */}
+              <span className="register-tools__rule" aria-hidden="true" />
+              {/* FILTERS. The role and status keys live in the row below; this is
+                  their disclosure, wearing the count of what that row is holding
+                  while it is folded away (the audit trail's own pattern). */}
+              <button
+                type="button"
+                className="register-tool"
+                aria-label={filterCount > 0 ? `Filters — ${filterCount} set` : 'Filters'}
+                aria-expanded={filtersOpen}
+                aria-controls="users-filter-row"
+                onClick={() => setFiltersOpen((v) => !v)}
               >
-                <option value="">All roles</option>
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-              {filtered && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearch('');
-                    setRole('');
-                  }}
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M4 5.5h16l-6.2 7.2v5.1l-3.6 1.7v-6.8L4 5.5z" /></svg>
+                <span className="register-tool__label">Filters</span>
+                {filterCount > 0 && (<span className="register-tool__count" aria-hidden="true">{filterCount}</span>)}
+              </button>
+              {/* SORT. The directory's order, as a menu, with the order in force
+                  ticked (see RowMenu's `checked`). The button states that order in
+                  its own name, and wears the accent while the list is in an order
+                  other than Name A–Z. */}
+              <button
+                type="button"
+                className="register-tool"
+                aria-label={`Sort accounts — ${sortOrder.label}`}
+                aria-haspopup="menu"
+                aria-expanded={sortMenuAt !== null}
+                data-on={sort !== 'name' ? 'true' : undefined}
+                onClick={openSortMenu}
+              >
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M4 6.5h11" /><path d="M4 12h7.5" /><path d="M4 17.5h4.5" /><path d="M17.5 9.5v8" /><path d="m14.6 14.9 2.9 2.9 2.9-2.9" /></svg>
+                <span className="register-tool__label">Sort</span>
+              </button>
+              {/* THE SCREEN'S PRIMARY ACTION, in the rail where the filters are
+                  (owner request): a labelled Add User beside the keys, so creating
+                  an account is found where the directory is read — the floating
+                  plus below stays as the thumb's way in. Its label is visible,
+                  so it needs no aria-label of its own. */}
+              <button type="button" className="primary users-add" onClick={startCreate}>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  aria-hidden="true"
                 >
-                  Clear filters
-                </button>
-              )}
+                  <path d="M12 5.5v13M5.5 12h13" />
+                </svg>
+                Add User
+              </button>
+              {/* THE DIRECTORY'S MARK, beside the roster's doorway: the account icon
+                  carries the station's headcount as its badge — the page head's old meta block, moved to the toolbar
+                  (owner request) so the count sits with Who's connected rather than
+                  across the page from it. A status, not a control: it names the whole
+                  directory even while the table is filtered. */}
+              <span className="users-directory-chip" role="status" aria-label={directoryStatus} title={directoryStatus}>
+                <span className="users-directory-chip__icon" aria-hidden="true">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="8" r="3.6" />
+                    <path d="M4.5 19.5c1.4-3.6 4.2-5.4 7.5-5.4s6.1 1.8 7.5 5.4" />
+                  </svg>
+                  <span className="users-directory-chip__badge">{error ? '–' : directoryCount}</span>
+                </span>
+              </span>
 
               {/* THE ROSTER'S DOORWAY, and it is a pill rather than a panel because the
                   panel is the top of the page: a toggle says whether it is open (the
@@ -1333,6 +1448,29 @@ export default function Users({ notify }) {
                   {presenceOpen ? 'Hide who’s connected' : 'Who’s connected now'}
                 </span>
               </button>
+            </div>
+            {/* THE FILTER ROW. Role and status live here, in labelled cells the way
+                the register's own filters do — the rail above stays a rail. Folded
+                away until asked for; the Filters key wears the count meanwhile. */}
+            <div className="reports-toolbar register-filters" id="users-filter-row" hidden={!filtersOpen}>
+              <div className="reports-filters">
+                <label className="reports-filter">
+                  <span className="reports-filter__label">Role</span>
+                  <select aria-label="Filter by role" value={role} onChange={(e) => setRole(e.target.value)}>
+                    <option value="">All roles</option>
+                    {ROLES.map((r) => (<option key={r} value={r}>{r}</option>))}
+                  </select>
+                </label>
+                <label className="reports-filter">
+                  <span className="reports-filter__label">Status</span>
+                  <select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)}>
+                    <option value="">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </label>
+                {filtered && (<button type="button" className="reports-filter__clear" onClick={clearFilters}>Clear filters</button>)}
+              </div>
             </div>
           </form>
 
@@ -1358,10 +1496,12 @@ export default function Users({ notify }) {
             </div>
           ) : shown.length === 0 ? (
             <div className="empty">
-              <strong>No accounts match these filters.</strong> Clear them to see the whole directory.
+              <strong>No accounts match these filters.</strong>{' '}
+              <button type="button" className="button-link" onClick={clearFilters}>Clear them</button>{' '}
+              to see the whole directory.
             </div>
           ) : (
-            <UsersTable users={shown} onOpen={openProfile} onEdit={startEdit} onMenu={openRowMenu} />
+            <UsersTable users={sorted} sortKey={sort} onOpen={openProfile} onEdit={startEdit} onMenu={openRowMenu} />
           )}
         </>
       )}
@@ -1372,6 +1512,15 @@ export default function Users({ notify }) {
           label={`Actions for ${menu.user.full_name}`}
           items={rowItems(menu.user)}
           onClose={closeRowMenu}
+        />
+      )}
+
+      {sortMenuAt && (
+        <RowMenu
+          at={sortMenuAt}
+          label="Sort accounts"
+          items={sortItems}
+          onClose={() => setSortMenuAt(null)}
         />
       )}
 

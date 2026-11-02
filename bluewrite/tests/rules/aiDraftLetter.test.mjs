@@ -123,8 +123,8 @@ test('the boxes are added UNDER the page — nothing puts the letter away', () =
   // The boxes are shown when there is no page to draw, or when asked for.
   assert.match(SRC, /const boxesShown = !sheeted \|\| boxesOpen;/, 'the boxes are no longer added under the page');
   assert.match(SRC, /\{boxesShown && \(<>/, 'the boxes are not rendered from that rule');
-  // The control that opens them is offered once, and not while they are open.
-  assert.match(SRC, /\{sheeted && !boxesOpen && \(/, 'the "Edit the draft" control is offered in the wrong states');
+  // "Edit the draft" removed by owner request: corrections happen on the sheet.
+  assert.doesNotMatch(SRC, /Edit the draft/, '"Edit the draft" control must be gone');
 
   // A new draft is read before it is corrected.
   assert.equal(
@@ -134,14 +134,21 @@ test('the boxes are added UNDER the page — nothing puts the letter away', () =
   );
 });
 
-test('a draft restored in this tab brings its page back whole, without replaying it', () => {
-  // The restore path puts the draft back and nothing else: no stored proposal,
-  // and no re-arming of the typing gate, because the sequence has already played
-  // once for this officer.
-  const restore = bodyOf(SRC, "const stored = loadStoredDraft(reportId);");
-  assert.match(restore, /setDraft\(stored\)/, 'the restored draft is no longer restored');
-  assert.doesNotMatch(restore, /setSheetTyped\(false\)/, 'a restored draft replays the typing from the start');
-  assert.doesNotMatch(restore, /setSheetDraft/, 'the restored draft still needs a stored proposal');
+test('the AI draft is not persisted, and any stored copy is deleted', () => {
+  // Owner request, 2026-11-02: a stored draft could come back over a page the
+  // officer had already arranged, which is how one report came to carry its own
+  // text twice. The panel therefore keeps its draft in memory only, and wipes
+  // whatever an earlier session left in the tab store.
+  assert.doesNotMatch(SRC, /loadStoredDraft/, 'a draft is still restored from the browser');
+  assert.doesNotMatch(
+    SRC,
+    /sessionStorage\.setItem/,
+    'the panel still mirrors its draft into the browser',
+  );
+  assert.match(SRC, /const DRAFT_STORE_PREFIX = 'bw-ai-draft-';/, 'the stored-key prefix is gone');
+  const purge = bodyOf(SRC, 'function purgeStoredDrafts()');
+  assert.match(purge, /removeItem\(key\)/, 'the old stored drafts are no longer deleted');
+  assert.match(SRC, /purgeStoredDrafts\(\);/, 'nothing calls the purge');
 
   // The sheet is told, from the same flag that opens the gate: a session that is
   // still typing animates, a restored one does not.
@@ -313,7 +320,7 @@ test('the letter reads as the same paper, not a page on a page', () => {
   const FORM_CSS = readFileSync(new URL('../../src/incident-report.css', import.meta.url), 'utf8');
   assert.match(
     FORM_CSS,
-    /\.ir-form--sheet:has\(\.ir-sheet-letter:not\(:empty\)\) \.ir-sheet-head,/,
+    /\.ir-form--sheet:has\(\.ir-sheet-letter > \.sheet-ribbon-dock\) \.ir-sheet-head,/,
     'the form band no longer steps aside for the letter',
   );
   assert.match(
@@ -336,6 +343,37 @@ test('the letter reads as the same paper, not a page on a page', () => {
     /\.ir-sheet-letter \.ai-sheet-preview \.print-sheet \{[\s\S]*?padding: 0;/,
     'the inner paper still adds its own inch inside the paper inch',
   );
+});
+
+test('the station heading keeps its size when the paper takes over', () => {
+  // Owner request, 2026-11-02: the same seven letterhead lines are drawn by the
+  // form's band while composing and by the paper's own header once a letter
+  // exists. Those two must be the SAME SIZE, or Generate/Arrange visibly resizes
+  // the heading mid-write.
+  const FORM_CSS = readFileSync(new URL('../../src/incident-report.css', import.meta.url), 'utf8');
+  const APP_CSS = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
+  const band = /\n\.ir-sheet-head-lines \{([\s\S]*?)\n\}/.exec(FORM_CSS);
+  const bandMeta = /\n\.ir-sheet-head-meta \{([\s\S]*?)\n\}/.exec(FORM_CSS);
+  assert.ok(band && bandMeta, 'the form band is gone');
+  const bandSize = /font-size:\s*([\d.]+)rem/.exec(band[1])[1];
+  const bandMetaSize = /font-size:\s*([\d.]+)rem/.exec(bandMeta[1])[1];
+  assert.equal(bandSize, '0.74', 'the composing band changed size');
+
+  // The desk copy of the paper's own header is pinned to the band's sizes.
+  const deskScope = FORM_CSS.split('.ir-sheet-letter .ai-sheet-preview .print-sheet .pr-org')[1] ?? '';
+  assert.match(
+    deskScope,
+    new RegExp(`font-size: ${bandSize.replace('.', '\\.')}rem;`),
+    'the paper heading is not drawn at the band\'s size on the desk',
+  );
+  assert.match(
+    FORM_CSS,
+    new RegExp(`\\.print-sheet \\\.pr-code-date \\{\\s*\\n\\s*font-size: ${bandMetaSize.replace('.', '\\.')}rem;`),
+    'the paper\'s office-code/date row is not drawn at the band\'s size on the desk',
+  );
+  // And it stays a DESK rule: the print sheet keeps its own type sizes.
+  assert.match(APP_CSS, /\.print-sheet \.pr-org \{ font-size: 9pt; line-height: 1\.25; \}/, 'the printed heading changed');
+  assert.match(APP_CSS, /\.pr-seal \{\s*\n\s*height: 0\.95in;/, 'the printed seals changed');
 });
 
 test('the blank sheet carries no buttons of its own — the assistant is the one entry', () => {

@@ -1,5 +1,5 @@
 // BlueWrite — the application's top bar (spec §1: "Official Incident Reporting
-// System"): the OFFICER's chrome. Every officer and staff screen renders it, so
+// System"): the OFFICER's chrome. Every officer screen renders it, so
 // the navy bar is chrome the app owns rather than a private component of the
 // report editor. AN ADMIN'S SCREENS DO NOT: an Admin's chrome is the rail beside
 // the workspace, which carries the same lockup, the same destinations and the

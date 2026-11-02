@@ -154,7 +154,7 @@ export const MFA_STAGES = ['verify'];
 
 /**
  * Which stage a sign-in response is asking for, or null when it is asking for
- * nothing (a Staff account, or a completed sign-in).
+ * nothing (a completed sign-in).
  *
  * The 'setup' stage that used to exist went with the authenticator app: there is
  * nothing to enrol when the code arrives by email, so 'verify' is the only stage

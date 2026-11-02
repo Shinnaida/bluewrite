@@ -3,8 +3,10 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Ai\NarrativeService;
 use App\Core\Auth;
 use App\Core\Database;
+use App\Core\ReportCaptures;
 // The sign-in code's mailer. Read only for its HEALTH (can this server send,
 // and over which transport) so the dashboard can show a station whether its
 // second factor can deliver before a shift starts — never for its credentials.
@@ -16,23 +18,33 @@ use PDOException;
 
 /**
  * Phase 4 — Dashboard monitoring (UC-017).
- *
- * GET /api/v1/dashboard/stats?from=YYYY-MM-DD&to=YYYY-MM-DD&type=<incident_type>&scope=mine|all
+ *  * GET /api/v1/dashboard/stats?from=YYYY-MM-DD&to=YYYY-MM-DD&type=<incident_type>&scope=mine|all&range=all
  *
  * Read-only aggregation endpoint. Contract:
  *   kpis{total,pending,submitted,finalized,periodDeltaPct}
+ *   registerTotals{total,pending,submitted,finalized} — the WHOLE register
+ *     (no date/type/scope narrowing), so the three hero cards match All
+ *     Reports whatever window the trend is reading
  *   seriesOverTime[{date,count}] / categoryBreakdown[{type,count}]
  *   seriesByType[{type,total,counts}] — the same days as seriesOverTime, cut by
  *     incident_type and ordered by volume descending (see below)
  *   categoryDeltas{type:{current,previous}} / statusBreakdown{draft,submitted,final}
  *   hourHistogram[{hour,count}] / officerBreakdown[{officer,count}]
+ *   statusSeries[{date,draft,submitted,finalized}] — the same zero-filled days
+ *     as seriesOverTime, cut by workflow state, for the metric cards' minis
+ *   locationBreakdown[{location,count}] — top 5 non-empty locations in range
+ *   system{database,storage,ai,notifications} — the status grid's readings,
+ *     measured here (config + writability + this response's own queries),
+ *     never invented client-side
  *   finalizeTime{medianMinutes,finalizedCount} / recentActivity[...] / meta{...}
+ *   users{total,byRole{Admin,Officer}} — ACTIVE accounts only, so a
+ *     deactivated account stops counting the moment it is switched off.
  * Integrated with the REAL app core instead of the starter's
  * standalone stubs:
  *   - auth via Auth::requireRole('Admin') — the dashboard is ADMIN-ONLY
- *     (product decision, Sep 2026); officers and staff get 403
+ *     (product decision, Sep 2026); officers get 403
  *   - one shared PDO via Database::pdo() (no duplicated credentials)
- *   - role strings match the roles table: 'Admin' | 'Officer' | 'Staff'
+ *   - role strings match the roles table: 'Admin' | 'Officer'
  *   - audit action strings match what Audit::log() actually writes
  *
  * Security notes:
@@ -109,6 +121,17 @@ final class DashboardController
         // lets an Admin compare their own output against the station.
         $scope = ($_GET['scope'] ?? null) === 'mine' ? 'mine' : 'all';
 
+        // "All time": the dashboard opens on the whole register, so its totals
+        // match All Reports. The window is derived from the data itself
+        // (earliest incident to today), so every windowed query below keeps
+        // working unchanged.
+        $rangeAll = ($_GET['range'] ?? null) === 'all';
+        if ($rangeAll) {
+            $minDate = $pdo->query('SELECT MIN(DATE(incident_datetime)) FROM reports WHERE deleted_at IS NULL')->fetchColumn();
+            $from = (is_string($minDate) && strlen($minDate) >= 10) ? substr($minDate, 0, 10) : date('Y-m-d');
+            $to = date('Y-m-d');
+        }
+
         // Incident type: allowlisted against the canonical type list, then
         // intersected with what actually exists — bound as a param either way.
         $typeFilter = null;
@@ -175,7 +198,27 @@ final class DashboardController
         $prevKpi = $prevStmt->fetch() ?: ['total' => 0, 'pending' => 0, 'submitted' => 0, 'finalized' => 0];
         $prevTotal = (int) $prevKpi['total'];
 
+        // All time has no "previous equal period" to move against, so the
+        // trend reads as no change rather than a jump from an empty window.
+        if ($rangeAll) {
+            $prevKpi = $kpi;
+            $prevTotal = $currentTotal;
+        }
+
         $delta = self::periodDelta($currentTotal, $prevTotal);
+
+        // ---- Whole-register totals (owner request, 2026-10-30) --------------
+        // The three hero cards read the REGISTER, not the window: Total,
+        // Drafts and Finalized match All Reports whatever range the trend is
+        // reading. One COUNT over everything not deleted — no date, type or
+        // scope narrowing, so a filter can never move the cards.
+        $register = $pdo->query(
+            "SELECT COUNT(*) AS total,
+                    SUM(status = 'draft') AS pending,
+                    SUM(status = 'submitted') AS submitted,
+                    SUM(status = 'finalized') AS finalized
+             FROM reports WHERE deleted_at IS NULL"
+        )->fetch() ?: ['total' => 0, 'pending' => 0, 'submitted' => 0, 'finalized' => 0];
 
         // ---- Series over time (zero-filled per day) ------------------------
         $stmt = $pdo->prepare(
@@ -288,6 +331,58 @@ final class DashboardController
             ],
             $activityStmt->fetchAll()
         );
+
+        // ---- Per-day workflow states (zero-filled) --------------------------
+        // The metric cards' mini bars: drafts and finalized drawn per day, from
+        // the same WHERE as the totals above so a mini can never disagree with
+        // the number beside it. Statuses outside the three workflow states are
+        // not possible (see ReportsController::STATUSES); an unexpected one is
+        // ignored rather than drawn, and the totals still reconcile because
+        // the cards' numbers come from the KPI query, not this one.
+        $ssStmt = $pdo->prepare(
+            "SELECT DATE(incident_datetime) AS d, status AS s, COUNT(*) AS cnt
+             FROM reports {$where}
+             GROUP BY DATE(incident_datetime), status"
+        );
+        $ssStmt->execute($params);
+        $byDayStatus = [];
+        foreach ($ssStmt->fetchAll() as $r) {
+            $byDayStatus[(string) $r['d']][(string) $r['s']] = (int) $r['cnt'];
+        }
+        $statusSeries = [];
+        foreach ($series as $point) {
+            $day = $byDayStatus[$point['date']] ?? [];
+            $statusSeries[] = [
+                'date' => $point['date'],
+                'draft' => $day['draft'] ?? 0,
+                'submitted' => $day['submitted'] ?? 0,
+                'finalized' => $day['finalized'] ?? 0,
+            ];
+        }
+
+        // ---- Top locations --------------------------------------------------
+        // Where the range's reports happened, five at most, blanks excluded —
+        // a report with no place recorded is a data gap for the register, not
+        // a bar on this chart. Raw strings, not normalised: two spellings of
+        // one street are two rows until the register spells them one way.
+        $locStmt = $pdo->prepare(
+            "SELECT location AS loc, COUNT(*) AS cnt
+             FROM reports {$where}
+             GROUP BY location
+             ORDER BY cnt DESC"
+        );
+        $locStmt->execute($params);
+        $locationBreakdown = [];
+        foreach ($locStmt->fetchAll() as $r) {
+            $loc = trim((string) ($r['loc'] ?? ''));
+            if ($loc === '') {
+                continue;
+            }
+            $locationBreakdown[] = ['location' => $loc, 'count' => (int) $r['cnt']];
+            if (count($locationBreakdown) >= 5) {
+                break;
+            }
+        }
 
         // ---- Per-category change vs the previous period ---------------------
         // Same WHERE shape, shifted window: feeds the up/down markers on the
@@ -405,6 +500,24 @@ final class DashboardController
             $recentStmt->fetchAll()
         );
 
+        // ---- Who can sign in: ACTIVE accounts by role --------------------
+        // The dashboard's own headcount. Deactivated accounts are excluded —
+        // a switched-off account is not someone who can open the register.
+        // Counts only, never names: the roster itself lives in User
+        // Management.
+        $userRows = $pdo->query(
+            "SELECT r.name AS role, COUNT(*) AS n
+             FROM users u JOIN roles r ON r.id = u.role_id
+             WHERE u.status = 'active'
+             GROUP BY r.name"
+        )->fetchAll();
+        $usersByRole = ['Admin' => 0, 'Officer' => 0];
+        foreach ($userRows as $ur) {
+            if (array_key_exists((string) $ur['role'], $usersByRole)) {
+                $usersByRole[(string) $ur['role']] = (int) $ur['n'];
+            }
+        }
+
         Response::json(200, [
             'kpis' => [
                 'total' => $currentTotal,
@@ -412,6 +525,12 @@ final class DashboardController
                 'submitted' => (int) ($kpi['submitted'] ?? 0),
                 'finalized' => (int) ($kpi['finalized'] ?? 0),
                 'periodDeltaPct' => $delta,
+            ],
+            'registerTotals' => [
+                'total' => (int) ($register['total'] ?? 0),
+                'pending' => (int) ($register['pending'] ?? 0),
+                'submitted' => (int) ($register['submitted'] ?? 0),
+                'finalized' => (int) ($register['finalized'] ?? 0),
             ],
             'seriesOverTime' => $series,
             'seriesByType' => $seriesByType,
@@ -452,6 +571,13 @@ final class DashboardController
             ],
             'recentReports' => $recentReports,
             'recentActivity' => $recentActivity,
+            'statusSeries' => $statusSeries,
+            'locationBreakdown' => $locationBreakdown,
+            'system' => $this->systemHealth(),
+            'users' => [
+                'total' => array_sum($usersByRole),
+                'byRole' => $usersByRole,
+            ],
             // ---- Sign-in health (S-01 preflight) --------------------------
             // Read so the station can see whether the second factor can
             // actually send BEFORE a shift starts, rather than discovering it
@@ -574,6 +700,34 @@ final class DashboardController
             'accountsWithEmail' => $withEmail,
             'accountsWithRecovery' => $withRecovery,
             'accountsWithoutFactor' => $withoutFactor,
+        ];
+    }
+
+    /**
+     * What the status grid draws — database, storage, AI and notifications —
+     * measured HERE, never invented client-side.
+     *
+     *   database      'online': this response exists because the queries above
+     *                 answered; a DB the dashboard cannot reach is the 503 the
+     *                 client already draws, never a red box on this grid.
+     *   storage       the captures directory the station actually files photos
+     *                 under (see ReportCaptures::directory): writable means the
+     *                 next capture can land, anything else is 'readonly'.
+     *   ai            the /ai/health question, asked the same way: the
+     *                 provider is enabled AND a key is configured.
+     *   notifications the bell's feed is a query over these same tables — no
+     *                 separate service to probe — so it shares the database's
+     *                 reading by construction rather than by a second query.
+     */
+    private function systemHealth(): array
+    {
+        $aiCfg = NarrativeService::aiConfig();
+        $aiKey = (string) (getenv('GEMINI_API_KEY') ?: ($aiCfg['gemini']['api_key'] ?? ''));
+        return [
+            'database' => 'online',
+            'storage' => is_writable(ReportCaptures::directory()) ? 'online' : 'readonly',
+            'ai' => (NarrativeService::enabled() && $aiKey !== '') ? 'online' : 'offline',
+            'notifications' => 'online',
         ];
     }
 

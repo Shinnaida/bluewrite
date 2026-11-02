@@ -28,7 +28,7 @@
    carries the toolbar, and its 1rem bottom margin is what held the Full name
    line away from the Search / All roles / Add User / presence row. Scoped to
    users-head so every other screen keeps its own spacing. */
-.ir-page-head.users-head { margin-bottom: 0.1cm; transform: translateY(-10%); }
+.ir-page-head.users-head { margin-top: calc(0.55cm - var(--ir-gutter-top)); margin-bottom: 0.1cm; transform: translateY(-10%); }
 .reports-toolbar-row.users-filters {
   display: flex;
   align-items: center;
@@ -68,8 +68,8 @@
   align-items: center;
   flex: 1 1 16rem;
   min-width: 0;
-  max-width: 22rem;
-  height: 2.4rem;
+  max-width: none;
+  height: 3.17rem;
   padding: 0 0.65rem 0 0.5rem;
   background: var(--ir-input);
   border: 1px solid var(--ir-field-border);
@@ -89,7 +89,7 @@
   width: auto;
   height: 100%;
   padding: 0 0.2rem;
-  font-size: 0.85rem;
+  font-size: 1.12rem;
   color: var(--ir-text);
   background: none;
   border: 0;
@@ -147,12 +147,12 @@
   width: auto;
 }
 /* ONE HEIGHT FOR THE WHOLE ROW: search, role filter, Add User and the presence
-   pill all stand 2.4rem so none of them sits high or low against its neighbour. */
+   pill all stand 3.17rem so none of them sits high or low against its neighbour. */
 .users-filters__filters .reports-search input,
 .users-filters__filters > select,
 .users-filters__actions .users-add,
 .users-filters__actions .conn-hub-toggle {
-  height: 2.4rem;
+  height: 3.17rem;
   box-sizing: border-box;
 }
 .users-filters__filters .reports-search input,
@@ -162,12 +162,14 @@
 .users-filters__actions .users-add {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.5rem;
   white-space: nowrap;
   border-radius: 999px;
+  font-size: 1.06rem;
 }
 .users-filters__actions .conn-hub-toggle {
   margin-left: 0;
+  font-size: .94rem;
 }
 @media (max-width: 900px) {
   .users-head .reports-toolbar { flex-basis: 100%; }
@@ -215,35 +217,49 @@
   color: var(--paper);
 }
 .conn-hub-toggle__dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--cyan);
   animation: conn-hub-blink 2.4s ease-in-out infinite;
 }
 .conn-hub-toggle__label { white-space: nowrap; }
+.users-directory-chip{display:inline-flex;align-items:center;flex:0 0 auto;line-height:1;white-space:nowrap}
+.users-directory-chip__icon{position:relative;display:grid;place-items:center;width:34px;height:34px;flex:0 0 auto;border-radius:50%;background:var(--ir-navy,#133e87);color:#fff}
+.users-directory-chip__badge{position:absolute;right:-8px;bottom:-6px;display:grid;place-items:center;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:999px;border:2px solid var(--panel);background:var(--ir-gold,#f0b429);color:var(--ir-navy,#132e5e);font-size:.74rem;font-weight:800;line-height:1}
+.users-filters__actions .users-directory-chip{margin-left:0}
+.users-filters__filters .register-tool{display:inline-flex;align-items:center;gap:.6rem;width:auto;height:3.17rem;padding:0 1.06rem;font-size:1.06rem;font-weight:600;white-space:nowrap}
+.users-filters__filters .register-tool svg{flex:none}
+.reports-toolbar-row.users-filters .register-filters{flex:1 1 100%;margin:0;padding:0}
+#users-filter-row .reports-filter select{height:3.17rem}
+#users-filter-row .reports-filter__label{font-size:.79rem}
 
 /* ---- The panel ----------------------------------------------------------- */
 
 .conn-hub {
   position: relative;
   margin: 0 0 1rem;
-  padding: 1rem 1.15rem 0.9rem;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--panel);
-  box-shadow: 0 12px 30px -22px rgba(8, 20, 40, 0.55);
+  padding: 1.1rem 1.25rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  background:
+    repeating-radial-gradient(circle at 50% 42%, transparent 0 46px, rgba(37, 99, 235, 0.05) 46px 47px),
+    radial-gradient(60% 50% at 50% 0%, rgba(147, 184, 232, 0.35), rgba(147, 184, 232, 0) 70%),
+    linear-gradient(165deg, #d9e7ff 0%, #e9f1ff 45%, #f5f9ff 100%);
+  box-shadow: 0 24px 48px -28px rgba(15, 36, 71, 0.35);
   overflow: hidden;
+  color: #0f2447;
 }
-/* A hairline of accent along the top edge: this is a live thing, and that is what says
+/* A soft sheen along the top edge: this is a live thing, and that is what says
    so before any circle in the drawing does. */
 .conn-hub::before {
   content: '';
   position: absolute;
   inset: 0 0 auto;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-  opacity: 0.75;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.55), transparent);
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .conn-hub__head {
@@ -261,36 +277,44 @@
   text-transform: uppercase;
   color: var(--cyan-dim);
 }
-.conn-hub__head h2 { margin: 0; font-size: 1.02rem; font-weight: 650; letter-spacing: -0.01em; }
+.conn-hub__head h2 { margin: 0; font-size: 1.4rem; font-weight: 800; letter-spacing: -0.01em; color: #0f2447; }
+.conn-hub__now { color: #2563eb; }
+.conn-hub__sub { margin: 0.15rem 0 0; font-size: 0.82rem; line-height: 1.45; color: #5b6b85; }
 
 .conn-hub__count {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.3rem 0.7rem;
-  border: 1px solid var(--cyan);
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #fff;
   border-radius: 999px;
-  background: var(--panel-raised);
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--paper);
+  background: rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 20px -12px rgba(15, 36, 71, 0.4);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #0f2447;
   white-space: nowrap;
 }
+.conn-hub__count-icon { color: #2563eb; flex: 0 0 auto; }
 .conn-hub__count-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--cyan);
+  background: #22c55e;
   animation: conn-hub-blink 2.4s ease-in-out infinite;
 }
 /* NOBODY CONNECTED IS A QUIET STATE, not an alarming one: the pill goes grey and the
    dot stops, because an empty station at night is not a fault. */
 .conn-hub__count.is-empty {
-  border-color: var(--line);
-  background: transparent;
-  color: var(--steel);
+  border-color: #d7e0ee;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: none;
+  color: #7b8aa0;
 }
-.conn-hub__count.is-empty .conn-hub__count-dot { background: var(--steel); animation: none; }
+.conn-hub__count.is-empty .conn-hub__count-icon { color: #7b8aa0; }
+.conn-hub__count.is-empty .conn-hub__count-dot { background: #94a3b8; animation: none; }
 
 .conn-hub__note {
   margin: 0.55rem 0 0;
@@ -304,7 +328,7 @@
   max-width: 62ch;
   font-size: 0.85rem;
   line-height: 1.5;
-  color: var(--steel);
+  color: #5b6b85;
 }
 
 /* ---- The drawing --------------------------------------------------------- */
@@ -319,7 +343,7 @@
   margin-top: 0.45rem;
   padding: 0.35rem 0;
   border-radius: 14px;
-  background: radial-gradient(58% 120% at 50% 50%, rgba(31, 95, 208, 0.07), rgba(31, 95, 208, 0) 72%);
+  background: transparent;
 }
 .conn-hub__svg {
   display: block;
@@ -331,51 +355,74 @@
 /* The rings are the drawing's floor: they say where the centre is before anybody is
    on it, so the empty state is a hub with room around it rather than a lone circle in
    a panel. */
-.conn-hub__ring { fill: none; stroke: var(--cyan); stroke-width: 1; opacity: 0.14; }
-.conn-hub__ring:nth-child(2) { opacity: 0.1; }
-.conn-hub__ring:nth-child(3) { opacity: 0.07; }
+.conn-hub__ring { fill: none; stroke: #8fb0e6; stroke-width: 1; opacity: 0.5; }
+.conn-hub__ring:nth-child(2) { opacity: 0.35; }
+.conn-hub__ring:nth-child(3) { opacity: 0.22; }
 
-.conn-hub__node circle { fill: var(--panel-raised); stroke: var(--cyan); stroke-width: 1.6; }
+.conn-hub__node circle { fill: #ffffff; stroke: #2563eb; stroke-width: 1.6; }
 .conn-hub__node .conn-hub__node-halo {
   fill: none;
-  stroke: var(--cyan);
+  stroke: #2563eb;
   stroke-width: 1;
   opacity: 0.3;
 }
 .conn-hub__node text {
-  fill: var(--paper);
+  fill: #0f2447;
   font-size: 13px;
   font-weight: 600;
   font-family: var(--font-body);
 }
-.conn-hub__node .conn-hub__label { font-size: 11px; font-weight: 500; fill: var(--steel); }
-/* ROLE INK ON THE RINGS (owner request): an Admin circle wears the station gold
-   with navy initials, an Officer circle wears the station blue with white initials —
-   so the drawing says whose desk it is before the list below it is read. */
-.conn-hub__node.is-admin circle:not(.conn-hub__node-halo) { fill: var(--ir-gold); stroke: var(--ir-gold); }
-.conn-hub__node.is-admin text:not(.conn-hub__label) { fill: var(--ir-navy); }
-.conn-hub__node.is-officer circle:not(.conn-hub__node-halo) { fill: var(--cyan); stroke: var(--cyan); }
-.conn-hub__node.is-officer text:not(.conn-hub__label) { fill: #fff; }
+.conn-hub__node .conn-hub__label { font-size: 11px; font-weight: 500; fill: #5b6b85; }
+/* ROLE INK ON THE RINGS (owner request): an Admin circle wears station blue with
+   white initials, an Officer circle wears station gold with navy initials —
+   so the drawing says whose desk it is before the list below it is read. The beam
+   riding to each node wears the same ink, so colour never starts halfway. */
+.conn-hub__node.is-admin circle:not(.conn-hub__node-halo) { fill: #2563eb; stroke: #2563eb; }
+.conn-hub__node.is-admin .conn-hub__node-halo { stroke: #2563eb; }
+.conn-hub__node.is-admin text:not(.conn-hub__label) { fill: #fff; }
+.conn-hub__node.is-officer circle:not(.conn-hub__node-halo) { fill: #f5b301; stroke: #f5b301; }
+.conn-hub__node.is-officer .conn-hub__node-halo { stroke: #f5b301; }
+.conn-hub__node.is-officer text:not(.conn-hub__label) { fill: #0f2447; }
+/* THE LEGEND: two solid dots naming the ink above, set as a quiet key so it
+   reads as part of the instrument rather than as a footnote. */
+.conn-hub__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.conn-hub__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #475569;
+}
+.conn-hub__swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  border: none;
+}
+.conn-hub__swatch.is-admin { background: #2563eb; }
+.conn-hub__swatch.is-officer { background: #f5b301; }
 
-.conn-hub__core circle:not(.conn-hub__pulse) { fill: var(--ir-navy); stroke: var(--cyan); stroke-width: 2; }
+.conn-hub__core circle:not(.conn-hub__pulse):not(.conn-hub__core-tag) { fill: #0b1e3a; stroke: #dbe7fb; stroke-width: 2; }
+.conn-hub__core-tag { fill: rgba(255, 255, 255, 0.92); stroke: #d7e3f8; stroke-width: 1; }
+.conn-hub__core text.conn-hub__core-tag-text { fill: #0f2447; font-size: 10px; font-weight: 700; font-family: var(--font-body); }
 .conn-hub__pulse {
   fill: none;
-  stroke: var(--cyan);
+  stroke: #2563eb;
   stroke-width: 2;
   opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
   animation: conn-hub-pulse 2.4s ease-out infinite;
 }
-.conn-hub__beam {
-  stroke: var(--cyan);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-dasharray: 6 10;
-  opacity: 0.7;
-  animation: conn-hub-flow 1.6s linear infinite;
-}
-@keyframes conn-hub-flow { to { stroke-dashoffset: -32; } }
 @keyframes conn-hub-pulse {
   0% { opacity: 0.8; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.9); }
@@ -403,55 +450,71 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.45rem 0.6rem;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--panel-raised);
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.75);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 26px -20px rgba(15, 36, 71, 0.45);
   min-width: 0;
 }
 .conn-hub__avatar {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: var(--ir-navy);
+  background: #0b1e3a;
   color: #fff;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
-/* THE SAME ROLE INK IN THE LIST: gold for an Admin, blue for an Officer. */
-.conn-hub__avatar.is-admin { background: var(--ir-gold); color: var(--ir-navy); }
-.conn-hub__avatar.is-officer { background: var(--cyan); color: #fff; }
+/* THE SAME ROLE INK IN THE LIST: blue for an Admin, gold for an Officer. */
+.conn-hub__avatar.is-admin { background: #2563eb; color: #fff; }
+.conn-hub__avatar.is-officer { background: #f5b301; color: #0f2447; }
 .conn-hub__who { display: flex; flex-direction: column; min-width: 0; }
 .conn-hub__name {
-  font-size: 0.86rem;
-  font-weight: 600;
-  color: var(--paper);
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f2447;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.conn-hub__role { font-size: 0.72rem; color: var(--steel); }
+.conn-hub__role { font-size: 0.72rem; color: #64748b; }
 .conn-hub__seen {
   margin-left: auto;
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  background: #edf1f6;
   font-size: 0.72rem;
   font-weight: 600;
-  color: var(--cyan-dim);
+  color: #475569;
   white-space: nowrap;
+}
+.conn-hub__seen-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex: 0 0 auto;
 }
 .conn-hub__person--more .conn-hub__avatar {
   background: transparent;
-  border: 1px dashed var(--line-bright);
-  color: var(--steel);
+  border: 1px dashed #94a3b8;
+  color: #5b6b85;
 }
 .conn-hub__person--more .conn-hub__seen { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .conn-hub__beam, .conn-hub__pulse, .conn-hub__count-dot, .conn-hub-toggle__dot { animation: none; }
+  .conn-hub__pulse, .conn-hub__count-dot, .conn-hub__seen-dot, .conn-hub-toggle__dot { animation: none; }
   .conn-hub__pulse { opacity: 0.25; }
 }
 

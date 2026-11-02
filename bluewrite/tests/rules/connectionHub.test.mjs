@@ -23,11 +23,12 @@ const readSrc = (relativePath) => readFile(path.join(root, relativePath), 'utf8'
 
 const user = (id, name, extra = {}) => ({ id, username: name.toLowerCase(), full_name: name, status: 'active', ...extra });
 
-test('an account seen just now is drawn as connected, with its beam', async () => {
+test('an account seen just now is drawn as connected, as a node with no beam', async () => {
   const { render, stampAgo } = await load();
   const html = render([user(1, 'Maria Santos', { last_seen_at: stampAgo(1) })]);
   assert.match(html, /1 signed in/);
-  assert.equal((html.match(/conn-hub__beam/g) || []).length, 1, 'one signed-in account must draw one beam');
+  assert.equal((html.match(/class="conn-hub__node(?:"| )/g) || []).length, 1, 'one signed-in account must draw one node');
+  assert.doesNotMatch(html, /conn-hub__beam/, 'no beam may be drawn between the hub and a node');
   assert.match(html, /Maria Santos|>Maria</, 'the connected account is not named on its node');
 });
 
@@ -63,7 +64,7 @@ test('more than eight connected accounts are capped on the drawing and counted i
   const many = Array.from({ length: 11 }, (_, i) => user(10 + i, `Officer ${i}`, { last_seen_at: stampAgo(i % 4) }));
   const html = render(many);
   assert.match(html, /11 signed in/, 'the count must be the real number, not the drawn one');
-  assert.equal((html.match(/conn-hub__beam/g) || []).length, 8, 'the drawing must stop at eight beams');
+  assert.equal((html.match(/class="conn-hub__node(?:"| )/g) || []).length, 8, 'the drawing must stop at eight nodes');
   assert.match(html, /and 3 more/, 'the accessible label must say how many are not drawn');
 });
 
@@ -75,7 +76,7 @@ test('each connected account is also listed, with its role and how recently it w
   const { render, stampAgo } = await load();
   const html = render([
     user(1, 'Maria Santos', { last_seen_at: stampAgo(0), role: 'Officer' }),
-    user(2, 'Ana Cruz', { last_seen_at: stampAgo(3), role: 'Staff' }),
+    user(2, 'Ana Cruz', { last_seen_at: stampAgo(3), role: 'Officer' }),
   ]);
 
   // THE LIST IS FILLED FROM THE SAME SLICE AS THE DRAWING, so the two cannot disagree
@@ -90,17 +91,58 @@ test('each connected account is also listed, with its role and how recently it w
   assert.match(html, /class="conn-hub__role">Officer</);
   assert.match(html, /active now/);
   assert.match(html, /active 3m ago/);
+  assert.doesNotMatch(html, />Staff</);
+});
+
+test('roles wear their colour on the drawing, the roster and the legend', async () => {
+  const { render, stampAgo } = await load();
+  const html = render([
+    user(1, 'Maria Santos', { last_seen_at: stampAgo(0), role: 'Admin' }),
+    user(2, 'Ana Cruz', { last_seen_at: stampAgo(0), role: 'Officer' }),
+    user(3, 'Lito Garcia', { last_seen_at: stampAgo(0), role: 'Officer' }),
+  ]);
+
+  // Blue for an Admin, gold for an Officer — on the node and its roster
+  // avatar alike.
+  assert.match(html, /conn-hub__node is-admin/);
+  assert.match(html, /conn-hub__node is-officer/);
+  assert.doesNotMatch(html, /conn-hub__beam/, 'no beam may be drawn between the hub and a node');
+  assert.match(html, /conn-hub__avatar is-admin/);
+  assert.match(html, /conn-hub__avatar is-officer/);
+  assert.doesNotMatch(html, /conn-hub__node is-staff/);
+
+  // And the code has its key: a legend naming the two role inks. The retired
+  // Staff role must not print anywhere on the panel.
+  assert.match(html, /conn-hub__legend/);
+  assert.match(html, /conn-hub__swatch is-admin/);
+  assert.match(html, /conn-hub__swatch is-officer/);
+  assert.doesNotMatch(html, />Staff</);
+
+  // The reference's own header: the accented "now", the one-line sub, the icon
+  // in the count pill, the office tag under the hub, and the green dot in each
+  // presence pill. The dashed orbit ring is gone on request, so it must not
+  // print anywhere on the panel.
+  assert.match(html, /Connected <span class="conn-hub__now">now<\/span>/);
+  assert.match(html, /Real-time view of all active users in the system\./);
+  assert.match(html, /conn-hub__count-icon/);
+  assert.doesNotMatch(html, /conn-hub__orbit-ring/, 'the dashed orbit ring is back on the drawing');
+  assert.doesNotMatch(html, /conn-hub__sat/, 'an orbit satellite is back on the drawing');
+  assert.match(html, /BlueWrite<\/text>/);
+  assert.match(html, /conn-hub__seen-dot/);
 });
 
 test('an account that is not connected is not listed either, and the empty state says why', async () => {
   const { render, stampAgo } = await load();
-  const stale = render([user(2, 'Ana Cruz', { last_seen_at: stampAgo(60), role: 'Staff' })]);
+  const stale = render([user(2, 'Ana Cruz', { last_seen_at: stampAgo(60), role: 'Officer' })]);
   assert.doesNotMatch(stale, /conn-hub__person/, 'a stale account was listed as connected');
   assert.match(stale, /Nobody has been active in the last five minutes\./);
 
   // The panel states its own rule, so "nobody" cannot be read as "the panel is broken".
+  // The header copy is gone on request (no eyebrow, no explainer under the title).
   const src = await readSrc('src/components/ConnectionHub.jsx');
   assert.match(src, /const ACTIVE_WINDOW_WORDS = 'five minutes';/);
+  assert.doesNotMatch(src, /Station presence/);
+  assert.doesNotMatch(src, /A colleague is connected/);
 });
 
 // ---------------------------------------------------------------------------

@@ -231,12 +231,12 @@ own session-scoped business.
 |---|---|---|
 | `m.santos` | Admin | `Passw0rd!23` |
 | `j.delacruz` | Officer | `Passw0rd!23` |
-| `e.ramos` | Staff | `Passw0rd!23` |
+| `e.ramos` | Officer | `Passw0rd!23` |
 
 ## Two-factor authentication
 
 Admin and Officer accounts sign in with a password **and** a six-digit code
-emailed to the account's own address. Staff accounts are unchanged.
+emailed to the account's own address.
 
 - **The address is the factor.** Each Admin and Officer needs an email address on
   their account (User Management); without one they cannot finish signing in, and
@@ -271,24 +271,24 @@ emailed to the account's own address. Staff accounts are unchanged.
 
 ## Roles & permissions (Phase 1)
 
-| Ability | Admin | Officer | Staff |
-|---|---|---|---|
-| Two-factor authentication | required | required | — |
-| User management | ✔ | — | — |
-| Set another account's photograph | ✔ | — | — |
-| Create/edit own reports | ✔ | ✔ | ✔ |
-| Finalize reports | ✔ | ✔ | — |
-| Edit finalized reports | ✔ | — | — |
-| Archive own reports | ✔ | ✔ | ✔ |
-| See all reports in the blotter | ✔ | — | — |
-| Read one officer's reports (`?created_by=`) | ✔ | — | — |
+| Ability | Admin | Officer |
+|---|---|---|
+| Two-factor authentication | required | required |
+| User management | ✔ | — |
+| Set another account's photograph | ✔ | — |
+| Create/edit own reports | ✔ | ✔ |
+| Finalize reports | ✔ | ✔ |
+| Edit finalized reports | ✔ | — |
+| Archive own reports | ✔ | ✔ |
+| See all reports in the blotter | ✔ | — |
+| Read one officer's reports (`?created_by=`) | ✔ | — |
 
 Everyone may set **their own** profile photograph (upload or camera) from their
 Profile; only an Admin may set somebody else's, which the account form offers for
 accounts that have not signed in yet. Both are audited (`user.photo_set`), with
 whoever made the change as the actor.
 
-An Officer and Staff see **only the reports they recorded** — the restriction is in
+An Officer sees **only the reports they recorded** — the restriction is in
 the query, not in the list's UI (`ReportsController::listQueryFilters`). The one
 exception is the **awaiting verification** view, which shows translated reports in the
 source languages the account reads, so a second officer can open a translation they
@@ -299,8 +299,8 @@ they are, what they have recorded, their sign-ins out of the audit trail, and wh
 were last seen — the question an administrator actually has about a colleague. Editing
 is one deliberate step from there, the pen on the photograph. The page reads one
 officer's blotter through the **Admin-only `created_by` filter** on the reports list
-(`GET /reports?created_by=N`), and that filter is **refused with 403** for an Officer or
-Staff rather than silently intersected with their own scoping: an empty list would read
+(`GET /reports?created_by=N`), and that filter is **refused with 403** for an Officer
+rather than silently intersected with their own scoping: an empty list would read
 as "that colleague has recorded nothing" instead of "you may not ask that".
 
 The account page also carries the **activity sheet** (`GET /users/:id/activity`, Admin

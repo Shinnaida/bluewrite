@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
 import '../api/portal_client.dart';
+import '../storage/draft_store.dart';
 import '../storage/secure_store.dart';
+import 'app_files_screen.dart';
 import 'review_screen.dart';
 
 /// The camera. One job: a sharp, upright photo of the blotter page.
@@ -30,11 +32,48 @@ class _CaptureScreenState extends State<CaptureScreen> {
   Future<void>? _init;
   String? _error;
   bool _sending = false;
+  // Files kept on this phone (captured photos + kept texts, this account).
+  // The APP FILES button wears the total as its badge.
+  int _fileCount = 0;
 
   @override
   void initState() {
     super.initState();
     _init = _openCamera();
+    _refreshFileCount();
+  }
+
+  Future<DraftStore> _scopedTray() async {
+    try {
+      final u = await _store.username();
+      final b = await _store.baseUrl();
+      final scoped =
+          DraftStore(accountId: DraftStore.scopeFor(username: u, baseUrl: b));
+      await scoped.migrateFromShared();
+      return scoped;
+    } catch (_) {
+      return DraftStore();
+    }
+  }
+
+  Future<void> _refreshFileCount() async {
+    try {
+      final tray = await _scopedTray();
+      final photos = await tray.listPhotos();
+      final notes = await tray.listNotes();
+      if (!mounted) return;
+      setState(() => _fileCount = photos.length + notes.length);
+    } catch (_) {
+      // The count stays where it was — the button still opens the list.
+    }
+  }
+
+  Future<void> _openFiles() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AppFilesScreen()),
+    );
+    if (!mounted) return;
+    _refreshFileCount();
   }
 
   Future<void> _openCamera() async {
@@ -239,6 +278,14 @@ class _CaptureScreenState extends State<CaptureScreen> {
                         style: TextStyle(
                             color: paper.withValues(alpha: _sending ? 0.6 : 1),
                             fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 18),
+                    // The app's own files: captured photos + kept texts for
+                    // this account. Yellow coin, labelled, count badged —
+                    // one tap lists everything the phone keeps.
+                    _AppFilesButton(
+                      count: _fileCount,
+                      onTap: _openFiles,
+                    ),
                     if (_error != null) ...[
                       const SizedBox(height: 8),
                       Text(_error!,
@@ -332,6 +379,81 @@ class _ShutterButton extends StatelessWidget {
                   )
                 : const Icon(Icons.camera_alt, color: Color(0xFF0C1B33), size: 32),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The APP FILES entry: a yellow coin with the document mark, the kept
+/// file count badged over its corner, and the label under it. One tap
+/// lists every photo and kept text this account keeps on the phone.
+class _AppFilesButton extends StatelessWidget {
+  const _AppFilesButton({required this.count, required this.onTap});
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: count == 0
+          ? 'App files'
+          : 'App files, $count ${count == 1 ? 'file' : 'files'}',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFFC9A227),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black45,
+                          blurRadius: 10,
+                          offset: Offset(0, 4)),
+                    ],
+                  ),
+                  child: const Icon(Icons.description_outlined,
+                      color: Color(0xFF0C1B33), size: 28),
+                ),
+                if (count > 0)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0C1B33),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: const Color(0xFFF4EFE3), width: 1.5),
+                      ),
+                      child: Text('$count',
+                          style: const TextStyle(
+                              color: Color(0xFFF4EFE3),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text('APP FILES',
+                style: TextStyle(
+                    color: Color(0xFFF4EFE3),
+                    fontSize: 11,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w700)),
+          ],
         ),
       ),
     );

@@ -61,9 +61,15 @@ test('the shared sheet renders one html for screen and print', () => {
   const LEAF = code(
     readFileSync(new URL('../../src/components/reports/ReportSheetBody.jsx', import.meta.url), 'utf8'),
   );
+  // The rich narrative renders through the sanitizer minus redundant header
+  // paragraphs (owner request, 2026-11-02): an arranged account's own
+  // opening date/time and title restate the certification line and the quoted
+  // title, so the sheet skips them — the record itself is untouched. The
+  // place line then takes the conclusive City of Naga spelling at render
+  // (owner request, 2026-11-02).
   assert.match(
     LEAF,
-    /dangerouslySetInnerHTML=\{\{ __html: sanitizeRichHtml\(narrativeRaw\) \}\}/,
+    /dangerouslySetInnerHTML=\{\{ __html: correctNagaPlaceLinesHtml\(sanitizeRichHtml\(stripRedundantSheetHeaderHtml\(narrativeRaw, sheetTitle\)\)\) \}\}/,
     'the rich narrative stopped rendering its stored html',
   );
   assert.match(

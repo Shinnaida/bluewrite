@@ -6,6 +6,7 @@ import { setLanguageRegistry } from './lib/languageRegistry.js';
 import { clearFor } from './lib/offlineCache.js';
 import Login from './components/Login.jsx';
 import Shell from './components/Shell.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 export default function App() {
   const [user, setUser] = useState(undefined); // undefined = checking, null = logged out
@@ -183,18 +184,27 @@ export default function App() {
 
   if (user === null) {
     return (
-      <Login
-        onLogin={onLogin}
-        notify={notify}
-        boot={boot}
-        notice={gateNotice}
-      />
+      <ErrorBoundary fallback="the sign-in gate">
+        <Login
+          onLogin={onLogin}
+          notify={notify}
+          boot={boot}
+          notice={gateNotice}
+        />
+      </ErrorBoundary>
     );
   }
 
   return (
     <>
-      <Shell
+      <ErrorBoundary
+        // KEYED WITH THE WORKSPACE, so a fence that trips is retired the same
+        // moment a fresh workspace mounts: a new account never inherits the
+        // last one's failure card.
+        key={user.id}
+        fallback="the workspace"
+      >
+        <Shell
         // KEYED BY THE ACCOUNT, so adopting a different session (above) remounts
         // the workspace rather than leaving a view behind that the new role has
         // no business on. A patch to the SAME account (the profile photo) keeps
@@ -209,7 +219,8 @@ export default function App() {
         onTheme={setTheme}
         density={density}
         onDensity={setDensity}
-      />
+        />
+      </ErrorBoundary>
       {toast && (
         <div className="toast" role="status">
           {toast.msg}

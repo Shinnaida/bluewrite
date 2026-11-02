@@ -19,6 +19,9 @@ dependencies:
   flutter_secure_storage: ^9.2.0
   # Downscale before upload: a 1600px JPEG reads as well and uploads 10x faster.
   image: ^4.2.0
+  # On-device tray: kept photos + kept texts survive app close (see
+  # DraftStore). Pinned by the App Files list on the home screen.
+  path_provider: ^2.1.0
 
 dev_dependencies:
   flutter_test:

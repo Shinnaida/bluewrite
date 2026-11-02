@@ -78,29 +78,24 @@ test('finalize gate blocks: no victims recorded, short narrative', () => {
 });
 
 test('finalize gate blocks: no action taken / status recorded', () => {
+  // Hidden by owner request (2026-11-02): the disposition is optional at
+  // every gate — stored when supplied, never demanded.
   for (const level of ['draft', 'finalize']) {
     const { errors } = validateReport(
       validBase('Theft', { action_taken: '' }),
       level,
     );
     const flagged = errors.some((e) => e.path === 'action_taken');
-    if (level === 'finalize') {
-      assert.ok(flagged, 'finalize must be blocked without the action taken');
-    } else {
-      assert.equal(flagged, false, 'a draft may omit the action taken');
-    }
+    assert.equal(flagged, false, `the action taken is optional at ${level}`);
   }
 });
 
 test('finalize gate blocks: no investigator-on-case recorded', () => {
+  // Hidden by owner request (2026-11-02): the IOC is optional at every gate.
   for (const level of ['draft', 'finalize']) {
     const { errors } = validateReport(validBase('Theft', { ioc_name: '' }), level);
     const flagged = errors.some((e) => e.path === 'ioc_name');
-    if (level === 'finalize') {
-      assert.ok(flagged, 'finalize must be blocked without the IOC');
-    } else {
-      assert.equal(flagged, false, 'a draft may omit the IOC');
-    }
+    assert.equal(flagged, false, `the IOC is optional at ${level}`);
   }
 });
 
@@ -1182,6 +1177,30 @@ test('the derived counts follow the casualty list, not the other way round', () 
   assert.equal(ts.vehicle_2_plate_number, 'XYZ9999', 'the second vehicle mirrors the second row');
 });
 
+test('a zero death/injury count never mirrors into the record', () => {
+  // The blotter never states "zero fatalities": injured rows with no
+  // Deceased status used to derive fatalities "0", which the sheet printed
+  // as a fact. Absence of a row is not a recorded fact.
+  const ts = deriveMirrors(
+    {
+      vehicles: [{ plate_number: 'ABC1234' }],
+      injured_persons: [
+        { name: 'Hero Canque', injury_status: 'Minor Injury' },
+        { name: 'Vilma Canque', injury_status: '' },
+      ],
+    },
+    'Traffic Accident',
+  );
+  assert.equal(ts.number_of_vehicles, '1', 'a real row count still mirrors');
+  assert.ok(!('fatalities' in ts), 'no zero-fatalities derivation is written');
+  const fire = deriveMirrors(
+    { injured_persons: [{ name: 'Ana Cruz', injury_status: 'Uninjured' }] },
+    'Fire Incident',
+  );
+  assert.ok(!('injuries' in fire), 'no zero-casualty derivation is written');
+  assert.ok(!('fatalities' in fire), 'no zero-fatalities derivation is written');
+});
+
 test('a casualty count is a count of people, never a number typed twice', () => {
   const fire = validBase('Fire Incident', {
     type_specific: {
@@ -1222,5 +1241,5 @@ test('the prose minimums measure words, never tags', () => {
     validBase('Theft', { action_taken: '<p><i>Referred</i></p>' }),
     'finalize',
   );
-  assert.ok(actErrors.some((e) => e.path === 'action_taken'), 'a tag-padded disposition cleared the minimum');
+  assert.ok(!actErrors.some((e) => e.path === 'action_taken'), 'the optional disposition must never block finalize');
 });

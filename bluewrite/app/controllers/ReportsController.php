@@ -141,6 +141,29 @@ final class ReportsController
      * report, which is a far worse failure than a compound incident being filed
      * under its primary type alone.
      */
+    /**
+     * Does this database have the table? (report_captures, migration 025.)
+     *
+     * The register names a per-row capture count (see index()) so Write
+     * Report can offer the officer's waiting phone filings. A database a
+     * migration behind has no such table, and the count is answered as zero
+     * by leaving the column out rather than failing the whole register.
+     */
+    private function hasTable(PDO $pdo, string $table): bool
+    {
+        try {
+            $probe = $pdo->prepare(
+                "SELECT 1 FROM information_schema.TABLES
+                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :t
+                  LIMIT 1"
+            );
+            $probe->execute([':t' => $table]);
+            return (bool) $probe->fetchColumn();
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
     private function hasReportColumn(PDO $pdo, string $column): bool
     {
         try {
@@ -159,6 +182,74 @@ final class ReportsController
     }
 
     /**
+     * Fold free-text incident types to their closest canonical type, keeping
+     * the officer's exact words.
+     *
+     * The type box is typable and the camera / blotter read can name the
+     * incident in legal words ("Reckless imprudence resulting to damage to
+     * property and physical injury") that are on no list. Such text is folded
+     * to the closest canonical type (IncidentTypes::closestType — the PHP
+     * mirror of the form's own folding) so the folders, the filters and the
+     * dashboard count the report under its main incident, and the exact words
+     * ride along in type_specific.incident_category (the "Reported as" line).
+     * Text with no real signal keeps the old answer — Other Incident specified
+     * — and a station without the catch-all still refuses it, exactly as the
+     * form does.
+     *
+     * @param array<string,mixed> $body request body, by value
+     * @param array<string,string> $folded out: canonical type => raw words (first wins)
+     * @return array<string,mixed> the body with folded types and injected Category
+     */
+    private function foldFreeTypes(array $body, array &$folded = []): array
+    {
+        $touchesTypes = array_key_exists('incident_types', $body) || array_key_exists('incident_type', $body);
+        if (!$touchesTypes) {
+            return $body;
+        }
+        $allowed = $this->allowedTypes();
+        $foldOne = static function ($value) use ($allowed, &$folded) {
+            if (!is_string($value)) {
+                return $value;
+            }
+            $text = trim($value);
+            if ($text === '' || in_array($text, $allowed, true)) {
+                return $value;
+            }
+            $closest = IncidentTypes::closestType($text, $allowed);
+            if ($closest === null) {
+                if (!in_array('Other Incident', $allowed, true)) {
+                    return $value; // refused below, as before
+                }
+                $closest = 'Other Incident';
+            }
+            if (!array_key_exists($closest, $folded)) {
+                $folded[$closest] = $text;
+            }
+            return $closest;
+        };
+        if (is_array($body['incident_types'] ?? null) && array_is_list($body['incident_types'])) {
+            $body['incident_types'] = array_values(array_map($foldOne, $body['incident_types']));
+        } elseif (array_key_exists('incident_type', $body)) {
+            $body['incident_type'] = $foldOne($body['incident_type']);
+        }
+        if ($folded !== []) {
+            $ts = $body['type_specific'] ?? null;
+            if (is_string($ts)) {
+                $decoded = json_decode($ts, true);
+                $ts = is_array($decoded) ? $decoded : [];
+            }
+            if (!is_array($ts)) {
+                $ts = [];
+            }
+            if (trim((string) ($ts['incident_category'] ?? '')) === '') {
+                $ts['incident_category'] = reset($folded);
+            }
+            $body['type_specific'] = $ts;
+        }
+        return $body;
+    }
+
+    /**
      * The incident types off a request body, primary first.
      *
      * TWO SHAPES, ONE ANSWER, so no client has to know about the other: a client
@@ -166,9 +257,9 @@ final class ReportsController
      * sends only `incident_type` (every build before this one, and the API driven
      * by hand) gets a list of one. Order is the client's — the FIRST type is the
      * primary and is what `incident_type` is set to — blanks and repeats are
-     * dropped rather than refused, and an unknown name is a 422, never a coercion:
-     * a report filed as "Illegal Gambling" would have no field blocks, no groups
-     * and no place on the dashboard.
+     * dropped rather than refused. Free text never reaches here unfolded:
+     * foldFreeTypes() runs first, so an unknown name at this point is a 422,
+     * never a coercion.
      *
      * @return string[] ready to be validated against allowedTypes()
      */
@@ -344,7 +435,7 @@ final class ReportsController
 
         // Pagination (UC-012).
         $page = max(1, (int) ($_GET['page'] ?? 1));
-        $perPage = min(100, max(5, (int) ($_GET['per_page'] ?? 25)));
+        $perPage = min(100, max(5, (int) ($_GET['per_page'] ?? 10)));
         $offset = ($page - 1) * $perPage;
 
         $whereSql = implode(' AND ', $where);
@@ -362,8 +453,13 @@ final class ReportsController
         // what leaves this endpoint is a count, not the officer's own words.
         // Migration 020's list is named only when the schema has it (see
         // hasReportColumn), so a database a migration behind still answers the
-        // register instead of "Unknown column".
+        // register instead of "Unknown column". The phone-filing count rides
+        // the same guard for the report_captures table (migration 025).
         $hasTypes = $this->hasReportColumn($pdo, 'incident_types');
+        $hasCaptures = $this->hasTable($pdo, 'report_captures');
+        $captureSelect = $hasCaptures
+            ? '(SELECT COUNT(*) FROM report_captures c WHERE c.report_id = r.id) AS capture_count, '
+            : '';
         $sql = "SELECT r.id, r.incident_type, " . ($hasTypes ? 'r.incident_types, ' : '') . "r.report_date, r.blotter_no, r.blotter_date,
                     r.incident_datetime, r.incident_date, r.incident_time,
                     r.incident_time_approximate, r.location, r.status,
@@ -371,7 +467,8 @@ final class ReportsController
                     r.created_by, u.full_name AS created_by_name, r.deleted_at,
                     r.narrative, r.narrative_source_text,
                     r.reporter_name, r.reporter_contact, r.reporter_address,
-                    r.action_taken, r.ioc_name, r.type_specific
+                    r.action_taken, r.ioc_name, r.type_specific,
+                    {$captureSelect}r.id AS id_again
              FROM reports r JOIN users u ON u.id = r.created_by
              WHERE {$whereSql}
              ORDER BY {$orderBy}, r.id DESC
@@ -403,6 +500,7 @@ final class ReportsController
             $row['incident_type_label'] = IncidentTypes::label($row);
             $row['incident_types'] = IncidentTypes::listFrom($row);
             unset(
+                $row['id_again'],
                 $row['narrative'],
                 $row['narrative_source_text'],
                 $row['reporter_name'],
@@ -482,7 +580,7 @@ final class ReportsController
     /**
      * CSV export of the report list (UC-013 companion). Reuses the exact
      * same filter/sort pipeline as index() — what you see is what you
-     * export, including the Officer/Staff own-reports scoping. No pagination:
+     * export, including the non-admin own-reports scoping. No pagination:
      * an export that silently stops at page boundaries would mislead records
      * custodians. Streams in chunks so a large blotter can't exhaust memory.
      */
@@ -560,8 +658,8 @@ final class ReportsController
         $params = [];
         $where = ['r.deleted_at ' . ($showArchived ? 'IS NOT NULL' : 'IS NULL')];
 
-        // Staff see only the reports they recorded. Officers and Admin see the
-        // whole station blotter (owner request: an officer can view every report,
+        // Non-admin accounts see only the reports they recorded. Officers and
+        // Admin see the whole station blotter (owner request: an officer can view every report,
         // and each row names the officer who recorded it). Editing stays
         // owner-only for everyone but Admin — see update(). Enforced HERE, in the
         // query, not just hidden in the UI.
@@ -577,7 +675,7 @@ final class ReportsController
         // that eventually disagrees with the record it summarises (pagination.total is
         // therefore that officer's total, not the station's).
         //
-        // ADMIN ONLY, AND REFUSED RATHER THAN IGNORED. An Officer or Staff account is
+        // ADMIN ONLY, AND REFUSED RATHER THAN IGNORED. A non-admin account is
         // already scoped to its own reports by the clause above; silently intersecting
         // the two would answer 200 with an empty blotter, which reads as "that colleague
         // has never recorded anything" rather than as "you may not ask that".
@@ -727,6 +825,15 @@ final class ReportsController
                     $or[] = "{$col} LIKE {$key}";
                     $params[$key] = '%' . $word . '%';
                 }
+
+                // The officer's own words for the incident (the "Reported as"
+                // line a fold keeps). A folded report is FILED under its
+                // canonical type, so searching the blotter's legal phrasing
+                // would otherwise find nothing. One scalar, never a row — so
+                // a plain extraction, not part of the person-name scan below.
+                $key = ":qcat{$wi}";
+                $params[$key] = '%' . $word . '%';
+                $or[] = "JSON_UNQUOTE(JSON_EXTRACT(r.type_specific, '$.incident_category')) LIKE {$key}";
 
                 // v3 reports keep ALL parties — victims, suspects, witnesses,
                 // drivers, missing/arrested persons — inside the type_specific
@@ -878,6 +985,10 @@ final class ReportsController
     {
         $user = Auth::requireUser();
         $body = $this->jsonBody();
+        // Free text folds to its main incident before anything validates — a
+        // camera read of "Reckless imprudence …" must be acceptable, not a 422.
+        $folded = [];
+        $body = $this->foldFreeTypes($body, $folded);
 
         $v = new Validator();
         // THE REPORT'S TYPES, PRIMARY FIRST. `incident_types` is the list the
@@ -1016,6 +1127,10 @@ final class ReportsController
             Response::json(404, ['error' => 'Report not found.']);
         }
 
+        // A retyped type box folds the same way a create does.
+        $folded = [];
+        $body = $this->foldFreeTypes($body, $folded);
+
         $isAdmin = $user['role'] === 'Admin';
         $isOwner = (int) $report['created_by'] === (int) $user['id'];
 
@@ -1023,7 +1138,7 @@ final class ReportsController
         if ($report['status'] === 'finalized' && !$isAdmin) {
             Response::json(403, ['error' => 'This report is finalized and locked. Only an administrator can edit it.']);
         }
-        // Officers and Staff edit only their own reports.
+        // Non-admin accounts edit only their own reports.
         if (!$isAdmin && !$isOwner) {
             Response::json(403, ['error' => 'You can only edit reports you recorded.']);
         }
@@ -1159,28 +1274,9 @@ final class ReportsController
             if ($narrative === '') {
                 Response::json(422, ['error' => 'Enter the narrative before finalizing.', 'field' => 'narrative']);
             }
-            // Action Taken / Status is required to finalize (migration 004):
-            // every finalized report must say how the incident was handled.
-            $actionTaken = array_key_exists('action_taken', $body)
-                ? trim((string) $body['action_taken'])
-                : trim((string) ($report['action_taken'] ?? ''));
-            if ($actionTaken === '') {
-                Response::json(422, [
-                    'error' => 'Enter the action taken / status before finalizing.',
-                    'field' => 'action_taken',
-                ]);
-            }
-            // The investigator-on-case signs the printed report, so the name
-            // must be recorded before it can be finalized.
-            $iocName = array_key_exists('ioc_name', $body)
-                ? trim((string) $body['ioc_name'])
-                : trim((string) ($report['ioc_name'] ?? ''));
-            if ($iocName === '') {
-                Response::json(422, [
-                    'error' => 'Enter the investigator-on-case (IOC) before finalizing.',
-                    'field' => 'ioc_name',
-                ]);
-            }
+            // Action Taken / Status and IOC hidden by owner request
+            // (2026-11-02): no longer required to finalize. Stored when
+            // supplied, never demanded.
             // Groups already stored on a draft are re-validated here. The
             // form validates the draft it is holding, but nothing guaranteed
             // the SAVED blob was still finalize-clean (a field could have
@@ -1567,8 +1663,8 @@ n     * reports; Admin and Officer may print any.
         $user = Auth::requireUser();
         $pdo = Database::pdo();
 
-        // Visibility rule: Staff may inspect history only for reports they
-        // recorded; Officers and Admin may inspect any report's history.
+        // Visibility rule: non-admin accounts may inspect history only for
+        // reports they recorded; Admins may inspect any report's history.
         $ownerStmt = $pdo->prepare('SELECT created_by FROM reports WHERE id = :id');
         $ownerStmt->execute([':id' => (int) $id]);
         $owner = $ownerStmt->fetchColumn();

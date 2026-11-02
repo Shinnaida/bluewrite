@@ -21,7 +21,9 @@ test('a captioned sheet quotes the blotter wording and names its recorder', asyn
     'the blotter wording is not on the paper',
   );
   assert.ok(!html.includes('TRAFFIC ACCIDENT'), 'the type still titles a captioned sheet');
-  assert.ok(html.includes('PSSg Bastiana'), 'the recorder is not on the paper');
+  // Recorder hidden by owner request (2026-11-02): the paper names nobody.
+  assert.ok(!html.includes('PSSg Bastiana'), 'the recorder should be hidden');
+  assert.ok(!html.includes('Recorded by:'), 'the recorder line should be hidden');
   // ...and the account that filed it is nowhere on it.
   assert.ok(!html.includes('keithabalo'), 'the session account is stamped on the paper');
 });
@@ -33,5 +35,6 @@ test('an uncaptioned sheet falls back to the type with a blank recorder', async 
   // The line stands (it is template), but it names nobody — not the account,
   // not a dash standing in for one.
   assert.ok(!html.includes('keithabalo'), 'the session account is stamped on the paper');
-  assert.match(html, /Recorded by:<\/strong>\s*<\/p>/, 'the recorder line is not blank');
+  // Recorder hidden by owner request (2026-11-02).
+  assert.ok(!html.includes('Recorded by:'), 'the recorder line should be hidden');
 });

@@ -80,6 +80,25 @@ final class ReportsListTest extends BaseApiTestCase
     }
 
     /**
+     * A folded report is FILED under its canonical type, so searching the
+     * blotter's legal phrasing would otherwise find nothing. The officer's own
+     * words ride along as the Category (the "Reported as" line), and the
+     * search reads that line too.
+     */
+    public function testKeywordSearchFindsAFoldedReportsOwnWords(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $this->createReport($cookie, $csrf, [
+            'incident_type' => 'Reckless imprudence resulting to damage to property and physical injury',
+            'narrative' => 'A motorcycle hit a post on the highway.',
+        ]);
+
+        $res = $this->request('GET', '/reports?q=' . urlencode('reckless imprudence'), null, $cookie);
+        $this->assertSame(1, $res['body']['pagination']['total']);
+        $this->assertSame('Traffic Accident', $res['body']['reports'][0]['incident_type']);
+    }
+
+    /**
      * A REPORT NUMBER is what an officer most often arrives with, and the
      * register's own field says so in as many words — "Search by report number,
      * location, or type…" (owner request, 2026-10-07). The number is not a

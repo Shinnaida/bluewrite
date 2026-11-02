@@ -56,8 +56,7 @@ test('every aliased field resolves to the id the form actually uses', () => {
   assert.deepEqual(fieldIdCandidates('reporter_name'), ['r-reporter-name']);
   assert.deepEqual(fieldIdCandidates('reporter_contact'), ['r-reporter-contact']);
   assert.deepEqual(fieldIdCandidates('reporter_address'), ['r-reporter-address']);
-  assert.deepEqual(fieldIdCandidates('action_taken'), ['r-act']);
-  assert.deepEqual(fieldIdCandidates('ioc_name'), ['r-ioc']);
+  // action_taken / ioc_name hidden by owner request (2026-11-02): no dedicated control.
 });
 
 test('incident_datetime names the date half of the pair', () => {

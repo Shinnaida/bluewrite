@@ -10,6 +10,8 @@
 
 import { suspectLine } from './suspectLine.js';
 import { richTextToPlain } from './richText.js';
+import { detectIncidentTitle } from './reportFormat.js';
+import { correctNagaLocation } from './nagaPlaces.js';
 
 // “August 06, 2026” — the format the PNP template uses for dates.
 const LONG_DATE = new Intl.DateTimeFormat('en-PH', {
@@ -44,6 +46,9 @@ export function fmtLong(v) {
 const N = (v) => String(v ?? '').trim();
 const has = (v) => N(v) !== '';
 const join = (...parts) => parts.map(N).filter(Boolean).join(', ');
+// Conclusive Naga place for INCIDENT locations: misspelled barangays print
+// corrected, everything else exactly as recorded — source words only.
+const conclusive = (v) => (has(v) ? correctNagaLocation(String(v)).text : String(v ?? ''));
 
 // Person-bearing group keys — the same roles MaskingGateway::PERSON_GROUPS
 // knows. Kept here as a flat list because the sheet only needs to READ a name
@@ -82,15 +87,20 @@ export function properNounsFor(report = {}, ts = {}) {
 
 /**
  * The sheet's quoted title. The officer types the offense exactly as the
- * blotter book words it (`ts.offense_caption`); until they do, the title
- * falls back to the incident type. The sheet upper-cases the result through
- * its normal casing pass, so this returns it as recorded.
+ * blotter book words it (`ts.offense_caption`); otherwise the title the
+ * report's own text states (the arranged account's heading, read by
+ * detectIncidentTitle — never invented, '' when the text states none);
+ * otherwise the incident type; otherwise blank (the sheet hides the line).
+ * The sheet upper-cases the result through its normal casing pass, so this
+ * returns it as recorded.
  *
  * @returns {string}
  */
 export function reportTitle(report = {}, ts = {}) {
   const caption = N(ts?.offense_caption);
   if (caption !== '') return caption;
+  const stated = detectIncidentTitle(richTextToPlain(report?.narrative ?? ''));
+  if (stated !== '') return stated;
   return N(report?.incident_type);
 }
 
@@ -188,6 +198,27 @@ function fmtTimeOnly(v) {
   return N(v);
 }
 
+// Blank-line rule (owner request, 2026-11-02): a fact line with nothing
+// recorded is omitted from the paper, never printed as a dash — for every
+// incident type. Renderers pass an entry's values through meaningfulValues()
+// and skip the line when nothing meaningful remains.
+const PLACEHOLDER_VALUES = new Set([
+  '—', '-', '–', '--', 'N/A', 'n/a', 'None', 'NONE',
+  'None recorded', 'Undetermined', 'None / bare hands',
+]);
+
+export function meaningfulValues(values) {
+  return (Array.isArray(values) ? values : []).filter((v) => {
+    const s = String(v ?? '').trim();
+    if (s === '') return false;
+    if (PLACEHOLDER_VALUES.has(s)) return false;
+    const rest = s.replace(/^around\s+/i, '').trim();
+    if (rest === '') return false;
+    if (/^[—–\-,.\s]+$/.test(rest)) return false;
+    return true;
+  });
+}
+
 /**
  * Per-type fact builders — one per incident type, each reproducing that
  * type's template line set from Police_Report_Templates_All_Types.docx,
@@ -281,7 +312,10 @@ export function buildTypeFacts(type, ctx) {
     return { label, items, total };
   };
 
-  const place = () => ({ label: 'Place', values: [has(report.location) ? report.location : '—'] });
+  // Conclusive Naga place (owner request): a misspelled stored place
+  // (CANGIMUNDONG, INOBURAN) prints conclusively corrected, everything else
+  // exactly as recorded — source words only, never rewritten.
+  const place = () => ({ label: 'Place', values: [has(report.location) ? correctNagaLocation(report.location).text : '—'] });
   const when = () => ({
     label: 'Date & Time of Incident',
     values: [fmtIncidentLong(report.incident_datetime)],
@@ -396,7 +430,7 @@ export function buildTypeFacts(type, ctx) {
     case 'Missing Person': {
       const mp = Array.isArray(ts.missing_person) ? ts.missing_person[0] : null;
       const lastSeen = join(
-        ts.location_last_seen ?? mp?.location_last_seen,
+        conclusive(ts.location_last_seen ?? mp?.location_last_seen),
         join(ts.date_last_seen, ts.time_last_seen)
           // The stored value is ISO (2026-09-23); the sheet prints the
           // template's long form (September 23, 2026), like every other date.
@@ -408,7 +442,7 @@ export function buildTypeFacts(type, ctx) {
           label: 'Name of Missing Person',
           values: [personLine(mp) || join(ts.missing_person_name, ts.age, ts.sex) || '—'],
         },
-        { label: 'Last Seen', values: [lastSeen || `Around ${fmtIncidentLong(report.incident_datetime)}, ${report.location || '—'}`] },
+        { label: 'Last Seen', values: [lastSeen || `Around ${fmtIncidentLong(report.incident_datetime)}, ${has(report.location) ? conclusive(report.location) : '—'}`] },
         { label: 'Reporting Person', values: victims().length > 0 ? victims() : ['—'] },
         { label: 'Circumstances', values: [N(mp?.circumstances) || '—'] },
         { label: 'Distinguishing Marks/Clothing', values: [join(mp?.clothing_last_seen, mp?.physical_description) || join(ts.clothing_last_seen, ts.physical_description) || '—'] },
@@ -426,9 +460,9 @@ export function buildTypeFacts(type, ctx) {
         {
           label: 'Place & Date Lost',
           values: [
-            join(ts.location_last_seen, join(ts.date_last_seen, ts.time_last_seen)
+            join(conclusive(ts.location_last_seen), join(ts.date_last_seen, ts.time_last_seen)
               ? `${fmtLong(ts.date_last_seen)} ${fmtTimeOnly(ts.time_last_seen)}`.trim()
-              : '') || `Around ${fmtIncidentLong(report.incident_datetime)}, ${report.location || '—'}`,
+              : '') || `Around ${fmtIncidentLong(report.incident_datetime)}, ${has(report.location) ? conclusive(report.location) : '—'}`,
           ],
         },
         { label: 'Circumstances', values: [N(ts.circumstances_of_loss) || '—'] },
@@ -458,7 +492,7 @@ export function buildTypeFacts(type, ctx) {
         place(),
         when(),
         { label: 'Owner/Occupant', values: victims() },
-        { label: 'Suspected Origin', values: [N(ts.fire_location) || N(ts.type_of_property) || '—'] },
+        { label: 'Suspected Origin', values: [conclusive(ts.fire_location) || N(ts.type_of_property) || '—'] },
         { label: 'Suspected Cause', values: [N(ts.possible_cause) || 'Undetermined'] },
         has(ts.estimated_property_loss) || has(ts.extent_of_damage)
           ? { label: 'Estimated Damage', values: [join(fmtValue(ts.estimated_property_loss), ts.extent_of_damage)] }

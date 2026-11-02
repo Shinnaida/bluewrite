@@ -71,7 +71,7 @@ test('the activity block is titled by what it actually counted', () => {
     title: 'Your reports',
     note: 'Only the ones you recorded.',
   });
-  assert.equal(activityScope('Staff').scope, 'own');
+  assert.equal(activityScope('Officer').scope, 'own');
   assert.equal(activityScope('Admin').scope, 'station');
   assert.equal(activityScope('Admin').title, 'Station reports');
   // A missing role is not an admin.
@@ -167,7 +167,8 @@ test('a folded section names its values, not its controls', () => {
     'Sheet · Light · Comfortable',
     'the order matches the order of the rows below it',
   );
-  assert.equal(preferencesSummary({ formFormat: 'steps', mode: 'dark', density: 'compact' }), 'Steps · Dark · Compact');
+  // Steps and Document are hidden — a legacy stored value drops its half.
+  assert.equal(preferencesSummary({ formFormat: 'steps', mode: 'dark', density: 'compact' }), 'Dark · Compact');
 });
 
 test('a preference this build does not know is dropped, not printed', () => {
@@ -231,7 +232,7 @@ test('the security summary states the second factor before the idle rule', () =>
     securitySummary(30, { required: true, has_email: true, recovery: { remaining: 4, total: 10 } }),
     'Two-step on · Signs out after 30 min idle',
   );
-  // Staff: not required, so the header is exactly what it was before the factor
+  // Not required, so the header is exactly what it was before the factor
   // existed — no "not set up" on an account that is never asked to set one up.
   assert.equal(securitySummary(30, { required: false, has_email: false }), 'Signs out after 30 min idle');
   // An older payload without the block renders the old sentence rather than

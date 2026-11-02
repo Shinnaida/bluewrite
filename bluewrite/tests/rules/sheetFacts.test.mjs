@@ -171,6 +171,35 @@ test('reportTitle falls back to the incident type when no caption is recorded', 
   assert.equal(reportTitle({ incident_type: 'Theft' }, { offense_caption: '   ' }), 'Theft');
 });
 
+test('reportTitle prefers the title the report text states over the incident type', () => {
+  // The arranged account carries its own heading: the sheet quotes it, not
+  // the register's folder name (owner request, 2026-11-02).
+  const narrative =
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY\n\n' +
+    'PLACE OF INCIDENT : CANGI MUNDONG, INOBURAN, CITY OF NAGA';
+  assert.equal(
+    reportTitle({ incident_type: 'Traffic Accident', narrative }, {}),
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+  );
+  // The officer-typed caption still wins over the detected heading.
+  assert.equal(
+    reportTitle(
+      { incident_type: 'Traffic Accident', narrative },
+      { offense_caption: 'Reckless imprudence resulting in damage to property' },
+    ),
+    'Reckless imprudence resulting in damage to property',
+  );
+  // The arranged HTML the editor, preview, print and PDF all render reads
+  // the same way — one title on every surface.
+  const html =
+    '<p><b>RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY</b></p>' +
+    '<p>PLACE OF INCIDENT : CANGI MUNDONG, INOBURAN, CITY OF NAGA</p>';
+  assert.equal(
+    reportTitle({ incident_type: 'Traffic Accident', narrative: html }, {}),
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+  );
+});
+
 test('reportTitle returns blank when neither caption nor type exists (never invented)', () => {
   assert.equal(reportTitle({}, {}), '');
   assert.equal(reportTitle({ incident_type: '' }, { offense_caption: '' }), '');

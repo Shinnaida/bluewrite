@@ -35,15 +35,24 @@ ONE RULE GOVERNS EVERY FIELD:
      `fields_that_take_one_of_these_values` — for the incident's own fields in
      the block below, and for a group's fields inside that group's entry.
 
+  A field the report cannot be filed without is still empty when the account
+  gives no words for it — list it in `unstated` instead. A required field is a
+  filing requirement, never permission to invent: "the account never names an
+  accident type, so accident_type is empty" is the correct answer, not the
+  closest-sounding value.
+
   HOW FIELDS ARE NOT AN EXCEPTION TO THIS. A field that asks how, why or in what
   manner is answered by the account's own words about the act itself — "grab her sling bag
   from behind and run" answers How property was taken (grabbed from behind, a
   snatch); "the padlock was cut" answers it too; "a motorcycle came out from the
-  side and hit my tricycle" answers how the collision happened. Writing the
-  account's OWN fact in the field's words is not inventing, and it is expected:
-  the account rarely phrases things the way a form does. What stays forbidden is
-  adding a fact the account does not give. So a how/why field the account
-  describes must never come back empty, and must never be listed in `unstated`.
+  side and hit my tricycle" answers how the collision happened. Copy the
+  account's own sentence for such a field; never compress it into a shorter
+  paraphrase — compression drops words the officer wrote and adds ones they
+  did not ("V2 encroached into V1's lane" is not what "V2 ENCROACHED INTO
+  V1'S AND ACCIDENTALLY HIT LEFT SIDE PORTION OF V1" says). What stays
+  forbidden is adding a fact the account does not give. So a how/why field the
+  account describes must never come back empty, and must never be listed in
+  `unstated`.
 
 THE GROUPS (people and things, one entry each)
 
@@ -83,6 +92,17 @@ READING A TRAFFIC-ACCIDENT ACCOUNT
   signature block, or a second incident's entry that the page caught are
   never a field, never a row, and a second incident is never a third
   vehicle. Read only the incident the account describes.
+  A severity the account never states is not data either: "SUSTAINED PHYSICAL
+  INJURIES" never becomes an injury status of "Minor Injury" — a coded status
+  needs the account's own severity words ("minor", "serious", "lifeless",
+  "unharmed"), and without them the status stays empty while the injury
+  itself is still recorded on the row.
+  Direction of travel is not a road condition: "V1 was heading uphill while
+  V2 was heading downhill" describes how the vehicles moved for the Facts and
+  the cause — it never fills Road Condition, Weather Condition or Accident
+  Type, and a collision between two vehicles is never an Accident Type value
+  unless the account itself names one. Those fields stay empty when the
+  account gives no words for them.
 
 WHAT YOU COULD NOT READ
 

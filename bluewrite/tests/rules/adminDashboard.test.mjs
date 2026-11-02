@@ -57,50 +57,55 @@ test('the page mounts, and paints its head, its range card and its skeletons', a
   assert.match(html, /dash-activity__list is-skeleton/);
 });
 
-test('each reading is a card: a tinted mark, the caption, the number, one line', async () => {
+test('each reading is a card: a tinted disc, the caption, the number, one line', async () => {
   const { renderCards } = await load();
   const html = renderCards();
 
-  // Four families, each named for the reading rather than for a colour, and the
-  // drawing is INSIDE the mark (a mark that renders empty is the failure here).
-  for (const family of ['blue', 'green', 'amber', 'violet']) {
-    assert.ok(html.includes(`dash-kpi__mark--${family}`), `the ${family} reading lost its mark`);
+  // Two families, blue and yellow only (owner request, 2026-10-30) — the
+  // number's echo wears it. No icon discs — the caption carries the card.
+  for (const family of ['blue', 'gold']) {
+    assert.ok(html.includes(`cmd-card--${family}`), `the ${family} reading lost its card`);
+    assert.ok(!html.includes(`cmd-card__icon--${family}`), `the ${family} reading grew its disc back`);
   }
-  const marks = html.match(/dash-kpi__glyph/g) ?? [];
-  assert.equal(marks.length, 4, 'a reading’s mark is not drawn');
-  // Every mark draws real geometry — not an empty <svg> from a missing path.
-  assert.ok(
-    (html.match(/<path d="M/g) ?? []).length >= 6,
-    'the marks lost their paths: the drawing map came back empty',
-  );
+  assert.doesNotMatch(html, /cmd-card__icon/, 'the removed icon discs are back on the cards');
 
-  // The readings themselves, in the reference's words.
-  for (const label of ['Total reports', 'Needs attention', 'Finalized', 'Median draft to final']) {
+  // The readings themselves, in the reference's words. (Needs attention and
+  // Median draft to final were removed on request; neither may come back.)
+  for (const label of ['Total Reports', 'Finalized Reports']) {
     assert.ok(html.includes(label), `the ${label} card is missing`);
   }
-  assert.match(html, /<span class="dash-kpi__value ">26<\/span>/);
-  assert.match(html, /<span class="dash-kpi__value dash-kpi__value--time">2h 47m<\/span>/);
+  for (const label of ['Needs attention', 'Median draft to final']) {
+    assert.ok(!html.includes(label), `the removed ${label} card is back on the strip`);
+  }
+  assert.match(html, /<span class="cmd-card__value">26<\/span>/);
 
-  // The sub-line under each number says what the number counts.
-  assert.ok(html.includes('20 draft · 2 awaiting finalization'), 'the queue card lost the split inside it');
-  assert.ok(html.includes('15% of reports in range'), 'the finalized card lost its share');
+  // NO foot lines (owner request, 2026-10-30): no change-against-the-period,
+  // no "Not yet submitted", no standing line. Only the headcount keeps its
+  // admin/officer line, which these two cards never had — yellow only,
+  // sitting beside the number on its own line, each with its own person mark.
+  assert.doesNotMatch(html, /vs\. previous period/, 'the removed change line is back on the cards');
+  assert.ok(!html.includes('Not yet submitted'), 'the removed drafts line is back on the cards');
+  assert.ok(!html.includes('— No change'), 'the removed standing line is back on the cards');
+  assert.doesNotMatch(html, /cmd-card__foot/, 'a removed foot line is back on the cards');
+  assert.ok(html.includes('cmd-card__value-row'), 'the value row is missing');
+  const page = readFileSync(new URL('../../src/components/Dashboard.jsx', import.meta.url), 'utf8');
+  assert.match(page, /cmd-role cmd-role--yellow/, 'the headcount split lost its yellow marks');
+  assert.doesNotMatch(page, /cmd-role cmd-role--admin/, 'the Admin split is still blue');
+  assert.doesNotMatch(page, /cmd-role cmd-role--officer/, 'the Officer split still uses its own colour');
 
-  // THE SPARKLINE: the range's own daily series, drawn as a polyline with one
-  // point per day, and labelled for a reader who cannot see it.
-  assert.ok(html.includes('dash-spark'), 'the total card lost its sparkline');
-  assert.match(html, /aria-label="Reports per day in this range"/);
-  const line = html.match(/points="([^"]+)"/);
-  assert.ok(line, 'the sparkline has no line');
-  assert.equal(line[1].trim().split(/\s+/).length, 30, 'the sparkline is not one point per day');
+  // NO MINIS: the cards are readings, not charts — no bars beside the numbers.
+  assert.equal(
+    (html.match(/cmd-mini__bar/g) ?? []).length,
+    0,
+    'the removed mini bars are back on the cards',
+  );
+  assert.doesNotMatch(html, /cmd-card__mini/, 'the removed mini slot is back on the cards');
 
-  // The ONE card that is also a control is the queue, and it is a real button
-  // with a name for the pointer.
-  assert.match(html, /<button type="button" class="dash-kpi dash-kpi--link"/);
-  assert.ok(html.includes('Open the needs-attention queue in All Reports'));
+  // NO card is a control: a card is a reading, so the row draws no buttons.
   assert.equal(
     (html.match(/<button/g) ?? []).length,
-    1,
-    'a card that is not a control is being drawn as one',
+    0,
+    'a card is still being drawn as a control',
   );
 });
 
@@ -134,7 +139,7 @@ test('a change is drawn as an arrow, and the median reads a fall as the good dir
   assert.ok(noComparison.includes('2h 47m'), 'the reading itself went with its arrow');
 });
 
-test('recent activity lists records, with their type mark and their state', async () => {
+test('recent activity lists records as compact cards: orange file, type pill, bold case number', async () => {
   const { renderActivity } = await load();
   const html = renderActivity();
 
@@ -143,10 +148,17 @@ test('recent activity lists records, with their type mark and their state', asyn
   assert.match(html, /title="Open report BW-0331"/);
   assert.ok(html.indexOf('Barangay San Isidro') < html.indexOf('Rizal Avenue'), 'the rows are not newest first');
 
-  // The type's own mark, in the register's own hue family, drawn as geometry.
-  assert.ok(html.includes('dash-activity__mark--violet'), 'a Theft lost the register’s own hue');
-  assert.ok(html.includes('dash-activity__mark--blue'), 'a Traffic Accident lost its hue');
-  assert.ok(html.includes('dash-activity__glyph'), 'the rows lost their type marks');
+  // The head is the name only — the sub-line is removed.
+  assert.ok(!html.includes('Latest reports and system activities'), 'the removed head sub-line is back');
+
+  // The reference's own row: the register's file logo (All Reports), the type
+  // pill in the register's own hue family with its tracked capitals, and the
+  // bold case number.
+  assert.ok(html.includes('dash-activity__file'), 'the rows lost the register file logo');
+  assert.ok(html.includes('dash-activity__type--violet'), 'a Theft lost the register’s own hue');
+  assert.ok(html.includes('dash-activity__type--blue'), 'a Traffic Accident lost its hue');
+  assert.ok(html.includes('dash-activity__type-text">Theft<'), 'the rows lost their type pills');
+  assert.ok(html.includes('>BW-0331<'), 'the rows lost their bold case numbers');
 
   // What the panel says about each row: what it was, where, and when.
   assert.ok(html.includes('Barangay San Isidro'));
@@ -157,7 +169,7 @@ test('recent activity lists records, with their type mark and their state', asyn
   // the difference between them.
   for (const [state, label] of [
     ['draft', 'Draft'],
-    ['submitted', 'Awaiting Finalization'],
+    ['submitted', 'Finalized'],
     ['finalized', 'Finalized'],
   ]) {
     assert.ok(html.includes(`dash-status--${state}`), `the ${label} chip lost its own state class`);
@@ -176,39 +188,158 @@ test('recent activity lists records, with their type mark and their state', asyn
   assert.ok(!empty.includes('dash-activity__row'), 'an empty range still draws rows');
 });
 
-test('the chart card is headed by its mark, its name and a corner control', () => {
+test('the chart card is headed by its name and the range control', () => {
   // THE ONE THING THIS FILE CANNOT RENDER. The chart card's head only exists in
   // the LOADED state (the page fetches on mount and effects do not run under
   // `renderToStaticMarkup`), and the card itself is a 500-line SVG component that
-  // dashboardChart.test.mjs already covers. So the head and the corner control are
-  // read from the source, and what is asserted is the arrangement the request
-  // asked for: the mark, the name, the sub-line, and the control that gives the
-  // chart the whole row.
+  // dashboardChart.test.mjs already covers. So the heads are read from the
+  // source, and what is asserted is the arrangement the owner asked for: every
+  // panel head is its name only — no mark, no sub-line (owner request,
+  // 2026-10-30) — and the trend head keeps the colour key and the one range
+  // control for the page.
   const src = readFileSync(new URL('../../src/components/Dashboard.jsx', import.meta.url), 'utf8');
 
-  assert.match(src, /title="Reports over time"/);
-  assert.match(src, /mark=\{<BarsMark \/>\}/, 'the chart card lost its mark');
-  assert.match(
-    src,
-    /sub="Number of incident reports per day"/,
-    'the chart card lost the line under its name',
-  );
+  // Every panel's own opening tag carries neither a mark nor a sub-line. Report
+  // Status is no panel at all any more (owner request, 2026-10-30): its split
+  // reads as two pills under the trend, and must not come back as a card.
+  assert.doesNotMatch(src, /title="Report Status"/, 'the removed Report Status panel is back');
+  for (const title of [
+    'Reports Overview',
+    'AI Insights',
+    'Incident Types',
+    'Top Locations',
+    'System Status',
+  ]) {
+    const at = src.indexOf(`title="${title}"`);
+    assert.ok(at >= 0, `the ${title} panel is missing`);
+    const head = src.slice(src.lastIndexOf('<Panel', at), src.indexOf('>', at));
+    assert.doesNotMatch(head, /mark=\{/, `the ${title} head is drawing a mark again`);
+    assert.doesNotMatch(head, /sub=/, `the ${title} head grew its sub-line back`);
+  }
+  // And the removed sub-lines read nowhere else either.
+  for (const line of [
+    'Number of incident reports per day',
+    'Latest reports and system activities',
+    'Draft vs filed in this range',
+    'Advisory highlights from this range',
+    'Distribution of reports',
+    'Areas with most reports',
+    'All systems operational',
+  ]) {
+    assert.ok(!src.includes(line), `the removed "${line}" line is back`);
+  }
+  // The AI source line with it: no connected badge, no from–to range.
+  assert.doesNotMatch(src, /cmd-ai__source/, 'the removed AI source line is back');
+  assert.ok(!src.includes('AI connected'), 'the removed AI badge is back');
+  // AND THE CHIPS ARE REMOVED: no All-types row above the plot — each band tall
+  // enough to hold it carries its incident type, written inside the column.
+  assert.doesNotMatch(src, /<TypeChips/, 'the removed type chips are back above the chart');
+  assert.doesNotMatch(src, /function TypeChips/, 'the removed TypeChips component is back');
+  assert.match(src, /segTag\(b\.type/, 'the bands no longer write their incident type inside the column');
+  // The head marks are gone with their heads: no mark components remain.
+  for (const mark of ['ClockMark', 'BarsMark', 'TrioMark', 'PieMark', 'PinMark', 'ShieldMark']) {
+    assert.doesNotMatch(src, new RegExp(`function ${mark}\\b`), `the removed ${mark} is back`);
+    assert.doesNotMatch(src, new RegExp(`<${mark}[ />]`), `the ${mark} head mark is drawn again`);
+  }
 
-  // The corner control is a STATE, not a dialog: it is pressed and unpressed, and
-  // the row it changes is the grid the two cards share.
-  assert.match(src, /const \[expanded, setExpanded\] = useState\(false\)/);
-  assert.match(src, /className="dash-expand"/);
-  assert.match(src, /aria-pressed=\{expanded\}/);
-  assert.match(src, /onClick=\{\(\) => setExpanded\(\(v\) => !v\)\}/);
-  assert.match(
-    src,
-    /dash-grid-main--split\$\{expanded \? ' is-expanded' : ''\}/,
-    'the control is not wired to the row it expands',
+  // The range the head reads, in the head that reads it: the colour key and the
+  // Last-5/7/14/30-days control share the head's aside, and the control is wired
+  // to the preset that every fetch reads.
+  // FIVE COLUMNS ON LOAD (owner request, 2026-10-30): the dashboard opens on
+  // the last five days, and the control offers that window back once changed.
+  assert.match(src, /<option value=\{5\}>Last 5 days<\/option>/, 'the Last-5-days window is not offered');
+  assert.match(src, /const \[preset, setPreset\] = useState\(5\)/, 'the dashboard no longer opens on five columns');
+  assert.match(src, /useState\(\(\) => datesForPreset\(5\)\)/, 'the opening window is not the last five days');
+  // THE HERO CARDS READ THE REGISTER (owner request, 2026-10-30): Total,
+  // Drafts and Finalized match All Reports whatever window the trend reads.
+  assert.match(src, /data\?\.registerTotals \?\? k/, 'the hero cards no longer read the whole register');
+  // AND THE RANGE MOVES ONLY THE CHART (owner request, 2026-10-30): the page
+  // reads the register once, the trend re-reads its own window, and the stack
+  // is ordered off the chart's payload — never the page's.
+  assert.match(src, /const \[chartData, setChartData\] = useState\(null\)/, 'the trend lost its own window');
+  assert.match(src, /series=\{chartData\?\.seriesOverTime \?\? \[\]\}/, 'the chart is not reading its own window');
+  assert.match(src, /orderForDisplay\(chartData\?\.seriesByType\)/, 'the stack is ordered off the page, not the chart');
+  assert.match(src, /loadPage\(\);\n        loadChart\(\);/, 'retry does not re-read both halves');
+  // THE STATUS SPLIT READS AS PILLS UNDER THE TREND (owner request,
+  // 2026-10-30): the split sits inside the Reports Overview panel — between
+  // the trend's own head and the duo row — drawn as pills, not bars.
+  const trendBlock = src.slice(src.indexOf('title="Reports Overview"'), src.indexOf('title="AI Insights"'));
+  assert.match(trendBlock, /<StatusBars status=\{data\?\.statusBreakdown\} \/>/, 'the status split is not under the trend');
+  assert.match(src, /cmd-statuspills/, 'the status split is not drawn as pills');
+  assert.doesNotMatch(src, /dash-grid-duo/, 'the emptied duo row is still drawn');
+  const css2 = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
+  assert.ok(css2.includes('cmd-statuspills'), 'the pills lost their stylesheet');
+  // AND THE FOOT IS TRIMMED: the plot reserves 16px — not 26 — under the axis,
+  // and the card's own bottom padding is cut, so no empty band sits there.
+  assert.match(src, /b: 16/, 'the plot still reserves its old foot under the axis');
+  const css = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
+  assert.ok(
+    css.includes('.dash-grid-main--split > .dash-panel:first-child'),
+    'the trend card lost its trimmed foot',
   );
+  assert.match(src, /<ChartKey byType=\{chartTypes\} \/>/);
+  assert.match(src, /<RangeSelect preset=\{preset\} onPick=\{applyPreset\} \/>/);
+  assert.match(src, /const applyPreset = \(days\) => \{[\s\S]{0,120}?setPreset\(days\)/);
+
+  // NO corner control any more: the trend takes the row's wide column at every
+  // range, so there is nothing to expand — and no state for it.
+  assert.doesNotMatch(src, /dash-expand/, 'the removed corner control is back');
+  assert.doesNotMatch(src, /setExpanded/, 'the removed expand state is back');
 
   // AND THE ACTIVITY PANEL IS IN THAT ROW — the two answer the same question at
-  // two resolutions, which is why they share a line rather than stacking.
-  const row = src.slice(src.indexOf('dash-grid-main--split'), src.indexOf('{/* ---- Status, beside the hour'));
+  // two resolutions, which is why they share a line rather than stacking — and
+  // it now reads the audit feed too, not only the records.
+  const row = src.slice(src.indexOf('dash-grid-main--split'), src.indexOf('dash-grid-trio'));
   assert.match(row, /<RecentActivity/);
+  assert.match(row, /events=\{data\?\.recentActivity\}/, 'the activity panel no longer reads the audit feed');
   assert.match(row, /onOpen=\{onOpenReport\}/, 'an activity row no longer opens its record');
+});
+
+test('the trio answers three questions: kind, place, pulse — above the brief', async () => {
+  // The status pie and the hour chart are gone (owner request, 2026-10-26): the
+  // trend's own head already carries the range, and this row is the reference's
+  // Incident Types, Top Locations and System Status.
+  const src = readFileSync(new URL('../../src/components/Dashboard.jsx', import.meta.url), 'utf8');
+  for (const title of ['Incident Types', 'Top Locations', 'System Status']) {
+    assert.match(src, new RegExp(`title="${title}"`), `the ${title} panel is missing`);
+  }
+  assert.match(src, /<TypeDonut slices=\{donutRows\} \/>/);
+  assert.match(src, /<LocationBars places=\{data\?\.locationBreakdown\} \/>/);
+  assert.match(src, /<SystemGrid system=\{data\?\.system\} \/>/);
+  // ORDER (owner request, 2026-10-30): the register's own facts read first,
+  // the analyst's advice after them — trio above, brief below.
+  assert.ok(
+    src.indexOf('dash-grid-trio') < src.indexOf('title="AI Insights"'),
+    'the brief is still sitting above the trio',
+  );
+  // THE BRIEF DRESSES LIKE ITSELF: the violet-tinted panel and the tabbed
+  // slips, not a fourth white card.
+  assert.match(src, /<Panel title="AI Insights" className="dash-panel--ai">/, 'the brief lost its own panel');
+  const briefCss = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
+  assert.ok(briefCss.includes('dash-panel--ai'), 'the brief lost its tinted panel');
+  assert.ok(briefCss.includes('cmd-ai__list li::before'), 'the slips lost their violet tabs');
+  assert.doesNotMatch(src, /title="Status breakdown"/, 'the status pie is back');
+  assert.doesNotMatch(src, /title="Reports by hour"/, 'the hour chart is back');
+
+  // RENDERED, with the shapes the endpoint really sends: the donut names every
+  // slice with its count and its share, the places draw the busiest street
+  // longest, and the system grid names its four services with icon, label and
+  // their Online state (owner request, 2026-10-30).
+  const { renderTrio } = await load();
+  const html = renderTrio();
+  for (const label of ['Traffic Accident', 'Theft', 'Others']) {
+    assert.ok(html.includes(label), `the donut lost its ${label} slice`);
+  }
+  assert.ok(html.includes('50%'), 'the busiest slice lost its share');
+  assert.ok(html.includes('National Highway'), 'the places lost their busiest street');
+  assert.match(html, /width: ?100%/, 'the busiest street is not drawn longest');
+  // Four boxes, each naming its service — and silence where the chorus was.
+  assert.equal((html.match(/cmd-sys__box/g) ?? []).length, 4, 'the grid does not draw four boxes');
+  for (const label of ['Database', 'AI Service', 'File Storage', 'Notification']) {
+    assert.ok(html.includes(label), `the grid lost its ${label} box`);
+  }
+  assert.ok(html.includes('Online'), 'the grid no longer names which services are online');
+  assert.ok(!html.includes('All systems operational'), 'the removed summary line is back on the grid');
+  assert.doesNotMatch(html, /cmd-sys__head/, 'the removed grid head is back');
+  assert.doesNotMatch(html, /cmd-sys__badge/, 'the removed grid badge is back');
 });

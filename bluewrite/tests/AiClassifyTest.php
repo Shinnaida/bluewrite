@@ -29,10 +29,11 @@ use PHPUnit\Framework\TestCase;
  *      empty field is the answer "your account does not state this";
  *   2. the instruction — that the type list and TODAY actually reach the model,
  *      the two facts only the app knows and the two the reading depends on;
- *   3. normaliseClassification() — the report's own field names, and every
- *      answer the report cannot carry being REJECTED rather than repaired (a
- *      type off the list, a datetime that is not one, a role that is not one, a
- *      party with no name);
+ *   3. normaliseClassification() — the report's own field names; a type off
+ *      the list is FOLDED to its closest canonical type with the answer's own
+ *      words kept as the Category, and every other answer the report cannot
+ *      carry is REJECTED rather than repaired (a datetime that is not one, a
+ *      role that is not one, a party with no name);
  *   4. NarrativeService::classifyAccount() — what it passes to the provider and
  *      what it reports back, driven through the stub provider;
  *   5. the SECOND half of the same read, POST /ai/classify/details — the
@@ -214,18 +215,93 @@ final class AiClassifyTest extends TestCase
     // ------------------------------------------------- normaliseClassification
 
     /**
-     * A type the station does not carry reads as EMPTY, never as itself: the
-     * create would reject it, so passing it on would only move the failure to
-     * the officer's next click.
+     * A type the station does not carry is FOLDED to its closest canonical
+     * type, never passed on as itself: the create would reject it, so passing
+     * it on would only move the failure to the officer's next click. The
+     * answer's own words ride along as the Category (the "Reported as"
+     * line), so nothing the account said is lost in the fold.
      */
-    public function testATypeOffTheListReadsAsEmpty(): void
+    public function testATypeOffTheListFoldsToItsClosestType(): void
     {
         $out = GeminiNarrativeProvider::normaliseClassification(
             ['incidentType' => 'Carnapping'],
             self::TYPES,
         );
 
+        $this->assertSame('Theft', $out['incident_type']);
+        $this->assertSame('Carnapping', $out['incident_category']);
+    }
+
+    /**
+     * The blotter names the incident the way it was written — "Reckless
+     * imprudence resulting to damage to property and physical injury" — which
+     * is on no dropdown. The read still settles the main incident (the
+     * traffic accident), and the exact legal words are kept as the Category.
+     */
+    public function testABlotterLegalPhraseFoldsToItsMainIncident(): void
+    {
+        $words = 'Reckless imprudence resulting to damage to property and physical injury';
+        $out = GeminiNarrativeProvider::normaliseClassification(
+            ['incidentType' => $words],
+            self::TYPES,
+        );
+
+        $this->assertSame('Traffic Accident', $out['incident_type']);
+        $this->assertSame($words, $out['incident_category']);
+    }
+
+    /**
+     * The live read answered "Other Incident" for a blotter whose charge is
+     * RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL
+     * INJURY — the model shrugged at legal words the list never carries.
+     * The folder follows the SHEET: the account itself folds to Traffic
+     * Accident, while the charge still rides as the Category (filled by the
+     * caller off the same account), so the title never changes.
+     */
+    public function testAnOtherAnswerWithATrafficAccountFoldsToTraffic(): void
+    {
+        $account = '10-20-26 10:00 AM RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY '
+            . 'PLACE OF INCIDENT : CANGIMUNDONG, INOBURAN, CITY OF NAGA T/D OF INCIDENT : MORE OR LESS 8:40 AM OF 10-20-26 '
+            . 'VEHICLES INVOLVED: V1 YAMAHA NMAX WITH PLATE 0718SR V2 HONDA XRM WITH PLATE GF39113 '
+            . 'FACTS- BOTH VEHICLES WERE TRAVELLING IN OPPOSITE DIRECTION';
+        $out = GeminiNarrativeProvider::normaliseClassification(
+            ['incidentType' => 'Other Incident'],
+            self::TYPES,
+            $account,
+        );
+
+        $this->assertSame('Traffic Accident', $out['incident_type']);
+        $this->assertSame('', $out['incident_category']);
+    }
+
+    /**
+     * A genuinely thin account keeps its honest Other: the safety net only
+     * fires when the account folds to a concrete type.
+     */
+    public function testAnOtherAnswerWithNoSignalKeepsOther(): void
+    {
+        $out = GeminiNarrativeProvider::normaliseClassification(
+            ['incidentType' => 'Other Incident'],
+            self::TYPES,
+            'something happened somewhere, no details at all xyzzy',
+        );
+
+        $this->assertSame('Other Incident', $out['incident_type']);
+    }
+
+    /**
+     * A text with no real signal still reads as EMPTY, never invented: a
+     * stray word must not conjure a classification.
+     */
+    public function testAPhraseWithNoSignalStillReadsAsEmpty(): void
+    {
+        $out = GeminiNarrativeProvider::normaliseClassification(
+            ['incidentType' => 'Something unclassifiable xyzzy'],
+            self::TYPES,
+        );
+
         $this->assertSame('', $out['incident_type']);
+        $this->assertSame('', $out['incident_category']);
     }
 
     /**
@@ -337,6 +413,7 @@ final class AiClassifyTest extends TestCase
         ], self::TYPES);
 
         $this->assertSame('', $out['incident_type']);
+        $this->assertSame('', $out['incident_category']);
         $this->assertSame('', $out['incident_datetime']);
         $this->assertSame('', $out['location']);
         $this->assertSame([], $out['parties']);
@@ -353,7 +430,7 @@ final class AiClassifyTest extends TestCase
         $out = GeminiNarrativeProvider::normaliseClassification([], self::TYPES);
 
         $this->assertSame([
-            'incident_type', 'incident_datetime', 'incident_time_approximate',
+            'incident_type', 'incident_category', 'incident_datetime', 'incident_time_approximate',
             'location', 'reporter_name', 'reporter_contact', 'reporter_address',
             'action_taken', 'parties', 'unstated',
         ], array_keys($out));
@@ -897,5 +974,149 @@ final class AiClassifyTest extends TestCase
             'May banggaan sa kalsada.',
             'Vehicular Accident',
         );
+    }
+
+    /**
+     * The blotter's charge, read off the text rather than modeled: the live
+     * read answered "Other Incident" for a blotter whose charge is
+     * RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL
+     * INJURY, and the sheet quoted "OTHER INCIDENT" — a predetermined label
+     * standing in for words the blotter states. The extractor reads the words
+     * between the reported time and PLACE OF INCIDENT, exactly as written.
+     */
+    public function testExtractIncidentTitleReadsTheBlotterChargeBetweenTimeAndPlace(): void
+    {
+        $account = '10-20-26 10:00 AM RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY '
+            . 'PLACE OF INCIDENT : CANGIMUNDONG, INOBURAN, CITY OF NAGA T/D OF INCIDENT : MORE OR LESS 8:40 AM OF 10-20-26 '
+            . 'VEHICLES INVOLVED: V1 YAMAHA NMAX WITH PLATE 0718SR V2 HONDA XRM WITH PLATE GF39113';
+        $this->assertSame(
+            'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+            GeminiNarrativeProvider::extractIncidentTitle($account),
+        );
+    }
+
+    /** A quoted standalone heading (the scanned certification's own title) reads whole. */
+    public function testExtractIncidentTitleReadsAQuotedStandaloneHeading(): void
+    {
+        $this->assertSame(
+            'RECKLESS IMPRUDENCE RESULTING IN DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+            GeminiNarrativeProvider::extractIncidentTitle(
+                '"RECKLESS IMPRUDENCE RESULTING IN DAMAGE TO PROPERTY AND PHYSICAL INJURY"',
+            ),
+        );
+    }
+
+    /**
+     * A reordered account may state its charge after the facts. The title is
+     * read from the whole text, never from a fixed position.
+     */
+    public function testExtractIncidentTitleReadsAChargeStatedAfterTheFacts(): void
+    {
+        $account = "PLACE OF INCIDENT : CANGIMUNDONG, INOBURAN, CITY OF NAGA\n"
+            . "FACTS- BOTH VEHICLES WERE TRAVELLING IN OPPOSITE DIRECTION\n"
+            . "RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY\n"
+            . "REMARKS. BOTH PARTIES AMICABLY SETTLED THE INCIDENT";
+        $this->assertSame(
+            'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+            GeminiNarrativeProvider::extractIncidentTitle($account),
+        );
+    }
+
+    /** Nothing title-like, nothing returned: a short word or an empty account is not a charge. */
+    public function testExtractIncidentTitleReturnsEmptyWhenNothingTitleLike(): void
+    {
+        $this->assertSame('', GeminiNarrativeProvider::extractIncidentTitle('10-20-26 10:00 AM THEFT PLACE OF INCIDENT : MARKET'));
+        $this->assertSame('', GeminiNarrativeProvider::extractIncidentTitle(''));
+        $this->assertSame('', GeminiNarrativeProvider::extractIncidentTitle('nothing title-like here at all'));
+    }
+
+    /**
+     * The live read filed the logbook head's entry time ("Around 7:33 P.M.,
+     * October 31, 2026") as the incident time, ignoring the blotter's own
+     * labeled T/D OF INCIDENT. The instruction now names the blotter's two
+     * times and which one is the incident's.
+     */
+    public function testClassificationPromptNamesTheBlotterEntryTimeVsIncidentTime(): void
+    {
+        $instruction = GeminiNarrativeProvider::classificationInstruction(self::TYPES, '2026-10-31');
+        $this->assertStringContainsString('T/D OF INCIDENT', $instruction);
+        $this->assertStringContainsString('never the leading', $instruction);
+        $this->assertStringContainsString('more or less 8:40 AM', $instruction);
+    }
+
+    /**
+     * A blotter charging reckless imprudence for a vehicular mishap reads as
+     * a Traffic Accident: the instruction names it, so the folder follows the
+     * sheet instead of the charge words (the charge itself rides as the
+     * Category, never rewritten).
+     */
+    public function testClassificationPromptNamesRecklessImprudenceAsTraffic(): void
+    {
+        $instruction = GeminiNarrativeProvider::classificationInstruction(self::TYPES, '2026-10-31');
+        $this->assertStringContainsString('reckless', strtolower($instruction));
+        $this->assertStringContainsString('Traffic Accident', $instruction);
+    }
+
+    /**
+     * The live details read invented "Vehicle vs Vehicle Collision" and
+     * "Uphill / Downhill slope" for fields the account never names — the
+     * required-field pressure read as permission to invent. The instruction
+     * now states the opposite, and that direction of travel is Facts ink,
+     * never a coded condition value.
+     */
+    public function testDetailsPromptForbidsInventingRequiredFieldsAndCodedConditions(): void
+    {
+        $prompt = (string) file_get_contents(dirname(__DIR__) . '/resources/ai/classification_details_prompt.txt');
+        $this->assertStringContainsString('never permission to invent', $prompt);
+        $this->assertStringContainsString('Direction of travel is not a road condition', $prompt);
+        // The same read COMPRESSED the cause ("V2 encroached into V1's
+        // lane" for "V2 ENCROACHED INTO V1'S AND ACCIDENTALLY HIT LEFT SIDE
+        // PORTION OF V1") and INFERRED a severity ("Minor Injury" for
+        // "SUSTAINED PHYSICAL INJURIES"). Cause sentences are copied, never
+        // compressed; a severity needs the account's own severity words.
+        $this->assertStringContainsString('never compress it into a shorter', $prompt);
+        $this->assertStringContainsString('A severity the account never states is not data', $prompt);
+    }
+
+    /**
+     * The live read FORMALISED the disposition ("Both involved parties
+     * appeared and amicably settled the incident" for the blotter's
+     * "BOTH PARTIES AMICABLY SETTLED THE INCIDENT") — "appeared" is a fact
+     * the account never states. The disposition is copied as written.
+     */
+    public function testClassificationPromptCopiesTheDispositionVerbatim(): void
+    {
+        $instruction = GeminiNarrativeProvider::classificationInstruction(self::TYPES, '2026-10-31');
+        $this->assertStringContainsString('THE DISPOSITION', $instruction);
+        $this->assertStringContainsString('copied as written', $instruction);
+        $this->assertStringContainsString('BOTH PARTIES AMICABLY SETTLED THE INCIDENT', $instruction);
+    }
+
+    /**
+     * A zero death/injury count is the absence of a row, not a recorded fact:
+     * injured rows with no Deceased status used to mirror fatalities "0",
+     * which the sheet printed as "Fatalities: 0" — a fact the account never
+     * stated. Only a real count mirrors (see the JS twin's zero-count test).
+     */
+    public function testApplyMirrorsNeverWritesAZeroCasualtyCount(): void
+    {
+        $ts = ReportRules::applyMirrors([
+            'vehicles' => [['plate_number' => 'ABC1234']],
+            'injured_persons' => [
+                ['name' => 'Hero Canque', 'injury_status' => 'Minor Injury'],
+                ['name' => 'Vilma Canque', 'injury_status' => ''],
+            ],
+        ], 'Traffic Accident');
+        $this->assertSame('1', $ts['number_of_vehicles'] ?? null, 'a real row count still mirrors');
+        $this->assertArrayNotHasKey('fatalities', $ts, 'no zero-fatalities derivation is written');
+        $fire = ReportRules::applyMirrors([
+            'injured_persons' => [['name' => 'Ana Cruz', 'injury_status' => 'Uninjured']],
+        ], 'Fire Incident');
+        $this->assertArrayNotHasKey('injuries', $fire);
+        $this->assertArrayNotHasKey('fatalities', $fire);
+        $real = ReportRules::applyMirrors([
+            'injured_persons' => [['name' => 'Pedro Reyes', 'injury_status' => 'Deceased']],
+        ], 'Traffic Accident');
+        $this->assertSame('1', $real['fatalities'] ?? null, 'a real death count still mirrors');
     }
 }

@@ -95,6 +95,7 @@ final class StubNarrativeProvider implements AiNarrativeProvider
 
         return $this->classification ?? [
             'incident_type' => '',
+            'incident_category' => '',
             'incident_datetime' => '',
             'incident_time_approximate' => false,
             'location' => '',
@@ -148,5 +149,18 @@ final class StubNarrativeProvider implements AiNarrativeProvider
         ];
 
         return (string) ($this->extra['transcription'] ?? '');
+    }
+
+    /**
+     * Enhance Wording — the canned enhanced report. The default returns the
+     * account unchanged, which is a valid answer (nothing needed improving)
+     * and the one that must never invent wording.
+     */
+    public function enhanceReport(string $account): string
+    {
+        $this->calls++;
+        $this->received[] = ['masked' => ['account' => $account], 'options' => []];
+
+        return (string) ($this->extra['enhanced'] ?? $account);
     }
 }

@@ -34,7 +34,7 @@
 // sheet read them from. The comment stays in one home: AppTopBar.jsx explains why
 // they are imported rather than typed out.
 
-import React from 'react';
+import React, { useState } from 'react';
 import { DEPARTMENT, STATION, SYSTEM_TITLE } from '../lib/appInfo.js';
 import pnpSeal from '../assets/pnp-logo.png';
 import citySeal from '../assets/city-of-naga-seal.png';
@@ -68,9 +68,55 @@ export default function AppSidebar({
   // REPORT reads as All Reports for an Admin — they supervise through the list
   // rather than by writing — which is exactly what `activeFor` already answers.
   const active = activeFor(current, true);
+  // Collapsed rail: icons only, so the register gets the width on a small
+  // laptop. Per BROWSER (a workstation choice, like density), and local to
+  // this component — Shell never reads it, so no route can disagree with it.
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return window.localStorage?.getItem('bw-rail') === 'collapsed';
+    } catch {
+      return false;
+    }
+  });
+  const toggleRail = () => {
+    setCollapsed((v) => {
+      try {
+        window.localStorage?.setItem('bw-rail', v ? 'open' : 'collapsed');
+      } catch {
+        // A workstation choice that cannot be kept is still a choice for now.
+      }
+      return !v;
+    });
+  };
+
+  // Tap-the-rail collapse (owner request): no button — tapping the rail's own
+  // empty surface folds it to icons, tapping again brings it back. Presses
+  // that land on anything interactive (destinations, the lockup, the bell,
+  // the profile control and their menus) are left alone, so a tap that means
+  // "go there" never folds the rail instead. Keyboard parity lives on the
+  // rail itself: Enter/Space on its own surface toggles, and it states which
+  // way it will go.
+  function onRailTap(e) {
+    if (e.target.closest('button, a, input, select, textarea, [role="menu"], [role="dialog"]')) return;
+    toggleRail();
+  }
+  function onRailKey(e) {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleRail();
+    }
+  }
 
   return (
-    <aside className="ir-sidebar">
+    <aside
+      className={`ir-sidebar${collapsed ? ' is-collapsed' : ''}`}
+      onClick={onRailTap}
+      onKeyDown={onRailKey}
+      tabIndex={0}
+      aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+      title={collapsed ? 'Tap to expand navigation' : 'Tap to collapse navigation'}
+    >
       {/* The station photo behind the rail. Decoration only: the rail's own text is
           the content, so the image is hidden from assistive technology. */}
       <img className="ir-sidebar__backdrop" src={stationPhoto} alt="" aria-hidden="true" />
@@ -108,6 +154,7 @@ export default function AppSidebar({
             className="ir-side-link"
             aria-current={active === l.kind ? 'page' : undefined}
             onClick={() => onNavigate(l.kind)}
+            title={collapsed ? l.label : undefined}
           >
             <NavIcon name={l.icon} />
             {l.label}

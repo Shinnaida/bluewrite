@@ -41,6 +41,10 @@ import {
   pieWedges,
   statusBreakdownText,
 } from '../lib/statusPie.js';
+// The station's own photograph for the command header: the same file the gate
+// stands in front of, masked into the header's right edge. Imported rather than
+// referenced, so the bundle carries it and the LAN needs no internet to draw it.
+import stationPhoto from '../assets/Modern Philippine Police Station at Dusk.png';
 // The same right-click menu the register's rows use, so a day of the chart offers
 // its actions the way the rest of the app does rather than by a second idiom.
 import RowMenu from './RowMenu.jsx';
@@ -86,17 +90,39 @@ import { typeHue, typeIcon } from '../lib/reportFolder.js';
 
 const fmt = new Intl.NumberFormat();
 
-function relativeTime(dbStamp) {
-  if (!dbStamp) return '';
-  const then = new Date(String(dbStamp).replace(' ', 'T'));
-  if (Number.isNaN(then.getTime())) return '';
-  const diffMin = Math.round((Date.now() - then.getTime()) / 60000);
-  if (diffMin < 1) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.round(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  return `${Math.round(diffHr / 24)}d ago`;
+/**
+ * EXECUTIVE SUMMARY helpers (owner request): the admin's station-at-a-glance.
+ * Everything here reads the SAME /dashboard/stats response the charts read,
+ * so the summary can never disagree with the panels below it.
+ */
+function dayGreeting(now = new Date()) {
+  const h = now.getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
 }
+function firstName(user) {
+  const full = String(user?.full_name ?? '').trim();
+  return full ? full.split(/\s+/)[0] : 'Admin';
+}
+/** The station wall clock: Philippine time, read where the badge reads it. */
+const MANILA = 'Asia/Manila';
+const MANILA_DATE = new Intl.DateTimeFormat('en-US', {
+  timeZone: MANILA,
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric',
+});
+const MANILA_DAY = new Intl.DateTimeFormat('en-US', {
+  timeZone: MANILA,
+  weekday: 'long',
+});
+const MANILA_TIME = new Intl.DateTimeFormat('en-US', {
+  timeZone: MANILA,
+  hour: 'numeric',
+  minute: '2-digit',
+  second: '2-digit',
+});
 
 const isoDate = (d) => d.toISOString().slice(0, 10);
 
@@ -105,17 +131,6 @@ function datesForPreset(days) {
   const from = new Date();
   from.setDate(to.getDate() - (days - 1));
   return { from: isoDate(from), to: isoDate(to) };
-}
-
-/** "2d 4h" / "5h 12m" / "38m" / "0m" — one consistent compact duration. */
-function fmtMinutes(mins) {
-  const m = Math.max(0, Math.round(mins));
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  const rem = m % 60;
-  if (h < 24) return rem ? `${h}h ${rem}m` : `${h}h`;
-  const d = Math.floor(h / 24);
-  return `${d}d ${h % 24}h`;
 }
 
 // ---- Skeleton bits (shown while the first load is in flight) --------------
@@ -150,7 +165,7 @@ const PANEL_INFO = {
   status: {
     label: 'How to read the status breakdown',
     title: 'How to read this pie',
-    note: 'Each wedge is one report status, drawn at its share of the reports in this range; a status with none in range is not drawn at all, so a two-wedge pie is not a broken one. The wedges run clockwise from twelve o’clock in workflow order — Final, Submitted, Draft — never by size, so a status stays where the reader learned to find it.',
+    note: 'Each wedge is one report status, drawn at its share of the reports in this range; a status with none in range is not drawn at all, so a two-wedge pie is not a broken one. The wedges run clockwise from twelve o’clock in workflow order — Final, Finalized, Draft — never by size, so a status stays where the reader learned to find it.',
     hint: 'Point at a wedge to lift it and read its count and share under the pie; right-click one to open those reports in the register, copy the breakdown, or pin the readout open.',
   },
   hour: {
@@ -159,17 +174,12 @@ const PANEL_INFO = {
     note: 'Each bar is one hour of the day, and every day in the range is added into the same 24 bars — the date is discarded — so this is when incidents land across the range rather than the shape of any one day. Bars count the hour the incident HAPPENED, not when the report was filed, and their heights are relative to the busiest hour rather than being shares.',
     hint: 'Hover a bar, or focus the strip and walk it with ←/→, to read that hour’s count and its share of the range. The line under the strip is the range’s busiest hour, and stays that way while you read.',
   },
-  categories: {
-    label: 'How to read the incident categories',
-    title: 'How to read this chart',
-    note: 'Each line is one incident type, and its position is that type’s RANK in each slice of the range — first at the top — so a line going up means that type is becoming more common relative to the others. Time is cut into days, weeks or months depending on how long the range is, and a line breaks where its type had nothing in that slice: a break is a type that was absent, never a fall. Only the leading types are drawn, and a type needs at least two slices with a rank to earn a line; the rest are counted underneath.',
-    hint: 'Hover or focus a name on the right to pick that type out, and press it to open its reports in the register. Hover the plot, or focus it and walk with ←/→, to read one slice of the range. Rank says nothing about how many reports are behind it, so every count is printed beside it.',
-  },
-};
+}; // The incident-categories entry was removed with its panel: a paragraph
+   // about a chart that is no longer on the page would be a stale claim.
 
-function Panel({ title, mark = null, sub = null, aside, info, children }) {
+function Panel({ title, mark = null, sub = null, aside, info, children, className = '' }) {
   return (
-    <section className="dash-panel">
+    <section className={`dash-panel${className ? ` ${className}` : ''}`}>
       <div className="dash-panel__head">
         {/* THE TITLE IS A MARK AND A LINE OF TYPE now (owner request,
             2026-10-12): the reference heads every card with the reading's own
@@ -239,6 +249,13 @@ const KPI_MARKS = {
   finalized: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'm8.4 12.2 2.5 2.5 4.7-5'],
   // A stopwatch: how long the work took.
   timer: ['M12 21a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17z', 'M12 8.6V13l3 1.8', 'M9.4 3.2h5.2'],
+  // Colleagues: the accounts that can open the register.
+  accounts: [
+    'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
+    'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+    'M22 21v-2a4 4 0 0 0-3-3.87',
+    'M16 3.13a4 4 0 0 1 0 7.75',
+  ],
 };
 
 function KpiMark({ name }) {
@@ -262,82 +279,61 @@ function KpiMark({ name }) {
 }
 
 /**
- * ONE READING, as the reference draws it: a tinted circle, the caption, the
- * number, and one line saying what the number counts.
+ * ONE READING: the caption in bold and the hero number. Only the headcount
+ * keeps a line under it (the admin/officer split); the other cards are just
+ * the reading (owner request, 2026-10-30).
  *
- * `tone` is the card's colour FAMILY (blue, green, amber, violet) and it is a
- * role rather than a value: the stylesheet owns what each family looks like, and
- * these four are the families the status chips and the register's own tints
-already use. `spark` is the one optional extra — the daily series behind the
- * first card — drawn only where a real series exists.
+ * `tone` is the card's colour FAMILY (blue, gold, green, violet): the number's
+ * echo wears it, and the stylesheet owns what each family looks like.
  *
- * A card with `to` is a BUTTON: the number is an action (the queue it counts),
- * and the only card that has one is Needs attention.
+ * The loading state keeps the old `dash-kpi is-skeleton` shell on purpose: the
+ * mount test counts those plates, and a skeleton is a skeleton whatever the
+ * card it stands in for looks like.
  */
-export function KpiCard({ tone, mark, label, value, note, delta, valueClass = '', spark = null, to = null, title = null, loading = false }) {
-  const body = (
-    <>
-      <span className={`dash-kpi__mark dash-kpi__mark--${tone}`} aria-hidden="true">
-        <KpiMark name={mark} />
-      </span>
-      <span className="dash-kpi__body">
-        <span className="dash-kpi__label">{label}</span>
-        <span className={`dash-kpi__value ${valueClass}`}>{value}</span>
-        {/* The delta line and the note are the same slot: a card says one thing
-            under its number, whichever of the two it has. A card may carry BOTH
-            only in the strip below, which is a different shape (see SummaryCard). */}
-        {delta ?? (note ? <span className="dash-kpi__note">{note}</span> : null)}
-      </span>
-      {spark}
-    </>
-  );
+export function MetricCard({ tone, label, value, foot, loading = false }) {
   if (loading) {
     return (
       <div className="dash-kpi is-skeleton" aria-hidden="true">
         <span className="sk sk--text" />
         <span className="sk sk--big" />
-        <span className="sk sk--text" />
+        {foot ? <span className="sk sk--text" /> : null}
       </div>
     );
   }
-  return to ? (
-    <button type="button" className="dash-kpi dash-kpi--link" onClick={to} title={title ?? undefined}>
-      {body}
-    </button>
-  ) : (
-    <div className="dash-kpi">{body}</div>
+  return (
+    <div className={`cmd-card cmd-card--${tone}`}>
+      <span className="cmd-card__main">
+        <span className="cmd-card__label">{label}</span>
+        <span className="cmd-card__value-row">
+          <span className="cmd-card__value">{value}</span>
+          {foot ? <span className="cmd-card__foot">{foot}</span> : null}
+        </span>
+      </span>
+    </div>
   );
 }
 
 /**
- * THE SPARKLINE under the total: the range's own daily counts, as one line.
- *
- * It is drawn from `seriesOverTime` — the same series the trend chart draws — so
- * it cannot disagree with the panel below it. It carries NO axis and no labels
- * on purpose: it says "busier here than there" at a glance, and the chart under
- * it is where a reader goes for the numbers.
+ * A card that OPENS somewhere: the register, pre-filtered to what the card
+ * counts, or User Management for the headcount. An anchor rather than a
+ * button, because leaving the page is navigation — and keyboard-reachable for
+ * the same reason. MetricCard itself stays a READING: the render fixture draws
+ * it unwrapped, and a reading is never a control.
  */
-export function Sparkline({ series, label }) {
-  const counts = (series ?? []).map((p) => Number(p.count) || 0);
-  if (counts.length < 2) return null;
-  const max = Math.max(...counts, 1);
-  const W = 100;
-  const H = 34;
-  const step = W / (counts.length - 1);
-  // Baseline to baseline inside the box, so the line never touches the card's
-  // own edge and a flat series sits on the floor rather than through the middle.
-  const y = (n) => H - 3 - (n / max) * (H - 8);
-  const points = counts.map((n, i) => `${(i * step).toFixed(2)},${y(n).toFixed(2)}`).join(' ');
+function CardLink({ label, onGo, children }) {
+  if (!onGo) return <>{children}</>;
   return (
-    <svg
-      className="dash-spark"
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-      role="img"
-      aria-label={label}
+    <a
+      href="#reports"
+      className="cmd-cardlink"
+      aria-label={`${label} — open in the register`}
+      onClick={(e) => {
+        e.preventDefault();
+        onGo();
+      }}
     >
-      <polyline className="dash-spark__line" points={points} />
-    </svg>
+      {children}
+    </a>
   );
 }
 
@@ -389,51 +385,17 @@ export function SummaryCard({ tone, mark, value, label, pct, good = 'up', valueC
   );
 }
 
-/** The clock in the activity panel's head, at the size the head's row wants. */
-function ClockMark() {
-  return (
-    <svg
-      className="dash-panel__mark"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      {KPI_MARKS.attention.map((d) => (
-        <path key={d} d={d} />
-      ))}
-    </svg>
-  );
-}
-
-/** The bar-chart mark in the trend panel's head. */
-function BarsMark() {
-  return (
-    <svg
-      className="dash-panel__mark"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M4.5 20.5h15" />
-      <path d="M7.5 20.5v-6M12 20.5V6.5M16.5 20.5v-9" />
-    </svg>
-  );
-}
+/* Panel-head marks REMOVED (owner request, 2026-10-30): every dashboard panel
+   is headed by its name only — Reports Overview, Recent Activity, Report
+   Status, AI Insights, Incident Types, Top Locations and System Status all
+   read as plain titles. BarsMark, TrioMark, PieMark, PinMark and ShieldMark
+   were those marks, and they are gone with them. */
 
 /** How a report's status reads on an activity row. One word for each state of
  *  the workflow, in the same words the register's shelves use. */
 const ACTIVITY_STATUS = {
   draft: 'Draft',
-  submitted: 'Awaiting Finalization',
+  submitted: 'Finalized',
   finalized: 'Finalized',
 };
 
@@ -450,27 +412,160 @@ function activityWhen(dbStamp) {
 }
 
 /**
- * RECENT ACTIVITY — the newest reports in the range being read, one row each.
- *
- * WHY RECORDS RATHER THAN THE AUDIT LOG. The endpoint has always carried
- * `recentActivity` (audit entries: an action, an actor, an entity), and the page
- * drew none of it. The reference's panel is a list of REPORTS — what kind, where,
- * when, and where each one stands in the workflow — which is what an Admin
- * opening this page is actually looking for, so the panel is fed by the records
- * themselves (`recentReports`, added to the same response). The audit feed is
- * still served for the screens that read it (Audit Trail).
- *
- * Every row opens its record through the same route the bell uses (Shell owns
- * the screen change), so a row here is a way into a report and not a dead line.
+ * One system happening, read off the audit feed: which title it earns, which
+ * line under it, and which of the two system marks it wears. Unmapped actions
+ * return null and are left out — the panel is five rows, not the audit trail.
  */
-export function RecentActivity({ reports, loading, onOpen, onViewAll }) {
-  const rows = Array.isArray(reports) ? reports : [];
+function systemRow(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const id = entry.entityId === null || entry.entityId === undefined ? '' : String(entry.entityId);
+  const bw = id !== '' && Number.isFinite(Number(id)) ? `BW-${String(Number(id)).padStart(4, '0')}` : id;
+  switch (entry.action) {
+    case 'user.create':
+      return { title: 'New User Added', detail: `Opened by ${entry.actor ?? 'an admin'}`, icon: 'user' };
+    case 'user.password_reset':
+      return { title: 'Password Reset', detail: `By ${entry.actor ?? 'an admin'}`, icon: 'user' };
+    case 'user.deactivate':
+      return { title: 'Account Deactivated', detail: `By ${entry.actor ?? 'an admin'}`, icon: 'user' };
+    case 'user.update':
+      return { title: 'Account Updated', detail: `By ${entry.actor ?? 'an admin'}`, icon: 'user' };
+    case 'report.update':
+      return { title: 'Report Updated', detail: `Incident Report #${bw || '—'}`, icon: 'doc', reportId: Number(id) || null };
+    case 'report.archive':
+      return { title: 'Report Archived', detail: `Incident Report #${bw || '—'}`, icon: 'doc', reportId: Number(id) || null };
+    case 'report.restore':
+      return { title: 'Report Restored', detail: `Incident Report #${bw || '—'}`, icon: 'doc', reportId: Number(id) || null };
+    case 'station.update':
+      return { title: 'Station Settings Updated', detail: `By ${entry.actor ?? 'an admin'}`, icon: 'doc' };
+    default:
+      return null;
+  }
+}
+
+/** The system rows' own marks: a colleague added, or a page of the register. */
+function SystemMark({ name }) {
+  return (
+    <svg
+      className="dash-activity__glyph"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {name === 'user' ? (
+        <>
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M19 8v6M22 11h-6" />
+        </>
+      ) : (
+        <>
+          <path d="M14 3.2H7.4a2 2 0 0 0-2 2v13.6a2 2 0 0 0 2 2h9.2a2 2 0 0 0 2-2V8z" />
+          <path d="M14 3.2V8h5" />
+          <path d="M9.2 16.4h5.6" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+/** The register's own file logo (see FileLogo in ReportList.jsx): the
+ * yellow-to-orange page with its corner folded down and three ruled bars —
+ * the same drawing a row of All Reports wears, so a record reads as the same
+ * file here as there. Purely drawn, aria-hidden: the row names the report. */
+function ActivityFileLogo({ className }) {
+  const gradientId = useId();
+  return (
+    <svg className={className} viewBox="0 0 24 28" fill="none" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id={gradientId} x1="12" y1="1" x2="12" y2="27" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#FFC93C" />
+          <stop offset="1" stopColor="#F29B00" />
+        </linearGradient>
+      </defs>
+      <path d="M5 1h9.6L22 8.4V24a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V4a3 3 0 0 1 3-3z" fill={`url(#${gradientId})`} />
+      <path d="M14.6 1 22 8.4h-5.4a2 2 0 0 1-2-2V1z" fill="#E1860A" />
+      <rect x="5.5" y="12" width="13" height="2" rx="1" fill="#DD7A01" />
+      <rect x="5.5" y="15.6" width="10.4" height="2" rx="1" fill="#DD7A01" />
+      <rect x="5.5" y="19.2" width="7.2" height="2" rx="1" fill="#DD7A01" />
+    </svg>
+  );
+}
+
+/** A `YYYY-MM-DD HH:MM:SS` stamp as milliseconds, or null when it is not one. */
+function stampMs(stamp) {
+  if (!stamp) return null;
+  const t = new Date(String(stamp).replace(' ', 'T')).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
+/**
+ * RECENT ACTIVITY — the newest records in the range being read, with the
+ * station's own happenings between them.
+ *
+ * Records say what kind, where, when, and where each one stands in the
+ * workflow; system rows (a colleague added, a report touched, the station
+ * itself changed) say who did it and when, and wear the blue System chip
+ * instead of a workflow one. Both halves come from the same stats response,
+ * merged newest-first and cut at five — the panel is the page's glance, not
+ * the audit trail.
+ *
+ * Every RECORD row opens through the same route the bell uses (Shell owns the
+ * screen change), and a system row that names a report does too; a row that
+ * names nobody is a dead line drawn as one (a div, not a button).
+ */
+export function RecentActivity({ reports, events = [], loading, onOpen, onViewAll, filtered = false, onStart }) {
+  const recordRows = (Array.isArray(reports) ? reports : []).map((r) => ({
+    key: `report-${r.id}`,
+    when: stampMs(r.incident_datetime) ?? 0,
+    // The case number the register files it under — the handle an Admin
+    // quotes, distinct from the status chip beside it.
+    caseNo: Number.isFinite(Number(r.id)) ? `BW-${String(Number(r.id)).padStart(4, '0')}` : '',
+    title: r.type,
+    // The reference's own row (owner request, 2026-10-30): the orange file, the
+    // type's pill in its own hue, and the bold case number — the register's
+    // chips, read the same way here as on All Reports.
+    pill: true,
+    hue: typeHue(r.type),
+    typeGlyph: typeIcon(r.type),
+    meta: `${r.location ? `${r.location} · ` : ''}${activityWhen(r.incident_datetime)}`,
+    chip: ACTIVITY_STATUS[r.status] ?? r.status,
+    chipClass: `dash-status dash-status--${r.status}`,
+    markClass: 'dash-activity__file',
+    mark: <ActivityFileLogo className="dash-activity__filemark" />,
+    openId: r.id,
+    openTitle: `Open report BW-${String(r.id).padStart(4, '0')}`,
+  }));
+  const systemRows = (Array.isArray(events) ? events : [])
+    .map((e, i) => {
+      const read = systemRow(e);
+      if (!read) return null;
+      return {
+        key: `event-${e.action}-${e.entityId ?? i}-${e.createdAt ?? i}`,
+        when: stampMs(e.createdAt) ?? 0,
+        title: read.title,
+        meta: `${read.detail} · ${activityWhen(e.createdAt)}`,
+        chip: 'System',
+        chipClass: 'dash-status dash-status--system',
+        markClass: 'dash-activity__file',
+        mark: <ActivityFileLogo className="dash-activity__filemark" />,
+        openId: read.reportId ?? null,
+        openTitle: read.reportId ? `Open report BW-${String(read.reportId).padStart(4, '0')}` : null,
+      };
+    })
+    .filter(Boolean);
+  const rows = [...recordRows, ...systemRows]
+    .sort((a, b) => b.when - a.when)
+    .slice(0, 5);
   return (
     <section className="dash-panel dash-activity">
       <div className="dash-panel__head">
         <h2 className="dash-panel__title">
-          <ClockMark />
-          Recent Activity
+          <span className="dash-panel__title-text">Recent Activity</span>
         </h2>
         <div className="dash-panel__aside">
           <button type="button" className="dash-viewall" onClick={onViewAll}>
@@ -491,39 +586,370 @@ export function RecentActivity({ reports, loading, onOpen, onViewAll }) {
           ))}
         </ul>
       ) : rows.length === 0 ? (
-        <EmptyNote>No reports were recorded in this range. Widen the dates, or clear the incident type.</EmptyNote>
+        // The hint names the narrowing only when there IS one: a station that
+        // recorded nothing reads "no reports yet" with a way to file the
+        // first, not advice about filters it never set.
+        filtered ? (
+          <EmptyNote>No reports were recorded in this range. Widen the dates, or clear the incident type.</EmptyNote>
+        ) : (
+          <div className="dash-empty dash-empty--action">
+            <p>No reports were recorded in this range yet.</p>
+            {onStart && (
+              <button type="button" className="dash-empty__btn" onClick={onStart}>
+                Start a report
+              </button>
+            )}
+          </div>
+        )
       ) : (
         <ul className="dash-activity__list">
-          {rows.map((r) => (
-            <li key={r.id}>
-              <button
-                type="button"
-                className="dash-activity__row"
-                onClick={() => onOpen?.(r.id)}
-                title={`Open report BW-${String(r.id).padStart(4, '0')}`}
-              >
-                <span
-                  className={`dash-activity__mark dash-activity__mark--${typeHue(r.type)}`}
-                  aria-hidden="true"
+          {rows.map((row) => (
+            <li key={row.key}>
+              {row.openId ? (
+                <button
+                  type="button"
+                  className="dash-activity__row"
+                  onClick={() => onOpen?.(row.openId)}
+                  title={row.openTitle}
                 >
-                  <ReportTypeIcon name={typeIcon(r.type)} className="dash-activity__glyph" />
-                </span>
-                <span className="dash-activity__text">
-                  <span className="dash-activity__title">{r.type}</span>
-                  <span className="dash-activity__meta">
-                    {r.location ? `${r.location} · ` : ''}
-                    {activityWhen(r.incident_datetime)}
+                  <span className={row.markClass} aria-hidden="true">
+                    {row.mark}
                   </span>
-                </span>
-                <span className={`dash-status dash-status--${r.status}`}>
-                  {ACTIVITY_STATUS[r.status] ?? r.status}
-                </span>
-              </button>
+                  <span className="dash-activity__text">
+                    <span className="dash-activity__title">
+                      {row.pill ? (
+                        <span className={`dash-activity__type dash-activity__type--${row.hue}`}>
+                          <ReportTypeIcon name={row.typeGlyph} className="dash-activity__type-mark" aria-hidden="true" />
+                          <span className="dash-activity__type-text">{row.title}</span>
+                        </span>
+                      ) : row.title}
+                      {row.caseNo && <span className="dash-activity__id">{row.caseNo}</span>}
+                    </span>
+                    <span className="dash-activity__meta">{row.meta}</span>
+                  </span>
+                  <span className={row.chipClass}>
+                    {row.chip}
+                  </span>
+                </button>
+              ) : (
+                <div className="dash-activity__row">
+                  <span className={row.markClass} aria-hidden="true">
+                    {row.mark}
+                  </span>
+                  <span className="dash-activity__text">
+                    <span className="dash-activity__title">
+                      {row.pill ? (
+                        <span className={`dash-activity__type dash-activity__type--${row.hue}`}>
+                          <ReportTypeIcon name={row.typeGlyph} className="dash-activity__type-mark" aria-hidden="true" />
+                          <span className="dash-activity__type-text">{row.title}</span>
+                        </span>
+                      ) : row.title}
+                      {row.caseNo && <span className="dash-activity__id">{row.caseNo}</span>}
+                    </span>
+                    <span className="dash-activity__meta">{row.meta}</span>
+                  </span>
+                  <span className={row.chipClass}>
+                    {row.chip}
+                  </span>
+                </div>
+              )}
             </li>
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+/** The wall clock, ticking every second: the badge beside the greeting is
+ *  read as "now", and a clock that only moves on reload is a stale one. */
+function useNow(stepMs = 1000) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), stepMs);
+    return () => clearInterval(id);
+  }, [stepMs]);
+  return now;
+}
+
+/** One range control for every panel header that offers one: three selects,
+ *  one state. The dashboard reads a single window, so a panel choosing its own
+ *  would be a control describing something that is not true. */
+export function RangeSelect({ preset, onPick }) {
+  return (
+    <label className="dash-range">
+      <span className="sr-only">Date range</span>
+      <select value={preset ?? 'custom'} onChange={(e) => onPick(e.target.value === 'all' ? 'all' : Number(e.target.value))}>
+        <option value="all">All time</option>
+        <option value={5}>Last 5 days</option>
+        <option value={7}>Last 7 days</option>
+        <option value={14}>Last 14 days</option>
+        <option value={30}>Last 30 days</option>
+        {preset === null && <option value="custom">Custom range</option>}
+      </select>
+    </label>
+  );
+}
+
+/**
+ * THE RANGE'S COMPOSITION, as a donut: the three busiest types get their own
+ * slice in the trend chart's own ramp order, and everything else is one grey
+ * Others slice — a fourth colour for a fifth type would be precision the
+ * legend cannot spend. Counts AND shares beside every name, because a slice
+ * says nothing about how many reports it is.
+ */
+export function TypeDonut({ slices }) {
+  const rows = (Array.isArray(slices) ? slices : []).filter((s) => s.count > 0);
+  const total = rows.reduce((n, s) => n + s.count, 0);
+  if (rows.length === 0 || total <= 0) return <EmptyNote>Nothing in range to break down.</EmptyNote>;
+  const R = 54;
+  const C = 2 * Math.PI * R;
+  let acc = 0;
+  return (
+    <div className="cmd-donut">
+      <svg className="cmd-donut__svg" viewBox="0 0 140 140" role="img" aria-label={`Incident types: ${rows.map((s) => `${s.label} ${s.count}`).join(', ')}`}>
+        <circle className="cmd-donut__track" cx="70" cy="70" r={R} />
+        {rows.map((s) => {
+          const frac = s.count / total;
+          const dash = `${Math.max(0, frac * C - 2)} ${C}`;
+          const rot = (acc / total) * 360;
+          acc += s.count;
+          return (
+            <circle
+              key={s.label}
+              className="cmd-donut__slice"
+              cx="70"
+              cy="70"
+              r={R}
+              // A STYLED stroke, not a `stroke` attribute: the colours arrive as
+              // `var(--cat-N)` and a presentation attribute cannot carry var().
+              style={{ stroke: s.color }}
+              strokeDasharray={dash}
+              transform={`rotate(${rot - 90} 70 70)`}
+            />
+          );
+        })}
+        <text className="cmd-donut__total" x="70" y="66" textAnchor="middle">{total}</text>
+        <text className="cmd-donut__caption" x="70" y="84" textAnchor="middle">reports</text>
+      </svg>
+      <ul className="cmd-donut__legend">
+        {rows.map((s) => (
+          <li key={s.label}>
+            <span className="cmd-donut__dot" style={{ background: s.color }} aria-hidden="true" />
+            <span className="cmd-donut__name">{s.label}</span>
+            <span className="cmd-donut__count">{fmt.format(s.count)}</span>
+            <span className="cmd-donut__pct">{Math.round((s.count / total) * 100)}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * WHERE THE RANGE'S REPORTS HAPPENED, longest bar first: one row per place,
+ * each bar a share of the busiest street. The register spells places by hand,
+ * so two spellings of one street are two rows until it spells them one way.
+ */
+export function LocationBars({ places }) {
+  const rows = (Array.isArray(places) ? places : []).filter((p) => p.count > 0);
+  if (rows.length === 0) return <EmptyNote>No places recorded in this range.</EmptyNote>;
+  const max = Math.max(...rows.map((p) => p.count), 1);
+  return (
+    <ul className="cmd-places">
+      {rows.map((p) => (
+        <li key={p.location}>
+          <span className="cmd-places__name">{p.location}</span>
+          <span className="cmd-places__track" aria-hidden="true">
+            <span className="cmd-places__bar" style={{ width: `${Math.max(4, Math.round((p.count / max) * 100))}%` }} />
+          </span>
+          <span className="cmd-places__count">{fmt.format(p.count)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The four services the status grid names, in the grid's own order. */
+const SYSTEM_SERVICES = [
+  { id: 'database', label: 'Database', mark: 'db' },
+  { id: 'ai', label: 'AI Service', mark: 'ai' },
+  { id: 'storage', label: 'File Storage', mark: 'files' },
+  { id: 'notifications', label: 'Notification', mark: 'bell' },
+];
+
+/** One service's mark, on the app's own 24-unit grid — no icon package. */
+function ServiceMark({ name }) {
+  const paths = {
+    db: ['M12 3.5c4.4 0 8 1.1 8 2.5s-3.6 2.5-8 2.5-8-1.1-8-2.5 3.6-2.5 8-2.5z', 'M4 6v12c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5V6', 'M4 12c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5'],
+    ai: ['M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4z', 'M19 15l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z'],
+    files: ['M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z'],
+    bell: ['M18 9a6 6 0 1 0-12 0c0 6-2.5 7-2.5 7h17S18 15 18 9z', 'M10 20a2.2 2.2 0 0 0 4 0'],
+  }[name] ?? [];
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {paths.map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  );
+}
+
+/**
+ * THE STATION'S OWN PULSE, as four boxes: the database that answered this very
+ * response, the captures disk, the AI provider, and the bell's feed — each
+ * measured server-side and handed down in `data.system`, never guessed in the
+ * browser. Every box names its state (owner request, 2026-10-30: Online in
+ * green when healthy); anything else paints amber, so trouble still reads at
+ * a glance.
+ */
+export function SystemGrid({ system }) {
+  const state = system && typeof system === 'object' ? system : {};
+  // A service the response does not name is UNKNOWN — never assumed online.
+  // The endpoint measures all four on every read, so a missing key means the
+  // read did not happen, not that the service is fine.
+  return (
+    <div className="cmd-sys">
+      <ul className="cmd-sys__grid">
+        {SYSTEM_SERVICES.map((s) => {
+          const value = state[s.id];
+          const ok = value === 'online';
+          const un = value === undefined || value === null;
+          const stateText = ok ? 'Online' : value === 'readonly' ? 'Read-only' : value === 'offline' ? 'Offline' : 'Unknown';
+          return (
+            <li key={s.id} className={`cmd-sys__box${ok ? ' is-online' : ''}${!ok && !un ? ' is-warn' : ''}`} aria-label={`${s.label}: ${(stateText ?? 'unknown').toLowerCase()}`}>
+              <span className="cmd-sys__icon" aria-hidden="true">
+                <ServiceMark name={s.mark} />
+              </span>
+              <span className="cmd-sys__label">{s.label}</span>
+              <span className="cmd-sys__state">
+                <span className="cmd-sys__dot" aria-hidden="true" />
+                {stateText}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * REPORT STATUS — draft against filed, from the same status split the register
+ * reads, drawn as TWO PILLS under the trend (owner request, 2026-10-30): dot,
+ * label, count and share each. Two states, not three: a report that has gone
+ * forward is Finalized (see ReportsTable's filter), so submitted and final are
+ * read as the one filed bucket the shelf tab holds. Nothing in range means no
+ * strip at all — the chart above already says so.
+ */
+function StatusBars({ status }) {
+  const draft = Math.max(0, Number(status?.draft ?? 0));
+  const filed = Math.max(0, Number(status?.submitted ?? 0)) + Math.max(0, Number(status?.final ?? status?.finalized ?? 0));
+  const total = draft + filed;
+  if (total <= 0) return null;
+  const rows = [
+    { label: 'Draft', count: draft, tone: 'draft' },
+    { label: 'Finalized', count: filed, tone: 'finalized' },
+  ];
+  return (
+    <ul className="cmd-statuspills" aria-label="Reports by status">
+      {rows.map((r) => (
+        <li key={r.label} className={`cmd-statuspill cmd-statuspill--${r.tone}`}>
+          <span className="cmd-statuspill__dot" aria-hidden="true" />
+          <span className="cmd-statuspill__label">{r.label}</span>
+          <span className="cmd-statuspill__count">{fmt.format(r.count)} · {Math.round((r.count / total) * 100)}%</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * AI INSIGHTS — advisory highlights computed from the whole register.
+ *
+ * Every bullet is a reading of the SAME stats response the panels draw (the
+ * busiest day, the leading type, the leading place), so a highlight can never
+ * name a fact the charts do not show. Nothing here names a person, a suspect
+ * or a conclusion — counts and shares only — and the panel says so.
+ *
+ * Whether the AI service itself is reachable comes from GET /ai/health: when
+ * it is off, the panel says it is off and the bullets are labelled rule-based
+ * counts rather than generated prose. A placeholder that pretends to reason
+ * would be worse than no panel.
+ */
+function AiInsights({ data, onFilterType }) {
+  const [aiOn, setAiOn] = useState(null);
+  useEffect(() => {
+    let live = true;
+    api('/ai/health')
+      .then((h) => { if (live) setAiOn(h?.enabled === true); })
+      .catch(() => { if (live) setAiOn(false); });
+    return () => { live = false; };
+  }, []);
+  const cats = Array.isArray(data?.categoryBreakdown) ? data.categoryBreakdown : [];
+  const total = cats.reduce((n, c) => n + Number(c.count || 0), 0);
+  const days = Array.isArray(data?.seriesOverTime) ? data.seriesOverTime : [];
+  const busiest = days.reduce((best, p) => (Number(p.count) > Number(best?.count ?? -1) ? p : best), null);
+  const places = Array.isArray(data?.locationBreakdown) ? data.locationBreakdown : [];
+  const bullets = [];
+  if (busiest && total > 0) {
+    bullets.push({
+      title: `${fmt.format(busiest.count)} reports on ${busiest.date}`,
+      detail: 'The busiest day in this range.',
+    });
+  }
+  if (cats.length > 0 && total > 0) {
+    bullets.push({
+      title: `${cats[0].type} leads types (${fmt.format(cats[0].count)} of ${fmt.format(total)})`,
+      detail: `${Math.round((Number(cats[0].count) / total) * 100)}% of the range — consider narrowing the register to it.`,
+      type: cats[0].type,
+    });
+  }
+  if (places.length > 0) {
+    bullets.push({
+      title: `${places[0].location} leads places (${fmt.format(places[0].count)})`,
+      detail: 'The street or barangay with the most reports in this range.',
+    });
+  }
+  // The source line (the AI-connected badge and the from–to range) is removed
+  // (owner request, 2026-10-30): the panel is the highlights. `aiOn` still
+  // decides whether the rule-based note shows.
+  return (
+    <div className="cmd-ai">
+      {aiOn === false && (
+        <p className="cmd-ai__note">
+          AI summaries are unavailable — the AI service is not configured. The highlights below are
+          rule-based counts from this range, not generated prose.
+        </p>
+      )}
+      {bullets.length === 0 ? (
+        <EmptyNote>Nothing in this range to highlight yet.</EmptyNote>
+      ) : (
+        <ul className="cmd-ai__list">
+          {bullets.map((b) => (
+            <li key={b.title}>
+              <strong>{b.title}</strong>
+              <span>{b.detail}</span>
+              {b.type && onFilterType && (
+                <button type="button" className="cmd-ai__filter" onClick={() => onFilterType(b.type)}>
+                  Show only {b.type}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="cmd-ai__advisory">Advisory only — verify against the register. It never determines guilt or replaces police judgment.</p>
+    </div>
   );
 }
 
@@ -538,18 +964,35 @@ export default function Dashboard({
   // Open ONE record, by id — the route Shell owns (the bell uses the same one).
   // The activity rows are the only thing on this page that names a single report.
   onOpenReport,
+  // Start a NEW report, and open User Management — both routes Shell owns, so
+  // the quick actions and the activity empty-state ask rather than reaching.
+  onNewReport,
+  onOpenUsers,
 }) {
+  // The page reads the WHOLE register (owner request, 2026-10-30): every
+  // panel except the trend answers for All time, whatever the range control
+  // says. The trend reads its own window below (`chartData`) — moving the
+  // Last-5-days control re-reads the chart and nothing else.
   const [data, setData] = useState(null);
-  // Whether the trend card has been EXPANDED over the whole row (the reference's
-  // corner control). It is a view state, not a query one: nothing is re-read, the
-  // card simply stops sharing its line with the activity panel.
-  const [expanded, setExpanded] = useState(false);
+  const [chartData, setChartData] = useState(null);
   const [error, setError] = useState(null);
-  const [preset, setPreset] = useState(30);
-  const [scope, setScope] = useState('all'); // meaningful for Admin/Staff only
-  const [{ from, to }, setDates] = useState(datesForPreset(30));
+  // The trend opens on the last five days, so it reads five columns on load.
+  // Widening to All time, 7/14/30 days, or a custom range re-windows the
+  // CHART only — the page around it stays on the register.
+  const [preset, setPreset] = useState(5);
+  const [scope, setScope] = useState('all');
+  // Empty dates mean All time: the server derives the window from the data
+  // itself (earliest incident to today) and echoes it back in meta. On load
+  // the window is the last five days, so the trend reads five columns.
+  const [{ from, to }, setDates] = useState(() => datesForPreset(5));
   const [type, setType] = useState('');
-  const [updatedAt, setUpdatedAt] = useState(null);
+  const now = useNow();
+  // The watch the greeting is read on: Day 06:00–18:00 Manila, Night otherwise.
+  // Display-only and computed from the clock — never a record, never a roster.
+  const shiftHour = Number(
+    new Intl.DateTimeFormat('en-US', { timeZone: MANILA, hour: 'numeric', hour12: false }).format(now),
+  );
+  const shift = shiftHour >= 6 && shiftHour < 18 ? 'Day' : 'Night';
   // The open self-service recovery requests (Phase 1, S-04), read from their own
   // endpoint so a failure there cannot take the charts down with it.
   const [requests, setRequests] = useState(null);
@@ -562,20 +1005,56 @@ export default function Dashboard({
     };
   }, []);
 
-  const load = useCallback(async () => {
+  // Full-bleed page (owner request, 2026-10-30): the shell's own padding and
+  // dark backdrop would frame the dashboard with blank sides, so while this
+  // screen is mounted the page column carries the dashboard's own background
+  // edge to edge — same pattern as `audits-white` / `station-white`.
+  useEffect(() => {
+    document.body.classList.add('dash-full');
+    return () => document.body.classList.remove('dash-full');
+  }, []);
+
+  // The page: always the whole register (`range=all`), re-read when the type
+  // or scope narrows it — never when the range control moves, which is the
+  // chart's own business below.
+  const loadPage = useCallback(async () => {
     setError(null);
     const params = new URLSearchParams();
-    if (from) params.set('from', from);
-    if (to) params.set('to', to);
+    // range=all asks for the whole register, not the last-30-days fallback
+    // the server applies when the window is simply absent.
+    params.set('range', 'all');
     if (type) params.set('type', type);
     params.set('scope', scope);
 
     try {
       const out = await api(`/dashboard/stats?${params.toString()}`);
-      if (live.current) {
-        setData(out);
-        setUpdatedAt(new Date());
+      if (live.current) setData(out);
+    } catch (err) {
+      if (isUnreachable(err)) {
+        onConnError?.();
+        return;
       }
+      if (live.current) setError(err?.message || 'The dashboard could not load its data.');
+    }
+  }, [type, scope, onConnError]);
+
+  useEffect(() => {
+    loadPage();
+  }, [loadPage]);
+
+  // The trend: the selected window only. Moving the range control re-reads
+  // this and nothing else — the page around the chart stays on the register.
+  const loadChart = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (!from && !to) params.set('range', 'all');
+    if (type) params.set('type', type);
+    params.set('scope', scope);
+
+    try {
+      const out = await api(`/dashboard/stats?${params.toString()}`);
+      if (live.current) setChartData(out);
     } catch (err) {
       if (isUnreachable(err)) {
         onConnError?.();
@@ -586,8 +1065,8 @@ export default function Dashboard({
   }, [from, to, type, scope, onConnError]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadChart();
+  }, [loadChart]);
 
   // The open requests. A read of local state like the rest of the dashboard, and
   // deliberately NOT part of the stats call: a failure here leaves the charts up
@@ -623,16 +1102,17 @@ export default function Dashboard({
   useEffect(() => {
     const iv = setInterval(() => {
       if (!error) {
-        load();
+        loadPage();
+        loadChart();
         loadRequests();
       }
     }, 60000);
     return () => clearInterval(iv);
-  }, [load, loadRequests, error]);
+  }, [loadPage, loadChart, loadRequests, error]);
 
   const applyPreset = (days) => {
     setPreset(days);
-    setDates(datesForPreset(days));
+    setDates(days === 'all' ? { from: '', to: '' } : datesForPreset(days));
   };
 
   const clearPreset = () => {
@@ -640,12 +1120,13 @@ export default function Dashboard({
   };
 
   /**
-   * Narrow the whole dashboard to one day, from the chart's right-click menu.
+   * Narrow the CHART to one day, from its own right-click menu. The page
+   * around it stays on the register — only the trend re-reads.
    *
    * The presets are cleared rather than left lit: a 7d button beside a range of a
    * single day is a control describing something that is not true, which is worse
    * than no button looking active. `preset` is only a highlight — the range itself
-   * is `dates`, which is what every fetch and the chart's own day axis read.
+   * is `dates`, which is what the chart fetch and its day axis read.
    */
   const focusDay = (date) => {
     clearPreset();
@@ -664,21 +1145,44 @@ export default function Dashboard({
     onOpenReports?.({ date_from: date, date_to: date, type: dayType || '' });
 
   const k = data?.kpis;
+  // The three hero cards read the REGISTER, not the window (owner request,
+  // 2026-10-30): Total, Drafts and Finalized match All Reports — 17, 16, 1 —
+  // whatever range the trend is reading. Falls back to the windowed figures on
+  // an older cached response that carries no registerTotals.
+  const hero = data?.registerTotals ?? k;
+  // The range on screen: the picked dates, or — on All time — the window the
+  // server derived from the data and echoed back in meta.
+  const viewFrom = from || chartData?.meta?.from || '';
+  const viewTo = to || chartData?.meta?.to || '';
   const loading = data === null && !error;
-  const statusSlices = data
-    ? { draft: data.statusBreakdown?.draft ?? 0, submitted: data.statusBreakdown?.submitted ?? 0, final: data.statusBreakdown?.final ?? 0 }
-    : null;
-  const needsAttention = (k?.pending ?? 0) + (k?.submitted ?? 0);
+  // The trend reads its own fetch: a skeleton until its window answers, even
+  // when the page around it has already loaded.
+  const chartLoading = chartData === null && !error;
 
   // ONE order for the chart, applied here and handed to both consumers, so the
   // stack and the key cannot disagree about it. The endpoint returns volume
   // order (most frequent first) and the catch-all bucket is moved to the end on
   // top of that — see orderForDisplay, which also explains why the bucket is the
-  // one entry allowed to sit out of volume order.
-  const chartTypes = useMemo(() => orderForDisplay(data?.seriesByType), [data?.seriesByType]);
+  // one entry allowed to sit out of volume order. Read off the CHART's window,
+  // never the page's, so the stack always answers the range on screen.
+  const chartTypes = useMemo(() => orderForDisplay(chartData?.seriesByType), [chartData?.seriesByType]);
+
+  // The donut and the places: all read from the same register response the
+  // panels around them read, so no card can disagree with the charts under
+  // it — including when the trend above is narrowed to five days.
+  const donutRows = useMemo(() => {
+    // Blue and yellow only (owner request, 2026-10-30): the trio's composition
+    // reads in the station's two colours rather than the chart ramp.
+    const DONUT_HUES = ['#2563eb', '#eab308', '#60a5fa'];
+    const cats = Array.isArray(data?.categoryBreakdown) ? data.categoryBreakdown : [];
+    const top = cats.slice(0, 3).map((c, i) => ({ label: c.type, count: c.count, color: DONUT_HUES[i % DONUT_HUES.length] }));
+    const rest = cats.slice(3).reduce((n, c) => n + c.count, 0);
+    if (rest > 0) top.push({ label: 'Others', count: rest, color: '#c9a227' });
+    return top;
+  }, [data?.categoryBreakdown]);
 
   return (
-    <div className="dash">
+    <div className="dash dash--cmd">
       {/* ---- Sign-in health (migration 018 / S-01) -------------------------
           The second factor's preflight, so the station can see its factor is
           healthy BEFORE a shift starts rather than when an officer is already
@@ -743,79 +1247,136 @@ export default function Dashboard({
         </div>
       )}
 
-      <header className="dash-topbar">
-
+      {/* ---- Command header -------------------------------------------------
+          The greeting, the station the page answers for, and the moment it was
+          read: the reference's own head. The photograph is the station's own
+          file (the same picture the gate stands in front of), masked into the
+          panel's right edge rather than pasted beside the words. */}
+      <header className="cmd-hero">
+        <div className="cmd-hero__photo" aria-hidden="true">
+          <img src={stationPhoto} alt="" />
+          <span className="cmd-hero__wash" />
+          <span className="cmd-hero__station">{(stationName ?? 'City of Naga Police Station').toUpperCase()}</span>
+        </div>
+        <div className="cmd-hero__text">
+          <h2 className="cmd-hello">{dayGreeting()}, <span>{firstName(user)}</span></h2>
+          <p className="cmd-sub">Here&apos;s what&apos;s happening at {stationName ?? 'City of Naga Police Station'} today.</p>
+          {/* WHO IS BEING GREETED, and on which watch: the role the session
+              holds and the shift the wall clock reads. Neither is a record —
+              the role names the account, the shift names the hour. */}
+          <p className="cmd-pills">
+            <span className="cmd-pill">{user?.role ?? 'Admin'} · {user?.badge_number ?? ''}</span>
+            <span className="cmd-pill">Shift: {shift}</span>
+          </p>
+        </div>
+        <div className="cmd-clock" role="status" aria-label={`Today is ${MANILA_DATE.format(now)}, ${MANILA_DAY.format(now)}, ${MANILA_TIME.format(now)}`}>
+          <span className="cmd-clock__date">{MANILA_DATE.format(now)}</span>
+          <span className="cmd-clock__day">{MANILA_DAY.format(now)}</span>
+          <span className="cmd-clock__time" aria-live="off">{MANILA_TIME.format(now)}</span>
+        </div>
       </header>
+
+      {/* ---- Dashboard toolbar: the quick actions ----------------------------
+          The rail stays the Admin's only chrome (bell and profile live there),
+          so this row is page furniture, not a second nav: the three jumps an
+          Admin reaches for — new report, open drafts, and the roster. */}
+      <div className="dash-toprow">
+      <div className="dash-toolbar">
+        <div className="dash-quick" role="group" aria-label="Quick actions">
+          <button type="button" className="dash-quick__btn is-primary" onClick={() => onNewReport?.()}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            New Report
+          </button>
+          <button type="button" className="dash-quick__btn" onClick={() => onOpenReports?.({ status: 'draft' })}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z" /><path d="M9 12h6M9 16h6" /></svg>
+            Review Drafts
+          </button>
+          <button type="button" className="dash-quick__btn" onClick={() => onOpenUsers?.()}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.2 3.4-5 6.5-5s5.7 1.8 6.5 5" /></svg>
+            Manage Users
+          </button>
+        </div>
+      </div>
 
       {error && (
         <div className="dash-alert" role="alert">
           {error}
-          <button type="button" className="dash-alert__retry" onClick={load}>
+          <button type="button" className="dash-alert__retry" onClick={() => { loadPage(); loadChart(); }}>
             retry
           </button>
         </div>
       )}
 
-      {/* ---- KPI strip -------------------------------------------------
-          FOUR CARDS, each saying one thing about the range being read (owner
-          request, 2026-10-12): a tinted mark that says which reading it is,
-          the number, and one line under it. The readings, their order and
-          their sub-lines are the reference's own; the FIRST card additionally
-          carries the range's daily series as a sparkline, and the only card
-          that is also a control is Needs attention (the number is a queue, and
-          a queue opens). */}
-      <section className="dash-kpis" aria-busy={loading}>
-        <KpiCard
-          loading={loading}
-          tone="blue"
-          mark="reports"
-          label="Total reports"
-          value={k ? fmt.format(k.total) : '—'}
-          delta={<DeltaLine pct={k ? k.periodDeltaPct : null} />}
-          spark={<Sparkline series={data?.seriesOverTime} label="Reports per day in this range" />}
-        />
-        <KpiCard
-          loading={loading}
-          tone="green"
-          mark="attention"
-          label="Needs attention"
-          value={k ? fmt.format(needsAttention) : '—'}
-          note={
-            k
-              ? `${fmt.format(k.pending)} draft · ${fmt.format(k.submitted)} awaiting finalization`
-              : ''
-          }
-          to={() => onOpenReports?.({ status: 'attention' })}
-          title="Open the needs-attention queue in All Reports"
-        />
-        <KpiCard
-          loading={loading}
-          tone="amber"
-          mark="finalized"
-          label="Finalized"
-          value={k ? fmt.format(k.finalized) : '—'}
-          note={k && finalizePct(k) !== null ? `${finalizePct(k)}% of reports in range` : ''}
-        />
-        <KpiCard
-          loading={loading}
-          tone="violet"
-          mark="timer"
-          label="Median draft to final"
-          value={
-            data?.finalizeTime?.medianMinutes != null
-              ? fmtMinutes(data.finalizeTime.medianMinutes)
-              : '—'
-          }
-          valueClass="dash-kpi__value--time"
-          note={
-            data?.finalizeTime
-              ? data.finalizeTime.medianMinutes != null
-                ? `${fmt.format(data.finalizeTime.finalizedCount)} finalized in range`
-                : 'Nothing was finalized in this range'
-              : ''
-          }
-        />
+      {/* ---- Metric cards ---------------------------------------------------
+          FOUR READINGS, each saying one thing about the range being read: the
+          bold caption and the hero number. The three report cards read the
+          whole register (registerTotals), so they match All Reports whatever
+          window the trend is reading; the panels below keep reading the window.
+          Only the headcount keeps its admin/officer line
+          (owner request, 2026-10-30). */}
+      <section className="dash-kpis cmd-kpis" aria-busy={loading}>
+        {/* Each card opens the register pre-filtered to what it counts — Total
+            reads the whole register, Drafts the open work, Finalized the filed
+            set (see ReportsTable's status filter), the headcount the roster. */}
+        <CardLink label="Total reports in the register" onGo={() => onOpenReports?.({})}>
+          <MetricCard
+            loading={loading}
+            tone="blue"
+            label="Total Reports"
+            value={hero ? fmt.format(hero.total) : '—'}
+          />
+        </CardLink>
+        <CardLink label="Drafts in progress" onGo={() => onOpenReports?.({ status: 'draft' })}>
+          <MetricCard
+            loading={loading}
+            tone="gold"
+            label="Drafts in Progress"
+            value={hero ? fmt.format(hero.pending) : '—'}
+          />
+        </CardLink>
+        <CardLink label="Finalized reports in the register" onGo={() => onOpenReports?.({ status: 'filed' })}>
+          <MetricCard
+            loading={loading}
+            tone="blue"
+            label="Finalized Reports"
+            value={hero ? fmt.format(hero.finalized) : '—'}
+          />
+        </CardLink>
+        <CardLink label="Active accounts" onGo={() => onOpenUsers?.()}>
+          <MetricCard
+            loading={loading}
+            tone="gold"
+            label="Active Accounts"
+            value={data?.users ? fmt.format(data.users.total) : '—'}
+            // Beside the headcount (owner request, 2026-10-30): yellow only,
+            // sitting on the number's own line — the words name the roles, so
+            // the colour is emphasis, never the only signal.
+            foot={data?.users?.byRole ? (
+              <span className="cmd-role-line">
+                <span className="cmd-role cmd-role--yellow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                    <circle cx="12" cy="8" r="3.5" />
+                    <path d="M5 20c.9-3.6 3.7-5.5 7-5.5s6.1 1.9 7 5.5" />
+                  </svg>
+                  {data.users.byRole.Admin ?? 0} admin
+                </span>
+                <span className="cmd-role-sep" aria-hidden="true">·</span>
+                <span className="cmd-role cmd-role--yellow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                    <circle cx="9" cy="8" r="3.5" />
+                    <path d="M2.5 20c.8-3.2 3.4-5 6.5-5s5.7 1.8 6.5 5" />
+                    <path d="M17 8.5h4M19 6.5v4" />
+                  </svg>
+                  {data.users.byRole.Officer ?? 0} officers
+                </span>
+              </span>
+            ) : (
+              'across the station'
+            )}
+          />
+        </CardLink>
       </section>
+      </div>
 
       {/* ---- Trend --------------------------------------------------------
           Full width, and not beside anything. The trend is the panel an Admin
@@ -823,61 +1384,35 @@ export default function Dashboard({
           days had about 19px — too little for a column to show a composition.
           Full width gives every day real room, and it keeps the wide-case layout
           the same shape as the narrow case. */}
-      <div
-        className={`dash-grid-main dash-grid-main--split${expanded ? ' is-expanded' : ''}`}
-      >
-        {loading ? <PanelSkeleton tall /> : (
+      <div className="dash-grid-main dash-grid-main--split">
+        {chartLoading ? <PanelSkeleton tall /> : (
           <Panel
-            title="Reports over time"
-            mark={<BarsMark />}
-            sub="Number of incident reports per day"
+            title="Reports Overview"
+            // The range this head reads, in the head that reads it: one control
+            // for the whole page (All time, Last 5 / 7 / 14 / 30 days), beside the
+            // colour key — the reference's own arrangement. `preset` is only a highlight;
+            // the range itself is `dates`, which is what every fetch reads.
             aside={
               <>
                 <ChartKey byType={chartTypes} />
-                {/* THE CORNER CONTROL (the reference draws it here). It expands
-                    the trend over the whole row — the activity panel drops
-                    below it — which is what a reader wants when the range is
-                    long and the days are thin. A pressed state, not a dialog:
-                    nothing is hidden, the drawing just gets the width. */}
-                <button
-                  type="button"
-                  className="dash-expand"
-                  aria-pressed={expanded}
-                  onClick={() => setExpanded((v) => !v)}
-                  title={expanded ? 'Share the row with recent activity' : 'Expand the chart across the row'}
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                    focusable="false"
-                  >
-                    {expanded ? (
-                      <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
-                    ) : (
-                      <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />
-                    )}
-                  </svg>
-                  <span className="sr-only">
-                    {expanded ? 'Collapse the chart' : 'Expand the chart'}
-                  </span>
-                </button>
+                <RangeSelect preset={preset} onPick={applyPreset} />
               </>
             }
           >
+            {/* The status split, as pills under the plot (owner request,
+                2026-10-30): Draft and Finalized with their counts and shares,
+                read off the register like the hero cards — not a panel of
+                their own any more. */}
+            <StatusBars status={data?.statusBreakdown} />
             <StackedColumns
-              series={data?.seriesOverTime ?? []}
+              series={chartData?.seriesOverTime ?? []}
               byType={chartTypes}
               scope={scope}
               type={type}
               // The range is already one day when the two ends match, which is how
               // the menu knows that "Filter the chart to this day" has nothing left
               // to do.
-              activeDay={from && from === to ? from : ''}
+              activeDay={viewFrom && viewFrom === viewTo ? viewFrom : ''}
               notify={notify}
               onFocusDay={focusDay}
               onOnlyType={setType}
@@ -891,116 +1426,57 @@ export default function Dashboard({
             then the last few things that actually happened in it. */}
         <RecentActivity
           reports={data?.recentReports}
+          events={data?.recentActivity}
           loading={loading}
           onOpen={onOpenReport}
           onViewAll={() => onOpenReports?.({})}
+          // The "widen the dates" hint belongs to a narrowed type only: the
+          // activity reads the whole register now, so the chart's range never
+          // narrows it — only the incident-type filter can.
+          filtered={type !== ''}
+          onStart={() => onNewReport?.()}
         />
       </div>
 
-      {/* ---- Status, beside the hour it was filed at ----------------------
-          The pie card hugs the drawing inside it and sits hard against the left
-          edge of the row — which is the trend panel's own edge above it
-          (styles.css, `.dash-grid-main--pie`) — and the hour chart takes what is
-          left. The two are the same KIND of fact: how the register splits once a
-          report is filed, by state and by time of day. Read together they answer
-          one question ("where is the work, and when does it arrive"), which is why
-          they share a line rather than taking one each.
-
-          The pie panel is deliberately narrower than the panel beside it: its only
-          content is a fixed-size drawing, so a card stretched to match would be
-          mostly empty panel — and the hour chart, which is 24 bars wide, is the
-          one that can actually use the room. */}
-      <div className="dash-grid-main dash-grid-main--pie">
+      {/* ---- Trio: kind, place, pulse — above the brief ----------------------
+          Moved above AI Insights (owner request, 2026-10-30): the register's
+          own facts read first, the analyst's advice after them. Three equal
+          panels, one row: the composition, where it happened, and the
+          station's own pulse. */}
+      <div className="dash-grid-trio">
         {loading ? <PanelSkeleton /> : (
-          <Panel title="Status breakdown" info={<PanelInfo {...PANEL_INFO.status} />}>
-            <StatusPie
-              status={statusSlices}
-              scope={scope}
-              type={type}
-              notify={notify}
-              onOpenReports={onOpenReports}
-            />
+          <Panel title="Incident Types">
+            <TypeDonut slices={donutRows} />
           </Panel>
         )}
         {loading ? <PanelSkeleton /> : (
-          <Panel title="Reports by hour" info={<PanelInfo {...PANEL_INFO.hour} />}>
-            <HourChart hours={data?.hourHistogram ?? []} />
+          <Panel title="Top Locations">
+            <LocationBars places={data?.locationBreakdown} />
+          </Panel>
+        )}
+        {loading ? <PanelSkeleton /> : (
+          <Panel title="System Status">
+            <SystemGrid system={data?.system} />
           </Panel>
         )}
       </div>
 
-      {/* ---- Incident categories ------------------------------------------
-          Its own full-width row: this is the one panel that wants the width, since every
-          line in it is a type's history across the range.
-
-          No aside in the head any more. The head used to say "Top 8 of 11" because the
-          BAR LIST was capped at eight rows; the chart now decides its own cut (the
-          leaders, with a type needing two ranked buckets to earn a line) and states it
-          under itself, so the honest footnote belongs to the element that applied the
-          rule rather than to the panel title. */}
-      <div className="dash-grid-main dash-grid-main--stack">
-        {loading ? <PanelSkeleton /> : (
-          <Panel title="Incident categories" info={<PanelInfo {...PANEL_INFO.categories} />}>
-            <CategoryRank
-              series={data?.seriesOverTime ?? []}
-              byType={chartTypes}
-              deltas={data?.categoryDeltas ?? {}}
-              rangeTotal={k?.total ?? 0}
-              from={from}
-              to={to}
-              onOpenReports={onOpenReports}
-            />
-          </Panel>
-        )}
-      </div>
-
-      {/* ---- The summary strip -------------------------------------------
-          THE FOUR READINGS AGAIN, at the foot of the page: the reference draws
-          its own figures twice — as cards at the top, and as this compact strip
-          below — and the owner asked for that design. What the strip adds is the
-          one thing the cards have no room for: the measured change against the
-          period before, one arrow each. Every percentage is the server's own
-          count over the same window shifted back (see the period deltas in
-          DashboardController); a figure with nothing to compare against draws no
-          arrow rather than a zero, and the median reads a FALL as the good
-          direction because a faster queue is the improvement. */}
-      {!loading && (
-        <div className="dash-sum">
-          <SummaryCard
-            tone="blue"
-            mark="reports"
-            value={k ? fmt.format(k.total) : '—'}
-            label="Total reports"
-            pct={k ? k.periodDeltaPct : null}
-          />
-          <SummaryCard
-            tone="green"
-            mark="attention"
-            value={k ? fmt.format(needsAttention) : '—'}
-            label="Needs attention"
-            pct={data?.periodDeltas?.attentionPct}
-          />
-          <SummaryCard
-            tone="amber"
-            mark="finalized"
-            value={k ? fmt.format(k.finalized) : '—'}
-            label="Finalized"
-            pct={data?.periodDeltas?.finalizedPct}
-          />
-          <SummaryCard
-            tone="violet"
-            mark="timer"
-            value={
-              data?.finalizeTime?.medianMinutes != null
-                ? fmtMinutes(data.finalizeTime.medianMinutes)
-                : '—'
-            }
-            label="Median draft to final"
-            pct={data?.periodDeltas?.medianPct}
-            good="down"
-          />
-        </div>
+      {/* ---- AI: the analyst's brief ---------------------------------------
+          Below the trio (owner request, 2026-10-30), and the one panel on the
+          page that is not the register speaking — so it dresses like the
+          analyst's brief, not a fourth white card (see styles.css,
+          `.dash-panel--ai`). */}
+      {loading ? <PanelSkeleton /> : (
+        <Panel title="AI Insights" className="dash-panel--ai">
+          <AiInsights data={data} onFilterType={setType} />
+        </Panel>
       )}
+
+      {/* ---- Incident categories: REMOVED (owner request) -----------------
+          The rank chart and its summary strip are gone: the trend, status and
+          hour panels plus recent activity are the dashboard. The backend still
+          serves seriesByType, categoryDeltas, periodDeltas and finalizeTime, so
+          whatever replaces them can be built on the same response. */}
 
       {/* ---- Workload + activity: REMOVED ---------------------------------
           Both panels were taken off deliberately, so the row is not here. The
@@ -1009,12 +1485,6 @@ export default function Dashboard({
           response without touching the API. */}
     </div>
   );
-}
-
-/** Share of the period's reports that reached `finalized`, or null when empty. */
-function finalizePct(k) {
-  if (!k || k.total <= 0) return null;
-  return Math.round((k.finalized / k.total) * 100);
 }
 
 // ---- Stacked columns: hand-drawn SVG, zero dependencies ---------------------
@@ -1166,7 +1636,7 @@ function ChartKey({ byType }) {
     <PanelInfo
       label="What the incident type colours mean"
       title="What the column colours mean"
-      note="Each column is one day. Bands stack from the bottom up, most frequent at the axis, so the band sitting on the baseline is the station's commonest incident. The number is how many reports of that type were filed in this range."
+      note="Each column is one day. Bands stack from the bottom up, most frequent at the axis, so the band sitting on the baseline is the station's commonest incident. The number is how many reports of that type were filed in this range. Bands tall enough to hold it carry the incident type, written inside the column."
       // Where a reader looks for how to read the chart, so it is where the chart
       // says it can be right-clicked. Hovering a column finds the breakdown;
       // nothing about hovering it suggests the actions behind the right button.
@@ -1188,6 +1658,53 @@ function ChartKey({ byType }) {
   );
 }
 
+/**
+ * The incident type, written INSIDE its own band (owner request, 2026-10-30).
+ *
+ * The chips above the chart are gone, so the column itself says which type
+ * each band is: flat when the band is tall enough for a line of type and wide
+ * enough for its name, turned sideways when the band is narrow but tall, and
+ * absent on slivers too small for either — the magnifier card still names
+ * every type present on those days. The width is an ESTIMATE (name length at a
+ * 0.58 advance for 10px type runs a hair wide of the truth), so a name that
+ * fits the estimate fits the band.
+ */
+const SEG_TAG_FS = 9;
+const SEG_TAG_ADV = 0.58;
+function segTag(type, x, midY, w, h, muted) {
+  const name = String(type ?? '');
+  if (!name) return null;
+  const tagClass = `dash-seg__tag${muted ? ' is-muted' : ''}`;
+  const wide = name.length * SEG_TAG_FS * SEG_TAG_ADV;
+  // Flat: a 9px line needs 13px of band, with 2px of air on each side.
+  if (h >= SEG_TAG_FS + 4 && wide <= w - 4) {
+    return (
+      <text x={x} y={midY} className={tagClass} fontSize={SEG_TAG_FS} textAnchor="middle" dominantBaseline="central" aria-hidden="true">
+        {name}
+      </text>
+    );
+  }
+  // Sideways: the band's height is the line's width, and 11px of column is the
+  // narrowest a turned name stays legible in.
+  if (w >= 11 && wide <= h - 6) {
+    return (
+      <text
+        x={x}
+        y={midY}
+        transform={`rotate(-90 ${x} ${midY})`}
+        className={tagClass}
+        fontSize={SEG_TAG_FS}
+        textAnchor="middle"
+        dominantBaseline="central"
+        aria-hidden="true"
+      >
+        {name}
+      </text>
+    );
+  }
+  return null;
+}
+
 function StackedColumns({
   series,
   byType,
@@ -1206,9 +1723,13 @@ function StackedColumns({
 }) {
   // Must match the plot's CSS height (styles.css, `.dash-plot`), because the
   // viewBox height below IS the pixel height and the two are read as one by every
-  // vertical calculation in here.
-  const H = 220;
-  const PAD = { l: 34, r: 12, t: 14, b: 26 };
+  // vertical calculation in here. Tall enough to fill the panel beside Recent
+  // Activity (owner request, 2026-10-30): at 220px the panel stretched past
+  // the plot and left a dead band under the axis.
+  const H = 300;
+  // The foot is trimmed (owner request, 2026-10-30): 16px under the axis is
+  // all the axis labels need, so no empty band sits at the plot's foot.
+  const PAD = { l: 34, r: 12, t: 14, b: 16 };
   const [hover, setHover] = useState(null); // index into series
   const [picked, setPicked] = useState(null); // ramp step of the box under the pointer
   // The day whose card is held open, kept as a DATE rather than as an index. The
@@ -1555,16 +2076,18 @@ function StackedColumns({
           // column is being read against, and they are already the faintest thing
           // on the plot.
           const muted = shown != null && b.day !== shown;
+          // Never thinner than a pixel of band to write in: one report on one
+          // day is a real fact, and the tag decision below reads this height.
+          const bandH = Math.max(1, yBase - yTop);
           return (
+            <g key={`${b.day}-${b.type}`}>
             <rect
-              key={`${b.day}-${b.type}`}
               className={`dash-seg dash-seg--${rampStep(b.rank)}${muted ? ' is-muted' : ''}`}
               x={cx(b.day) - w / 2}
               y={yTop}
               width={w}
-              // Never thinner than a pixel: one report on one day is a real fact
-              // and has to leave a mark rather than vanish into the baseline.
-              height={Math.max(1, yBase - yTop)}
+              // ...while the rect below still never vanishes into the baseline.
+              height={bandH}
               // The plot is drawn with preserveAspectRatio="none" so the columns can
               // fill whatever width the panel has, which means this 1px separator
               // would otherwise scale with the panel — about 0.8px in the old
@@ -1578,7 +2101,9 @@ function StackedColumns({
               // across the whole window, so the highlight follows the type, not its
               // position in this particular day.
               onMouseEnter={() => setPicked(b.rank)}
-            />
+              />
+              {segTag(b.type, cx(b.day), (yTop + yBase) / 2, w, bandH, muted)}
+            </g>
           );
         })}
         {[0, Math.round(axisMax / 2), axisMax].map((v) => (
@@ -1591,7 +2116,7 @@ function StackedColumns({
             <text
               key={idx}
               x={cx(idx)}
-              y={H - 6}
+              y={H - 5}
               fontSize="10"
               className="chart-axis"
               // The first and last are anchored inward so neither runs off the edge
@@ -2108,7 +2633,7 @@ function CategoryRank({ series, byType, deltas, rangeTotal, from, to, onOpenRepo
 // order stays put.
 const STATUS_SLICES = [
   { key: 'final', label: 'Final' },
-  { key: 'submitted', label: 'Submitted' },
+  { key: 'submitted', label: 'Finalized' },
   { key: 'draft', label: 'Draft' },
 ];
 

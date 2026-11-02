@@ -61,7 +61,10 @@ test('the config, the launcher and the watchdog all name the same two ports', ()
   );
   // scripts\serve.cmd: both directions — start it there, and only if that exact
   // port is free.
-  assert.match(ps, /@\('-S', "127\.0\.0\.1:\$port", '-t', 'public', 'router\.php'\)/, 'the shared watchdog no longer starts the API on its configured port');
+  // Bound to ALL interfaces on purpose: the phone app reaches this same port over
+  // the station Wi-Fi, and a loopback-only bind would make the server invisible
+  // to it (see the note above Repair-Api in the script itself).
+  assert.match(ps, /@\('-S', "0\.0\.0\.0:\$port", '-t', 'public', 'router\.php'\)/, 'the shared watchdog no longer starts the API on its configured port');
   // The API check matches any interface: the portal binds 0.0.0.0:8099 so the
   // phone app can reach it over the station LAN, and a loopback-only pattern
   // reports "down" while it is serving.

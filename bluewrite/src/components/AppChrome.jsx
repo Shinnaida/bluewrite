@@ -7,7 +7,7 @@
 // holding one thing — this chrome — and the request was to take that strip away
 // too: an Admin's chrome is the rail, with the account at its foot. So the SAME
 // two controls are now drawn by BOTH chromes: the bar (AppTopBar) for an officer
-// or staff member, and the rail (AppSidebar) for an Admin. One bell, one menu,
+// or officer, and the rail (AppSidebar) for an Admin. One bell, one menu,
 // one Log out, drawn once and placed twice — a second copy of this markup is a
 // second account menu that drifts from the first, which is the rule this module
 // exists to keep.

@@ -72,7 +72,7 @@ bw_page_start([
 <div class="grid grid--4 dash-kpis">
   <article class="kpi kpi--total"><p class="kpi__label">Reports in window</p><p class="kpi__value" data-kpi="total">—</p><p class="kpi__meta" data-kpi="delta"></p></article>
   <article class="kpi kpi--pending"><p class="kpi__label">Awaiting action</p><p class="kpi__value" data-kpi="pending">—</p><p class="kpi__meta">drafts not yet filed</p></article>
-  <article class="kpi kpi--submitted"><p class="kpi__label">Submitted</p><p class="kpi__value" data-kpi="submitted">—</p><p class="kpi__meta">in the review queue</p></article>
+  <article class="kpi kpi--submitted"><p class="kpi__label">Finalized</p><p class="kpi__value" data-kpi="submitted">—</p><p class="kpi__meta">filed records</p></article>
   <article class="kpi kpi--final"><p class="kpi__label">Finalized</p><p class="kpi__value" data-kpi="finalized">—</p><p class="kpi__meta">locked records</p></article>
 </div>
 

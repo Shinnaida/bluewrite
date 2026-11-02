@@ -185,27 +185,53 @@ export function sanitizeLetterHtml(html) {
   return out;
 }
 
-/** The record's words without its ink: what rules, detection and AI read. */
-export function richTextToPlain(html) {
+/** The record's words without its ink: what rules, detection and AI read.
+ *
+ * Default collapses every break run to one line — what prompts, detection
+ * and word counts want. `{ keepBreaks: true }` keeps the officer's own
+ * paragraph gaps (3+ blanks capped at two) for surfaces that must read back
+ * exactly what was written: the arranged paper and its Discard way back.
+ * A `</p><p>` boundary already yields one blank line under it, so HTML the
+ * capture built round-trips to the reviewed text break for break. */
+export function richTextToPlain(html, { keepBreaks = false } = {}) {
   const src = String(html ?? '');
   const withBreaks = src
     .replace(/<(br|p|li|ul|ol|tr)\b[^>]*>/gi, '\n')
     .replace(/<\/(p|li|ul|ol|div|h[1-6]|tr|table)>/gi, '\n');
   const noTags = withBreaks.replace(/<[^>]*>/g, '');
-  return noTags
+  const unescaped = noTags
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#39;|&apos;/gi, "'");
+  if (!keepBreaks) {
+    return unescaped
+      .split('\n')
+      .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+      .filter((line) => line !== '')
+      .join('\n');
+  }
+  return unescaped
     .split('\n')
     .map((line) => line.replace(/[ \t]+/g, ' ').trim())
-    .filter((line) => line !== '')
-    .join('\n');
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^[\n]+|[\n]+$/g, '');
 }
 
 /** True when the value carries any of the subset's tags. */
 export function containsRichTags(value) {
   return /<(b|i|u|strong|em|ul|ol|li|p|br|div)\b/i.test(String(value ?? ''));
+}
+
+/**
+ * True when the value carries the officer's own emphasis or list ink
+ * (bold/italic/underline/lists) — as opposed to bare capture structure
+ * (`<p>`/`<br>`/`<div>` the capture builder emits). The paper renders inked
+ * words exactly as emphasized and dresses structural-only words formally.
+ */
+export function hasRichInk(value) {
+  return /<(b|i|u|strong|em|ul|ol|li)\b/i.test(String(value ?? ''));
 }

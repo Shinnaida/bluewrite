@@ -13,12 +13,17 @@
 //      not even when the read disagrees with it. The officer's own answer is
 //      the record; the read fills the blanks around it. This is the rule that
 //      makes a silent fill safe to run behind a button press.
-//   2. THE FORM'S OWN LIST WINS. The server already refuses a type outside the
-//      station's allowlist (ReportsController::allowedTypes()), but that list is
-//      WIDER than the form's dropdown — it carries the legacy Phase 1/2
-//      spellings so an old report can still be corrected. Writing one of those
-//      into the form would set a value no option in the select matches, so a
-//      type that is not in the caller's list is dropped, not repaired.
+//   2. THE FORM'S OWN LIST WINS. A read that names the incident in legal
+//      words rather than the form's own spelling ("Reckless imprudence
+//      resulting to damage to property and physical injury") is FOLDED to the
+//      closest type on the caller's list — the server applies the same rule,
+//      so the two never disagree — and the read's own words are kept as the
+//      report's Category, the same line a typed box keeps them on. An "Other"
+//      answer whose title words fold to a concrete type follows the title —
+//      a reckless-imprudence traffic blotter files as Traffic Accident, with
+//      its charge kept as the Category. A text with no real signal is
+//      dropped, not invented: a type that is neither named nor foldable
+//      leaves the draft's type (and Category) alone.
 //   3. A ROLE IS NOT A PERSON. A party lands in a group only when it has a name
 //      AND the type has that group; an unnamed role is not a row, and a witness
 //      row on a type with no Witnesses group is not a row either.
@@ -26,8 +31,9 @@
 // Nothing here reads state, the network or the clock, so the tests can ask any
 // question of any draft.
 
-import { GROUP_CONFIG, TYPE_FIELDS } from './incidentTypes.js';
+import { GROUP_CONFIG, TYPE_FIELDS, classifyClosestType } from './incidentTypes.js';
 import { applyRowVisibility, hasGroupRows, meaningfulRows } from './reportRules.js';
+import { correctNagaLocation } from './nagaPlaces.js';
 
 // The answer's scalar fields, in the order the form asks for them, with the
 // label the officer reads in the receipt line. One row per field: the key that
@@ -80,6 +86,7 @@ const str = (v) => (typeof v === 'string' ? v.trim() : '');
  *   filled: string[],       // the labels of everything above, form order
  *   unstated: string[],     // the read's "your account does not say this" list
  *   type: string,           // the type the draft will carry after the patch
+ *   category: string,       // the read's own words for the incident, '' when none
  * }}
  */
 export function buildClassifyFill(answer, draft, types = []) {
@@ -90,12 +97,56 @@ export function buildClassifyFill(answer, draft, types = []) {
   const empty = (key) => str(d[key]) === '';
 
   // The type first: it decides which groups exist, so everything below reads
-  // the type the draft will HAVE, not the one it has.
+  // the type the draft will HAVE, not the one it has. A read that names the
+  // incident in the blotter's legal words is folded to the closest type on the
+  // form's list (classifyClosestType — the server folds the same answer the
+  // same way), and the read's own words are kept as the Category.
   const answeredType = str(f.incident_type);
-  if (empty('incident_type') && answeredType !== '' && types.includes(answeredType)) {
-    patch.incident_type = answeredType;
-    filled.push('Type of incident');
+  let category = '';
+  if (empty('incident_type') && answeredType !== '') {
+    if (types.includes(answeredType)) {
+      patch.incident_type = answeredType;
+      filled.push('Type of incident');
+      // An "Other" answer is the read saying the account is too thin — but
+      // a blotter charges in legal words the list never carries
+      // ("RECKLESS IMPRUDENCE ..."), so the read lands on Other for a
+      // traffic account it described. When the read's own title words fold
+      // to a concrete type, the folder follows the sheet, not the shrug:
+      // the title still rides as the Category below, so no words change.
+      if (/^other(\s|$)/i.test(answeredType)) {
+        const fromTitle = classifyClosestType(str(f.incident_category), types);
+        if (fromTitle !== null && !/^other(\s|$)/i.test(fromTitle)) {
+          patch.incident_type = fromTitle;
+        }
+      }
+    } else {
+      const closest = classifyClosestType(answeredType, types);
+      if (closest !== null) {
+        patch.incident_type = closest;
+        filled.push('Type of incident');
+        category = answeredType;
+      }
+    }
   }
+  // The model sometimes names the crime only in its own words
+  // (incident_category) while leaving incident_type blank — and a blank type
+  // is what strands the save behind this read (no report is created without
+  // one), stranding the Improve-writing press on a refusal. When those words
+  // fold decisively to a concrete type on the list, the read takes it; an
+  // undecided fold stays blank rather than guessing, and the read's own words
+  // still ride as the Category below.
+  if (empty('incident_type') && patch.incident_type === undefined) {
+    const fromCategory = classifyClosestType(str(f.incident_category), types);
+    if (fromCategory !== null && !/^other(\s|$)/i.test(fromCategory)) {
+      patch.incident_type = fromCategory;
+      filled.push('Type of incident');
+    }
+  }
+  // The server carries the answer's words separately when IT did the folding —
+  // same line, no second source of truth. And the officer's own words stand:
+  // a Category already on the draft is never overwritten by the read.
+  if (category === '') category = str(f.incident_category);
+  if (category !== '' && str(d.type_specific?.incident_category) !== '') category = '';
   const type = patch.incident_type ?? str(d.incident_type);
 
   // The date and the time are ONE stored field (`YYYY-MM-DDTHH:MM`), and the
@@ -122,6 +173,23 @@ export function buildClassifyFill(answer, draft, types = []) {
     if (value === '' || !empty(key)) continue;
     patch[key] = value;
     filled.push(label);
+  }
+
+  // PLACE SPELLING — CITY OF NAGA GAZETTEER (owner request): the AI copies
+  // the place as written (OCR and hand-typed barangays drift: INOBUKAN for
+  // Inoburan, MAIN IT for Mainit), and the app maps near-miss spellings to
+  // the closest of the station's 28 barangays — scope City of Naga, Cebu,
+  // the same names Google Maps carries (see nagaPlaces.js). Exact and
+  // recognised variants are untouched; sitios, puroks and genuine unknowns
+  // are kept as written. The correction rides the patch like any fill, and
+  // the FROM → TO pairs are receipted below so the officer sees what moved.
+  let locationCorrection = [];
+  if (patch.location) {
+    const fixed = correctNagaLocation(patch.location);
+    if (fixed.text !== patch.location) {
+      locationCorrection = fixed.changes;
+      patch.location = fixed.text;
+    }
   }
 
   // The named people, into the groups this type actually has.
@@ -156,6 +224,8 @@ export function buildClassifyFill(answer, draft, types = []) {
       .map((line) => str(line))
       .filter((line) => line !== ''),
     type,
+    category,
+    locationCorrection,
   };
 }
 
@@ -201,12 +271,26 @@ function coerce(fld, value) {
   return option ?? '';
 }
 
+// Incident location keys conclusively corrected: misspelled barangays file
+// corrected, everything else exactly as read — source words only.
+const INCIDENT_LOCATION_KEYS = new Set([
+  'location_last_seen',
+  'incident_location',
+  'location_found',
+  'fire_location',
+  'possible_location',
+  'destination_if_known',
+]);
+
 /** One group row, reduced to the fields the group's schema knows. */
 function cleanRow(incoming, itemSchema) {
   const row = {};
   for (const fld of itemSchema) {
-    const value = coerce(fld, str(incoming?.[fld.key]));
-    if (value !== '') row[fld.key] = value;
+    let value = coerce(fld, str(incoming?.[fld.key]));
+    if (value === '') continue;
+    // Conclusive address: group resident addresses print corrected too.
+    if (fld.key === 'address') value = correctNagaLocation(value).text;
+    row[fld.key] = value;
   }
   return row;
 }
@@ -249,8 +333,10 @@ export function buildTypeDetailsFill(answer, draft) {
       const controller = patch[fld.showIf.key] ?? ts[fld.showIf.key] ?? '';
       if (!fld.showIf.values.includes(controller)) continue;
     }
-    patch[fld.key] = value;
-    ts[fld.key] = value; // visible to the next field's showIf
+    // Conclusive incident location: misspelled barangays file corrected.
+    const finalValue = INCIDENT_LOCATION_KEYS.has(fld.key) ? correctNagaLocation(value).text : value;
+    patch[fld.key] = finalValue;
+    ts[fld.key] = finalValue; // visible to the next field's showIf
     filled.push(fld.label);
   }
 
@@ -314,5 +400,6 @@ export function buildTypeDetailsFill(answer, draft) {
 /** True when the read has nothing to change — the receipt line says so. */
 export function classifyFillIsEmpty(fill) {
   return Object.keys(fill?.patch ?? {}).length === 0
-    && Object.keys(fill?.groups ?? {}).length === 0;
+    && Object.keys(fill?.groups ?? {}).length === 0
+    && str(fill?.category ?? '') === '';
 }

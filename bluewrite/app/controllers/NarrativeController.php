@@ -452,6 +452,64 @@ final class NarrativeController
     }
 
     /**
+     * POST /ai/enhance — Enhance Wording.
+     *
+     * The other half of the two-mode AI Assistance feature: the officer's own
+     * incident report goes in, the same report with better grammar and clearer
+     * wording comes back. It takes no report id and writes nothing — like
+     * /ai/classify, the account is the only source and the answer is a proposal
+     * the officer reviews and accepts in the editor.
+     *
+     * The report text is length-capped like every other free-text field the
+     * officer's words travel through. Field-label formatting is deliberately
+     * NOT done here: both modes go through the client's one formatter, so the
+     * Arrange output can never drift from the Enhance output.
+     */
+    public function enhance(): void
+    {
+        $user = Auth::requireUser();
+        if (!NarrativeService::enabled()) {
+            Response::json(503, ['error' => 'AI assistance is disabled. Continue with the report as written.']);
+        }
+
+        $body = NarrativeController::jsonBody();
+        $account = trim((string) ($body['account'] ?? ''));
+        if ($account === '') {
+            Response::json(422, ['error' => 'Write the report first — there is nothing yet to enhance.']);
+        }
+        $account = mb_substr($account, 0, 20000);
+
+        try {
+            $out = (new NarrativeService())->enhanceReport($account);
+        } catch (AiUnavailableException $e) {
+            Response::json(503, [
+                'error' => $e->getMessage(),
+                'retry_in' => $e->retryIn,
+                'manual_mode' => true,
+            ]);
+        } catch (AiProviderException $e) {
+            Response::json(502, [
+                'error' => self::providerFailureMessage($e),
+                'manual_mode' => !$e->retryable,
+            ]);
+        }
+
+        // The real actor, and no report id: the report may not exist yet and
+        // this call does not write to one either way.
+        Audit::log((int) $user['id'], 'ai.enhance', 'report', null, sprintf(
+            'chars_in: %d, chars_out: %d',
+            mb_strlen($account),
+            mb_strlen($out),
+        ));
+
+        Response::json(200, [
+            // The enhanced report text, plain. The client lays it out and bolds
+            // only the labels the source carried.
+            'report' => $out,
+        ]);
+    }
+
+    /**
      * Phase 7 — POST /ai/classify/details
      *
      * The second half of the account read: the incident type's OWN fields. Same

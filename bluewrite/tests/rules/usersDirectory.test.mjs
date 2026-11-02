@@ -154,7 +154,7 @@ test('the status chip is a chip, centred with its own heading, and the sign-in r
   // The status cell carries the class the stylesheet centres on, heading and body
   // together — a chip hard against the left edge read as if it belonged to the
   // column before it.
-  assert.match(html, /<td class="status"><span class="badge active">active<\/span><\/td>/);
+  assert.match(html, /<td class="status" data-label="Status"><span class="badge active">active<\/span><\/td>/);
   assert.match(html, /<span class="badge inactive">inactive<\/span>/);
 
   // THE SERVER'S STAMP, VERBATIM, on one line: no client-side "2h ago" anywhere,
@@ -163,8 +163,8 @@ test('the status chip is a chip, centred with its own heading, and the sign-in r
   // never-wrap rule; without it the timestamp broke across two lines and took the
   // row's height with it. And `num` is ALL it wears: the machine `stamp` face is
   // gone, so the sign-in reads in the same face as the full name beside it.
-  assert.match(html, /<td class="num">2026-09-22 18:19:16<\/td>/);
-  assert.match(html, /<td class="num">Never<\/td>/);
+  assert.match(html, /<td class="num" data-label="Last sign-in">2026-09-22 18:19:16<\/td>/);
+  assert.match(html, /<td class="num" data-label="Last sign-in">Never<\/td>/);
   assert.doesNotMatch(html, /num stamp">2026/);
   assert.doesNotMatch(html, /ago</);
 });
@@ -191,13 +191,12 @@ test('the actions are the app’s own row menu, and destruction is last and alon
   assert.match(items, /label: 'Deactivate account', danger: true/);
   assert.equal((items.match(/danger: true/g) || []).length, 1);
 
-  // The FACTOR items are ABSENT for a Staff account rather than disabled: there is no
-  // factor to clear and none to issue, and a dead item asks the officer to work out why.
-  // Both live behind the same role gate: the email-code reset, and the offline recovery
-  // codes (migration 018) that print a way in when mail cannot send.
-  const factorItems = items.slice(items.indexOf("u.role === 'Admin'"), items.indexOf('u.status ==='));
-  assert.match(factorItems, /\{ label: 'Issue recovery codes', onSelect: \(\) => askRecoveryCodes\(u\) \}/);
-  assert.match(factorItems, /\{ label: 'Reset verification', onSelect: \(\) => askResetMfa\(u\) \}/);
+  // The FACTOR items are on every row: every role signs in with an emailed code
+  // (migration 021 retired Staff), so there is always a factor to clear and one
+  // to issue. Both live side by side: the email-code reset, and the offline
+  // recovery codes (migration 018) that print a way in when mail cannot send.
+  assert.match(items, /\{ label: 'Issue recovery codes', onSelect: \(\) => askRecoveryCodes\(u\) \}/);
+  assert.match(items, /\{ label: 'Reset verification', onSelect: \(\) => askResetMfa\(u\) \}/);
   // A deactivated row's menu is where the way back lives, so it is never empty.
   assert.match(items, /u\.status === 'active' \? \{ label: 'Deactivate account'/);
   assert.match(items, /\{ label: 'Reactivate account', onSelect: \(\) => askReactivate\(u\) \}/);
@@ -223,15 +222,34 @@ test('the directory filters in place, and every empty state says which one it is
   assert.match(src, /The station directory could not be read\./);
   assert.match(src, /No accounts yet\./);
   assert.match(src, /No accounts match these filters\./);
-  assert.match(src, /filtered \? `\$\{shown\.length\} OF \$\{totalLine\}` : totalLine/);
+  assert.match(src, /users-directory-chip/);
 
   // The filter row is the app's own: the toolbar the audit trail and the register
   // share. The screen's primary action is no longer one of these controls — it left
   // this row for the corner, and it is asserted in its own test below.
   assert.match(src, /className="reports-toolbar" role="search"/);
-  assert.match(src, /className="reports-search"/);
+  assert.match(src, /className="reports-search register-tools__search"/);
   assert.match(src, /aria-label="Search accounts by name, username, badge number or email"/);
   assert.match(src, /<option value="">All roles<\/option>/);
+  // The search wears the register's own dress: the All Reports pill with its
+  // magnifier, and the status key beside the role key (active vs inactive).
+  assert.match(src, /className="reports-search__go"/);
+  assert.match(src, /aria-label="Filter by status"/);
+  assert.match(src, /<option value="">All statuses<\/option>/);
+  assert.match(src, /if \(status !== '' && u\.status !== status\) return false;/);
+  // The rail is the register's: search pill, hairline, Filters disclosure with its
+  // count, and a ticked Sort menu — the role/status keys live in the fold-away row.
+  assert.match(src, /register-tools__rule/);
+  assert.match(src, /register-tool__label">Filters/);
+  assert.match(src, /register-tool__label">Sort/);
+  assert.match(src, /aria-controls="users-filter-row"/);
+  assert.match(src, /Sort accounts/);
+  assert.match(src, /Recently signed in/);
+  // The sorted column wears the blue (the gold header rule is gone): the table
+  // takes the key, marks the column with aria-sort, and names it back.
+  assert.match(src, /sortKey=\{sort\}/);
+  assert.match(src, /is-sorted/);
+  assert.match(src, /aria-sort/);
 
   // Escape closes a dialog, which every other panel in the app already answers for
   // itself — the confirmations were the exception, and the only way out of one was
@@ -297,13 +315,12 @@ test('the create circle owns the corner, and the presence rail is lifted clear o
   assert.equal((ir.match(/:not\(\.users-fab\)/g) || []).length, 2);
 });
 
-test('the three roles have one home, so the filter cannot offer what the form refuses', async () => {
+test('the two roles have one home, so the filter cannot offer what the form refuses', async () => {
   const src = flat(await readSrc());
 
-  // The account form's select, the directory's filter, and the two places a role
-  // decides what a row may do all read ROLES. Three copies of three names is how a
-  // filter ends up offering a role that cannot be created.
-  assert.match(src, /const ROLES = \['Admin', 'Officer', 'Staff'\];/);
+  // The account form's select and the directory's filter read ROLES. Two copies
+  // of two names is how a filter ends up offering a role that cannot be created.
+  assert.match(src, /const ROLES = \['Admin', 'Officer'\];/);
   assert.equal((src.match(/ROLES\.map\(\(r\) => \(/g) || []).length, 2);
   assert.doesNotMatch(src, /<option>Admin<\/option>/);
 });
@@ -366,7 +383,12 @@ test('the account form is framed, sectioned, and says what it is for', async () 
   // directory underneath keeps the whole window it needs.
   // AND WHILE AN ACCOUNT IS OPEN, because the account page is the form's sibling state
   // on one screen: the title stays where it is and the body under it changes.
-  assert.match(src, /<div className=\{form \|\| profileUser \? 'acct-page' : undefined\}>/);
+  assert.match(src, /acct-page\$\{profileUser && !form \? ' acct-read' : ''\}/);
+  // THE READ VIEW IS FLAT: the open account sits on the page with no card
+  // boxes, like Station Settings — while the form keeps its cards.
+  const pageCss = flat(await readFile(path.join(root, 'src/styles.css'), 'utf8'));
+  assert.match(pageCss, /\.acct-page\.acct-read \{ max-width: none; \}/);
+  assert.match(pageCss, /\.acct-page\.acct-read \.st-block \{[\s\S]*?background: transparent;[\s\S]*?border: 0;/);
   const css = flat(await readFile(path.join(root, 'src/styles.css'), 'utf8'));
   assert.match(css, /\.acct-page \{ max-width: 64rem; margin-inline: auto; \}/);
   assert.match(src, /<h2 className="acct-title">/);
@@ -386,7 +408,7 @@ test('the account form is framed, sectioned, and says what it is for', async () 
 
   // AND IT READS A TABLE, one entry per role, rather than a conditional per role in
   // the markup — a fourth role is one object here, not a fourth branch in the JSX.
-  for (const role of ['Admin', 'Officer', 'Staff']) {
+  for (const role of ['Admin', 'Officer']) {
     assert.ok(src.includes(`${role}: { summary:`), `no reach entry for ${role}`);
   }
 

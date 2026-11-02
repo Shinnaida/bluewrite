@@ -52,6 +52,20 @@ test('an empty draft takes every field the read states', () => {
   assert.deepEqual(fill.groups, { complainant: [{ name: 'Salvacion, Maria Teresa L.' }] });
   assert.equal(fill.type, 'Theft');
   assert.deepEqual(fill.unstated, ['no suspect name given']);
+  assert.deepEqual(fill.locationCorrection, [], 'a clean place reports no correction');
+});
+
+test('a near-miss barangay spelling is matched to City of Naga and receipted', () => {
+  // OCR/hand-typed drift (INOBUKAN for Inoburan): the read copies the place
+  // as written and the app maps it to the closest of the station's 28
+  // barangays — scope City of Naga, Cebu — instead of filing the misspelling.
+  const fill = buildClassifyFill(answer({ location: 'CANGIMUNDONG, INOBUKAN, CITY OF NAGA' }), draft(), INCIDENT_TYPES);
+  assert.equal(fill.patch.location, 'Cansimundong, Inoburan, CITY OF NAGA');
+  assert.deepEqual(fill.locationCorrection, [
+    { from: 'CANGIMUNDONG', to: 'Cansimundong' },
+    { from: 'INOBUKAN', to: 'Inoburan' },
+  ]);
+  assert.ok(fill.filled.includes('Place of incident'));
 });
 
 test('a field the officer already filled is never touched, even when the read disagrees', () => {
@@ -66,14 +80,76 @@ test('a field the officer already filled is never touched, even when the read di
   assert.equal(fill.filled.includes('Place of incident'), false);
 });
 
-test('a type outside the form’s own list is dropped, not repaired', () => {
-  // The API allows the legacy Phase 1/2 spellings, which the dropdown no longer
-  // offers: writing one into the form would set a value no option matches.
+test('a legal phrase for the incident folds to the closest type and keeps its words', () => {
+  // The blotter names the incident the way it was written — "Reckless
+  // imprudence resulting to damage to property and physical injury" — which
+  // is on no dropdown. The read must still settle the type: the report is
+  // filed under its main incident and the exact words ride along as the
+  // Category, the same line a typed box keeps them on.
+  const words = 'Reckless imprudence resulting to damage to property and physical injury';
+  const fill = buildClassifyFill(answer({ incident_type: words }), draft(), INCIDENT_TYPES);
+  assert.equal(fill.patch.incident_type, 'Traffic Accident');
+  assert.equal(fill.category, words);
+  assert.equal(fill.type, 'Traffic Accident');
+  assert.equal(fill.filled.includes('Type of incident'), true);
+  assert.equal(classifyFillIsEmpty(fill), false);
+});
+
+test('an Other answer whose title folds concrete follows the sheet, title kept', () => {
+  // The live read answered "Other Incident" for a blotter charging RECKLESS
+  // IMPRUDENCE ... — the model shrugged at legal words the list never
+  // carries. The folder follows the sheet (Traffic Accident) while the charge
+  // stays as the Category. The title never changes.
+  const words = 'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY';
+  const fill = buildClassifyFill(
+    answer({ incident_type: 'Other Incident', incident_category: words }),
+    draft(),
+    INCIDENT_TYPES,
+  );
+  assert.equal(fill.patch.incident_type, 'Traffic Accident');
+  assert.equal(fill.category, words);
+  assert.equal(fill.type, 'Traffic Accident');
+  assert.equal(fill.filled.includes('Type of incident'), true);
+});
+
+test('an Other answer with no folding signal keeps Other', () => {
+  const fill = buildClassifyFill(
+    answer({ incident_type: 'Other Incident', incident_category: 'Something vague xyzzy' }),
+    draft(),
+    INCIDENT_TYPES,
+  );
+  assert.equal(fill.patch.incident_type, 'Other Incident');
+  assert.equal(fill.type, 'Other Incident');
+});
+
+test('a server-folded answer carries the words separately, and the officer’s own words stand', () => {
+  const words = 'Reckless imprudence resulting to damage to property and physical injury';
+  const fill = buildClassifyFill(
+    answer({ incident_type: 'Traffic Accident', incident_category: words }),
+    draft(),
+    INCIDENT_TYPES,
+  );
+  assert.equal(fill.patch.incident_type, 'Traffic Accident');
+  assert.equal(fill.category, words);
+
+  // A Category the officer already wrote is never overwritten by the read.
+  const kept = buildClassifyFill(
+    answer({ incident_type: 'Traffic Accident', incident_category: words }),
+    draft({ type_specific: { incident_category: 'Bangga sa poste' } }),
+    INCIDENT_TYPES,
+  );
+  assert.equal(kept.category, '');
+});
+
+test('a phrase with no signal is dropped, not invented', () => {
+  // Neither a type on the list nor foldable to one: writing anything into the
+  // form would set a value the report cannot carry.
   const fill = buildClassifyFill(answer({ incident_type: 'Physical Injury' }), draft(), [
     'Theft',
     'Lost Property',
   ]);
   assert.equal('incident_type' in fill.patch, false);
+  assert.equal(fill.category, '');
   assert.equal(fill.type, '');
   assert.equal(fill.groups.complainant, undefined, 'with no type there is no group to add a row to');
 });

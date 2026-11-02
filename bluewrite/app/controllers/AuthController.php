@@ -132,15 +132,14 @@ final class AuthController
         $upd = $pdo->prepare('UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = :id');
         $upd->execute([':id' => $user['id']]);
 
-        // Admin and Officer must prove a second factor before a session exists
-        // at all. (See EmailOtp::REQUIRED_ROLES — Staff accounts are
-        // deliberately outside this.)
+        // Every account must prove a second factor before a session exists at
+        // all. (See EmailOtp::REQUIRED_ROLES.)
         if (EmailOtp::isRequired((string) $user['role'])) {
             $this->beginSecondFactor($user);
         }
 
-        // Staff (and anyone for whom the factor is not required): the password
-        // is the whole sign-in, exactly as it was before this existed.
+        // Anyone for whom the factor is not required: the password is the
+        // whole sign-in, exactly as it was before this existed.
         $pdo->prepare('UPDATE users SET last_login_at = NOW() WHERE id = :id')->execute([':id' => $user['id']]);
         Auth::login($user);
         Audit::log((int) $user['id'], 'login.success', 'user', (string) $user['id']);
@@ -150,8 +149,9 @@ final class AuthController
     /**
      * The session payload, built in ONE place.
      *
-     * Two flows end in a signed-in session — a password-only sign-in (Staff) and
-     * a password plus a proved second factor — and they must hand the client
+     * Two flows end in a signed-in session — a password-only sign-in (when the
+     * factor is not required for the account) and a password plus a proved
+     * second factor — and they must hand the client
      * exactly the same thing. Duplicating this array is how one of them quietly
      * stops carrying the language registry, or the idle deadline the countdown
      * is built from.

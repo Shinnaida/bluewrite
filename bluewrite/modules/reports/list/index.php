@@ -23,14 +23,12 @@ $statusOptions = $isAdmin
         '' => 'Any status',
         'attention' => 'Awaiting action',
         'draft' => 'Draft',
-        'submitted' => 'Submitted',
-        'finalized' => 'Finalized',
+        'filed' => 'Finalized',
     ]
     : [
         '' => 'Any status',
         'draft' => 'Draft',
-        'submitted' => 'Submitted',
-        'finalized' => 'Finalized',
+        'filed' => 'Finalized',
     ];
 
 bw_page_start([

@@ -863,3 +863,133 @@ export const LEGACY_TYPE_MAP = {
   'Drug-related': 'Drug-Related Incident',
   'Other': 'Other Incident',
 };
+
+// ---------------------------------------------------------------------------
+// Free-text → closest canonical type.
+//
+// The Type of Incident box is typable, and the camera / blotter upload can
+// name the incident in the officer's own legal words ("Reckless imprudence
+// resulting to damage to property and physical injury"). The register's
+// folders, the dashboard and the field blocks all key on ONE canonical type,
+// so free text is folded to the closest one here — and the officer's exact
+// words are kept alongside it (type_specific.incident_category), never thrown
+// away. Mirrored in PHP by IncidentTypes::closestType() — keep the two in
+// lockstep by review.
+//
+// Scoring, not first-match: every rule that fires adds its weight, the
+// highest total wins, and a tie breaks toward the lower rank (Traffic
+// Accident first, then person before property). A blotter "reckless
+// imprudence resulting to damage to property and physical injury" is filed
+// as the accident by WEIGHT, not by the tie-break: the recklessness is the
+// incident and outranks its own consequence words. A best score below
+// MIN_SCORE means "no real signal" and
+// falls back to null, so a stray word like "property" alone does not invent
+// a classification.
+// ---------------------------------------------------------------------------
+
+/** Minimum score for a classification to count — see above. */
+export const CLOSEST_TYPE_MIN_SCORE = 2;
+
+/** [canonical type, tie-break rank, [pattern, weight][]]. Lower rank wins ties. */
+export const CLOSEST_TYPE_RULES = [
+  ['Rape / Sexual Assault', 1, [
+    [/\brape\b/i, 3], [/sexual assault|sexual abuse|sexual harassment/i, 3],
+    [/molest\w*|acts? of lasciviousness|lascivious/i, 3],
+  ]],
+  ['Domestic Violence', 2, [
+    [/domestic violence|violence against women|\bvawc\b|\bra\s*9262\b/i, 3],
+    [/\bdomestic\b/i, 2],
+  ]],
+  ['Drug-Related Incident', 3, [
+    [/\bshabu\b|methamphetamine|\bmarijuana\b|\bcannabis\b|\becstasy\b/i, 3],
+    [/buy[- ]?bust|drug den|drug paraphernalia|illegal drugs?\b/i, 3],
+    [/\bdrugs?\b/i, 2],
+  ]],
+  ['Fire Incident', 4, [
+    [/\barson\b|\bsunog\b|\bnasunog\b/i, 3],
+    [/\bfire\b(?!\s*arm)/i, 2],
+  ]],
+  ['Missing Person', 5, [
+    [/missing( person)?\b|\bnawawala\b|whereabouts unknown/i, 3],
+  ]],
+  ['Traffic Accident', 6, [
+    // "Reckless imprudence" is the quasi-offense the blotter writes for a
+    // vehicular mishap ("Reckless imprudence resulting to damage to property
+    // and physical injury") — the RECKLESSNESS is the incident and the harm
+    // that follows is its consequence. So it names the traffic folder on its
+    // own, DECISIVELY: 6 outranks the stacked consequence words ("physical
+    // injury" + "injury" is 5, "damage to property" + "damage" is 4), and
+    // the tie-break below then only settles genuinely ambiguous writes.
+    [/reckless imprudence|reckless driving/i, 6],
+    [/traffic( accident)?|vehicular|\bcollision\b|road (crash|accident)|hit-?and-?run|\bbangga\b|\bkarambola\b|overshoot/i, 3],
+    [/\bvehicle\b|\bmotor\b|tricycle|jeepney|\btruck\b|\bvan\b|\bcrash\b/i, 2],
+    [/\bnegligen\w+/i, 1],
+  ]],
+  ['Burglary / Break-In', 7, [
+    [/burglary|break[- ]?in|forcible entry|unlawful entry|akyat[- ]bahay/i, 3],
+  ]],
+  ['Robbery', 8, [
+    [/\brobbery\b|hold[- ]?up|\bsnatch\w*|\bhinablot\b|armed robbery/i, 3],
+  ]],
+  ['Theft', 9, [
+    [/\btheft\b|\bstole\b|\bstolen\b|\bsteal\w*|\bnakaw\b|\bninakaw\b|carnap\w*|pickpocket|shoplift\w*/i, 3],
+  ]],
+  ['Fraud / Estafa', 10, [
+    [/\bestafa\b|\bfraud\b|\bscam\b|swindl\w*|\bbudol\b|pyramid scam/i, 3],
+  ]],
+  ['Assault / Physical Injury', 11, [
+    [/physical injur\w*|physical harm|\bassault\b|\bmauling\b|beat\w* up|beaten up|\bstab\w*|\bshoot\w*|\bhack\w*|\bnanakit\b|\bsinaktan\b|\bbugbog\b|panununtok/i, 3],
+    [/\binjur\w*|\bwound\w*|\bhurt\b|\bharm\b/i, 2],
+  ]],
+  ['Property Damage / Malicious Mischief', 12, [
+    [/damage to property|malicious mischief|\bvandal\w*/i, 3],
+    [/\bdamage[sd]?\b/i, 1],
+  ]],
+  ['Lost Property', 13, [
+    [/\blost\b.{0,40}\b(property|wallet|phone|bag|purse|\bid\b|license|documents?)\b/i, 2],
+    [/\bmisplaced\b/i, 2],
+  ]],
+];
+
+/**
+ * The closest canonical type for free text, or null when nothing fires.
+ *
+ * Exact and legacy spellings are honoured first (case-insensitive), then the
+ * keyword rules above are scored. Only types in `types` (the station's own
+ * list) can win, so a station that configured its list away still decides.
+ *
+ * @param {string} text free text from the type box, camera or blotter read
+ * @param {string[]} types the station's configured canonical types
+ * @returns {string|null}
+ */
+export function classifyClosestType(text, types) {
+  const raw = String(text ?? '').trim();
+  if (raw === '') return null;
+  const list = Array.isArray(types) ? types : [];
+  const lowered = raw.toLowerCase();
+  const exact = list.find((t) => String(t).toLowerCase() === lowered);
+  if (exact) return String(exact);
+  for (const [legacy, canonical] of Object.entries(LEGACY_TYPE_MAP)) {
+    if (legacy.toLowerCase() === lowered && list.includes(canonical)) return canonical;
+  }
+  let best = null;
+  let bestScore = 0;
+  let bestRank = Number.MAX_SAFE_INTEGER;
+  for (const [type, rank, patterns] of CLOSEST_TYPE_RULES) {
+    if (!list.includes(type)) continue;
+    let score = 0;
+    for (const [re, weight] of patterns) {
+      // A fresh lastIndex per test: these regexes are literals, never global,
+      // so test() is stateless — stated once so a future /g flag cannot make
+      // consecutive calls disagree.
+      if (re.test(raw)) score += weight;
+    }
+    if (score > bestScore || (score === bestScore && score > 0 && rank < bestRank)) {
+      best = type;
+      bestScore = score;
+      bestRank = rank;
+    }
+  }
+  if (bestScore < CLOSEST_TYPE_MIN_SCORE) return null;
+  return best;
+}

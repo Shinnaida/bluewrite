@@ -41,18 +41,8 @@ const COMMON_RULES = {
   // NOT be finalized without them. Narrative and the Action Taken / Status
   // both describe what happened and how it was handled.
   narrative: { required: true, finalizeOnly: true, label: 'Narrative', minLength: 120, maxDate: null },
-  action_taken: {
-    required: true,
-    finalizeOnly: true,
-    label: 'Action taken / status',
-    minLength: 10,
-  },
-  ioc_name: {
-    required: true,
-    finalizeOnly: true,
-    label: 'Investigator-on-case (IOC)',
-    minLength: 3,
-  },
+  // Action Taken / Status and IOC hidden by owner request (2026-11-02):
+  // optional leftovers only, never required at finalize.
 };
 
 // ---------------------------------------------------------------------------
@@ -172,16 +162,19 @@ export function hasGroupRows(ts, groupKey) {
  */
 function mirrorValue(spec, rows) {
   if (spec.length) return String(rows.length);
+  // A count of zero is the absence of a row, not a recorded fact: the blotter
+  // never states "zero fatalities", so a zero count mirrors as blank (which
+  // the caller skips) instead of a "0" the sheet would print as a fact.
   if (spec.countInjury !== undefined) {
-    return String(rows.filter((r) => String(r?.injury_status ?? '').trim() === spec.countInjury).length);
+    const n = rows.filter((r) => String(r?.injury_status ?? '').trim() === spec.countInjury).length;
+    return n === 0 ? '' : String(n);
   }
   if (spec.countInjured) {
-    return String(
-      rows.filter((r) => {
-        const status = String(r?.injury_status ?? '').trim();
-        return status !== '' && status !== 'Uninjured';
-      }).length,
-    );
+    const n = rows.filter((r) => {
+      const status = String(r?.injury_status ?? '').trim();
+      return status !== '' && status !== 'Uninjured';
+    }).length;
+    return n === 0 ? '' : String(n);
   }
   return String(rows[spec.index ?? 0]?.[spec.key] ?? '').trim();
 }

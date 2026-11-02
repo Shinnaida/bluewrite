@@ -196,9 +196,13 @@ function Find-MySql {
   return $null
 }
 
-# ---- The API + the built app (http://127.0.0.1:8099/) ------------------------
+# ---- The API + the built app (http://<lan-ip>:8099/) ------------------------
 # One PHP process, no node anywhere in the path: the origin that has proved
 # durable here, and the one to hand someone with a browser open in front of them.
+# Bound to ALL interfaces on purpose: the phone app reaches this same port over
+# the station Wi-Fi (see docs\LAN_SETUP.md), and a loopback-only bind would
+# make the server invisible to it. Windows Firewall rule "BlueWrite LAN 8099"
+# is what decides which networks may come in — not this bind.
 function Repair-Api {
   foreach ($port in $ApiPort) {
     if (Test-Port $port) { continue }
@@ -207,7 +211,7 @@ function Repair-Api {
       Write-Note "api  $port DOWN - no php.exe found (looked in C:\laragon\bin\php and PATH)"
       continue
     }
-    $res = Start-Detached -FilePath $php -ArgumentList @('-S', "127.0.0.1:$port", '-t', 'public', 'router.php')
+    $res = Start-Detached -FilePath $php -ArgumentList @('-S', "0.0.0.0:$port", '-t', 'public', 'router.php')
     if ($res.ReturnValue -eq 0) {
       Write-Note ('api  {0} DOWN -> started {1} (hidden)' -f $port, $php)
     } else {

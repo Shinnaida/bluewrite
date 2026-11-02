@@ -95,9 +95,9 @@ final class UsersController
         $v->require('full_name', $body['full_name'] ?? null, 'Full name', 120);
         $v->require('badge_number', $body['badge_number'] ?? null, 'Badge / employee number', 40);
         $v->require('username', $body['username'] ?? null, 'Username', 60);
-        $v->in('role', $body['role'] ?? null, ['Admin', 'Officer', 'Staff'], 'Role');
-        // The mailbox sign-in codes go to. Required for the roles that use a
-        // second factor, optional for Staff (who sign in with a password alone).
+        $v->in('role', $body['role'] ?? null, ['Admin', 'Officer'], 'Role');
+        // The mailbox sign-in codes go to. Required: every role signs in with
+        // a password plus an emailed code (migration 021 retired Staff).
         $email = $this->validateEmail($body['email'] ?? null, (string) ($body['role'] ?? ''), $v);
         // Phase 6 Stage 4 — which source languages the account reads. Optional;
         // NULL means "not recorded", so it cannot verify a translation.
@@ -170,7 +170,7 @@ final class UsersController
             $v->require('username', $body['username'], 'Username', 60);
         }
         if (array_key_exists('role', $body)) {
-            $v->in('role', $body['role'], ['Admin', 'Officer', 'Staff'], 'Role');
+            $v->in('role', $body['role'], ['Admin', 'Officer'], 'Role');
         }
         if (array_key_exists('status', $body)) {
             $v->in('status', $body['status'], ['active', 'inactive'], 'Status');
@@ -1046,8 +1046,7 @@ final class UsersController
     }
 
     /**
-     * An email address: required for the roles that sign in with a code, optional
-     * for Staff.
+     * An email address: required — every role signs in with a code.
      *
      * Returns the trimmed address, or null when none is set — which is a real
      * state only for an account that never receives a code. An invalid address is

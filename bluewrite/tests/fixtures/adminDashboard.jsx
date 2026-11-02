@@ -26,11 +26,16 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import Dashboard, {
   DeltaLine,
-  KpiCard,
+  LocationBars,
+  MetricCard,
   RecentActivity,
-  Sparkline,
   SummaryCard,
+  SystemGrid,
+  TypeDonut,
 } from '../../src/components/Dashboard.jsx';
+// The identity band lives on the LIVE dashboard (the stale twin above is the
+// one the older renderings pin). Same harness, same markup reading.
+import { StationBanner } from '../../src/components/admin/Dashboard.jsx';
 
 /** The Admin the screen is gated on. */
 export const USER = {
@@ -44,12 +49,6 @@ export const USER = {
 export const KPIS = { total: 26, pending: 20, submitted: 2, finalized: 4, periodDeltaPct: 78 };
 export const DELTAS = { attentionPct: 65, finalizedPct: 33, medianPct: -42 };
 export const FINALIZE = { medianMinutes: 167, finalizedCount: 4 };
-/** A range long enough to draw a line, with one busy day in the middle. */
-export const SERIES = Array.from({ length: 30 }, (_, i) => ({
-  date: `2026-09-${String(i + 1).padStart(2, '0')}`,
-  count: i === 20 ? 9 : (i % 4) + 1,
-}));
-
 /** `recentReports` — the shape the endpoint sends, newest first, covering all
  *  three states of the workflow and four hue families. */
 export const RECENT = [
@@ -100,44 +99,25 @@ export function renderDashboard(overrides = {}) {
   );
 }
 
-/** The four readings, exactly as the page builds them — including the sparkline
- *  on the first card and the one card that is also a control. */
+/** Two of the four readings, exactly as the page builds them — the bold caption
+ *  and the hero number only. (Needs attention and Median draft to final were
+ *  removed on request, as were the icon discs, the mini bars and the foot
+ *  lines; the queue the former counted opens from All Reports. Only the
+ *  headcount keeps its admin/officer line.) */
 export function renderCards() {
   return renderToStaticMarkup(
     React.createElement(
       'div',
       null,
-      React.createElement(KpiCard, {
+      React.createElement(MetricCard, {
         tone: 'blue',
-        mark: 'reports',
-        label: 'Total reports',
+        label: 'Total Reports',
         value: '26',
-        delta: React.createElement(DeltaLine, { pct: KPIS.periodDeltaPct }),
-        spark: React.createElement(Sparkline, { series: SERIES, label: 'Reports per day in this range' }),
       }),
-      React.createElement(KpiCard, {
-        tone: 'green',
-        mark: 'attention',
-        label: 'Needs attention',
-        value: '22',
-        note: '20 draft · 2 awaiting finalization',
-        to: () => {},
-        title: 'Open the needs-attention queue in All Reports',
-      }),
-      React.createElement(KpiCard, {
-        tone: 'amber',
-        mark: 'finalized',
-        label: 'Finalized',
+      React.createElement(MetricCard, {
+        tone: 'gold',
+        label: 'Finalized Reports',
         value: '4',
-        note: '15% of reports in range',
-      }),
-      React.createElement(KpiCard, {
-        tone: 'violet',
-        mark: 'timer',
-        label: 'Median draft to final',
-        value: '2h 47m',
-        valueClass: 'dash-kpi__value--time',
-        note: '4 finalized in range',
       })
     )
   );
@@ -182,6 +162,16 @@ export function renderSummary({ medianPct = DELTAS.medianPct } = {}) {
   );
 }
 
+/** The station identity band from the live dashboard, with the letterhead name. */
+export function renderBanner(overrides = {}) {
+  return renderToStaticMarkup(
+    React.createElement(StationBanner, {
+      stationName: 'Naga City Police Station',
+      ...overrides,
+    })
+  );
+}
+
 /** The activity panel, in both of its own states. */
 export function renderActivity(overrides = {}) {
   return renderToStaticMarkup(
@@ -192,5 +182,47 @@ export function renderActivity(overrides = {}) {
       onViewAll: () => {},
       ...overrides,
     })
+  );
+}
+
+/** Two audit happenings, as `GET /dashboard/stats` sends them in `recentActivity`. */
+export const EVENTS = [
+  {
+    action: 'user.create',
+    entityId: 12,
+    createdAt: '2026-10-12 19:05:00',
+    actor: 'Station Admin',
+  },
+  {
+    action: 'report.update',
+    entityId: 329,
+    createdAt: '2026-10-12 15:44:00',
+    actor: 'Station Admin',
+  },
+];
+
+/** The bottom trio, with the shapes the endpoint really sends. */
+export function renderTrio() {
+  return renderToStaticMarkup(
+    React.createElement(
+      'div',
+      null,
+      React.createElement(TypeDonut, {
+        slices: [
+          { label: 'Traffic Accident', count: 4, color: 'var(--cat-2)' },
+          { label: 'Theft', count: 2, color: 'var(--cat-7)' },
+          { label: 'Others', count: 2, color: '#64748b' },
+        ],
+      }),
+      React.createElement(LocationBars, {
+        places: [
+          { location: 'National Highway', count: 4 },
+          { location: 'Poblacion', count: 2 },
+        ],
+      }),
+      React.createElement(SystemGrid, {
+        system: { database: 'online', ai: 'online', storage: 'online', notifications: 'online' },
+      })
+    )
   );
 }

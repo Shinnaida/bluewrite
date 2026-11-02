@@ -1,9 +1,10 @@
 // BlueWrite — printed ACTION TAKEN / STATUS composition tests.
 // Runs with Node's built-in runner (see package.json "test"). Covers: the
-// routing line is printed once and only when the recorded disposition does not
-// already state an onward action; the disclaimer wording is gone; the
-// medico-legal examination is not repeated when the per-type fact block already
-// prints it; and the officer's own lines still lead the block.
+// block prints only what the officer recorded (no on-file stand-in, no
+// automatic routing line — both retired as canned defaults, owner requests
+// 2026-10-31); the disclaimer wording is gone; the medico-legal examination
+// is not repeated when the per-type fact block already prints it; and the
+// officer's own lines still lead the block.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -29,7 +30,11 @@ test('the block reproduces the reported sheet: no second disposition', () => {
   assert.ok(!lines.includes(MEDICO), 'the medico-legal exam already prints as a per-type fact');
 });
 
-test('the on-file note is a stand-in, not a footer', () => {
+test('an empty block stays empty — no canned stand-in, no routing line', () => {
+  // Owner request 2026-10-31: with nothing recorded the block prints nothing
+  // at all, instead of the old "entry is on file" + referral defaults.
+  assert.deepEqual(buildActionBlock({}), []);
+  assert.deepEqual(buildActionBlock({ recordedLines: ['', '   '] }), []);
   // A recorded disposition says what was done; a line telling the reader the
   // entry exists adds nothing about the case and is not printed beside it.
   assert.ok(
@@ -40,9 +45,6 @@ test('the on-file note is a stand-in, not a footer', () => {
     !buildActionBlock({ structured: ['Suspect status: At large.'] }).includes(ON_FILE_NOTE),
     'a recorded state already fills the block'
   );
-  // With nothing recorded at all, it is the only true thing the block can say.
-  assert.deepEqual(buildActionBlock({}), [ON_FILE_NOTE, REFERRAL_LINE]);
-  assert.deepEqual(buildActionBlock({ recordedLines: ['', '   '] }), [ON_FILE_NOTE, REFERRAL_LINE]);
 });
 
 test('no disposition ever prints a disclaimer about its own record', () => {
@@ -57,29 +59,27 @@ test('no disposition ever prints a disclaimer about its own record', () => {
   }
 });
 
-test('the routing line prints only when the record states no onward action', () => {
-  const onward = [
-    'endorsed to follow up investigation',
-    'The case was endorsed for a follow-up investigation by this Office.',
-    'referred to the station investigator-on-case',
-    'case remains under investigation',
-    'suspect turned over to the station',
-    'case filed in court',
-    'no referral necessary',
-  ];
-  for (const disposition of onward) {
-    const lines = buildActionBlock({ recordedLines: [disposition] });
-    assert.ok(!lines.includes(REFERRAL_LINE), `routing line restated the disposition: ${disposition}`);
-  }
-
+test('the routing line is never emitted — a referral is the officer’s own line', () => {
+  // Owner request 2026-10-31: the canned referral is retired. A disposition
+  // that states no onward action prints exactly as recorded — beside a
+  // settled case ("both parties amicably settled") no referral may appear.
   const plain = ['responded 10pm, talked to both parties, gave warning, no injuries'];
-  assert.deepEqual(buildActionBlock({ recordedLines: plain }), [...plain, REFERRAL_LINE]);
+  assert.deepEqual(buildActionBlock({ recordedLines: plain }), [...plain]);
+  assert.deepEqual(buildActionBlock({ recordedLines: ['BOTH PARTIES AMICABLY SETTLED THE INCIDENT'] }), [
+    'BOTH PARTIES AMICABLY SETTLED THE INCIDENT',
+  ]);
+  for (const lines of [
+    buildActionBlock({ recordedLines: plain }),
+    buildActionBlock({ structured: ['Suspect status: At large.'] }),
+    buildActionBlock({}),
+  ]) {
+    assert.ok(!lines.includes(REFERRAL_LINE), 'the canned referral must never print');
+  }
 });
 
-test('a recorded state keeps the station convention even with no disposition', () => {
+test('a recorded state prints without any station tail', () => {
   assert.deepEqual(buildActionBlock({ recordedLines: [], structured: ['Suspect status: At large.'] }), [
     'Suspect status: At large.',
-    REFERRAL_LINE,
   ]);
 });
 
@@ -102,7 +102,7 @@ test('a finalized report prints its finalization note, not the on-file note', ()
   assert.ok(!lines.includes(ON_FILE_NOTE), 'a finalized entry is not still awaiting verification');
 });
 
-test('the officer\'s own lines lead the block, blank lines dropped', () => {
+test('the officer’s own lines still lead the block, blank lines dropped', () => {
   const lines = buildActionBlock({
     recordedLines: ['Suspect arrested and detained.  ', '', '  '],
     structured: ['Recovery status: Full.'],

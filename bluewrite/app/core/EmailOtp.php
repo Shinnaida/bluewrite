@@ -40,11 +40,10 @@ final class EmailOtp
     /**
      * The roles the second factor is MANDATORY for.
      *
-     * Admin and Officer, and deliberately not Staff — unchanged from 012. An
-     * Admin can create and deactivate accounts and every report is visible to
-     * them; an Officer signs reports and reads the station's records. A Staff
-     * account is narrow by design, and a factor on it would buy a support cost
-     * for an account that cannot do much with a stolen password anyway.
+     * Admin and Officer — the station's only roles since migration 021
+     * retired Staff. An Admin can create and deactivate accounts and every
+     * report is visible to them; an Officer signs reports and reads the
+     * station's records.
      */
     public const REQUIRED_ROLES = ['Admin', 'Officer'];
 
@@ -132,8 +131,7 @@ final class EmailOtp
      *
      * `required` is about the ROLE and `has_email` is about this account, and
      * they are reported separately because the interesting state is the pair:
-     * required-and-no-address is an account an Admin has to fix, while
-     * not-required is a Staff account that never sees any of this.
+     * required-and-no-address is an account an Admin has to fix.
      */
     public static function status(int $userId, ?string $role = null, ?string $email = null): array
     {

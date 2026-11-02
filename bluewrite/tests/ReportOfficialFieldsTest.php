@@ -59,6 +59,133 @@ final class ReportOfficialFieldsTest extends BaseApiTestCase
         $this->assertSame('station.update', $row);
     }
 
+    public function testContactLinesAndDefaultNotedByRoundTrip(): void
+    {
+        [$adminCookie, $adminCsrf] = $this->login('t.admin');
+
+        // A fresh station has nothing on file — blank, not missing keys.
+        $fresh = $this->request('GET', '/station', null, $adminCookie);
+        $this->assertSame('', $fresh['body']['header']['station_email']);
+        $this->assertSame('', $fresh['body']['header']['station_phone']);
+        $this->assertSame('', $fresh['body']['header']['noted_by']);
+
+        // Non-Admins cannot write them either.
+        [$officerCookie, $officerCsrf] = $this->login('t.officer');
+        $denied = $this->request('PATCH', '/station', ['station_email' => 'x@example.test'], $officerCookie, $officerCsrf);
+        $this->assertSame(403, $denied['status']);
+
+        // A malformed Gmail is a 422, not a stored typo.
+        $bad = $this->request('PATCH', '/station', ['station_email' => 'not-an-address'], $adminCookie, $adminCsrf);
+        $this->assertSame(422, $bad['status']);
+
+        // The full block writes, echoes, and reads back.
+        $ok = $this->request('PATCH', '/station', [
+            'station_email' => 'naga.invest@example.test',
+            'station_phone' => '+63 (32) 123 4567',
+            'noted_by' => 'Test Officer',
+        ], $adminCookie, $adminCsrf);
+        $this->assertSame(200, $ok['status'], json_encode($ok['body']));
+        $this->assertSame('naga.invest@example.test', $ok['body']['header']['station_email']);
+        $this->assertSame('+63 (32) 123 4567', $ok['body']['header']['station_phone']);
+        $this->assertSame('Test Officer', $ok['body']['header']['noted_by']);
+
+        // Blank clears the line back to NULL — "no Gmail on file" is a state.
+        $cleared = $this->request('PATCH', '/station', ['station_email' => '   '], $adminCookie, $adminCsrf);
+        $this->assertSame(200, $cleared['status'], json_encode($cleared['body']));
+        $this->assertSame('', $cleared['body']['header']['station_email']);
+        $this->assertSame('+63 (32) 123 4567', $cleared['body']['header']['station_phone']);
+
+        $after = $this->request('GET', '/station', null, $adminCookie);
+        $this->assertSame('', $after['body']['header']['station_email']);
+        $this->assertSame('Test Officer', $after['body']['header']['noted_by']);
+    }
+
+    public function testFreedLetterheadRoundTrip(): void
+    {
+        [$adminCookie, $adminCsrf] = $this->login('t.admin');
+
+        // A fresh station uses the standard composed lines.
+        $fresh = $this->request('GET', '/station', null, $adminCookie);
+        $this->assertSame('', $fresh['body']['letterhead_html']);
+
+        // Non-Admins cannot free the letterhead either.
+        [$officerCookie, $officerCsrf] = $this->login('t.officer');
+        $denied = $this->request('PATCH', '/station', ['letterhead_html' => '<p>Hi</p>'], $officerCookie, $officerCsrf);
+        $this->assertSame(403, $denied['status']);
+
+        // Markup outside the allowlist is stripped, not stored: a script tag
+        // keeps its words and loses its script.
+        $ok = $this->request('PATCH', '/station', [
+            'letterhead_html' => '<div align="center">CITY of NAGA POLICE STATION</div><script>alert(1)</script>',
+        ], $adminCookie, $adminCsrf);
+        $this->assertSame(200, $ok['status'], json_encode($ok['body']));
+        $this->assertStringNotContainsString('<script>', $ok['body']['letterhead_html']);
+        $this->assertStringContainsString('CITY of NAGA POLICE STATION', $ok['body']['letterhead_html']);
+
+        // More words than the budget allows is a 422, not a stored truncation.
+        $long = $this->request('PATCH', '/station', ['letterhead_html' => '<p>' . str_repeat('w', 2001) . '</p>'], $adminCookie, $adminCsrf);
+        $this->assertSame(422, $long['status']);
+
+        // Blank clears the document back to the standard composed lines.
+        $cleared = $this->request('PATCH', '/station', ['letterhead_html' => '   '], $adminCookie, $adminCsrf);
+        $this->assertSame(200, $cleared['status'], json_encode($cleared['body']));
+        $this->assertSame('', $cleared['body']['letterhead_html']);
+    }
+
+    public function testSealUploadRoundTrip(): void
+    {
+        [$adminCookie, $adminCsrf] = $this->login('t.admin');
+
+        // No upload on file: the bundled artwork is in force, and the route
+        // says so with a 404 rather than empty bytes.
+        $fresh = $this->request('GET', '/station', null, $adminCookie);
+        $this->assertNull($fresh['body']['seal_left_url']);
+        $missing = $this->download('/station/seal/left', $adminCookie);
+        $this->assertSame(404, $missing['status']);
+
+        // A side the station does not have is a 404, not a 500.
+        $badSide = $this->download('/station/seal/middle', $adminCookie);
+        $this->assertSame(404, $badSide['status']);
+
+        // Non-Admins cannot change the seals.
+        [$officerCookie, $officerCsrf] = $this->login('t.officer');
+        $denied = $this->upload('/station/seal/left', 'seal', 'seal.png', self::tinyPng(), $officerCookie, $officerCsrf);
+        $this->assertSame(403, $denied['status']);
+
+        // A file that is not an image is a 422, however it is labelled.
+        $fake = $this->upload('/station/seal/left', 'seal', 'seal.png', 'this is not an image', $adminCookie, $adminCsrf);
+        $this->assertSame(422, $fake['status']);
+
+        // A real upload is served back as bytes with its own content type.
+        $up = $this->upload('/station/seal/left', 'seal', 'seal.png', self::tinyPng(), $adminCookie, $adminCsrf);
+        $this->assertSame(200, $up['status'], json_encode($up['body']));
+        $this->assertNotNull($up['body']['seal_left_url']);
+        $this->assertNull($up['body']['seal_right_url']);
+
+        $got = $this->download('/station/seal/left', $adminCookie);
+        $this->assertSame(200, $got['status']);
+        $this->assertSame('image/png', $got['contentType']);
+        $this->assertSame(self::tinyPng(), $got['bytes']);
+
+        // Clearing restores the bundled artwork: the URL is null again and
+        // the bytes route is a 404 again. Clearing twice is still a 200.
+        $clear = $this->request('DELETE', '/station/seal/left', null, $adminCookie, $adminCsrf);
+        $this->assertSame(200, $clear['status']);
+        $this->assertNull($clear['body']['seal_left_url']);
+        $again = $this->request('DELETE', '/station/seal/left', null, $adminCookie, $adminCsrf);
+        $this->assertSame(200, $again['status']);
+        $gone = $this->download('/station/seal/left', $adminCookie);
+        $this->assertSame(404, $gone['status']);
+    }
+
+    /** A 1x1 PNG, decodable without GD — what the seal tests upload. */
+    private static function tinyPng(): string
+    {
+        return (string) base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+        );
+    }
+
     public function testConfiguredIncidentTypesReplaceTheBuiltInList(): void
     {
         [$adminCookie, $adminCsrf] = $this->login('t.admin');

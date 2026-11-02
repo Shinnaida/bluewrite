@@ -49,7 +49,7 @@ export const SPARSE_ACCOUNT = {
   badge_number: '',
   username: 'k.abalo',
   email: null,
-  role: 'Staff',
+  role: 'Officer',
   status: 'active',
   last_login_at: null,
   last_seen_at: null,

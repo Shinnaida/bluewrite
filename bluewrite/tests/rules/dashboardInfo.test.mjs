@@ -1,26 +1,23 @@
-// BlueWrite — the info controls on the dashboard's chart panels.
+// BlueWrite — the explanations the dashboard offers, and the ones it does not.
 //
-// Each panel answers a different question with the same furniture (a wedge, a strip of
-// 24 bars, two lists of bars), and the panel head has room for a title and nothing else.
-// So every chart panel carries one control that opens over the chart with its own
-// explanation. This file guards the three ways that goes wrong quietly:
+// The page answers with drawings that hide their own rules: stacked bands whose
+// order IS the ranking, a donut whose slices come from the trend's own ramp, a
+// grid whose four boxes were measured server-side. The one control that opens an
+// explanation is the trend's colour key; the trio below it carries none, the
+// way the reference draws it. This file guards both directions that goes wrong
+// quietly:
 //
-//   - A PANEL WITH NO EXPLANATION. The dashboard is read by an Admin who did not write
-//     it, and the interesting facts are all invisible: that the hour bars discard the
-//     date, that a bar length is relative rather than a share, that "workload" counts
-//     reports created rather than incidents attended. Nothing on screen is wrong when
-//     one of those is missing — the panel is just unreadable to a new reader.
+//   - AN EXPLANATION WITH NOTHING BEHIND IT. A `?` control that opens an empty
+//     card is worse than no control — ChartKey renders nothing when the range
+//     is empty, so there are no colours to explain.
 //
-//   - COPY THAT DRIFTED. These paragraphs name specifics (the timestamp, the
-//     denominator, the cut-off). Editing the query without editing the claim leaves a
-//     confident sentence describing the old behaviour, which is worse than no note.
+//   - COPY THAT DRIFTED. The note names specifics (which band sits on the axis,
+//     what the number counts). Editing the stacking without editing the claim
+//     leaves a confident sentence describing behaviour that is gone.
 //
-//   - ONE CARD FOR FIVE CONTROLS. `aria-controls` is how a screen reader gets from the
-//     button to the card; an id written twice points four of the five at one panel's
-//     card, and nothing visible looks broken.
-//
-// The wording rules live on PANEL_INFO in Dashboard.jsx: what ONE MARK is, what its size
-// means, then the trap a reader would otherwise fall into.
+//   - TWO CONTROLS, ONE CARD. `aria-controls` is how a screen reader gets from
+//     the button to the card; an id written twice points both at one panel,
+//     and nothing visible looks broken.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -43,83 +40,56 @@ function rule(selector) {
   return found.join('; ');
 }
 
-const info = component.slice(component.indexOf('const PANEL_INFO = {'), component.indexOf('\nfunction Panel('));
-// The workload and activity panels are gone, so there are three: the trend chart's
-// control is the colour key, which carries no PANEL_INFO entry of its own.
-const keys = ['status', 'hour', 'categories'];
-
-/** The copy block for one panel, from `key: {` to the line that closes it. */
-function entry(key) {
-  const at = info.indexOf(`\n  ${key}: {`);
-  assert.ok(at > -1, `PANEL_INFO.${key} is missing`);
-  return info.slice(at, info.indexOf('\n  },', at));
-}
-
-test('every chart panel offers its own explanation', () => {
-  // The trend chart's control is the colour key, which is the same panel behind
-  // it — and since 2026-10-12 the head of that panel also carries the range's
-  // own name and a corner control, so what is asserted is that the KEY is still
-  // in the head's `aside` rather than that it is the only thing there.
-  assert.match(component, /title="Reports over time"/);
+test('the trend head carries the key and the range, and nothing else', () => {
+  // The head's aside is the colour key and the one range control for the page —
+  // Last 5 / 7 / 14 / 30 days — the reference's own arrangement. The key is still in
+  // the head's `aside` rather than the only thing there.
   assert.match(
     component,
     /aside=\{\s*<>[\s\S]{0,400}?<ChartKey byType=\{chartTypes\} \/>/,
     'the trend panel’s head no longer carries the colour key',
   );
+  assert.match(
+    component,
+    /aside=\{\s*<>[\s\S]{0,600}?<RangeSelect preset=\{preset\} onPick=\{applyPreset\} \/>/,
+    'the trend panel’s head no longer carries the range it reads',
+  );
   assert.match(component, /function ChartKey\(\{ byType \}\) \{[\s\S]*?<PanelInfo/);
-  // The other four are plain copy — and each names ITS OWN entry, so a copy-paste
-  // that left one panel explaining another chart is a test failure.
-  assert.match(component, /<Panel title="Status breakdown" info=\{<PanelInfo \{\.\.\.PANEL_INFO\.status\} \/>\}>/);
-  assert.match(component, /<Panel title="Reports by hour" info=\{<PanelInfo \{\.\.\.PANEL_INFO\.hour\} \/>\}>/);
-  assert.match(component, /<Panel title="Incident categories" info=\{<PanelInfo \{\.\.\.PANEL_INFO\.categories\} \/>\}>/);
-  assert.equal(keys.length, 3, 'one entry per non-trend chart panel');
-  // The removed panels took their copy with them: a stale entry would be a paragraph
-  // about a chart that is no longer on the page.
-  assert.ok(!component.includes('PANEL_INFO.officers'), 'no entry for a panel that is gone');
-  assert.ok(!component.includes('function OfficerRows(') && !component.includes('function Activity('));
 });
 
-test('each panel forswears the thing it cannot know, in its own words', () => {
-  // The claims a reader cannot check from the picture, patterned per panel so that two
-  // entries swapped or a paragraph reused would fail rather than read fine.
-  const claims = {
-    // A pie with two wedges is not a bug: a status with nothing in range is dropped.
-    status: [/wedge/i, /share of the reports in this range/, /clock/, /workflow order/, /Draft/, /not drawn/],
-    // The one panel whose numbers are NOT per-day, and not the filing timestamp.
-    hour: [/hour of the day/, /date is discarded/, /HAPPENED/, /not when the report was filed/, /relative to the busiest hour/],
-    // Rank over time — a question about position, not about volume.
-    categories: [/RANK in each slice/, /a line breaks where its type had nothing/, /never a fall/],
-  };
-  const notes = keys.map((key) => {
-    const e = entry(key);
-    assert.match(e, /label: '/, `PANEL_INFO.${key} needs a label for the control`);
-    assert.match(e, /title: '/, `PANEL_INFO.${key} needs a title for the control`);
-    const note = e.match(/note: '([^']+)'/);
-    assert.ok(note, `PANEL_INFO.${key} needs a note`);
-    for (const pattern of claims[key]) {
-      assert.match(note[1], pattern, `PANEL_INFO.${key} must say what makes IT different`);
-    }
-    return note[1];
-  });
-  assert.equal(new Set(notes).size, notes.length, 'no two panels may share one paragraph');
+test('the key says what the stacking means, in its own words', () => {
+  const at = component.indexOf('function ChartKey(');
+  const body = component.slice(at, component.indexOf('function StackedColumns('));
+  // Which band sits where, and why: the order IS the ranking, most frequent at
+  // the axis. A reader who takes the top band for the commonest incident is
+  // reading the chart backwards, which is the trap this note exists for.
+  assert.match(body, /most frequent at the axis/);
+  assert.match(body, /stack from the bottom up/);
+  // The number beside each name is a count in this range, not a share.
+  assert.match(body, /how many reports of that type were filed in this range/);
+  // …and the hint names the input the drawing hides: the right button.
+  assert.match(body, /Right-click a day/);
+  // An empty range draws no control at all rather than one that opens nothing.
+  assert.match(body, /if \(!byType\.length\) return null;/);
 });
 
-test('no panel promises a hover it does not have', () => {
-  // Every chart left on the page answers a pointer, so every one of them carries a hint —
-  // a hint line is a promise about behaviour, and one without the other is the bug.
-  for (const key of keys) {
-    assert.match(entry(key), /hint: '/, `PANEL_INFO.${key} must say what pointing does`);
+test('the trio carries no explanation controls of its own', () => {
+  // The reference draws Incident Types, Top Locations and System Status with a
+  // mark, a name and a sub-line — no `?` circle. A Panel `info` on any of them
+  // would be a control the design does not have.
+  for (const title of ['Incident Types', 'Top Locations', 'System Status']) {
+    const at = component.indexOf(`title="${title}"`);
+    assert.ok(at > -1, `the ${title} panel is missing`);
+    const head = component.slice(Math.max(0, at - 200), at + 300);
+    assert.doesNotMatch(head, /info=\{/, `the ${title} panel grew an info control`);
   }
-  // …and the hints name the input, so the reader knows how to try it.
-  assert.match(entry('status'), /right-click one/);
-  assert.match(entry('hour'), /←\/→/);
-  assert.match(entry('categories'), /Hover or focus a name on the right/);
-  // …and it names the other route into the same chart, because a reader who only knows
-  // about hovering one of the two dimensions will never find the other.
-  assert.match(entry('categories'), /Hover the plot, or focus it and walk with ←\/→/);
-  // The trap the rank chart carries, said out loud rather than left to be discovered:
-  // a line can lead on four reports, so the counts are printed beside every position.
-  assert.match(entry('categories'), /Rank says nothing about how many reports/);
+  // The donut reads the three busiest types, everything else as Others — in
+  // blue and yellow only (owner request, 2026-10-30), so the page stays in
+  // the station's two colours.
+  assert.match(component, /cats\.slice\(0, 3\)/);
+  assert.match(component, /\{ label: 'Others', count: rest/);
+  assert.match(component, /DONUT_HUES/);
+  assert.doesNotMatch(component, /rampColor\(rank >= 0 \? rank : 9\)/, 'the donut is back on the chart ramp');
 });
 
 test('the control is one disclosure, and its card id is unique per panel', () => {
@@ -131,7 +101,7 @@ test('the control is one disclosure, and its card id is unique per panel', () =>
   assert.match(component, /const panelId = `\$\{useId\(\)\}-info`/);
   assert.ok(
     !component.includes('dash-chart-key'),
-    'a hardcoded id used by five controls would point every aria-controls at the first card',
+    'a hardcoded id used by five controls would point every aria-controls at the first panel',
   );
   // The disclosure contract, unchanged from the key it grew out of.
   assert.match(component, /aria-expanded=\{open\}/);

@@ -242,6 +242,52 @@ check(
         === 'On or about 09:00 hours, the subject fled.'
 );
 
+// No invented issuance (owner request, 2026-11-01) — code enforcement
+// beside the prompt rule: a live enhance run closed a plain account that
+// carried NO issuance line with an invented requestor name. Pure and
+// offline like the Task 6 strip above.
+echo "\nNo invented issuance\n";
+$plainNotes = 'One (1) Jonalyn ledger, of legal age, single, personally appeared and reported that she lost her wallet.';
+$inventedClose = 'This certification is issued upon the request of "VON NEBRIL" for what ever legal purposes it may serve.';
+check(
+    'an issuance line the account never had is stripped whole',
+    NarrativeService::stripInventedIssuance($plainNotes . "\n\n" . $inventedClose, $plainNotes) === $plainNotes,
+    NarrativeService::stripInventedIssuance($plainNotes . "\n\n" . $inventedClose, $plainNotes)
+);
+check(
+    'a narrative with no issuance anywhere is untouched',
+    NarrativeService::stripInventedIssuance($plainNotes, $plainNotes) === $plainNotes
+);
+$ownClose = 'This certification is issued upon the request of "Jonalyn Ledger" for what ever legal purposes it may serve.';
+$ownCert = $plainNotes . "\n\n" . $ownClose;
+check(
+    'the officer\'s own issuance line is kept verbatim',
+    NarrativeService::stripInventedIssuance($ownCert, $ownCert) === $ownCert
+);
+check(
+    'a swapped requestor is put back to the officer\'s own name',
+    NarrativeService::stripInventedIssuance($plainNotes . "\n\n" . $inventedClose, $ownCert)
+        === $ownCert,
+    NarrativeService::stripInventedIssuance($plainNotes . "\n\n" . $inventedClose, $ownCert)
+);
+$placeholderClose = 'This certification is issued upon the request of "name of who requested" for what ever legal purposes it may serve.';
+$placeholderCert = $plainNotes . "\n\n" . $placeholderClose;
+check(
+    'an invented name over the placeholder goes back to the placeholder',
+    NarrativeService::stripInventedIssuance($plainNotes . "\n\n" . $inventedClose, $placeholderCert)
+        === $placeholderCert,
+    NarrativeService::stripInventedIssuance($plainNotes . "\n\n" . $inventedClose, $placeholderCert)
+);
+// A live run wrapped the invented line across two paper lines ("...it may
+// /serve.") and the same-line strip missed it — the requestor survived.
+// The strip tolerates wrapped endings without ever crossing a blank line.
+$wrappedClose = 'This certification is issued upon the request of "VON NEBRIL" for what ever legal purposes it may' . "\n" . 'serve.';
+check(
+    'a wrapped invented issuance line is stripped whole',
+    NarrativeService::stripInventedIssuance($plainNotes . "\n\n" . $wrappedClose, $plainNotes) === $plainNotes,
+    NarrativeService::stripInventedIssuance($plainNotes . "\n\n" . $wrappedClose, $plainNotes)
+);
+
 // legalBasis (§3.2) — JSON valid + only stable-citation types carry it.
 $vocab = json_decode((string) file_get_contents(__DIR__ . '/../resources/ai/type_vocabulary.json'), true);
 check('type_vocabulary.json is valid JSON', is_array($vocab));
