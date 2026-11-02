@@ -606,7 +606,9 @@ test('the static lines type too — letterhead, labels, headings, signatures', (
   assert.match(LEAF, /\{CL\('head agency', head\.agency\)\}/, 'the agency line does not type');
   assert.match(LEAF, /\{CL\('title', "POLICE REPORT"\)\}/, 'the title does not type');
   assert.match(LEAF, /\{CL\(`label \$\{entry\.label\}`, labelCase\(entry\.label\)\)\}/, 'fact labels do not type');
-  assert.match(LEAF, /\{CL\('facts head',/, 'the facts heading does not type');
+  // Owner request (2026-11-02): the heading over the narrative was removed,
+  // so the account reads on its own on every incident's sheet.
+  assert.doesNotMatch(LEAF, /FACTS OF THE CASE/, 'the narrative heading is back on the sheet');
   assert.match(LEAF, /\{CL\('noted label',/, 'the noted-by label does not type');
   // Read-only stays read-only: the editor renders only under `editable`,
   // and the fallback ink is the template default, never an empty box.

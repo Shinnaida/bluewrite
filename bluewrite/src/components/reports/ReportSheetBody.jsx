@@ -892,10 +892,13 @@ export default function ReportSheetBody({
            nouns) and never flattens or rewrites a word. Task 6 — a LEADING
            blotter-entry restatement is dropped, because the certification
            line directly above already states it; this also cleans a legacy
-           row stored before the server stopped adding one. Task 9 — the label
-           is chrome; the text types itself in. ---- */}
+           row stored before the server stopped adding one. Task 9 — the text
+           types itself in; the heading over it was removed by owner request
+           (2026-11-02), so every incident's sheet reads without a label. ---- */}
       <div className="pr-narrative">
-        <strong>{CL('facts head', "FACTS OF THE CASE:")} </strong>
+        {/* Owner request (2026-11-02): the heading over the narrative is
+            removed on every incident's sheet — the account reads on its own,
+            with no label above it. */}
         {editInner && onEditNarrative ? (
           <RichTextArea
             value={narrativeRaw}
