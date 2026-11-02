@@ -571,26 +571,12 @@ test('stolenItemsTotal sums what is known and labels a partial total', () => {
 // ---- 11. Part 1: the reporting party (Panel I) -----------------------------
 
 test('the reporting party must be named and reachable before the report is filed', () => {
-  // WHO FILED IT is the report's minimum: without a name there is nobody the
-  // document is from, and without a number there is nobody to call back about
-  // the case. Both are required — and nothing else about the reporter is.
-  const missing = validateReporterParty({});
-  assert.deepEqual(
-    missing.map((p) => p.path).sort(),
-    ['reporter_contact', 'reporter_name'],
-  );
-  assert.ok(missing.every((p) => p.level === 'error'));
-
-  // Each one is reported on its own — a report is blocked for the one that is
-  // actually missing, not for "the party" as a whole.
-  assert.deepEqual(
-    validateReporterParty({ reporter_name: 'Juan Dela Cruz' }).map((p) => p.path),
-    ['reporter_contact'],
-  );
-  assert.deepEqual(
-    validateReporterParty({ reporter_contact: '0917 555 1234' }).map((p) => p.path),
-    ['reporter_name'],
-  );
+  // Owner request 2026-11-03: finalize must not block on a missing reporting
+  // party. The fields stay on the sheet and are shape-checked when supplied;
+  // only the finalize floor is lifted.
+  assert.deepEqual(validateReporterParty({}), []);
+  assert.deepEqual(validateReporterParty({ reporter_name: 'Juan Dela Cruz' }), []);
+  assert.deepEqual(validateReporterParty({ reporter_contact: '0917 555 1234' }), []);
 });
 
 test('the rest of the reporting party is optional, but a supplied value is checked', () => {
@@ -634,8 +620,9 @@ test('the reporting-party rules are a finalize check, not a draft nag', () => {
   assert.equal(asDraft.errors.filter((e) => e.path === 'reporter_contact').length, 0);
 
   const atFinalize = validateReport(blank, 'finalize');
-  assert.equal(atFinalize.errors.filter((e) => e.path === 'reporter_name').length, 1);
-  assert.equal(atFinalize.errors.filter((e) => e.path === 'reporter_contact').length, 1);
+  // Owner request 2026-11-03: no finalize floor for the reporting party.
+  assert.equal(atFinalize.errors.filter((e) => e.path === 'reporter_name').length, 0);
+  assert.equal(atFinalize.errors.filter((e) => e.path === 'reporter_contact').length, 0);
 });
 
 // ---- 12. Per-type requirements: what each incident KIND must record --------
@@ -657,7 +644,8 @@ const REQUIRED_OF = {
   'Theft': ['item_stolen', 'how_property_was_taken'],
   'Robbery': ['property_taken', 'method_used', 'weapon_involved'],
   'Assault / Physical Injury': ['type_of_injury', 'body_part_injured', 'cause_of_injury'],
-  'Traffic Accident': ['accident_type', 'suspected_cause'],
+  // Owner request 2026-11-03: Traffic Accident finalize is not gated on these.
+  'Traffic Accident': [],
   'Rape / Sexual Assault': ['relationship_to_victim', 'medical_examination'],
   'Domestic Violence': ['relationship_between_parties', 'type_of_abuse', 'children_involved'],
   'Missing Person': ['date_last_seen', 'location_last_seen'],

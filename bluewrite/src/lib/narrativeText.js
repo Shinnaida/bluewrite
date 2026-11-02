@@ -152,7 +152,9 @@ export function stripRedundantSheetHeaderHtml(html, title) {
 // discipline the structured fields use (see nagaPlaces.js). Only that value
 // is corrected; every other line, label and word renders as stored.
 
-const PLACE_LINE = /^(\s*PLACE\s+OF\s+INCIDENT\s*:\s*)(.*)$/i;
+// Owner request: the sheet prints the short label "Place:" — stored reports
+// still carry the long form, so both are recognised here.
+const PLACE_LINE = /^(\s*(?:PLACE\s+OF\s+INCIDENT|PLACE)\s*:\s*)(.*)$/i;
 
 /**
  * Correct the value of every PLACE OF INCIDENT line in a plain narrative.
@@ -180,7 +182,7 @@ export function correctNagaPlaceLines(value) {
 // <br> line; the value runs to the next tag. Anchoring at `>` (or the start)
 // keeps an occurrence inside prose — "upon reaching the place of incident …"
 // — exactly as written.
-const PLACE_HTML = /(^|>)(\s*(?:<b>|<strong>)?\s*PLACE\s+OF\s+INCIDENT\s*:\s*(?:<\/b>|<\/strong>)?\s*)([^<]*)/gi;
+const PLACE_HTML = /(^|>)(\s*(?:<b>|<strong>)?\s*(?:PLACE\s+OF\s+INCIDENT|PLACE)\s*:\s*(?:<\/b>|<\/strong>)?\s*)([^<]*)/gi;
 
 /**
  * The same rule for formatter-style html (Arrange Only / Enhance Wording and

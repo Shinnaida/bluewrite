@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:blotter_capture/blotter_text.dart';
 
 import '../api/portal_client.dart';
+import '../blotter_filing.dart';
 import '../storage/draft_store.dart';
 import '../storage/secure_store.dart';
 
@@ -285,7 +286,23 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
       // own incident title, place, requestor and disposition — the read
       // turns those into the draft's real fields instead of placeholders
       // and canned ACTION TAKEN lines. Best-effort: a miss files plain.
-      final read = await widget.client.classifyAccount(widget.bearer, text);
+      // SAME analysis as a pasted source text on the web: classify the
+      // account, then the type-scoped details. Best-effort — a miss files
+      // plain with the lately certification format below.
+      Map<String, dynamic>? read = await widget.client.classifyAccount(widget.bearer, text);
+      if (read != null) {
+        final probe = blotterFilingFields(
+          read: read,
+          stationTypes: _types,
+          fallbackType: 'Other Incident',
+          typedLocation: '',
+        );
+        final probeType = (probe['incident_type'] ?? '').toString();
+        if (probeType.isNotEmpty) {
+          final details = await widget.client.classifyDetails(widget.bearer, text, probeType);
+          if (details != null) read = {...read, 'details': details};
+        }
+      }
       final filing = blotterFilingFields(
         read: read,
         stationTypes: _types,

@@ -62,10 +62,10 @@ const COMMON_RULES = {
 // no email field at all — the station reaches a reporting party by telephone, and
 // a mailbox nobody reads was one more box to leave blank.
 // ---------------------------------------------------------------------------
-const REPORTER_REQUIRED = [
-  { key: 'reporter_name', label: 'Reporting party name' },
-  { key: 'reporter_contact', label: 'Contact number' },
-];
+// Owner request 2026-11-03: finalize must not block on a missing reporting
+// party. The Panel I fields stay on the sheet and are still shape-checked
+// when supplied; only the finalize floor is lifted.
+const REPORTER_REQUIRED = [];
 
 const REPORTER_FIELDS = [
   {

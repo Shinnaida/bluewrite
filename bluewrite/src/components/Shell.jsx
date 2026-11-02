@@ -238,7 +238,8 @@ export default function Shell({
     let alive = true;
     setRecentReports(null);
     setReportTally(null);
-    api('/reports?per_page=100&sort=incident_datetime&dir=desc')
+    // Owner request: Home reads the most recently edited reports first.
+    api('/reports?per_page=100&sort=updated_at&dir=desc')
       .then((d) => {
         if (alive) setRecentReports(d.reports);
       })

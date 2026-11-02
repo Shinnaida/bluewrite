@@ -379,7 +379,7 @@ test('All Reports is the whole register as files, and it says in what order', ()
   // of folders for a shelf that is meant to be a list of reports.
   assert.equal(ALL_SHELF.list, true);
   assert.equal(ALL_SHELF.all, true);
-  assert.equal(ALL_SHELF.note, 'Newest first');
+  assert.equal(ALL_SHELF.note, 'Newest edited');
   const [all] = buildShelves(
     [
       { status: 'draft', incident_type: 'Theft', count: 2 },
@@ -390,7 +390,7 @@ test('All Reports is the whole register as files, and it says in what order', ()
   assert.equal(all.key, 'all');
   assert.equal(all.label, 'All Reports');
   assert.equal(all.list, true);
-  assert.equal(all.note, 'Newest first');
+  assert.equal(all.note, 'Newest edited');
   assert.equal(all.total, 3);
 });
 
@@ -713,10 +713,11 @@ test('ALL REPORTS draws the register as files, newest first, and asks for them',
   );
   assert.match(reports, /const officer = user\.role !== 'Admin';/);
 
-  // NEWEST FIRST is the register's own order, unstated by the shelf because the
-  // query already carries it: the newest incident at the top (see the query state
-  // and listParams, which sends `sort`/`dir` with every request).
-  assert.match(reports, /sort: 'incident_datetime',\s*\n\s*dir: 'desc',/);
+  // NEWEST EDITED is the register's own order, unstated by the shelf because
+  // the query already carries it: the most recently edited report at the top
+  // (see the query state and listParams, which sends `sort`/`dir` with every
+  // request).
+  assert.match(reports, /sort: 'updated_at',\s*\n\s*dir: 'desc',/);
 
   // THE REGISTER ASKS FOR THE RIGHT THING. An open folder asks for its contents;
   // ALL REPORTS asks for the whole filtered set AND the tally (the strip's counts
@@ -743,13 +744,14 @@ test('ALL REPORTS draws the register as files, newest first, and asks for them',
   );
 });
 
-test('the register can be read in four orders, and the shelf says which one is on', () => {
+test('the register can be read in six orders, and the shelf says which one is on', () => {
   // The menu offers exactly what the SERVER can sort by (ReportsController's
-  // $sortMap: incident_datetime, incident_type, status, created_by_name) — a
-  // fifth order would be a control that blanks the register when it is pressed.
+  // $sortMap: updated_at, incident_datetime, incident_type, status,
+  // created_by_name) — a seventh order would be a control that blanks the
+  // register when it is pressed.
   assert.deepEqual(
     SORT_ORDERS.map((o) => o.key),
-    ['incident_datetime', 'incident_datetime', 'incident_type', 'status', 'created_by_name'],
+    ['updated_at', 'updated_at', 'incident_datetime', 'incident_datetime', 'incident_type', 'status', 'created_by_name'],
   );
   for (const key of SORT_ORDERS.map((o) => o.key)) {
     assert.match(
@@ -773,18 +775,22 @@ test('the register can be read in four orders, and the shelf says which one is o
   // TOTAL: a pair this build does not know (a bookmarked URL, a default that
   // drifted from the server's) resolves to the register's own order rather than
   // to a menu with nothing ticked.
-  assert.equal(sortOrder('incident_datetime', 'desc'), DEFAULT_SORT);
+  assert.equal(sortOrder('updated_at', 'desc'), DEFAULT_SORT);
+  assert.equal(sortOrder('incident_datetime', 'desc').label, 'Newest incident');
   assert.equal(sortOrder('incident_type', 'asc').label, 'Incident type, A to Z');
   assert.equal(sortOrder('incident_type', 'DESC'), DEFAULT_SORT);
   assert.equal(sortOrder('narrative', 'asc'), DEFAULT_SORT);
   assert.equal(sortOrder(undefined, undefined), DEFAULT_SORT);
+  assert.equal(sortNote('updated_at', 'desc'), 'Newest edited');
   assert.equal(sortNote('incident_datetime', 'asc'), 'Oldest first');
   assert.equal(sortNote('status', 'asc'), 'Status A–Z');
 
   // AND THE SHELF THAT STATES AN ORDER STATES THE ONE THAT IS ON: ALL REPORTS
   // wears the officer's order when the register is built with it, so a tab cannot
   // go on claiming "Newest first" over a list of the oldest reports.
-  assert.equal(shelvesFor({})[0].note, 'Newest first');
+  // go on claiming "Newest edited" over a list of the oldest reports.
+  assert.equal(shelvesFor({})[0].note, 'Newest edited');
+  assert.equal(shelvesFor({ sort: 'incident_datetime', dir: 'desc' })[0].note, 'Newest first');
   assert.equal(shelvesFor({ sort: 'incident_datetime', dir: 'asc' })[0].note, 'Oldest first');
   assert.equal(shelvesFor({ sort: 'incident_type', dir: 'asc' })[0].note, 'Type A–Z');
   // The other two shelves have no note of their own — a shelf of folders is

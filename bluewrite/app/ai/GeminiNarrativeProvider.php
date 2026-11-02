@@ -451,6 +451,88 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
     }
 
     /**
+     * Arrange Only — arrange the officer's report into the station order
+     * without changing its wording (resources/ai/arrange_report_prompt.txt).
+     *
+     * Temperature 0.0 like classify(): arrangement has one defensible answer
+     * and creativity here is rewording. Best-effort strictness: the client
+     * runs the shared formatter after this call, so spacing and bold labels
+     * are settled there even when the model drifts.
+     */
+    public function arrangeReport(string $account): string
+    {
+        if ($this->apiKey === '') {
+            throw new AiProviderException('Gemini API key is not configured.', retryable: false);
+        }
+        $account = trim($account);
+        if ($account === '') {
+            throw new AiProviderException('No report text was sent with the request.', retryable: false);
+        }
+
+        $body = [
+            'contents' => [
+                ['role' => 'user', 'parts' => [['text' => $account]]],
+            ],
+            'generationConfig' => [
+                'temperature' => 0.0,
+                'maxOutputTokens' => max($this->maxOutputTokens, 8192),
+                'responseMimeType' => 'application/json',
+                'responseSchema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'report' => ['type' => 'string'],
+                    ],
+                    'required' => ['report'],
+                ],
+            ],
+        ];
+        if ($this->thinkingLevel !== '') {
+            $body['generationConfig']['thinkingConfig'] = ['thinkingLevel' => $this->thinkingLevel];
+        }
+        $body = self::attachInstruction($body, null, self::arrangeInstruction());
+
+        $decoded = json_decode($this->post($body), true);
+        if (!is_array($decoded)) {
+            throw new AiProviderException('Gemini returned a non-JSON response.');
+        }
+        $text = self::answerText($decoded);
+        if ($text === '') {
+            $reason = $decoded['candidates'][0]['finishReason'] ?? 'unknown';
+            throw new AiProviderException("Gemini returned no arranged report (finishReason: {$reason}).");
+        }
+        $parsed = self::parseNarrativeJson($text);
+        if (!is_array($parsed) || !isset($parsed['report']) || !is_string($parsed['report'])) {
+            $reason = $decoded['candidates'][0]['finishReason'] ?? 'unknown';
+            throw new AiProviderException(
+                "Gemini arrange payload did not match the response schema (finishReason: {$reason}). Raw text head: "
+                . substr($text, 0, 200)
+            );
+        }
+        return trim($parsed['report']);
+    }
+
+    /**
+     * The Arrange Only instruction (resources/ai/arrange_report_prompt.txt).
+     * Public for tests; maintainer '#' comment lines are stripped.
+     */
+    public static function arrangeInstruction(): string
+    {
+        $file = dirname(__DIR__, 2) . '/resources/ai/arrange_report_prompt.txt';
+        if (is_file($file)) {
+            $raw = (string) file_get_contents($file);
+            $lines = preg_grep('/^\\s*#/', explode("\n", $raw), PREG_GREP_INVERT) ?: [];
+            $trimmed = trim(implode("\n", $lines));
+            if ($trimmed !== '') {
+                return $trimmed;
+            }
+        }
+        return 'Arrange the supplied police incident report into the station report order '
+            . 'without changing any word, spelling, number or identifier. '
+            . 'Emit the incident title once, keep every part the source carries, add nothing, drop nothing. '
+            . 'One blank line between sections, no trailing spaces. Return only the arranged report text.';
+    }
+
+    /**
      * The Enhance Wording instruction (resources/ai/enhance_report_prompt.txt).
      * Public for tests; maintainer '#' comment lines are stripped.
      */

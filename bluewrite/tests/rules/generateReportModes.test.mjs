@@ -84,8 +84,11 @@ test('a throwing draft-save cannot strand Arrange in silent loading', () => {
   assert.match(body, /setPanelOpen\(true\)/, 'a failed arrange never shows its reason');
 });
 test('arranged drafts render a visible wording-unchanged receipt', () => {
-  assert.ok(PANEL.includes('ai-arranged-note'), 'receipt element missing');
-  assert.ok(PANEL.includes('wording unchanged'), 'receipt must say wording is unchanged');
+  // Owner request: the arranged chatter is gone — no arranged note, no
+  // filled-fields pointer. The draft still carries the arranged flag (see
+  // arrangeDraft.js); only the noise is removed.
+  assert.ok(!PANEL.includes('ai-arranged-note'), 'arranged note is still rendered');
+  assert.ok(!PANEL.includes('wording unchanged'), 'arranged chatter is still rendered');
   assert.ok(CSS.includes('.ai-arranged-note'), 'receipt css missing');
 });
 test('Time/Date is a label: it is bolded and named the sheet way', () => {
@@ -100,6 +103,14 @@ test('Time/Date is a label: it is bolded and named the sheet way', () => {
   // Spacing around the slash is presentational: every spelling is ONE label, so
   // an answer that spaces it differently still matches the source's allow-list.
   assert.deepEqual(extractFieldLabels('Time / Date: x'), extractFieldLabels('Time/Date: x'));
+  // Owner request: Time/Date sits directly below Place on the sheet, whatever
+  // order the account typed them in — the short label ranks with the long one.
+  const unordered = ['TITLE', '', 'Time/Date: 8:40 AM', 'Place: Naga'].join('\n');
+  const ordered = formatIncidentReportHtml(unordered);
+  assert.ok(
+    ordered.indexOf('Place:') < ordered.indexOf('Time/Date:'),
+    'Time/Date is not directly below Place',
+  );
   // A clock is still a clock: a bare "8:40 AM" line is not a label.
   assert.equal(formatIncidentReportHtml('8:40 AM of 10-20-26', {}).includes('<b>'), false, 'a time was bolded as a label');
 });
@@ -267,6 +278,9 @@ test('sheet provisional arrival writes on landing; Discard restores, Keep confir
   // Lifecycle resets: Close or a new run from a restored draft reopens the
   // lifecycle so the next arrival applies instead of stranding pending.
   assert.ok(PANEL.includes("if (provisionalState === 'pending') setProvisionalState('idle')"), 'close does not reopen pending');
+  // Owner request: closing must not change the paper — an applied draft is
+  // restored on close, so only Keep confirms it.
+  assert.ok(PANEL.includes("if (provisionalState === 'applied') onRestoreProvisional?.()"), 'close keeps an applied draft on the paper');
   assert.ok(PANEL.includes('const restoredRun = beginFreshRun(false)'), 'generate does not reopen through the shared helper');
   // Runs read restored values first — never the draft sitting on the paper.
   assert.ok(PANEL.includes('restoredRun.narrative ?? narrative'), 'generate does not prefer restored words');
@@ -292,7 +306,7 @@ test('the shared formatter bolds existing labels only and adds none', () => {
     'RECORDED BY : PO1 DELA CRUZ',
   ].join(LF);
   const html = formatIncidentReportHtml(src);
-  assert.ok(html.includes('<b>PLACE OF INCIDENT:</b> CANGI MUNDONG'), 'place label not bolded');
+  assert.ok(html.includes('<b>PLACE:</b> CANGI MUNDONG'), 'place label not bolded');
   assert.ok(html.includes('<b>T/D OF INCIDENT:</b> MORE OR LESS 8:40 AM'), 't/d label not bolded');
   assert.ok(html.includes('<b>VEHICLES INVOLVED:</b>'), 'vehicles label not bolded');
   assert.ok(html.includes('<b>FACTS:</b> INVESTIGATION REVEALED'), 'facts label not bolded');
@@ -319,7 +333,7 @@ test('enhance formats only labels the source carried', () => {
   assert.deepEqual(extractFieldLabels(source), ['place of incident', 'facts']);
   const enhanced = ['PLACE OF INCIDENT : Naga City', 'FACTS: The wallet was lost.', 'VEHICLES INVOLVED: None.'].join(LF);
   const draft = buildEnhancedDraft({ enhancedText: enhanced, sourceText: source });
-  assert.ok(draft.narrative.includes('<b>PLACE OF INCIDENT:</b>'), 'source label not bolded');
+  assert.ok(draft.narrative.includes('<b>PLACE:</b>'), 'source label not bolded');
   assert.ok(draft.narrative.includes('<b>FACTS:</b>'), 'source label not bolded');
   assert.ok(!draft.narrative.includes('<b>VEHICLES INVOLVED:</b>'), 'invented label was bolded');
   assert.equal(draft.enhanced, true);
@@ -454,7 +468,7 @@ test('no title is invented when the source carries none', () => {
   assert.equal(detectIncidentTitle(src), '');
   const html = formatIncidentReportHtml(src);
   assert.ok(!html.includes('<p><b>PUBLIC MARKET'), 'a field value was promoted to a heading');
-  assert.ok(html.includes('<b>PLACE OF INCIDENT:</b>'), 'existing labels still bold');
+  assert.ok(html.includes('<b>PLACE:</b>'), 'existing labels still bold');
 });
 
 test('arrange sentence-cases the place without correcting it; enhance keeps it as written', () => {
@@ -469,13 +483,13 @@ test('arrange sentence-cases the place without correcting it; enhance keeps it a
   ].join(LF);
   const arranged = buildArrangeDraft({ accountText: src });
   assert.ok(
-    arranged.narrative.includes('<b>Place of incident:</b> Cangi Mundong, Inoburan, City of Naga'),
+    arranged.narrative.includes('<b>Place:</b> Cangi Mundong, Inoburan, City of Naga'),
     'arrange did not sentence-case the recorded place or its label',
   );
   assert.ok(!arranged.narrative.includes('Cansimundong'), 'arrange corrected the recorded place');
   const enhanced = buildEnhancedDraft({ enhancedText: src, sourceText: src });
   assert.ok(
-    enhanced.narrative.includes('<b>PLACE OF INCIDENT:</b> CANGI MUNDONG, INOBURAN, CITY OF NAGA'),
+    enhanced.narrative.includes('<b>PLACE:</b> CANGI MUNDONG, INOBURAN, CITY OF NAGA'),
     'enhance formatting changed the recorded place wording',
   );
 });
@@ -549,7 +563,7 @@ test('arrange keeps names, places, vehicle markers and identifiers intact', () =
   ].join(LF);
   const arranged = buildArrangeDraft({ accountText: full });
   for (const bit of [
-    '<b>Place of incident:</b> Cangi Mundong, Inoburan, City of Naga',
+    '<b>Place:</b> Cangi Mundong, Inoburan, City of Naga',
     '<b>Time/Date:</b> More or less 8:40 AM of 10-20-26',
     '<b>V1:</b> Yamaha NMAX with plate 0718SR, OR 0716-819041, CR 0216-25-250349',
     'Joseph Lontayo Porol',
@@ -569,11 +583,12 @@ test('arrange keeps names, places, vehicle markers and identifiers intact', () =
     assert.ok(arranged.narrative.includes(bit), 'lost source detail: ' + bit);
   }
   // Every word is still there, exactly once: the pass is capitalisation only.
-  // The one exception is the label the sheet renames (T/D → Time/Date).
+  // The exceptions are the labels the sheet renames (T/D → Time/Date,
+  // PLACE OF INCIDENT → Place).
   const words = (s) => (String(s).toLowerCase().match(/[a-z0-9]+/g) || []).sort();
   assert.deepEqual(
     words(reportHtmlToPlain(arranged.narrative)),
-    words(full.replace('T/D OF INCIDENT', 'Time/Date')),
+    words(full.replace('T/D OF INCIDENT', 'Time/Date').replace('PLACE OF INCIDENT', 'Place')),
     'sentence case added, dropped, duplicated or reordered a word',
   );
 });
@@ -645,7 +660,7 @@ test('arrange writes every bold field label in sentence case, not all caps', () 
     ].join(LF),
   });
   for (const bit of [
-    '<b>Place of incident:</b> Cangi Mundong, Inoburan, City of Naga',
+    '<b>Place:</b> Cangi Mundong, Inoburan, City of Naga',
     '<b>Time/Date:</b> More or less 8:40 AM of 10-20-26',
     '<b>Vehicles involved:</b>',
     '<b>Facts:</b><br>The vehicles collided.',
@@ -678,7 +693,7 @@ test('a title stated after the facts is still the report its title', () => {
     0,
     'the title is not the leading heading',
   );
-  assert.ok(html.includes('<b>PLACE OF INCIDENT:</b> PUBLIC MARKET'), 'the place was lost');
+  assert.ok(html.includes('<b>PLACE:</b> PUBLIC MARKET'), 'the place was lost');
   assert.ok(html.includes('<b>FACTS:</b>'), 'the facts were lost');
   assert.ok(html.includes('<b>REMARKS:</b>'), 'the remarks were lost');
   assert.ok(!html.includes('INCIDENT TITLE:'), 'an INCIDENT TITLE: label was added');
@@ -700,7 +715,8 @@ test('reordered parts are arranged in the report order without losing a word', (
   const order = [
     '10-20-26 10:00 AM',
     'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
-    'PLACE OF INCIDENT',
+    // The sheet prints the place label short (owner request: "Place:").
+    '<b>PLACE:</b>',
     'T/D OF INCIDENT',
     'VEHICLES INVOLVED',
     'FACTS',

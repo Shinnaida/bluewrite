@@ -396,6 +396,13 @@ try {
         (new NarrativeController())->enhance();
     }
 
+    // POST /ai/arrange — Arrange Only via Gemini with strict rules. Like
+    // /ai/enhance it takes no report id: the officer's report text is the
+    // whole source and the answer is the same text arranged, never written.
+    if ($seg0 === 'ai' && $seg1 === 'arrange' && !isset($parts[2]) && $method === 'POST') {
+        (new NarrativeController())->arrange();
+    }
+
     // POST /ocr/read — the online photo reader (owner request). Online-first
     // with local fallback: with no key the controller answers
     // `configured: false` and the client reads on-device; on any upstream

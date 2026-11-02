@@ -79,9 +79,12 @@ const CASES = [
 
 test('every incident type keeps every source word exactly once', () => {
   for (const { name, source } of CASES) {
+    // The sheet prints the place label short ("Place:", owner request), so
+    // the long source label reads two words lighter on the paper.
+    const expected = String(source).replace(/PLACE OF INCIDENT/gi, 'Place');
     assert.deepEqual(
       words(reportHtmlToPlain(render(source))),
-      words(source),
+      words(expected),
       name + ': the formatter added, dropped, duplicated or reworded a word',
     );
   }
@@ -141,8 +144,12 @@ test('NO section is bolded that the source did not carry', () => {
         .map((m) => m[1].replace(/\s+/g, ' ').trim().toLowerCase()),
     );
     for (const label of boldLabels(render(source))) {
+      // The sheet prints the place label short ("Place:", owner request): a
+      // source carrying the long form stated it.
+      const stated =
+        label.toLowerCase() === 'place' ? 'place of incident' : label.toLowerCase();
       assert.ok(
-        inSource.has(label.toLowerCase()),
+        inSource.has(label.toLowerCase()) || inSource.has(stated),
         name + ': the formatter bolded a label the source never stated: ' + label,
       );
     }
@@ -223,11 +230,12 @@ test('a wrapped vehicle row keeps every detail with its own vehicle', () => {
   assert.ok(/DOB: 03-22-/i.test(v2), "the wrapped DOB left V2");
   assert.ok(/back rider Vilma Sanoria Canque/i.test(v2), 'the back rider left V2');
   // Nothing was invented or dropped to achieve it. (Checked on the plain
-  // render: Arrange Only's label names — Time/Date, Vehicles involved — are a
-  // deliberate presentation change, covered by generateReportModes.)
+  // render: Arrange Only's label names — Time/Date, Vehicles involved — and
+  // the sheet's short Place label are a deliberate presentation change,
+  // covered by generateReportModes.)
   assert.deepEqual(
     words(reportHtmlToPlain(render(source))),
-    words(source),
+    words(String(source).replace(/PLACE OF INCIDENT/gi, 'Place')),
     'the fix added, dropped or reworded a word',
   );
 });

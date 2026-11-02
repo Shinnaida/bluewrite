@@ -510,6 +510,59 @@ final class NarrativeController
     }
 
     /**
+     * POST /ai/arrange — Arrange Only via Gemini with strict rules.
+     *
+     * The officer's own report text goes in, the same report arranged into
+     * the station order comes back: same words, title emitted once, spacing
+     * normalised. It takes no report id and writes nothing — like
+     * /ai/enhance, the account is the only source and the answer is a
+     * proposal the officer reviews in the editor. A provider miss falls back
+     * to the client's deterministic formatter, never to an error the officer
+     * must work around.
+     */
+    public function arrange(): void
+    {
+        $user = Auth::requireUser();
+        if (!NarrativeService::enabled()) {
+            Response::json(503, ['error' => 'AI assistance is disabled. Continue with the report as written.']);
+        }
+
+        $body = NarrativeController::jsonBody();
+        $account = trim((string) ($body['account'] ?? ''));
+        if ($account === '') {
+            Response::json(422, ['error' => 'Write the report first — there is nothing yet to arrange.']);
+        }
+        $account = mb_substr($account, 0, 20000);
+
+        try {
+            $out = (new NarrativeService())->arrangeReport($account);
+        } catch (AiUnavailableException $e) {
+            Response::json(503, [
+                'error' => $e->getMessage(),
+                'retry_in' => $e->retryIn,
+                'manual_mode' => true,
+            ]);
+        } catch (AiProviderException $e) {
+            Response::json(502, [
+                'error' => self::providerFailureMessage($e),
+                'manual_mode' => !$e->retryable,
+            ]);
+        }
+
+        Audit::log((int) $user['id'], 'ai.arrange', 'report', null, sprintf(
+            'chars_in: %d, chars_out: %d',
+            mb_strlen($account),
+            mb_strlen($out),
+        ));
+
+        Response::json(200, [
+            // The arranged report text, plain. The client runs it through the
+            // shared formatter so spacing and bold labels settle in one place.
+            'report' => $out,
+        ]);
+    }
+
+    /**
      * Phase 7 — POST /ai/classify/details
      *
      * The second half of the account read: the incident type's OWN fields. Same

@@ -3382,6 +3382,10 @@ export function ReportEditor({
       });
     }
     applyAiDraft(parts, sourceMeta);
+    // Owner request: the generated report arrives editable and typable — free
+    // the letter so the officer can type corrections on it at once, instead of
+    // finding the paper locked in View.
+    setLetterEdit(true);
   }
 
   // The way back from a provisional arrival: every snapshot is dropped and
@@ -3410,6 +3414,9 @@ export function ReportEditor({
     if (aiUndo.action_taken !== null) restored.actionTaken = aiUndo.action_taken;
     revertAiField('findings');
     revertAiField('action_taken');
+    // Discarding (or closing) a provisional arrival returns the paper to the
+    // officer's own words, so the clean View comes back with it.
+    setLetterEdit(false);
     return restored;
   }
 
@@ -4756,6 +4763,18 @@ export function ReportEditor({
                   equal to the other, and enough for the whole value with the
                   picker's own indicator beside it. */}
               <div className="ir-field ir-span-2">
+                <IrLabel htmlFor="r-loc" icon="pin" required>Location of Incident</IrLabel>
+                <input
+                  id="r-loc"
+                  placeholder="Specific address or intersection"
+                  value={draft.location}
+                  onChange={(e) => set('location', e.target.value)}
+                  disabled={!canEdit}
+                  aria-invalid={!!errors.location}
+                />
+                {errors.location && <div className="error">{errors.location}</div>}
+              </div>
+              <div className="ir-field ir-span-2">
                 <IrLabel icon="calendar">Date &amp; Time of Occurrence</IrLabel>
                 {/* Two fields, not one datetime-local: the incident date and
                     time are recorded separately, and the time carries an
@@ -4828,18 +4847,7 @@ export function ReportEditor({
                     there is simply no longer a control for it here. */}
                 {errors.incident_datetime && <div className="error">{errors.incident_datetime}</div>}
               </div>
-              <div className="ir-field ir-span-2">
-                <IrLabel htmlFor="r-loc" icon="pin" required>Location of Incident</IrLabel>
-                <input
-                  id="r-loc"
-                  placeholder="Specific address or intersection"
-                  value={draft.location}
-                  onChange={(e) => set('location', e.target.value)}
-                  disabled={!canEdit}
-                  aria-invalid={!!errors.location}
-                />
-                {errors.location && <div className="error">{errors.location}</div>}
-              </div>
+
             </div>
           </IrCard>
 
@@ -6322,7 +6330,7 @@ export function ReportShelf({
                 <ShelfGlyph name={shelf.key} className="folder-tab__icon" />
                 <span className="folder-tab__label">{shelf.label}</span>
                 {/* The shelf's own note, where it has one — ALL REPORTS wears the
-                    sort ("Newest first"), which is the one thing about a flat
+                    sort ("Newest edited"), which is the one thing about a flat
                     list of everything that the list cannot say before it is
                     read. It rides the tab so the officer learns it without
                     opening the shelf. */}
@@ -6477,7 +6485,8 @@ export function ReportsTable({
     status: initialStatus ?? '',
     date_from: initialDateFrom || '',
     date_to: initialDateTo || '',
-    sort: 'incident_datetime',
+    // Owner request: the register opens on the most recently edited report.
+    sort: 'updated_at',
     dir: 'desc',
     page: 1,
     verification: '',

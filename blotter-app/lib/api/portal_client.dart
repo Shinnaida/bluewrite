@@ -163,6 +163,49 @@ class PortalClient {
     return null; // configured:false, 502, anything — the hand-typed path.
   }
 
+  /// The SAME AI account read the web paste path uses (POST /ai/classify):
+  /// incident type, date/time, place, reporting party and disposition out of
+  /// the officer's own words. Best-effort — null on any miss, so the caller
+  /// files plain instead of blocking.
+  Future<Map<String, dynamic>?> classifyAccount(String bearer, String account) async {
+    final text = account.trim();
+    if (text.isEmpty) return null;
+    try {
+      final res = await http
+          .post(_u('/ai/classify'),
+              headers: _headers(bearer: bearer), body: jsonEncode({'account': text}))
+          .timeout(const Duration(seconds: 30));
+      final body = _decode(res);
+      if (res.statusCode == 200 && body['fields'] is Map) {
+        return Map<String, dynamic>.from(body);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Second half of the same read (POST /ai/classify/details): the type's
+  /// own vehicles/items/injuries block, scoped by the type the first read
+  /// settled. Null on any miss — the first read's fill still stands.
+  Future<Map<String, dynamic>?> classifyDetails(
+      String bearer, String account, String type) async {
+    final text = account.trim();
+    if (text.isEmpty || type.trim().isEmpty) return null;
+    try {
+      final res = await http
+          .post(_u('/ai/classify/details'),
+              headers: _headers(bearer: bearer),
+              body: jsonEncode({'account': text, 'type': type.trim()}))
+          .timeout(const Duration(seconds: 30));
+      final body = _decode(res);
+      if (res.statusCode == 200) return Map<String, dynamic>.from(body);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Create the draft the captures will hang off. The caller files the
   /// reviewed text as the narrative (as HTML via blotterTextToHtml) — the
   /// same paragraphs a web Upload inserts — so the Write Report sheet opens

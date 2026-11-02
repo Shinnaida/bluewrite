@@ -56,7 +56,7 @@ String cleanBlotterTranscription(String text) {
 /// shapes the reviewed text with the RECORDED BY line plus the closing
 /// issuance line, without rewording anything. Idempotent.
 String formatBlotterCertification(String text,
-    {String recordedBy = '', String requestedBy = ''}) {
+    {String recordedBy = '', String recordedByPosition = '', String requestedBy = ''}) {
   final raw = text.replaceAll(RegExp(r'\r\n?'), '\n');
   if (raw.trim().isEmpty) return '';
   final cleaned = raw
@@ -77,8 +77,11 @@ String formatBlotterCertification(String text,
       .hasMatch(cleaned);
   var out = cleaned;
   if (!hasRecordedBy) {
-    final recordedLine =
-        recorder.isNotEmpty ? 'RECORDED BY :  $recorder' : 'RECORDED BY :';
+    final who = [
+      recorder,
+      recordedByPosition.trim(),
+    ].where((s) => s.isNotEmpty).join(' - ');
+    final recordedLine = who.isNotEmpty ? 'RECORDED BY :  $who' : 'RECORDED BY :';
     final remarksIdx = lines
         .indexWhere((line) => RegExp(r'^[ \t]*REMARKS\s*:', caseSensitive: false).hasMatch(line));
     if (remarksIdx >= 0) {

@@ -967,6 +967,9 @@ final class ReportsController
         // Sort (UC-014): hardcoded column map — user input never touches SQL
         // identifiers (same allowlist pattern as the UPDATE builders).
         $sortMap = [
+            // Owner request: the register opens on the most recently EDITED
+            // report, so `updated_at` (auto-touched on every save) is sortable.
+            'updated_at' => 'r.updated_at',
             'incident_datetime' => 'r.incident_datetime',
             'incident_type' => 'r.incident_type',
             'status' => 'r.status',

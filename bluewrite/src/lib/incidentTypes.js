@@ -179,7 +179,7 @@ export const TYPE_FIELDS = {
     f('medical_certificate_available', 'Medical Certificate Issued', { select: ['Yes', 'No', 'Pending'] }),
   ],
   'Traffic Accident': [
-    f('accident_type', 'Accident Type', { required: true }),
+    f('accident_type', 'Accident Type'),
     f('weather_condition', 'Weather Condition'),
     f('road_condition', 'Road Condition'),
     // The Vehicles Involved group is the record for machinery; this legacy
@@ -222,7 +222,7 @@ export const TYPE_FIELDS = {
     }),
     // What caused it is the operational crux of a traffic report; the
     // conditions and the violation are recorded if known.
-    f('suspected_cause', 'Suspected Cause', { required: true }),
+    f('suspected_cause', 'Suspected Cause'),
     f('traffic_violation', 'Traffic Violation'),
     f('insurance_information', 'Insurance Information'),
   ],
@@ -658,7 +658,9 @@ export const GROUP_CONFIG = {
     // Drivers, not victims — the victim-type/representative fields do not
     // apply, so the plain person schema stays here.
     complainant: { label: 'Parties (Drivers)', minCount: 1, itemSchema: PERSON_ITEM_FIELDS },
-    vehicles: { label: 'Vehicles Involved', minCount: 1, itemSchema: VEHICLE_ITEM_FIELDS, softWarnAt: 6 },
+    // Owner request 2026-11-03: finalize must not block on a missing vehicle row.
+    // The group stays on the sheet; only the count floor is lifted.
+    vehicles: { label: 'Vehicles Involved', minCount: 0, itemSchema: VEHICLE_ITEM_FIELDS, softWarnAt: 6 },
     injured_persons: { label: 'Injured / Deceased Persons', minCount: 0, itemSchema: PERSON_ITEM_FIELDS },
     witness: { label: 'Witnesses', minCount: 0, itemSchema: WITNESS_ITEM_FIELDS },
   },

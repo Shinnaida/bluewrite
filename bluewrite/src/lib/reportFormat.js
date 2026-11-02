@@ -579,7 +579,7 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
 // order; the formatter never adds a part, it only places the parts present.
 const SECTION_RANKS = [
   [/^(place|place of incident|place of occurrence|location|incident location)$/, 20],
-  [/^(t\/d of incident|td of incident|time and date|time and date of incident|date and time|date and time of incident|date of incident|time of incident|date reported|time reported)$/, 30],
+  [/^(t\/d|td|time\/date|t\/d of incident|td of incident|time\/date of incident|time and date|time and date of incident|date and time|date and time of incident|date of incident|time of incident|date reported|time reported)$/, 30],
   [/^(vehicles? involved|vehicle)$/, 40],
   [/^(persons? involved|persons? of interest|victim|victims|suspect|suspects|respondent|respondents|complainant|complainants|witness|witnesses|backrider|driver|owner)$/, 50],
   [/^(facts|facts of the case|statement|statement of facts|narrative)$/, 60],
@@ -610,6 +610,13 @@ function splitReportSections(raw, title) {
     sections.push(current);
   };
   const titleNorm = title === '' ? '' : title.toUpperCase();
+  // Normalized title key: the same heading restated in another case, with
+  // quotes, extra spaces or sentence-case wording still names the same
+  // charge (the screenshot defect: quoted capitals + sentence case + caps
+  // printed the title three times). Any line whose key equals this one is
+  // the title restated, wherever it sits, and is dropped here.
+  const titleKey = titleNorm.replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const lineKey = (s) => String(s ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   // A title the OCR wrapped is emitted once, whole: its leading fragments are
   // consumed here, in order, so none of them survives as stray prose below.
   let titleLeft = titleNorm;
@@ -625,8 +632,9 @@ function splitReportSections(raw, title) {
       continue;
     }
     const bare = trimmed.replace(/^["'\u201C\u201D]+|["'\u201C\u201D]+$/g, '').trim();
-    // The title, wherever it sat: emitted once at the top.
-    if (titleNorm !== '' && bare.toUpperCase() === titleNorm) continue;
+    // The title, wherever it sat: emitted once at the top. Normalized so a
+    // restatement in another case/spacing/punctuation still matches.
+    if (titleKey !== '' && lineKey(bare) === titleKey) continue;
     if (titleLeft !== '') {
       const upper = bare.toUpperCase();
       if (titleLeft === upper || titleLeft.startsWith(upper + ' ')) {
@@ -640,7 +648,7 @@ function splitReportSections(raw, title) {
     // A labelled source title ("TITLE: …") is the same heading; its label is
     // chrome, not a field the officer wrote.
     const labelledTitle = /^\s*(incident title|title|subject|re|regarding|offense|offence|nature of incident)\s*:\s*(.+?)\s*$/i.exec(line);
-    if (labelledTitle && titleNorm !== '' && labelledTitle[2].trim().toUpperCase() === titleNorm) continue;
+    if (labelledTitle && titleKey !== '' && lineKey(labelledTitle[2]) === titleKey) continue;
 
     const hit = matchLabelLine(line);
     if (hit !== null) {
@@ -683,6 +691,15 @@ function splitReportSections(raw, title) {
   for (const section of sections) {
     while (section.lines.length > 0 && section.lines[0].trim() === '') section.lines.shift();
     while (section.lines.length > 0 && section.lines[section.lines.length - 1].trim() === '') section.lines.pop();
+    // Spacing: one blank line between paragraphs inside a section — a run
+    // of blanks from a pasted account collapses to one, so no stray <br>
+    // survives the join below.
+    const collapsed = [];
+    for (const ln of section.lines) {
+      if (ln.trim() === '' && collapsed.length > 0 && collapsed[collapsed.length - 1].trim() === '') continue;
+      collapsed.push(ln);
+    }
+    section.lines = collapsed;
   }
   return sections;
 }
@@ -759,8 +776,13 @@ function formatLine(line, allowed, vehicles = false, { sentenceCase = false, sta
   // Arrange Only names the label the way the sheet writes it (sentence case,
   // T/D spelled out as Time/Date) and closes it with a colon — "FACTS." is
   // presented as "Facts:" with the facts following on the next line. The other
-  // mode keeps the label exactly as the answer wrote it.
-  const shownLabel = sentenceCase ? arrangeLabelName(normalized) : label;
+  // mode keeps the label exactly as the answer wrote it — except the place
+  // label, which always prints short (owner request: "Place:", never the
+  // long form), keeping the source's own capitalisation.
+  const placeShort = label === label.toUpperCase() ? 'PLACE' : 'Place';
+  const shownLabel = sentenceCase
+    ? arrangeLabelName(normalized)
+    : (/^(?:place|place of incident|place of occurrence|location|incident location)$/.test(normalized) ? placeShort : label);
   const head = `<b>${escapeHtml(shownLabel + ':')}</b>`;
   if (cased === '') return head;
   if (sentenceCase && FACT_LABELS.test(normalized)) return `${head}<br>${escapeHtml(cased)}`;
@@ -778,8 +800,9 @@ function arrangeLabelName(label) {
   }
   if (FACT_LABELS.test(label)) return 'Facts';
   if (/^remarks?$/.test(label)) return 'Remarks';
+  // Owner request: the place label prints short — "Place:", never the long form.
   if (/^(?:place|place of incident|place of occurrence|location|incident location)$/.test(label)) {
-    return 'Place of incident';
+    return 'Place';
   }
   const words = label.split(' ').filter(Boolean);
   return words

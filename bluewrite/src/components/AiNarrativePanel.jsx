@@ -1435,6 +1435,9 @@ export default function AiNarrativePanel({
   const closePanel = () => {
     setRevealOn(false); // unmounts NarrativeReveal — cancels its timer
     setRevealStage('done'); // reopened, the draft draws whole (see `revealing`)
+    // Closing the assistant also closes its fullscreen paper, so the sheet
+    // never outlives the draft review it was opened from.
+    setSheetFull(false);
     // TASK 9 (revised) — the letter is no longer dropped here. Closing the card
     // hides it; the DRAFT is still sitting in this panel, unwritten, and "A draft
     // is ready" is the way back to it — so the way back has to lead to the page
@@ -1471,20 +1474,19 @@ export default function AiNarrativePanel({
   // and never hidden — any name the read could not protect, and the fields the
   // officer still has to supply themselves. Silent filling of a form is not a
   // thing this system does: the fill is invisible, the RECEIPT is not.
-  const fillLine = fillNote ? (
+  // Owner request: the read's chatter (the already-filled line, the unstated
+  // fields, the unprotectable names) is not shown. The fill still runs;
+  // only the noise is gone.
+  const fillQuiet = !!fillNote?.ok
+    && !fillNote.detailsFailed
+    && (fillNote.stillNeeded ?? []).length === 0;
+  const fillLine = !fillNote || fillQuiet ? null : (
     <p className={fillNote.ok ? 'ai-fill-note' : 'ai-fill-note ai-fill-note--failed'} role="status">
-      {fillNote.ok ? (
-        (fillNote.filled ?? []).length > 0
-          ? <><strong>Filled from your account:</strong> {fillNote.filled.join(', ')}.</>
-          : <>Read your account — every field it names was already filled.</>
-      ) : (
+      {/* Hidden by request: the "Filled from your account" receipt is not
+          shown. The fill still runs; only this line is gone. A successful
+          read with nothing else to say renders nothing (see fillQuiet). */}
+      {!fillNote.ok && (
         <>Your account could not be read, so nothing was filled.{fillNote.message ? ` ${fillNote.message}` : ''}</>
-      )}
-      {fillNote.ok && (fillNote.unstated ?? []).length > 0 && (
-        <> <span className="ai-fill-unstated">Your account does not say: {fillNote.unstated.join('; ')}.</span></>
-      )}
-      {fillNote.ok && (fillNote.residual ?? []).length > 0 && (
-        <> <span className="ai-fill-risk">Names the read could not protect: {fillNote.residual.join(', ')}.</span></>
       )}
       {/* The SECOND read (the incident type's own block) can fail on its own
           while the first one succeeded. Saying so is what keeps an empty
@@ -1499,7 +1501,7 @@ export default function AiNarrativePanel({
         <> <span className="ai-fill-needed">Still needed for this report: {fillNote.stillNeeded.join(' ')}</span></>
       )}
     </p>
-  ) : null;
+  );
 
   // The escape hatch a REPORT-side refusal needs (see onRevealFields): the
   // sheet keeps the report's own fields behind its reveal control, so the

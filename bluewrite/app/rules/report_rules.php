@@ -138,7 +138,8 @@ final class ReportRules
         'Theft' => ['item_stolen', 'how_property_was_taken'],
         'Robbery' => ['property_taken', 'method_used', 'weapon_involved'],
         'Assault / Physical Injury' => ['type_of_injury', 'body_part_injured', 'cause_of_injury'],
-        'Traffic Accident' => ['accident_type', 'suspected_cause'],
+        // Owner request 2026-11-03: finalize must not block on these.
+        'Traffic Accident' => [],
         'Rape / Sexual Assault' => ['relationship_to_victim', 'medical_examination'],
         'Domestic Violence' => ['relationship_between_parties', 'type_of_abuse', 'children_involved'],
         // Physical Description is not listed either: it is DERIVED from the
@@ -700,7 +701,8 @@ final class ReportRules
                 // Drivers, not victims: the victim fields do not apply, so the
                 // plain person schema stays here.
                 'complainant' => ['label' => 'Parties (Drivers)', 'minCount' => 1, 'fields' => $person],
-                'vehicles' => ['label' => 'Vehicles Involved', 'minCount' => 1, 'fields' => $vehicle, 'softWarnAt' => 6],
+                // Owner request 2026-11-03: finalize must not block on a missing vehicle row.
+                'vehicles' => ['label' => 'Vehicles Involved', 'minCount' => 0, 'fields' => $vehicle, 'softWarnAt' => 6],
                 'injured_persons' => ['label' => 'Injured / Deceased Persons', 'minCount' => 0, 'fields' => $person],
                 'witness' => ['label' => 'Witnesses', 'minCount' => 0, 'fields' => $witness],
             ],
@@ -1094,14 +1096,9 @@ final class ReportRules
         $errors = [];
         $trim = static fn ($v): string => trim((string) ($v ?? ''));
 
-        if ($finalizing) {
-            if ($trim($f['reporter_name'] ?? null) === '') {
-                $errors['reporter_name'] = 'Reporting party name is required.';
-            }
-            if ($trim($f['reporter_contact'] ?? null) === '') {
-                $errors['reporter_contact'] = 'Contact number is required.';
-            }
-        }
+        // Owner request 2026-11-03: finalize must not block on a missing
+        // reporting party. Fields stay on the sheet; only the gate is lifted.
+        // Shape is still checked when a value is supplied (below).
 
         // The email address and the address are both OPTIONAL and only their
         // shape is checked when they are supplied — the client no longer collects

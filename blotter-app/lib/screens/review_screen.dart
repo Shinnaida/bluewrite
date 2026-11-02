@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:blotter_capture/blotter_text.dart';
 
 import '../api/portal_client.dart';
+import '../blotter_filing.dart';
 
 /// The review gate — mirrors the web's BlotterCapture dialog (see
 /// BlotterCapture.jsx): photo beside the reading, word count, Recorded by /
@@ -106,7 +107,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   Future<void> _send() async {
-    final text = _text.text.trim();
+    var text = _text.text.trim();
     if (text.isEmpty) {
       setState(() => _error = 'There is no text to file. Type the account or retake the photo.');
       return;
@@ -120,21 +121,69 @@ class _ReviewScreenState extends State<ReviewScreen> {
       _error = null;
     });
     try {
+      // SAME analysis as a pasted source text on the web and the typed
+      // phone path: the picture's reviewed text states the incident, so the
+      // account read turns it into the draft's real fields (type, reporter,
+      // disposition, type-specific block) instead of placeholders. Uses the
+      // LATELY certification format below. Best-effort: a missed read files
+      // plain with the formatted text.
+      Map<String, dynamic>? read = await widget.client.classifyAccount(widget.bearer, text);
+      final stationTypes = <String>[if ((_defaultType ?? '').trim().isNotEmpty) (_defaultType ?? '').trim()];
+      if (read != null) {
+        final probe = blotterFilingFields(
+          read: read,
+          stationTypes: stationTypes,
+          fallbackType: _defaultType ?? 'Other Incident',
+          typedLocation: _location.text,
+        );
+        final probeType = (probe['incident_type'] ?? '').toString();
+        if (probeType.isNotEmpty) {
+          final details = await widget.client.classifyDetails(widget.bearer, text, probeType);
+          if (details != null) read = {...read, 'details': details};
+        }
+      }
+      final filing = blotterFilingFields(
+        read: read,
+        stationTypes: stationTypes.isNotEmpty ? stationTypes : [(_defaultType ?? 'Other Incident').trim()],
+        fallbackType: _defaultType ?? 'Other Incident',
+        typedLocation: _location.text,
+      );
+      var location = (filing['location'] ?? '').toString().trim();
+      if (location.isEmpty) location = _location.text.trim();
+      // The lately format: shape the reviewed text with RECORDED BY plus
+      // the closing issuance line, without rewording anything.
+      text = blotterFilingText(
+        text,
+        recordedBy: _recordedBy.text,
+        requestedBy: _requestedBy.text,
+        readReporter: (filing['reporter_name'] ?? '').toString(),
+      );
       final now = DateTime.now();
       final stamp = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}'
           'T${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
       // What the officer reviewed IS what lands in the sheet: the draft is
-      // filed with the reviewed text already in its narrative (as HTML, the
-      // same paragraphs a web Upload inserts), and the photo plus that same
-      // text travel together as the capture evidence. On the portal the
-      // officer opens the draft in Write Report — the text is in the sheet,
-      // editable before the final report — with the photo beside it.
-      final id = await widget.client.createDraft(widget.bearer, {
-        'incident_type': _defaultType ?? 'Other Incident',
+      // filed with the reviewed + analysed text already in its narrative (as
+      // HTML, the same paragraphs a web Upload inserts), and the photo plus
+      // that same text travel together as the capture evidence. On the
+      // portal the officer opens the draft in Write Report — the text is in
+      // the sheet, editable before the final report — with the photo beside it.
+      final draft = <String, dynamic>{
+        'incident_type': (filing['incident_type'] ?? _defaultType ?? 'Other Incident').toString(),
         'incident_datetime': stamp,
-        'location': _location.text.trim(),
+        'location': location,
         'narrative': blotterTextToHtml(text),
-      });
+      };
+      final filingTs = Map<String, dynamic>.from((filing['type_specific'] as Map?) ?? {});
+      if (_recordedBy.text.trim().isNotEmpty) filingTs['recorded_by'] = _recordedBy.text.trim();
+      if (_requestedBy.text.trim().isNotEmpty) filingTs['requested_by'] = _requestedBy.text.trim();
+      if (filingTs.isNotEmpty) draft['type_specific'] = filingTs;
+      if ((filing['reporter_name'] ?? '').toString().isNotEmpty) {
+        draft['reporter_name'] = filing['reporter_name'];
+      }
+      if ((filing['action_taken'] ?? '').toString().isNotEmpty) {
+        draft['action_taken'] = filing['action_taken'];
+      }
+      final id = await widget.client.createDraft(widget.bearer, draft);
       await widget.client.uploadCapture(widget.bearer, id, widget.jpegBytes, text, _engine);
       if (!mounted) return;
       setState(() => _sentDraftId = id);

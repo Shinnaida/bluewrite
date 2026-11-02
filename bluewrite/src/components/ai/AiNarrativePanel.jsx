@@ -66,7 +66,7 @@ import { useRotatingStatus, holdVerifyPhase, VERIFY_PHRASE, THINKING_PHRASES } f
 // no selector to fill and no codes to list. The registry function stays for the
 // callers that still offer them.
 import { languageLabel } from '../../lib/reportLanguages.js';
-import { richTextToPlain, containsRichTags } from '../../lib/richText.js';
+import { richTextToPlain } from '../../lib/richText.js';
 import { translationEnabled, translationDisabledNotice } from '../../lib/languageRegistry.js';
 // Phase 6 Stage 5 (Track C) — the guided "Translate & tighten" flow. The rule
 // is a pure state machine (src/lib/guidedFlow.js) and this component only ever
@@ -1280,11 +1280,14 @@ export default function AiNarrativePanel({
   // SHEET FORMAT — Arrange-only Generate Report (2026-10-23).
   // Organizes the officer's own account into the capstone police report format
   // WITHOUT rewording: runs the same account read as Generate (Gemini fills
-  // type/date/place plus the type's own fields, blanks left blank), saves
-  // best-effort, then proposes the officer's own cleaned text as the draft.
-  // No LLM call, so no tokens, no hallucination, works even when AI is down.
-  // Missing parts stay missing: a report the read could not complete still
-  // arranges, and the paper renders the blanks blank for the officer to fill.
+  // type/date/place, blanks left blank), arranges the analyzed source text
+  // through Gemini with strict rules (order + single title + spacing, never
+  // rewording — see resources/ai/arrange_report_prompt.txt), saves
+  // best-effort, then proposes the arranged text through the shared formatter.
+  // A provider miss falls back to the deterministic formatter, so Arrange
+  // works even when AI is down. Missing parts stay missing: a report the read
+  // could not complete still arranges, and the paper renders the blanks blank
+  // for the officer to fill.
   const arrangeReport = async () => {
     setLastPress({ kind: 'arrange' });
     let accountText = richTextToPlain(String(narrative || ''));
@@ -1306,11 +1309,11 @@ export default function AiNarrativePanel({
     // and an uncaught throw here would strand the panel in silent loading —
     // a press that appears to do nothing.
     //
-    // Best-effort save (owner request): Arrange needs no report id — there is
-    // no LLM call to file — so a refused or impossible save never blocks the
-    // press. The read above already filled what the account stated and left
-    // the rest blank; the paper renders those blanks blank. A refused save
-    // already says why on the editor banner (see ensureAiReportId).
+    // Best-effort save (owner request): Arrange needs no report id — so a
+    // refused or impossible save never blocks the press. The read above
+    // already filled what the account stated and left the rest blank; the
+    // paper renders those blanks blank. A refused save already says why on
+    // the editor banner (see ensureAiReportId).
     try {
       const restoredRun = beginFreshRun(false);
       if (restoredRun.narrative !== undefined) accountText = richTextToPlain(String(restoredRun.narrative));
@@ -1329,6 +1332,18 @@ export default function AiNarrativePanel({
         await resolveReportId();
       } catch {
         // Arranging never depends on the save — proceed to the draft.
+      }
+      // Arrange Only runs through Gemini with strict rules (order + title
+      // dedupe + spacing, never rewording — see
+      // resources/ai/arrange_report_prompt.txt). Best-effort: a provider
+      // miss falls back to the deterministic formatter on the raw account.
+      setMessage('Arranging the report...');
+      try {
+        const arranged = await api('/ai/arrange', { method: 'POST', body: { account: accountText } });
+        const text = String(arranged?.report ?? '').trim();
+        if (text !== '') accountText = text;
+      } catch {
+        // Local formatter below carries the press on its own.
       }
       setLastSource({ kind: 'notes', text: accountText, language: 'en' });
       setDraft(buildArrangeDraft({ accountText, notableFindings: runFindings, actionTaken: runActionTaken }));
@@ -1537,23 +1552,6 @@ export default function AiNarrativePanel({
     && String(draft.actionTaken || '').trim() !== richTextToPlain(String(actionTaken || '')).trim();
 
   // Word-like ink (owner request): a prose field may carry formatting the
-  // plain draft cannot keep, so applying the draft resets that field to
-  // plain words. Said beside the buttons, before they are pressed (the D2
-  // pattern): the note names every field a visible apply would reset — the
-  // whole draft on Accept/Keep/Use-translation, the narrative alone on a
-  // tighten accept, and each field proposal only while its button is offered.
-  const formatResetParts = [];
-  if (draft) {
-    const appliesAll = guided === 'review' || !tightenDraft;
-    if (containsRichTags(narrative)) formatResetParts.push('the narrative');
-    if (appliesAll || findingsProposed) {
-      if (containsRichTags(notableFindings)) formatResetParts.push('Notable Findings');
-    }
-    if (appliesAll || statusProposed) {
-      if (containsRichTags(actionTaken)) formatResetParts.push('Action Taken / Status');
-    }
-  }
-
   // THE REST OF WHAT THE DRAFT WROTE. Generate formalises THREE things — the
   // facts of the case (the narrative, shown in the labelled box above), the
   // Notable Findings, and the Action Taken / Status, which are what the record
@@ -1796,13 +1794,16 @@ export default function AiNarrativePanel({
   const closePanel = () => {
     setRevealOn(false); // unmounts NarrativeReveal — cancels its timer
     setRevealStage('done'); // reopened, the draft draws whole (see `revealing`)
-    // Closing the card hides it; the DRAFT is still sitting in this panel. In
-    // the sheet's provisional mode the paper keeps what was written into it —
-    // closing is not discarding — and "A draft is ready" is the way back.
+    // Closing the assistant also closes its fullscreen paper: the preview is
+    // the draft being reviewed, so leaving it on screen after Close would
+    // keep the sheet the officer just closed.
+    setSheetFull(false);
+    // Closing hides the review controls but leaves the paper as it is — the
+    // draft stays on the letter (the slim portal below is mounted whenever a
+    // reviewed draft exists, not only while the review is open), so the
+    // officer keeps reading the sheet they closed. Discard is the way back
+    // to their own words; Keep confirms the paper.
     setSheetTyped(true);
-    // Reopen a pending Close (an applied draft stays applied — the paper
-    // still holds it, and a new run restores it first).
-    if (provisionalState === 'pending') setProvisionalState('idle');
     setPanelOpen(false);
   };
 
@@ -1845,20 +1846,20 @@ export default function AiNarrativePanel({
   // and never hidden — any name the read could not protect, and the fields the
   // officer still has to supply themselves. Silent filling of a form is not a
   // thing this system does: the fill is invisible, the RECEIPT is not.
-  const fillLine = fillNote ? (
+  // Owner request: the read's chatter (the already-filled line, the unstated
+  // fields, the unprotectable names) is not shown. The fill still runs;
+  // only the noise is gone. What stays visible: a non-empty filled list, a
+  // failed read, and the follow-ups the officer must still act on.
+  const fillQuiet = !!fillNote?.ok
+    && !fillNote.detailsFailed
+    && (fillNote.stillNeeded ?? []).length === 0;
+  const fillLine = !fillNote || fillQuiet ? null : (
     <p className={fillNote.ok ? 'ai-fill-note' : 'ai-fill-note ai-fill-note--failed'} role="status">
-      {fillNote.ok ? (
-        (fillNote.filled ?? []).length > 0
-          ? <><strong>Filled from your account:</strong> {fillNote.filled.join(', ')}.</>
-          : <>Read your account — every field it names was already filled.</>
-      ) : (
+      {/* Hidden by request: the "Filled from your account" receipt is not
+          shown. The fill still runs; only this line is gone. A successful
+          read with nothing else to say renders nothing (see fillQuiet). */}
+      {!fillNote.ok && (
         <>Your account could not be read, so nothing was filled.{fillNote.message ? ` ${fillNote.message}` : ''}</>
-      )}
-      {fillNote.ok && (fillNote.unstated ?? []).length > 0 && (
-        <> <span className="ai-fill-unstated">Your account does not say: {fillNote.unstated.join('; ')}.</span></>
-      )}
-      {fillNote.ok && (fillNote.residual ?? []).length > 0 && (
-        <> <span className="ai-fill-risk">Names the read could not protect: {fillNote.residual.join(', ')}.</span></>
       )}
       {/* The SECOND read (the incident type's own block) can fail on its own
           while the first one succeeded. Saying so is what keeps an empty
@@ -1873,7 +1874,7 @@ export default function AiNarrativePanel({
         <> <span className="ai-fill-needed">Still needed for this report: {fillNote.stillNeeded.join(' ')}</span></>
       )}
     </p>
-  ) : null;
+  );
 
   // The escape hatch a REPORT-side refusal needs (see onRevealFields): the
   // sheet keeps the report's own fields behind its reveal control, so the
@@ -2269,13 +2270,11 @@ export default function AiNarrativePanel({
               on the paper's mount and nowhere else — the mount is up before
               the first arrival, so there is no flash of a second copy in the
               bar. Deck formats keep the page in the card. */}
-          {sheeted && (slim
-            // In the sheet mount, Edit mode reviews on the free canvas instead
-            // of per-field editors (see ReportSheetBody `freeReview`): the
-            // officer types flowing text on the paper, and Keep/Discard keep
-            // working from the desk. The deck card branch below never frees.
-            ? (letterMount ? createPortal(<SheetLetterDock {...letterProps} freeReview={slim && letterEdit} />, letterMount) : null)
-            : <SheetLetterDock {...letterProps} />)}
+          {/* Deck formats keep the page in the card. The sheet's slim bar
+              portals onto the paper mount OUTSIDE this review section (see
+              below), so the letter stays on the paper even while the review
+              is closed — closing hides these controls, not the sheet. */}
+          {sheeted && !slim && <SheetLetterDock {...letterProps} />}
 
           {/* The body keeps the indentation it had inside the docked panel, so
               the diff of moving it inline is the wrapper and nothing else. */}
@@ -2283,11 +2282,6 @@ export default function AiNarrativePanel({
                 {/* Phase 7 — what the read filled, above everything else: it is
                     about the REPORT, not about the draft below it. */}
                 {fillLine}
-                {draft && draft.arranged && mode === 'done' && (
-                  <p className="ai-arranged-note" role="status">
-                    Arranged from your account - wording unchanged. Fields filled are listed above; review before accepting.
-                  </p>
-                )}
                 {/* Track C — the guided flow's step, always visible while the
                     officer holds a decision. The cancel control is offered in
                     the two states where a click still changes something; during
@@ -2416,11 +2410,14 @@ export default function AiNarrativePanel({
                         thing that arrives late. (Every other note on this panel
                         still waits for the text it describes — see
                         `revealing`.) */}
+                    {/* Owner request: the provisional arrival says nothing —
+                        the paper already shows what landed, and Keep/Discard
+                        sit beside it. The deck note stays. */}
+                    {!sheetProvisional && (
                     <p className="ai-side-note">
-                      {sheetProvisional
-                        ? 'On the paper now — Keep to confirm it, Discard to bring back your words.'
-                        : 'Not saved — review before accepting. It is never written into the report automatically.'}
+                      Not saved — review before accepting. It is never written into the report automatically.
                     </p>
+                    )}
                     {/* TASK 9/10 — and where the words are arriving: while the
                         sheet is typing the draft, the panel says so and its own
                         boxes stay out of the way until the letter has finished. */}
@@ -2618,11 +2615,6 @@ export default function AiNarrativePanel({
                         Applying this replaces your narrative with the English text. Your original{' '}
                         {languageLabel(lastSource.language)}{' '}
                         text will be kept as this report's source, and the report will be marked as written in English.
-                      </p>
-                    )}
-                    {!revealing && formatResetParts.length > 0 && (
-                      <p className="alert info ai-apply-note" role="status">
-                        Applying this draft replaces the formatted text in {formatResetParts.join(', ')} with plain words — local bold, italic and lists will be reset.
                       </p>
                     )}
                     {!revealing && tightenDraft && (draft.factLoss?.length ?? 0) > 0 && (
@@ -2895,6 +2887,14 @@ export default function AiNarrativePanel({
           </div>
         </section>
       )}
+
+      {/* THE SLIM-BAR LETTER lives on the paper mount whenever a reviewed
+          draft exists — not only while the review above is open. Closing the
+          assistant hides its controls (the section above) but leaves this
+          sheet on the paper, which is the state the officer closed it from;
+          Discard removes it (the draft is cleared) and brings back their own
+          words. Deck formats never reach this branch (see `slim`). */}
+      {sheeted && slim && mode === 'done' && (letterMount ? createPortal(<SheetLetterDock {...letterProps} freeReview={slim && letterEdit} />, letterMount) : null)}
 
       {/* ---- THE REPORT, ON THE SCREEN ALONE -----------------------------
           The Preview control above the card's paper opens THIS. It is the same

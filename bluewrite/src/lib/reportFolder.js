@@ -159,22 +159,27 @@ export function reportNumber(id) {
 /**
  * The orders the register can be read in, in the order the menu offers them.
  *
- * FOUR ORDERS, and the list's own endpoint is what allows them: the server takes
- * a column from a fixed map (`incident_datetime`, `incident_type`, `status`,
- * `created_by_name` — see ReportsController's `$sortMap`) and a direction, and
- * REFUSES anything else with a 422. The menu may therefore offer exactly these:
- * a menu that offered a fifth order the server does not know would be a control
- * that blanks the register when it is pressed.
+ * SIX ORDERS, and the list's own endpoint is what allows them: the server takes
+ * a column from a fixed map (`updated_at`, `incident_datetime`,
+ * `incident_type`, `status`, `created_by_name` — see ReportsController's
+ * `$sortMap`) and a direction, and REFUSES anything else with a 422. The menu
+ * may therefore offer exactly these: a menu that offered a seventh order the
+ * server does not know would be a control that blanks the register when it is
+ * pressed.
  *
- * WHEN IT HAPPENED comes first and is the default, because that is what a
- * register is read by — an officer opens it for the newest incident. The other
- * three exist for the questions a sheer list cannot answer: which type is piling
- * up (type), what is still open (status), whose desk it is (officer).
+ * WHEN IT WAS LAST TOUCHED comes first and is the default (owner request:
+ * the register opens on the most recently edited report, not the newest
+ * incident). WHEN IT HAPPENED follows, for the register as a log of events.
+ * The other three exist for the questions a sheer list cannot answer: which
+ * type is piling up (type), what is still open (status), whose desk it is
+ * (officer).
  *
  * `note` is the SAME order said short, for the ALL shelf's own tab, which states
  * the order of the list under it before the first row is read.
  */
 export const SORT_ORDERS = Object.freeze([
+  { key: 'updated_at', dir: 'desc', label: 'Newest edited', note: 'Newest edited' },
+  { key: 'updated_at', dir: 'asc', label: 'Oldest edited', note: 'Oldest edited' },
   { key: 'incident_datetime', dir: 'desc', label: 'Newest incident', note: 'Newest first' },
   { key: 'incident_datetime', dir: 'asc', label: 'Oldest incident', note: 'Oldest first' },
   { key: 'incident_type', dir: 'asc', label: 'Incident type, A to Z', note: 'Type A–Z' },
@@ -182,7 +187,7 @@ export const SORT_ORDERS = Object.freeze([
   { key: 'created_by_name', dir: 'asc', label: 'Officer, A to Z', note: 'Officer A–Z' },
 ]);
 
-/** The register's own order: newest incident first, which is what it opens in. */
+/** The register's own order: most recently edited first, which is what it opens in. */
 export const DEFAULT_SORT = SORT_ORDERS[0];
 
 /**

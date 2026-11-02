@@ -203,6 +203,22 @@ final class NarrativeService
     }
 
     /**
+     * Arrange Only — arrange the officer's own report text via the provider.
+     *
+     * A pure pass-through like enhanceReport(): the text is the officer's and
+     * the only source, the answer is that same document arranged, and NOTHING
+     * is written to the database. The shared formatter is applied client-side
+     * after this call, so spacing and bold labels settle there.
+     *
+     * @param string $account the officer's report text, as typed
+     * @return string the arranged report text
+     */
+    public function arrangeReport(string $account): string
+    {
+        return $this->provider->arrangeReport($account);
+    }
+
+    /**
      * Photo OCR (owner request): the blotter photo read by the provider's
      * own vision model through the station's already-configured key.
      *

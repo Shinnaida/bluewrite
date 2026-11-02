@@ -154,4 +154,21 @@ interface AiNarrativeProvider
      *   or returns an unusable payload
      */
     public function enhanceReport(string $account): string;
+
+    /**
+     * Arrange Only — arrange the officer's own report into the station's
+     * report order WITHOUT changing its wording.
+     *
+     * Strict arrangement only: the same parts, in the station order, the
+     * title emitted once, spacing normalised (one blank line between
+     * sections, no trailing spaces). No grammar, spelling, capitalisation
+     * or terminology change; no added or dropped label, section or fact.
+     *
+     * @param string $account the officer's report text, as typed
+     * @return string the arranged report text (plain; the client applies the
+     *   shared bold-label formatting)
+     * @throws AiProviderException when the provider is unreachable, times out,
+     *   or returns an unusable payload
+     */
+    public function arrangeReport(string $account): string;
 }

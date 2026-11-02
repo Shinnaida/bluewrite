@@ -1,0 +1,637 @@
+<mxfile host="app.diagrams.net" agent="BlueWrite" version="1.0">
+  <diagram name="BlueWrite ERD" id="bluewrite-erd-v2">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="3000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="tbl_roles" value="roles" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="20" width="300" height="76" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_roles_r0" value="id PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_roles">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_roles_r1" value="name" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_roles">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users" value="users" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="360" y="20" width="300" height="460" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r0" value="id PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_users">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r1" value="role_id FK -&gt; roles.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r2" value="full_name" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r3" value="badge_number" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r4" value="username" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r5" value="email" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="148" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r6" value="password_hash" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="172" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r7" value="status" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="196" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r8" value="failed_attempts" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="220" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r9" value="locked_until" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="244" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r10" value="last_login_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="268" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r11" value="last_seen_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="292" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r12" value="photo_path" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="316" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r13" value="photo_updated_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="340" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r14" value="languages_read" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="364" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r15" value="notifications_seen_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="388" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r16" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="412" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r17" value="updated_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_users">
+          <mxGeometry y="436" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports" value="reports" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="700" y="20" width="300" height="1060" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r0" value="id PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r1" value="incident_type" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r2" value="incident_types" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r3" value="report_date" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r4" value="blotter_no" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r5" value="blotter_date" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="148" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r6" value="incident_datetime" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="172" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r7" value="incident_date" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="196" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r8" value="incident_time" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="220" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r9" value="incident_time_approximate" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="244" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r10" value="discovery_date" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="268" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r11" value="discovery_time" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="292" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r12" value="discovery_time_approximate" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="316" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r13" value="location" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="340" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r14" value="complainant" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="364" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r15" value="respondent" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="388" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r16" value="narrative" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="412" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r17" value="narrative_language" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="436" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r18" value="narrative_source_text" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="460" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r19" value="narrative_source_language" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="484" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r20" value="type_specific" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="508" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r21" value="action_taken" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="532" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r22" value="letter_html" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="556" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r23" value="ioc_name" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="580" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r24" value="reporter_name" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="604" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r25" value="reporter_id_no" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="628" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r26" value="reporter_contact" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="652" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r27" value="reporter_email" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="676" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r28" value="reporter_address" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="700" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r29" value="reporter_role" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="724" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r30" value="officer_initials" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="748" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r31" value="party_signed_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="772" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r32" value="status" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="796" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r33" value="created_by FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="820" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r34" value="finalized_by FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="844" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r35" value="finalized_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="868" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r36" value="noted_by_id FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="892" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r37" value="noted_by_name" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="916" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r38" value="noted_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="940" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r39" value="updated_by FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="964" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r40" value="deleted_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="988" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r41" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="1012" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_reports_r42" value="updated_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_reports">
+          <mxGeometry y="1036" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings" value="station_settings" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="20" width="300" height="484" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r0" value="id PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r1" value="agency" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r2" value="commission" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r3" value="regional_office" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r4" value="provincial_office" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r5" value="station_name" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="148" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r6" value="station_location" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="172" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r7" value="office_code" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="196" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r8" value="noted_by" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="220" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r9" value="letterhead_html" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="244" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r10" value="seal_left_path" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="268" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r11" value="seal_right_path" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="292" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r12" value="letterhead_style" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="316" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r13" value="station_email" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="340" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r14" value="station_phone" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="364" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r15" value="incident_types" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="388" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r16" value="updated_by FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="412" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r17" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="436" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_station_settings_r18" value="updated_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_station_settings">
+          <mxGeometry y="460" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_history" value="report_history" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="1140" width="300" height="172" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_history_r0" value="id PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_report_history">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_history_r1" value="report_id FK -&gt; reports.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_history">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_history_r2" value="changed_by FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_history">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_history_r3" value="change_note" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_history">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_history_r4" value="snapshot" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_history">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_history_r5" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_history">
+          <mxGeometry y="148" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs" value="audit_logs" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="360" y="1140" width="300" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r0" value="id PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r1" value="user_id FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r2" value="action" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r3" value="entity_type" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r4" value="entity_id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r5" value="detail" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="148" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r6" value="ip_address" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="172" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r7" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="196" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_verifications" value="report_verifications" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1140" width="300" height="268" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_verifications_r0" value="id PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_report_verifications">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_verifications_r1" value="report_id FK -&gt; reports.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_verifications">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_verifications_r2" value="verifier_id FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_verifications">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_verifications_r3" value="verified_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_verifications">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_verifications_r4" value="outcome" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_verifications">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_verifications_r5" value="note" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_verifications">
+          <mxGeometry y="148" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_verifications_r6" value="source_language" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_verifications">
+          <mxGeometry y="172" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_verifications_r7" value="narrative_hash" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_verifications">
+          <mxGeometry y="196" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_verifications_r8" value="source_hash" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_verifications">
+          <mxGeometry y="220" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_verifications_r9" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_verifications">
+          <mxGeometry y="244" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_email_otp_codes" value="email_otp_codes" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="1140" width="300" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_email_otp_codes_r0" value="user_id PK, FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_email_otp_codes">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_email_otp_codes_r1" value="code_hash" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_email_otp_codes">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_email_otp_codes_r2" value="expires_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_email_otp_codes">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_email_otp_codes_r3" value="sent_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_email_otp_codes">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_email_otp_codes_r4" value="failed_attempts" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_email_otp_codes">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_email_otp_codes_r5" value="locked_until" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_email_otp_codes">
+          <mxGeometry y="148" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_email_otp_codes_r6" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_email_otp_codes">
+          <mxGeometry y="172" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_email_otp_codes_r7" value="updated_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_email_otp_codes">
+          <mxGeometry y="196" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_ai_requests" value="ai_requests" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="1468" width="300" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_ai_requests_r0" value="id PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_ai_requests">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_ai_requests_r1" value="report_id FK -&gt; reports.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_ai_requests">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_ai_requests_r2" value="masked_payload_hash" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_ai_requests">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_ai_requests_r3" value="status" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_ai_requests">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_ai_requests_r4" value="attempts" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_ai_requests">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_ai_requests_r5" value="last_error" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_ai_requests">
+          <mxGeometry y="148" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_ai_requests_r6" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_ai_requests">
+          <mxGeometry y="172" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_ai_requests_r7" value="updated_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_ai_requests">
+          <mxGeometry y="196" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_ai_cache" value="ai_cache" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="360" y="1468" width="300" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_ai_cache_r0" value="payload_hash PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_ai_cache">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_ai_cache_r1" value="payload" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_ai_cache">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_ai_cache_r2" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_ai_cache">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_mfa_recovery_codes" value="mfa_recovery_codes" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1468" width="300" height="148" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_mfa_recovery_codes_r0" value="id PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_mfa_recovery_codes">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_mfa_recovery_codes_r1" value="user_id FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_mfa_recovery_codes">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_mfa_recovery_codes_r2" value="code_hash" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_mfa_recovery_codes">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_mfa_recovery_codes_r3" value="used_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_mfa_recovery_codes">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_mfa_recovery_codes_r4" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_mfa_recovery_codes">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_mfa_recovery_state" value="mfa_recovery_state" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="1468" width="300" height="124" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_mfa_recovery_state_r0" value="user_id PK, FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_mfa_recovery_state">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_mfa_recovery_state_r1" value="failed_attempts" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_mfa_recovery_state">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_mfa_recovery_state_r2" value="locked_until" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_mfa_recovery_state">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_mfa_recovery_state_r3" value="generated_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_mfa_recovery_state">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_messages" value="messages" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="1748" width="300" height="172" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_messages_r0" value="id PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_messages">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_messages_r1" value="sender_id FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_messages">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_messages_r2" value="recipient_id FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_messages">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_messages_r3" value="body" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_messages">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_messages_r4" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_messages">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_messages_r5" value="read_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_messages">
+          <mxGeometry y="148" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_message_typing" value="message_typing" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="360" y="1748" width="300" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_message_typing_r0" value="user_id PK, FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_message_typing">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_message_typing_r1" value="peer_id PK, FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_message_typing">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_message_typing_r2" value="updated_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_message_typing">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_presence_days" value="presence_days" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1748" width="300" height="172" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_presence_days_r0" value="user_id PK, FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_presence_days">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_presence_days_r1" value="day PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_presence_days">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_presence_days_r2" value="first_seen" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_presence_days">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_presence_days_r3" value="last_seen" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_presence_days">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_presence_days_r4" value="seconds" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_presence_days">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_presence_days_r5" value="beats" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_presence_days">
+          <mxGeometry y="148" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_account_requests" value="account_requests" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="1748" width="300" height="196" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_account_requests_r0" value="id PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_account_requests">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_account_requests_r1" value="user_id FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_account_requests">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_account_requests_r2" value="kind" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_account_requests">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_account_requests_r3" value="reason" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_account_requests">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_account_requests_r4" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_account_requests">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_account_requests_r5" value="handled_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_account_requests">
+          <mxGeometry y="148" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_account_requests_r6" value="handled_by FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_account_requests">
+          <mxGeometry y="172" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_device_tokens" value="device_tokens" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="2004" width="300" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_device_tokens_r0" value="id PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_device_tokens">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_device_tokens_r1" value="user_id FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_device_tokens">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_device_tokens_r2" value="token_hash" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_device_tokens">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_device_tokens_r3" value="device_name" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_device_tokens">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_device_tokens_r4" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_device_tokens">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_device_tokens_r5" value="last_used_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_device_tokens">
+          <mxGeometry y="148" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_device_tokens_r6" value="expires_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_device_tokens">
+          <mxGeometry y="172" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_device_tokens_r7" value="revoked_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_device_tokens">
+          <mxGeometry y="196" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_captures" value="report_captures" style="shape=table;startSize=28;container=1;collapsible=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;fillColor=#0B2A5C;strokeColor=#0B2A5C;fontColor=#FFFFFF;fontStyle=1;fontSize=13;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="360" y="2004" width="300" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_captures_r0" value="id PK" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;fontStyle=1;" vertex="1" parent="tbl_report_captures">
+          <mxGeometry y="28" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_captures_r1" value="report_id FK -&gt; reports.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_captures">
+          <mxGeometry y="52" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_captures_r2" value="file_path" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_captures">
+          <mxGeometry y="76" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_captures_r3" value="mime" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_captures">
+          <mxGeometry y="100" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_captures_r4" value="ocr_text" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_captures">
+          <mxGeometry y="124" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_captures_r5" value="engine" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_captures">
+          <mxGeometry y="148" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_captures_r6" value="created_by FK -&gt; users.id" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_captures">
+          <mxGeometry y="172" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_report_captures_r7" value="created_at" style="shape=tableRow;horizontal=0;verticalAlign=middle;fillColor=#ffffff;strokeColor=#0B2A5C;fontColor=#000000;fontSize=11;rounded=0;" vertex="1" parent="tbl_report_captures">
+          <mxGeometry y="196" width="300" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e_users_role" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_users" target="tbl_roles">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_reports_creator" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_reports" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_station_user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_station_settings" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_history_report" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_report_history" target="tbl_reports">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_history_user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_report_history" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_audit_user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_audit_logs" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_verify_report" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_report_verifications" target="tbl_reports">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_verify_user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_report_verifications" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_otp_user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_email_otp_codes" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ai_report" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;dashed=1;" edge="1" parent="1" source="tbl_ai_requests" target="tbl_reports">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_rec_user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_mfa_recovery_codes" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_recstate_user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_mfa_recovery_state" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_msg_sender" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_messages" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_typing_user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_message_typing" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_presence_user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_presence_days" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_acctreq_user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_account_requests" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_device_user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_device_tokens" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_capture_report" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_report_captures" target="tbl_reports">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_capture_user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=ERoneToMany;endFill=0;strokeColor=#0B2A5C;" edge="1" parent="1" source="tbl_report_captures" target="tbl_users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

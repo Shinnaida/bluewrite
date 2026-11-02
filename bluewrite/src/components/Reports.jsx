@@ -5985,7 +5985,7 @@ export function ReportShelf({
                 <ShelfGlyph name={shelf.key} className="folder-tab__icon" />
                 <span className="folder-tab__label">{shelf.label}</span>
                 {/* The shelf's own note, where it has one — ALL REPORTS wears the
-                    sort ("Newest first"), which is the one thing about a flat
+                    sort ("Newest edited"), which is the one thing about a flat
                     list of everything that the list cannot say before it is
                     read. It rides the tab so the officer learns it without
                     opening the shelf. */}
@@ -6124,7 +6124,8 @@ export function ReportsTable({
     status: initialStatus ?? '',
     date_from: initialDateFrom || '',
     date_to: initialDateTo || '',
-    sort: 'incident_datetime',
+    // Owner request: the register opens on the most recently edited report.
+    sort: 'updated_at',
     dir: 'desc',
     page: 1,
     verification: '',
