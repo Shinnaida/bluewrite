@@ -63,7 +63,9 @@ export default function ReportPrint({
   const [error, setError] = useState(null);
   // The station's letterhead — deployment data (Station settings), not part of a
   // report, which is why it travels beside the report rather than inside it.
+  // The full letter (freed doc, style, seals) so print wears what Admin saved.
   const [stationHeader, setStationHeader] = useState(null);
+  const [stationLetter, setStationLetter] = useState(null);
   // Phase 6 Stage 4 (D2) — the translation's review record, for the appendix.
   const [verifications, setVerifications] = useState([]);
   const [verificationStatus, setVerificationStatus] = useState(null);
@@ -88,6 +90,13 @@ export default function ReportPrint({
         onLoaded?.(data.report);
         // Sent with the report precisely so the sheet needs no second request.
         setStationHeader(data.station ?? null);
+        setStationLetter({
+          header: data.station ?? null,
+          letterhead_html: typeof data.letterhead_html === 'string' ? data.letterhead_html : '',
+          letterhead_style: data.letterhead_style ?? null,
+          seal_left_url: data.seal_left_url ?? null,
+          seal_right_url: data.seal_right_url ?? null,
+        });
         setVerifications(data.verifications ?? []);
         setVerificationStatus(data.verification_status ?? null);
         // The page variant never prints on its own: a page is not a dialog, and
@@ -116,7 +125,15 @@ export default function ReportPrint({
     let alive = true;
     api('/station')
       .then((d) => {
-        if (alive) setStationHeader(d.header ?? null);
+        if (!alive) return;
+        setStationHeader(d.header ?? null);
+        setStationLetter({
+          header: d.header ?? null,
+          letterhead_html: typeof d.letterhead_html === 'string' ? d.letterhead_html : '',
+          letterhead_style: d.letterhead_style ?? null,
+          seal_left_url: d.seal_left_url ?? null,
+          seal_right_url: d.seal_right_url ?? null,
+        });
       })
       .catch(() => {
         // Best-effort: resolveHeader falls back to the built-in lines.
@@ -190,6 +207,7 @@ export default function ReportPrint({
             report={report}
             ts={ts}
             stationHeader={stationHeader}
+            stationLetter={stationLetter ?? stationHeader}
             verifications={verifications}
             verificationStatus={verificationStatus}
             // A freed letter prints its own text (never editable here, so

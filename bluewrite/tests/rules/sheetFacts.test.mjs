@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTypeFacts, properNounsFor, buildFindings, buildStructuredFindings, reportTitle } from '../../src/lib/sheetFacts.js';
+import { buildTypeFacts, properNounsFor, buildFindings, buildStructuredFindings, reportTitle, fmtIncidentWhen } from '../../src/lib/sheetFacts.js';
 
 const labels = (type, ts, report = {}) =>
   buildTypeFacts(type, { report, ts }).map((e) => e.label);
@@ -33,6 +33,36 @@ test('"Date of Discovery" is formatted like the sheet\'s other dates', () => {
     ts: { date_of_discovery: '2026-09-24' },
   }).find((e) => e.label === 'Date of Discovery');
   assert.equal(entry.values[0], 'September 24, 2026');
+});
+
+test('a date with no recorded time prints as the date alone, never a midnight', () => {
+  // The date-only fill (an account that states a date but no clock time):
+  // the sheet prints "October 10, 2026", not a 12:00 A.M. nobody recorded.
+  assert.equal(
+    fmtIncidentWhen({ incident_datetime: '2026-10-10', incident_time: null }),
+    'October 10, 2026',
+  );
+  assert.equal(
+    fmtIncidentWhen({ incident_datetime: '2026-10-10 00:00:00', incident_time: null }),
+    'October 10, 2026',
+  );
+  assert.equal(
+    fmtIncidentWhen({ incident_datetime: '2026-10-10', incident_time: '' }),
+    'October 10, 2026',
+  );
+  assert.equal(fmtIncidentWhen({ incident_datetime: '', incident_date: '' }), '—');
+});
+
+test('a recorded time still prints with the date', () => {
+  assert.equal(
+    fmtIncidentWhen({ incident_datetime: '2026-10-10 08:40:00', incident_time: '08:40:00' }),
+    '8:40 A.M., October 10, 2026',
+  );
+  // A real recorded midnight is a fact, not a default: it keeps its time.
+  assert.equal(
+    fmtIncidentWhen({ incident_datetime: '2026-10-10 00:00:00', incident_time: '00:00:00' }),
+    '12:00 A.M., October 10, 2026',
+  );
 });
 
 test('Missing Person "Last Seen" prints the template date/time, not raw ISO', () => {

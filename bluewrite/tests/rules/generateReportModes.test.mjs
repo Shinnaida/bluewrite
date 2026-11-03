@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { cleanAccountText, buildArrangeDraft, buildEnhancedDraft } from '../../src/lib/arrangeDraft.js';
 import { formatIncidentReportHtml, reportHtmlToPlain, extractFieldLabels, unsupportedFieldLabels, detectIncidentTitle, stripAddedFieldRows } from '../../src/lib/reportFormat.js';
+import { emphasizeIssuanceRequestorHtml } from '../../src/lib/narrativeText.js';
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const PANEL = read('../../src/components/ai/AiNarrativePanel.jsx');
 const REPORTS = read('../../src/pages/Reports.jsx');
@@ -309,7 +310,7 @@ test('the shared formatter bolds existing labels only and adds none', () => {
   assert.ok(html.includes('<b>PLACE:</b> CANGI MUNDONG'), 'place label not bolded');
   assert.ok(html.includes('<b>T/D OF INCIDENT:</b> MORE OR LESS 8:40 AM'), 't/d label not bolded');
   assert.ok(html.includes('<b>VEHICLES INVOLVED:</b>'), 'vehicles label not bolded');
-  assert.ok(html.includes('<b>FACTS:</b> INVESTIGATION REVEALED'), 'facts label not bolded');
+  assert.ok(html.includes('<b>FACTS:</b><br>\u2003\u2003INVESTIGATION REVEALED'), 'facts label not bolded');
   assert.ok(html.includes('<b>REMARKS:</b> Settled at the barangay.'), 'remarks label not bolded');
   assert.ok(html.includes('<b>RECORDED BY:</b> PO1 DELA CRUZ'), 'recorded-by label not bolded');
   // The incident title has no separator: it stands as its own bold heading,
@@ -501,7 +502,7 @@ test('enhance path uses the same title logic as arrange but keeps its own casing
     'enhance did not keep the source title as a standalone heading',
   );
   assert.ok(
-    draft.narrative.includes('<b>FACTS:</b> INVESTIGATION REVEALED'),
+    draft.narrative.includes('<b>FACTS:</b><br>\u2003\u2003INVESTIGATION REVEALED'),
     'enhance must not be sentence-cased by Arrange Only\'s pass',
   );
   const arranged = buildArrangeDraft({ accountText: REFERENCE });
@@ -524,7 +525,7 @@ test('arrange sentence-cases every all-caps narrative without correcting its wor
   // on the next line (owner request, 2026-11-02).
   assert.ok(
     arranged.narrative.includes(
-      '<b>Facts:</b><br>Investigation revealed that both vehicle were traveling in opposite direction.',
+      '<b>Facts:</b><br>\u2003\u2003Investigation revealed that both vehicle were traveling in opposite direction.',
     ),
     'the FACTS narrative was not sentence-cased or does not follow its label',
   );
@@ -564,7 +565,7 @@ test('arrange keeps names, places, vehicle markers and identifiers intact', () =
   const arranged = buildArrangeDraft({ accountText: full });
   for (const bit of [
     '<b>Place:</b> Cangi Mundong, Inoburan, City of Naga',
-    '<b>Time/Date:</b> More or less 8:40 AM of 10-20-26',
+    '<b>Time/Date:</b> More or less 8:40 AM of October 20, 2026',
     '<b>V1:</b> Yamaha NMAX with plate 0718SR, OR 0716-819041, CR 0216-25-250349',
     'Joseph Lontayo Porol',
     'male Filipino',
@@ -578,7 +579,9 @@ test('arrange keeps names, places, vehicle markers and identifiers intact', () =
     'No drivers license.',
     'Backrider Vilma Sanoria Canque',
     '<b>Recorded by:</b> Honey',
-    '"Bee"',
+    // The issuance line's requestor name prints bold, ALL CAPS and
+    // underlined on the paper (owner request) — never sentence-cased.
+    '"<b><u>BEE</u></b>"',
   ]) {
     assert.ok(arranged.narrative.includes(bit), 'lost source detail: ' + bit);
   }
@@ -588,8 +591,136 @@ test('arrange keeps names, places, vehicle markers and identifiers intact', () =
   const words = (s) => (String(s).toLowerCase().match(/[a-z0-9]+/g) || []).sort();
   assert.deepEqual(
     words(reportHtmlToPlain(arranged.narrative)),
-    words(full.replace('T/D OF INCIDENT', 'Time/Date').replace('PLACE OF INCIDENT', 'Place')),
+    words(
+      full
+        .replace('T/D OF INCIDENT', 'Time/Date')
+        .replace('PLACE OF INCIDENT', 'Place')
+        .replace('MORE OR LESS 8:40 AM OF 10-20-26', 'MORE OR LESS 8:40 AM OF October 20, 2026'),
+    ),
     'sentence case added, dropped, duplicated or reordered a word',
+  );
+});
+
+test('arrange caps a lowercase or# before a number and spaces glued vehicle tokens', () => {
+  // Live sheet bug: "or# 0716-819041" printed lowercase, and
+  // "CR#0716-25-250349DRIVEN" printed with no spacing.
+  const src = [
+    'VEHICLES INVOLVED:',
+    'V1 YAMAHA NMAX WITH PLATE 0718SR, or# 0716-819041, CR#0716-25-250349DRIVEN BY JOSEPH',
+  ].join(LF);
+  const html = formatIncidentReportHtml(src, { sentenceCase: true });
+  assert.ok(html.includes('OR# 0716-819041'), 'lowercase or# was not capped: ' + html);
+  assert.ok(html.includes('CR# 0716-25-250349 driven'), 'glued vehicle tokens were not spaced: ' + html);
+  // Plates never split.
+  assert.ok(html.includes('0718SR'), 'plate was damaged: ' + html);
+  assert.doesNotMatch(html, /0718 SR/, 'plate was split: ' + html);
+});
+
+test('enhance keeps document codes capped and spaced without sentence-casing', () => {
+  // Same live bug on the Enhance path: the formatter runs without
+  // sentenceCase there, so OR/CR caps and spacing must hold on their own.
+  // The conjunction "or" before words stays lowercase.
+  const src = [
+    'VEHICLES INVOLVED:',
+    'V1 Yamaha NMAX with plate #0718SR, or# 0716-819041, CR#0716-25-250349DRIVEN by Joseph',
+    'V2 Honda XRM with plate # gf 39113, or #0701 0741-206152, cr # 258V03221, owned by Galeo',
+  ].join(LF);
+  const html = formatIncidentReportHtml(src, {});
+  assert.ok(html.includes('OR# 0716-819041'), 'enhance lost OR caps: ' + html);
+  assert.ok(html.includes('CR# 0716-25-250349 DRIVEN'), 'enhance lost glued spacing: ' + html);
+  assert.ok(html.includes('OR #0701'), 'enhance lost spaced OR caps: ' + html);
+  assert.ok(html.includes('CR # 258V03221'), 'enhance lost CR caps: ' + html);
+  assert.ok(html.includes('0718SR'), 'enhance damaged a plate: ' + html);
+  const prose = formatIncidentReportHtml('FACTS. Tea or coffee. He left.', {});
+  assert.ok(prose.includes('or coffee'), 'conjunction was capped: ' + prose);
+});
+
+test('a Requested-by line builds the closing issuance with the named requestor', () => {
+  // Owner request: "Requested by: KNOHEA" in the source prints the
+  // certification closing naming them — in Arrange Only and everywhere the
+  // same formatter runs (Enhance Wording is handed the arranged text).
+  const src = [
+    'LOST WALLET REPORT',
+    '',
+    'REQUESTED BY: KNOHEA',
+    '',
+    'FACTS. THE COMPLAINANT REPORTED THAT HER WALLET WENT MISSING.',
+    'REMARKS: NONE',
+    'RECORDED BY : PO1 DELA CRUZ',
+  ].join(LF);
+  const html = buildArrangeDraft({ accountText: src }).narrative;
+  assert.ok(
+    html.includes(
+      'This certification is issued upon the request of "<b><u>KNOHEA</u></b>" for what ever legal purposes it may serve.',
+    ),
+    'issuance with the named requestor missing: ' + html,
+  );
+  // The label line itself is consumed — the report closes with the
+  // certification naming them, and "Requested by:" is not repeated.
+  assert.ok(!html.includes('Requested by:'), 'the Requested-by line was repeated');
+  // The arranged text handed to Enhance carries the same line, so the
+  // wording pass keeps it like any other line it was given.
+  const arrangedPlain = reportHtmlToPlain(formatIncidentReportHtml(src, { sentenceCase: true }));
+  assert.ok(
+    arrangedPlain.includes('This certification is issued upon the request of "KNOHEA"'),
+    'enhance input lost the issuance',
+  );
+  const enhanced = buildEnhancedDraft({ enhancedText: arrangedPlain, sourceText: arrangedPlain });
+  assert.equal(
+    enhanced.narrative.split('upon the request of').length - 1,
+    1,
+    'enhance display doubled the issuance',
+  );
+});
+
+test('no Requested-by line means no issuance line is built', () => {
+  const src = ['FACTS. THE COMPLAINANT REPORTED THAT HER WALLET WENT MISSING.', 'REMARKS: NONE'].join(LF);
+  assert.ok(
+    !formatIncidentReportHtml(src).includes('upon the request of'),
+    'an issuance line was invented',
+  );
+});
+
+test('an issuance the source already carries is kept once, never doubled', () => {
+  const src = [
+    'REQUESTED BY: KNOHEA',
+    '',
+    'FACTS. SOMETHING HAPPENED.',
+    'This certification is issued upon the request of "KNOHEA" for what ever legal purposes it may serve.',
+  ].join(LF);
+  const html = formatIncidentReportHtml(src);
+  assert.equal(
+    html.split('upon the request of').length - 1,
+    1,
+    'issuance duplicated: ' + html,
+  );
+});
+
+test('a reworded issuance line still dresses its requestor', () => {
+  // A second Enhance press runs the wording pass over the arranged page, and
+  // that pass may "correct" the station formula ("purposes" to "purpose",
+  // dropped quotes). The paper still dresses the name — the line is
+  // recognized by meaning, not by exact template wording.
+  for (const line of [
+    'This certification is issued upon the request of KNOHEA for whatever legal purpose it may serve.',
+    'This certification is issued upon the request of "KNOHEA" for whatever legal purposes it may serve.',
+    'This certification is issued upon the request of KNOHEA for what ever legal purposes it may serve.',
+  ]) {
+    const html = formatIncidentReportHtml(line);
+    assert.ok(html.includes('<b><u>KNOHEA</u></b>'), 'requestor not dressed: ' + line);
+  }
+  // The editor-side dresser agrees, so the box and the paper never disagree.
+  const dressed = emphasizeIssuanceRequestorHtml(
+    '<p>This certification is issued upon the request of KNOHEA for whatever legal purpose it may serve.</p>',
+  );
+  assert.ok(dressed.includes('<b><u>KNOHEA</u></b>'), 'editor dresser missed the reworded line');
+});
+
+test('a placeholder requestor builds no issuance', () => {
+  const src = ['REQUESTED BY: name of who requested', '', 'FACTS. SOMETHING HAPPENED.'].join(LF);
+  assert.ok(
+    !formatIncidentReportHtml(src).includes('upon the request of'),
+    'an issuance was built for a placeholder',
   );
 });
 
@@ -602,7 +733,7 @@ test('arrange sentence-cases mixed-case source without flattening correct words'
   });
   assert.ok(
     mixed.narrative.includes(
-      '<b>Facts:</b><br>The complainant reported that his wallet was missing.<br>He said the wallet was last seen at the market.',
+      '<b>Facts:</b><br>\u2003\u2003The complainant reported that his wallet was missing.<br>\u2003\u2003He said the wallet was last seen at the market.',
     ),
     'mixed-case source was not brought to consistent sentence case',
   );
@@ -628,7 +759,7 @@ test('arrange handles a non-vehicular report and keeps incomplete identifiers', 
     ].join(LF),
   });
   assert.ok(
-    lost.narrative.includes('<b>Facts:</b><br>The complainant reported that his wallet went missing while buying goods.'),
+    lost.narrative.includes('<b>Facts:</b><br>\u2003\u2003The complainant reported that his wallet went missing while buying goods.'),
     'the lost-property narrative was not sentence-cased',
   );
   assert.ok(lost.narrative.includes('<b>Remarks:</b> None'), 'existing remarks were not kept');
@@ -661,9 +792,9 @@ test('arrange writes every bold field label in sentence case, not all caps', () 
   });
   for (const bit of [
     '<b>Place:</b> Cangi Mundong, Inoburan, City of Naga',
-    '<b>Time/Date:</b> More or less 8:40 AM of 10-20-26',
-    '<b>Vehicles involved:</b>',
-    '<b>Facts:</b><br>The vehicles collided.',
+    '<b>Time/Date:</b> More or less 8:40 AM of October 20, 2026',
+    '<b>Vehicles involved:</b></p><p>',
+    '<b>Facts:</b><br>\u2003\u2003The vehicles collided.',
     '<b>Remarks:</b> Both parties amicably settled the incident',
     '<b>Recorded by:</b> Honey',
     '<b>Purpose:</b> Record',
@@ -741,7 +872,7 @@ test('reordered parts are arranged in the report order without losing a word', (
     'HONEY',
     '<b>V1:</b> YAMAHA NMAX WITH PLATE 0718SR.',
     'CANGI MUNDONG, INOBURAN, CITY OF NAGA',
-    'MORE OR LESS 8:40 AM OF 10-20-26',
+    'MORE OR LESS 8:40 AM OF October 20, 2026',
   ]) {
     assert.ok(html.includes(word), 'lost source wording: ' + word);
   }
@@ -801,6 +932,16 @@ test('enhance is a copy-edit of the ALREADY-ARRANGED report, never a rearrangeme
   assert.doesNotMatch(prompt, /order of the parts/i, 'the prompt still lets the model order the parts');
   assert.doesNotMatch(prompt, /arranged into the standard report order below/i, 'stale ordering instruction is back');
   assert.match(prompt, /correct wording, grammar,\s*\npunctuation and police register/);
+
+  // Police register with real terminology (owner request): Enhance is the
+  // wording pass, so the prompt carries the formal substitutions themselves
+  // — vocabulary swaps only, never a new fact, never a heavier legal term,
+  // never an invented classification.
+  assert.match(prompt, /POLICE REGISTER/);
+  assert.match(prompt, /proceeded to/);
+  assert.match(prompt, /made contact with/);
+  assert.match(prompt, /never a term of greater legal/);
+  assert.match(prompt, /Warrant of Arrest/);
 
   // The panel arranges FIRST and hands the model that text.
   const PANEL = readFileSync(new URL('../../src/components/ai/AiNarrativePanel.jsx', import.meta.url), 'utf8');

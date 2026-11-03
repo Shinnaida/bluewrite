@@ -18,6 +18,7 @@ import {
   sameReviewValue,
   setIncidentDate,
   setIncidentTime,
+  storedIncidentDatetime,
   valueAtPath,
 } from '../../src/lib/reviewFields.js';
 
@@ -222,6 +223,34 @@ test('the date and time halves read back out of one stored datetime', () => {
   assert.equal(incidentTimePart(''), '');
   assert.equal(incidentDatePart(undefined), '');
   assert.equal(incidentTimePart(null), '');
+});
+
+test('a composed midnight with no recorded time reads back as the bare date', () => {
+  // The form must not show a 00:00 the officer never typed — and writing
+  // that phantom time back would cement it. A real recorded midnight keeps
+  // its time.
+  assert.equal(
+    storedIncidentDatetime({ incident_datetime: '2026-10-10 00:00:00', incident_time: null }),
+    '2026-10-10',
+  );
+  assert.equal(
+    storedIncidentDatetime({ incident_datetime: '2026-10-10 00:00:00', incident_time: '' }),
+    '2026-10-10',
+  );
+  assert.equal(
+    storedIncidentDatetime({ incident_datetime: '2026-10-10', incident_time: null }),
+    '2026-10-10',
+  );
+  assert.equal(
+    storedIncidentDatetime({ incident_datetime: '2026-10-10T08:40', incident_time: '08:40:00' }),
+    '2026-10-10T08:40',
+  );
+  assert.equal(
+    storedIncidentDatetime({ incident_datetime: '2026-10-10 00:00:00', incident_time: '00:00:00' }),
+    '2026-10-10T00:00',
+  );
+  assert.equal(storedIncidentDatetime({ incident_datetime: '' }), '');
+  assert.equal(storedIncidentDatetime({}), '');
 });
 
 test('changing the date keeps the time that was already entered', () => {

@@ -502,11 +502,22 @@ function isLabelCandidate(raw) {
  * @param {{allowedLabels?: string[], sentenceCase?: boolean}} [options]
  *   `allowedLabels` — labels permitted to be bold
  *   `sentenceCase` — Arrange Only's formal sentence case (capitalisation only)
- * @returns {string} html using only the app's rich-text subset (<p>, <br>, <b>)
+ * @returns {string} html using only the app's rich-text subset (<p>, <br>, <b>, <u>)
+ *
+ * The blotter certification's closing issuance line names who requested the
+ * copy (owner request): the name prints bold, ALL CAPS and underlined —
+ * `... upon the request of "I Love You" for what ever ...` renders as
+ * `... upon the request of "<b><u>I LOVE YOU</u></b>" for what ever ...`.
+ * Every other word keeps its wording (and Arrange Only's capitalisation).
  */
 export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceCase = false } = {}) {
   const raw = String(text ?? '').replace(/\r\n?/g, '\n').trim();
   if (raw === '') return '';
+  // A "Requested by: NAME" line names who asked for the copy (owner
+  // request): the report closes with the certification issuance naming them.
+  // An issuance line the source already carries always wins; a placeholder
+  // name is not a requestor, so nothing is appended for one.
+  const withIssuance = appendRequestedByIssuance(raw);
 
   const allowed = Array.isArray(allowedLabels)
     ? new Set(allowedLabels.map(normalizeLabel))
@@ -516,8 +527,8 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
   // the report's entry timestamp, and removed from its original position. No
   // `INCIDENT TITLE:` label is ever added; a source that states none still
   // gets none.
-  const title = detectIncidentTitle(raw);
-  const sections = splitReportSections(raw, title);
+  const title = detectIncidentTitle(withIssuance);
+  const sections = splitReportSections(withIssuance, title);
   if (title !== '') sections.push({ rank: 15, order: -1, title: true, lines: [] });
 
   // Standard report order (owner request, 2026-11-02): a reordered account is
@@ -546,10 +557,10 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
     return true;
   });
 
-  const html = [];
+  const parts = [];
   for (const section of uniqueSections) {
     if (section.title) {
-      html.push(`<p><b>${escapeHtml(title)}</b></p>`);
+      parts.push({ rank: 15, html: `<p><b>${escapeHtml(title)}</b></p>` });
       continue;
     }
     // A vehicle row the blotter wrapped stays ONE row (see
@@ -559,20 +570,43 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
     // Sentence-case state travels through the section: a line that continues
     // the previous sentence stays lower-case, a new sentence or paragraph
     // starts with a capital. A blank line starts a new paragraph.
+    // Only a section the FACTS label opens carries the facts indent — stray
+    // unlabeled prose keeps its own shape (see the 'b  a' arrange unit).
+    const opensFacts = (() => {
+      const hit = matchLabelLine(lines[0] ?? '');
+      return hit !== null && FACT_LABELS.test(normalizeLabel(hit.label));
+    })();
     const state = { start: true };
-    const body = lines
-      .map((line) => {
-        if (line.trim() === '') {
-          state.start = true;
-          return '';
-        }
-        return formatLine(line, allowed, section.rank === 40, { sentenceCase, state });
-      })
-      .join('<br>')
-      .replace(/<br>\s*<br>/g, '</p><p>');
-    if (body.trim() !== '') html.push(`<p>${body}</p>`);
+    const mapped = lines.map((line) => {
+      if (line.trim() === '') {
+        state.start = true;
+        return '';
+      }        return formatLine(line, allowed, section.rank === 40, { sentenceCase, state, facts: opensFacts });
+    });
+    // A single space after the VEHICLES INVOLVED heading (owner request): a
+    // bare label stands on its own paragraph, and the V1:/V2: rows open the
+    // next one — the same paragraph rhythm as every other gap, no blank line.
+    if (section.rank === 40) {
+      const headAt = lines.findIndex((line) => /^\s*vehicles?\s+involved\s*:?\s*$/i.test(line));
+      if (headAt >= 0 && headAt + 1 < mapped.length) mapped.splice(headAt + 1, 0, '');
+    }
+    const body = mapped.join('<br>').replace(/<br>\s*<br>/g, '</p><p>');
+    if (body.trim() !== '') parts.push({ rank: section.rank, html: `<p>${body}</p>` });
   }
-  return html.join('');
+  // Single blank-line breathing room (owner request) at four boundaries:
+  // after Time/Date, before Facts, before Remarks, after Recorded-by — in
+  // both Arrange Only and Enhance Wording, which share this formatter. One
+  // separator per boundary even when two rules meet there, and never a
+  // leading or trailing blank.
+  const SEP = '<p><br></p>';
+  const out = [];
+  parts.forEach((part, i) => {
+    out.push(part.html);
+    if (i + 1 >= parts.length) return;
+    const next = parts[i + 1];
+    if (part.rank === 30 || next.rank === 60 || next.rank === 70 || part.rank === 80) out.push(SEP);
+  });
+  return out.join('');
 }
 
 // Section ranks for the shared formatter. The order is the station's report
@@ -732,10 +766,115 @@ function joinVehicleContinuations(lines) {
   return out;
 }
 
-function formatLine(line, allowed, vehicles = false, { sentenceCase = false, state = null } = {}) {
+// The certification's closing issuance line (owner request): the name of
+// who requested the copy prints bold, ALL CAPS and underlined. The quotes
+// the blotter format writes around the name are kept; a line without quotes
+// is dressed the same way. Anything else returns null and renders as usual.
+const ISSUANCE_REQUESTOR =
+  /^(.*?upon the request of\s*)((?:"|&quot;|“|”)?)([^"“”<>]+?)((?:"|&quot;|“|”)?)(\s+for\s+what\s*ever\s+legal\s+purposes?\s+it\s+may\s+serve\.?\s*)$/i;
+
+function formatIssuanceRequestor(line, { sentenceCase = false, state = null } = {}) {
+  const m = ISSUANCE_REQUESTOR.exec(String(line ?? ''));
+  if (!m) return null;
+  const name = m[3].trim().toUpperCase();
+  if (name === '') return null;
+  // The name is presentation ink, never reworded: casing it upper cannot
+  // touch the record, and the words around it keep the mode's own casing —
+  // Arrange Only still sentence-cases them, Enhance keeps them as written.
+  const before = sentenceCase ? caseText(m[1], { start: state?.start ?? true }) : m[1];
+  const after = sentenceCase ? caseText(m[5], { start: false }) : m[5];
+  if (sentenceCase && state) state.start = endsSentence(after);
+  const open = m[2] !== '' ? m[2] : (m[4] !== '' ? '"' : '');
+  const close = m[4] !== '' ? m[4] : (m[2] !== '' ? '"' : '');
+  return `${escapeHtml(before)}${escapeHtml(open)}<b><u>${escapeHtml(name)}</u></b>${escapeHtml(close)}${escapeHtml(after)}`;
+}
+
+// A "Requested by: NAME" label line names who asked for the copy. The
+// appended closing issuance carries that name into both sheet modes (Arrange
+// Only and Enhance Wording share this formatter); the renderer dresses the
+// name bold, ALL CAPS and underlined, and Enhance keeps the line like any
+// other it was handed. Idempotent: a line already present is never doubled.
+const HAS_ISSUANCE = /this certification is issued upon the request/i;
+const REQUESTED_BY_LINE = /^\s*requested\s+by\s*:\s*(.+?)\s*$/im;
+const PLACEHOLDER_REQUESTOR = /^\s*name of (who requested|requestor|requester)\s*$/i;
+
+function appendRequestedByIssuance(text) {
+  const src = String(text ?? '');
+  if (HAS_ISSUANCE.test(src)) return src;
+  const m = REQUESTED_BY_LINE.exec(src);
+  if (!m) return src;
+  const name = String(m[1] ?? '').trim().replace(/^["“”']+|["“”']+$/g, '').trim();
+  if (name === '' || PLACEHOLDER_REQUESTOR.test(name)) return src;
+  // The label line is consumed into the closing issuance: the report closes
+  // with the certification naming them, and "Requested by:" itself is not
+  // repeated. A source that is nothing but the line is left alone.
+  const without = (src.slice(0, m.index) + src.slice(m.index + m[0].length))
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  if (without === '') return src;
+  return `${without}\n\nThis certification is issued upon the request of "${name}" for what ever legal purposes it may serve.`;
+}
+
+// A Time/Date line's own labels (the rank-30 set in SECTION_RANKS): only
+// these lines spell their numeric date in words.
+const TD_LABEL =
+  /^(t\/d|td|time\/date|t\/d of incident|td of incident|time\/date of incident|time and date|time and date of incident|date and time|date and time of incident|date of incident|time of incident|date reported|time reported)$/;
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/**
+ * Spell a numeric incident date in words: "10-20-26" → "October 20, 2026".
+ * Only MM-DD-YY(YY) with slashes or dashes and a real month/day is
+ * converted; a 2-digit year reads in this century, and anything else stays
+ * exactly as written.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+function incidentDateInWords(value) {
+  return String(value ?? '').replace(
+    /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2}|\d{4})\b/g,
+    (m, mm, dd, yy) => {
+      const month = Number(mm);
+      const day = Number(dd);
+      if (month < 1 || month > 12 || day < 1 || day > 31) return m;
+      const year = yy.length === 2 ? 2000 + Number(yy) : Number(yy);
+      return `${MONTHS[month - 1]} ${day}, ${year}`;
+    },
+  );
+}
+
+// First-line indent for the facts content (owner request): two em spaces.
+// A real character, not markup — it survives the sanitizer, prints on the
+// paper, and round-trips through plain text (word counts and the label audit
+// never see it as a word). Title detection trims lines first, so an
+// indented ALL-CAPS line reads exactly as it did unindented.
+const FACTS_INDENT = '\u2003\u2003';
+
+// Missing spaces the blotter/AI drops inside a vehicle row ("CR#0716-…DRIVEN",
+// "plate #gf 39113" keeps its recorded spacing otherwise): a `#` glued to a
+// digit takes one, and a digit glued to a document keyword takes one. Only the
+// listed keywords split — plates like 0718SR or 258V03221 never do — and
+// nothing is re-cased or reworded here.
+function separateRunOnTokens(text) {
+  return String(text ?? '')
+    .replace(/\bor\b(?=\s*[:.#\-]?\s*\d)/gi, 'OR')
+    .replace(/\bcr\b(?=\s*[:.#\-]?\s*\d)/gi, 'CR')
+    .replace(/([A-Za-z]#)(\d)/g, '$1 $2')
+    .replace(/(\d)(DRIVEN|OWNED|VALID|LICEN[CS]E|RESIDENT|PLATE)\b/g, '$1 $2');
+}
+
+function formatLine(line, allowed, vehicles = false, { sentenceCase = false, state = null, facts = false } = {}) {
   const original = String(line ?? '').replace(/[ \t]+$/, '');
   const hit = matchLabelLine(original);
   if (hit === null) {
+    // The issuance line's requestor name is paper ink (see above): bold,
+    // ALL CAPS and underlined, wording around it untouched.
+    const issuance = formatIssuanceRequestor(original, { sentenceCase, state });
+    if (issuance !== null) return issuance;
     // A vehicle row's own marker is chrome, like a field label: V1:, V2:, …
     // bold, with the colon the sheet's labels use, every word after it
     // untouched except for Arrange Only's capitalisation pass. Only a row that
@@ -744,7 +883,7 @@ function formatLine(line, allowed, vehicles = false, { sentenceCase = false, sta
     if (vehicles) {
       const marker = /^(\s*)(V\d+)(?=[\s:.,;]|$)[\s:.,;]*/i.exec(original);
       if (marker) {
-        const rest = original.slice(marker[0].length);
+        const rest = separateRunOnTokens(original.slice(marker[0].length));
         const cased = sentenceCase && rest !== '' ? caseText(rest, { start: true, vehicleRow: true }) : rest;
         if (sentenceCase && state) state.start = endsSentence(cased);
         return `${escapeHtml(marker[1])}<b>${escapeHtml(marker[2])}:</b>${cased === '' ? '' : ` ${escapeHtml(cased)}`}`;
@@ -752,7 +891,8 @@ function formatLine(line, allowed, vehicles = false, { sentenceCase = false, sta
     }
     const cased = sentenceCase ? caseText(original, { start: state?.start ?? true }) : original;
     if (sentenceCase && state) state.start = endsSentence(cased);
-    return escapeHtml(cased);
+    // Every facts paragraph opens indented (owner request) — in both modes.
+    return (facts ? FACTS_INDENT : '') + escapeHtml(cased);
   }
 
   const normalized = normalizeLabel(hit.label);
@@ -764,7 +904,12 @@ function formatLine(line, allowed, vehicles = false, { sentenceCase = false, sta
   }
 
   const label = hit.label.replace(/\s+/g, ' ').trim();
-  const rest = hit.rest.replace(/^[ \t]+/, '');
+  let rest = hit.rest.replace(/^[ \t]+/, '');
+  // The incident date in words (owner request): on the Time/Date line only,
+  // a numeric date prints spelled out — "10-20-26" → "October 20, 2026" —
+  // while the time and every other word stay exactly as written. Identifiers
+  // anywhere else (DOB, OR/CR, plates, prose) are never touched.
+  if (TD_LABEL.test(normalized)) rest = incidentDateInWords(rest);
   const kind = sentenceCase ? labelValueKind(normalized) : null;
   const cased = sentenceCase && rest !== ''
     ? caseText(rest, { start: true, placeValue: kind === 'place', nameValue: kind === 'name' })
@@ -785,7 +930,9 @@ function formatLine(line, allowed, vehicles = false, { sentenceCase = false, sta
     : (/^(?:place|place of incident|place of occurrence|location|incident location)$/.test(normalized) ? placeShort : label);
   const head = `<b>${escapeHtml(shownLabel + ':')}</b>`;
   if (cased === '') return head;
-  if (sentenceCase && FACT_LABELS.test(normalized)) return `${head}<br>${escapeHtml(cased)}`;
+  // The facts content follows its label on the next line, indented (owner
+  // request) — in both modes, so Arrange and Enhance read the same page.
+  if (FACT_LABELS.test(normalized)) return `${head}<br>${FACTS_INDENT}${escapeHtml(cased)}`;
   return `${head} ${escapeHtml(cased)}`;
 }
 
@@ -978,9 +1125,10 @@ function caseWord(token, { start, span, line, next }) {
   const allCaps = word === word.toUpperCase() && /[A-Z]/.test(word);
 
   if (lookup === 'i') return 'I';
-  // OR is a document code only when a number follows it; otherwise it is the
-  // conjunction and follows the ordinary word.
-  if (lookup === 'or' && /^\s*[:.\-]?\s*\d/.test(next)) return 'OR';
+  // OR is a document code only when a number follows it ("OR 0716-819041",
+  // "or# 0716-819041"); otherwise it is the conjunction and follows the
+  // ordinary word.
+  if (lookup === 'or' && /^\s*[:.#\-]?\s*\d/.test(next)) return 'OR';
   // AM/PM are clock markers only after a time; "I AM" is the verb.
   if ((lookup === 'am' || lookup === 'pm') && /\d\s*$/.test(line.slice(0, token.start))) {
     return lookup.toUpperCase();

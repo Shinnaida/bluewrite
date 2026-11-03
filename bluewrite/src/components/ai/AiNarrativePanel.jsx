@@ -2953,6 +2953,7 @@ export default function AiNarrativePanel({
                 report={sheet.report}
                 ts={sheet.ts}
                 stationHeader={sheet.stationHeader}
+                stationLetter={sheet.stationLetter ?? sheet.stationHeader ?? null}
                 pending={sheetPending}
                 revealPending={false}
               />

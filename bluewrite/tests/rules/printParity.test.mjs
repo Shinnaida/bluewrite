@@ -66,10 +66,11 @@ test('the shared sheet renders one html for screen and print', () => {
   // opening date/time and title restate the certification line and the quoted
   // title, so the sheet skips them — the record itself is untouched. The
   // place line then takes the conclusive City of Naga spelling at render
-  // (owner request, 2026-11-02).
+  // (owner request, 2026-11-02), and the issuance line's requestor name
+  // prints bold, ALL CAPS and underlined (owner request).
   assert.match(
     LEAF,
-    /dangerouslySetInnerHTML=\{\{ __html: correctNagaPlaceLinesHtml\(sanitizeRichHtml\(stripRedundantSheetHeaderHtml\(narrativeRaw, sheetTitle\)\)\) \}\}/,
+    /dangerouslySetInnerHTML=\{\{ __html: emphasizeIssuanceRequestorHtml\(correctNagaPlaceLinesHtml\(sanitizeRichHtml\(stripRedundantSheetHeaderHtml\(narrativeRaw, sheetTitle\)\)\)\) \}\}/,
     'the rich narrative stopped rendering its stored html',
   );
   assert.match(
@@ -82,6 +83,25 @@ test('the shared sheet renders one html for screen and print', () => {
     /dangerouslySetInnerHTML=\{\{ __html: sanitizeRichHtml\(statusHtml\) \}\}/,
     'the rich disposition stopped rendering its stored html',
   );
+});
+
+test('a short report still fits the whole sheet, justified', () => {
+  // Owner request: dynamic fill — the slack before the signature block is
+  // measured from layout and becomes one gap, so a short report meets the
+  // bottom of the leaf while a full report measures none. Both Arrange Only
+  // and Enhance Wording read here, justified.
+  const SHEET = code(
+    readFileSync(new URL('../../src/components/reports/ReportSheetBody.jsx', import.meta.url), 'utf8'),
+  );
+  assert.match(SHEET, /className="pr-fill"/, 'the fill spacer is gone from the sheet');
+  // Loop-proof by construction (2026-11-03): the height is written straight
+  // to the spacer's DOM node and re-measured by a ResizeObserver — no React
+  // state, so the finalize preview can never feed itself ("Maximum update
+  // depth exceeded"). The old state-fill expression must not come back.
+  assert.match(SHEET, /new ResizeObserver/, 'the fill is no longer re-measured from layout');
+  assert.doesNotMatch(SHEET, /setFill/, 'the fill went back to React state');
+  const css = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.pr-narrative \{[^}]*text-align: justify;/, 'the narrative is no longer justified');
 });
 
 test('the printed leaf holds a full ordinary report on one sheet', () => {

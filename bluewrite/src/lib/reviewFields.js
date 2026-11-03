@@ -256,6 +256,20 @@ export function incidentTimePart(current) {
 }
 
 /**
+ * The form value for a STORED incident datetime. A composed midnight with no
+ * recorded time (`incident_time` empty) reads back as the bare date — the
+ * form must not show a 00:00 the officer never typed, and writing that
+ * phantom time back would cement it. A real recorded midnight keeps its time.
+ */
+export function storedIncidentDatetime(row) {
+  const raw = String(row?.incident_datetime ?? '');
+  if (raw === '') return '';
+  const form = raw.slice(0, 16).replace(' ', 'T');
+  if (String(row?.incident_time ?? '') === '' && /00:00$/.test(form)) return form.slice(0, 10);
+  return form;
+}
+
+/**
  * The stored datetime after the DATE half changes. Keeps an already-entered
  * time, because the two halves are typed into separate controls and changing
  * one is never meant to clear the other.

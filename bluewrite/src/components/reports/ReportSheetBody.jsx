@@ -36,7 +36,8 @@
 // click on the sheet does the same (a manual Skip).
 
 import React, { useEffect, useRef, useState, useLayoutEffect } from 'react';
-import { resolveHeader } from '../../lib/stationSettings.js';
+import { resolveHeader, resolveLetterheadStyle, letterheadCss } from '../../lib/stationSettings.js';
+import SealImg from './SealImg.jsx';
 import { languageLabel } from '../../lib/reportLanguages.js';
 import {
   hasSource,
@@ -50,7 +51,7 @@ import {
   buildTypeFacts,
   buildStructuredFindings,
   buildStructuredActions,
-  fmtIncidentLong,
+  fmtIncidentWhen,
   fmtLong,
   properNounsFor,
   reportTitle,
@@ -68,6 +69,7 @@ import {
   stripRedundantSheetHeaderHtml,
   correctNagaPlaceLines,
   correctNagaPlaceLinesHtml,
+  emphasizeIssuanceRequestorHtml,
 } from '../../lib/narrativeText.js';
 import { sanitizeRichHtml, containsRichTags, richTextToPlain, sanitizeLetterHtml } from '../../lib/richText.js';
 import RichTextArea from './RichTextArea.jsx';
@@ -186,6 +188,10 @@ export default function ReportSheetBody({
   report,
   ts,
   stationHeader = null,
+  // The full letterhead Station Settings saves (freed document, style, seal
+  // URLs). When a host only has the header it passes stationHeader alone and
+  // the sheet falls back to the composed lines + bundled seals.
+  stationLetter = null,
   verifications = [],
   verificationStatus = null,
   pending = null,
@@ -205,7 +211,22 @@ export default function ReportSheetBody({
 }) {
   const finalized = report.status === 'finalized';
   const reportNo = report.id ? `BW-${String(report.id).padStart(4, '0')}` : 'BW-____';
-  const head = resolveHeader(stationHeader);
+  // The station's letterhead as SAVED: a host may pass the full /station
+  // payload as stationLetter, or (older callers) the header alone as
+  // stationHeader. A freed document on file wins over the composed lines —
+  // that is what "what I edit and save shows on the sheet" means. The seals
+  // and the style travel with the same object; missing pieces fall back to
+  // the bundled seals and the built-in presentation, so the head never
+  // renders seal-less or unstyled.
+  const letterSrc = stationLetter ?? (stationHeader && typeof stationHeader === 'object' && ('letterhead_html' in stationHeader || 'seal_left_url' in stationHeader) ? stationHeader : null);
+  const letterHeadSrc = letterSrc && typeof letterSrc.header === 'object' ? letterSrc.header : stationHeader;
+  const head = resolveHeader(letterHeadSrc);
+  const freedDoc = letterSrc && typeof letterSrc.letterhead_html === 'string' ? letterSrc.letterhead_html.trim() : '';
+  const hasFreedDoc = freedDoc !== '';
+  const letterStyle = resolveLetterheadStyle(letterSrc?.letterhead_style);
+  const letterCss = letterheadCss(letterStyle);
+  const sealLeftUrl = letterSrc?.seal_left_url ?? null;
+  const sealRightUrl = letterSrc?.seal_right_url ?? null;
   // EVERY STATIC LINE TYPES (owner request). The template default reads
   // until the officer types the line; a cleared line drops its override.
   // Overrides ride flat `sheet_*` scalars in type_specific (server-safe:
@@ -247,10 +268,11 @@ export default function ReportSheetBody({
         ariaLabel={typeof fb === 'string' ? fb : k}
       />
     ) : (fb);
-  // The signing official: a per-report override, then the report's own noting
-  // official, then the station default — never a blank line on the paper.
-  const stationNoted = typeof stationHeader?.noted_by === 'string' ? stationHeader.noted_by.trim() : '';
-  const notedName = st('noted name', String(report.noted_by_name || '').trim() || stationNoted || NOTED_BY_NAME);
+  // The signing official — ALWAYS "DEXTER MALEZA CALACAR" on every printed
+  // incident report (owner request). Fixed by the station, not per-report
+  // data and not the station setting, so no override chain: drafts and
+  // finalized reports alike carry the same footer. Never a blank line.
+  const notedName = NOTED_BY_NAME;
   // Task 9 — a draft under review brings the model's own Suspect sentence for
   // each respondent row it described; the facts block draws it in place of the
   // record's composed line. A tighten carries none: it rewrites the officer's
@@ -566,6 +588,44 @@ export default function ReportSheetBody({
   // instead; clearing it re-seeds from the composed letter on the next edit.
   const [seed, setSeed] = useState(null);
   const seedRef = useRef(null);
+  const bodyRef = useRef(null);
+  const spacerRef = useRef(null);
+  // Dynamic fill (owner request): a short report still fits the whole
+  // sheet — the slack between the leaf's floor and the signature block
+  // becomes one measured gap, never exaggerated, and a full report
+  // measures no slack so nothing is added. offsetHeight reads layout
+  // pixels, so preview zoom never skews the math; any host that is not a
+  // full leaf measures no slack and the spacer stays out.
+  //
+  // Loop-proof by construction: the height is written straight to the
+  // spacer's DOM node and NO React state is set, so this can never feed a
+  // render loop (a state fill re-rendered the sheet, re-measured, and fed
+  // itself under the finalize preview — "Maximum update depth exceeded").
+  // Writes are idempotent (the same slack writes the same pixels), so the
+  // observer below reaches its fixed point and goes quiet.
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    const host = body?.parentElement;
+    const sp = spacerRef.current;
+    if (!body || !host || !sp) return undefined;
+    const measure = () => {
+      const prevH = sp.style.height;
+      sp.style.height = '0px';
+      const cs = getComputedStyle(host);
+      const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      const slack = host.offsetHeight - pad - body.offsetHeight;
+      const px = slack > 1 ? Math.floor(slack) : 0;
+      const next = px > 0 ? `${px}px` : '';
+      if (prevH !== next) sp.style.height = next;
+      else if (sp.style.height !== prevH) sp.style.height = prevH;
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(host);
+    ro.observe(body);
+    return () => ro.disconnect();
+  });
   useEffect(() => {
     if (!freeEdit) {
       setSeed(null);
@@ -754,7 +814,7 @@ export default function ReportSheetBody({
                 <span className="pr-fact-value">
                   <WordField
                     className="pr-edit--inline pr-edit--grow"
-                    value={`Around ${fmtIncidentLong(report.incident_datetime)}`}
+                    value={`Around ${fmtIncidentWhen(report)}`}
                     onChange={commitIncidentDateTime}
                     ariaLabel="Date and time of incident — type 21/10/2026 09:40 pm"
                     placeholder="Around 21/10/2026 09:40 pm"
@@ -937,7 +997,7 @@ export default function ReportSheetBody({
         ) : narrativeRich ? (
           <div
             className="pr-narrative-html"
-            dangerouslySetInnerHTML={{ __html: correctNagaPlaceLinesHtml(sanitizeRichHtml(stripRedundantSheetHeaderHtml(narrativeRaw, sheetTitle))) }}
+            dangerouslySetInnerHTML={{ __html: emphasizeIssuanceRequestorHtml(correctNagaPlaceLinesHtml(sanitizeRichHtml(stripRedundantSheetHeaderHtml(narrativeRaw, sheetTitle)))) }}
           />
         ) : (
           <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(narrativeText); })()}</span>
@@ -1079,14 +1139,46 @@ export default function ReportSheetBody({
   );
 
   // The sheet body is built with `val`, which is what fills `slotAcc`.
+  // The letterhead block: the freed document Station Settings saved when one
+  // is on file (seals + style included), else the composed seven lines with
+  // the bundled seals. Either way the office-code row below stays composed.
+  const letterSeals = (slot) => {
+    if (letterStyle.seals === 'stacked') return slot === 'top' ? ['left', 'right'] : [];
+    if (letterStyle.seals === 'swapped') return slot === 'left' ? ['right'] : slot === 'right' ? ['left'] : [];
+    return slot === 'left' ? ['left'] : slot === 'right' ? ['right'] : [];
+  };
+  const letterSealImg = (side) => (
+    <SealImg
+      key={side}
+      url={side === 'left' ? sealLeftUrl : sealRightUrl}
+      fallback={side === 'left' ? pnpLogo : citySeal}
+      alt={side === 'left' ? 'PNP seal' : 'City of Naga Police Station seal'}
+      className={side === 'left' ? 'pr-code-logo' : 'pr-seal'}
+    />
+  );
   const body = (
     <>
-      {/* ---- Agency header: station seal (upper LEFT, 1x1, with the bold
-           Arial "NCPS-INVEST" code beneath it) + org block, RP seal on the
-           right. CHROME — rendered immediately, never typed. ---- */}
-      <header className="pr-head">
+      {/* ---- Agency header: the saved letterhead when Station Settings holds
+           a freed document, else the composed lines. CHROME — rendered
+           immediately, never typed. ---- */}
+      {hasFreedDoc ? (
+        <header className="pr-head pr-head--doc" style={letterCss}>
+          {letterSeals('top').length > 0 && (
+            <div className="pr-doc-top">{letterSeals('top').map(letterSealImg)}</div>
+          )}
+          <div className="pr-doc-row">
+            <div className="pr-head-left">{letterSeals('left').map(letterSealImg)}</div>
+            <div
+              className="pr-org pr-doc"
+              dangerouslySetInnerHTML={{ __html: sanitizeLetterHtml(freedDoc) }}
+            />
+            <div className="pr-head-right">{letterSeals('right').map(letterSealImg)}</div>
+          </div>
+        </header>
+      ) : (
+      <header className="pr-head" style={letterCss}>
         <div className="pr-head-left">
-          <img className="pr-code-logo" src={pnpLogo} alt="PNP seal" />
+          <SealImg url={sealLeftUrl} fallback={pnpLogo} alt="PNP seal" className="pr-code-logo" />
         </div>
         <div className="pr-org">
           {CL('head agency', head.agency)}
@@ -1101,35 +1193,26 @@ export default function ReportSheetBody({
           <br />
           {CL('head station location', head.station_location)}
         </div>
-        <img
-          className="pr-seal"
-          src={citySeal}
-          alt="City of Naga Police Station seal"
-        />
+        <SealImg url={sealRightUrl} fallback={citySeal} alt="City of Naga Police Station seal" className="pr-seal" />
       </header>
+      )}
 
       {midHost}
 
-      {/* ---- Signature block: Recorded by / IOC / Noted by. The labels type
-           like every other line. Recorded by is the report's own creator
-           (report.created_by_name) — never the viewing account; Noted by
-           resolves per-report, then the station default (see notedName above). ---- */}
+      {/* Dynamic fill (owner request): the measured slack before the
+          signatures, so a short report still fits the whole sheet. Zero
+          when the report already fills the leaf. */}
+      <div ref={spacerRef} className="pr-fill" aria-hidden="true" />
+
+      {/* ---- Signature block: ALWAYS "Noted by: DEXTER MALEZA CALACAR" on
+           every incident's sheet (owner request). Not editable, not
+           overridable — the same footer on drafts and finalized reports. ---- */}
       <div className="pr-footer-block">
         {/* Recorded by / IOC hidden by owner request (2026-11-02): kept in
             code but not rendered on any incident's sheet. */}
         <div className="pr-noted">
           <span className="pr-noted-label">{CL('noted label', "Noted by:")}</span>
-          <span className="pr-noted-name">
-            {chromeEdit ? (
-              <SheetText
-                ts={ts}
-                textKey="noted name"
-                fallback={notedName}
-                onEditChrome={onEditChrome}
-                ariaLabel="Noted by"
-              />
-            ) : notedName}
-          </span>
+          <span className="pr-noted-name">{notedName}</span>
         </div>
       </div>
 
@@ -1209,6 +1292,7 @@ export default function ReportSheetBody({
   // the printed page) behaves exactly as before.
   return (
     <div
+      ref={bodyRef}
       className={`pr-sheet-body${typing && !done ? ' pr-sheet-typing' : ''}`}
       onClick={typing && !done ? skip : undefined}
       title={typing && !done ? 'Click to show the whole draft' : undefined}

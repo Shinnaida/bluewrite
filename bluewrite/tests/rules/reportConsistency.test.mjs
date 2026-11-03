@@ -80,8 +80,11 @@ const CASES = [
 test('every incident type keeps every source word exactly once', () => {
   for (const { name, source } of CASES) {
     // The sheet prints the place label short ("Place:", owner request), so
-    // the long source label reads two words lighter on the paper.
-    const expected = String(source).replace(/PLACE OF INCIDENT/gi, 'Place');
+    // the long source label reads two words lighter on the paper — and the
+    // Time/Date line spells its numeric date in words (owner request).
+    const expected = String(source)
+      .replace(/PLACE OF INCIDENT/gi, 'Place')
+      .replace('MORE OR LESS 8:40 AM OF 10-20-26', 'MORE OR LESS 8:40 AM OF October 20, 2026');
     assert.deepEqual(
       words(reportHtmlToPlain(render(source))),
       words(expected),
@@ -191,6 +194,51 @@ test('a long narrative is kept whole, in its own paragraphs', () => {
   assert.ok(html.includes('</p><p>'), 'the source paragraph break was lost');
 });
 
+test('field blocks breathe at four boundaries, nowhere else', () => {
+  // Owner request: one blank-line separator after Time/Date, before Facts,
+  // before Remarks and after Recorded-by — in both Arrange Only and
+  // Enhance Wording, which share the formatter. One per boundary even
+  // when two rules meet there, and never a leading or trailing blank.
+  const out = render(TRAFFIC);
+  assert.ok(
+    out.includes('OF October 20, 2026</p><p><br></p><p>'),
+    'no breathing room after Time/Date',
+  );
+  assert.ok(out.includes('<p><br></p><p><b>FACTS:'), 'no breathing room before Facts');
+  assert.ok(out.includes('<p><br></p><p><b>REMARKS:'), 'no breathing room before Remarks');
+  assert.ok(
+    out.includes('HONEY</p><p><br></p><p>This certification'),
+    'no breathing room after Recorded-by',
+  );
+  for (const { name, source } of CASES) {
+    const body = render(source);
+    assert.ok(!body.startsWith('<p><br></p>'), name + ': a blank line leads the report');
+    assert.ok(!body.endsWith('<p><br></p>'), name + ': a blank line trails the report');
+    assert.ok(!body.includes('<p><br></p><p><br></p>'), name + ': a doubled blank line');
+  }
+  // A single space after the VEHICLES INVOLVED heading (owner request): the
+  // bare label stands on its own paragraph and the rows open the next one.
+  assert.ok(
+    render(TRAFFIC).includes('VEHICLES INVOLVED:</b></p><p>'),
+    'no space after the vehicles-involved heading',
+  );
+});
+
+test('the facts content opens indented', () => {
+  // Owner request: every facts paragraph opens with the indent — in both
+  // modes, since Arrange Only and Enhance Wording share the formatter.
+  assert.ok(
+    render(TRAFFIC).includes('<b>FACTS:</b><br>\u2003\u2003INVESTIGATION REVEALED'),
+    'facts content not indented after its label',
+  );
+  assert.ok(
+    formatIncidentReportHtml(TRAFFIC, { sentenceCase: true }).includes(
+      '<b>Facts:</b><br>\u2003\u2003Investigation revealed',
+    ),
+    'arranged facts content not indented after its label',
+  );
+});
+
 test('a certification statement ends the report and is never duplicated', () => {
   const html = render(TRAFFIC);
   const at = html.indexOf('This certification is issued upon the request of');
@@ -235,7 +283,11 @@ test('a wrapped vehicle row keeps every detail with its own vehicle', () => {
   // covered by generateReportModes.)
   assert.deepEqual(
     words(reportHtmlToPlain(render(source))),
-    words(String(source).replace(/PLACE OF INCIDENT/gi, 'Place')),
+    words(
+      String(source)
+        .replace(/PLACE OF INCIDENT/gi, 'Place')
+        .replace('MORE OR LESS 8:40 AM OF 10-20-26', 'MORE OR LESS 8:40 AM OF October 20, 2026'),
+    ),
     'the fix added, dropped or reworded a word',
   );
 });

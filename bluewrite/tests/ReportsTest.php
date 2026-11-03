@@ -63,7 +63,14 @@ final class ReportsTest extends BaseApiTestCase
         $this->assertSame(422, $res['status']);
     }
 
-    public function testCreateReportRejectsMissingLocation(): void
+    /**
+     * Owner request (2026-11-03): completeness never blocks — bypassed, not
+     * deleted. Creating with a blank place of incident succeeds (the finalize
+     * confirm creates first, so this is the same gate that 422'd the
+     * finalize button). The blank stores as '' and the row still gets its
+     * id, so the BW number and the sheet render exactly as before.
+     */
+    public function testCreateReportSucceedsWithABlankLocation(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');
         $res = $this->request('POST', '/reports', [
@@ -72,8 +79,35 @@ final class ReportsTest extends BaseApiTestCase
             'location' => '',
             'narrative' => 'n',
         ], $cookie, $csrf);
-        $this->assertSame(422, $res['status']);
-        $this->assertArrayHasKey('fields', $res['body']);
+        $this->assertSame(201, $res['status'], json_encode($res['body']));
+        $id = (int) ($res['body']['report']['id'] ?? 0);
+        $this->assertGreaterThan(0, $id, 'the blank report still gets its id');
+        $stored = $this->db()->query("SELECT location FROM bluewrite_test.reports WHERE id = {$id}")->fetchColumn();
+        $this->assertSame('', (string) $stored);
+    }
+
+    /**
+     * Same bypass for the other two identity fields: a blank type stores ''
+     * (the column is NOT NULL) and a blank date stores NULL (the DATE column
+     * is NULLable — never '' and never a fabricated day).
+     */
+    public function testCreateReportSucceedsWithABlankTypeAndDate(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $res = $this->request('POST', '/reports', [
+            'incident_type' => '',
+            'location' => 'Test Location',
+            'narrative' => 'n',
+        ], $cookie, $csrf);
+        $this->assertSame(201, $res['status'], json_encode($res['body']));
+        $id = (int) ($res['body']['report']['id'] ?? 0);
+        $this->assertGreaterThan(0, $id, 'the blank report still gets its id');
+        $row = $this->db()->query(
+            "SELECT incident_type, incident_date, incident_datetime FROM bluewrite_test.reports WHERE id = {$id}"
+        )->fetch(\PDO::FETCH_ASSOC);
+        $this->assertSame('', (string) $row['incident_type']);
+        $this->assertNull($row['incident_date']);
+        $this->assertNotEmpty($row['incident_datetime'], 'the sortable key is always derived');
     }
 
     public function testCreateReportRejectsInvalidDatetime(): void
@@ -88,63 +122,49 @@ final class ReportsTest extends BaseApiTestCase
         $this->assertSame(422, $res['status']);
     }
 
-    public function testFinalizeRequiresNarrative(): void
+    /**
+     * Owner request (2026-11-02): completeness never blocks — bypassed, not
+     * deleted. Finalizing with a blank narrative succeeds; the rule engine
+     * still reports the gap, but no gate refuses it.
+     */
+    public function testFinalizeSucceedsWithABlankNarrative(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');
         $report = $this->createReport($cookie, $csrf, ['narrative' => '']);
 
         $res = $this->patchReport($cookie, $csrf, (int) $report['id'], ['status' => 'finalized']);
-        $this->assertSame(422, $res['status']);
-        $this->assertStringContainsString('narrative', $res['body']['error']);
+        $this->assertSame(200, $res['status'], json_encode($res['body']));
     }
 
     /**
-     * Migration 004: a report may not be finalized without an Action Taken /
-     * Status. The rule is enforced server-side too (the form is only the
-     * first gate).
+     * Owner request (2026-11-02): completeness never blocks. Finalizing with
+     * a blank Action Taken / Status succeeds.
      */
-    public function testFinalizeRequiresActionTaken(): void
+    public function testFinalizeSucceedsWithABlankActionTaken(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');
         $report = $this->createReport($cookie, $csrf, ['action_taken' => '']);
 
         $res = $this->patchReport($cookie, $csrf, (int) $report['id'], ['status' => 'finalized']);
-        $this->assertSame(422, $res['status']);
-        $this->assertStringContainsString('action taken', strtolower((string) ($res['body']['error'] ?? '')));
-
-        // Supplying it in the same PATCH finalizes cleanly.
-        $ok = $this->patchReport($cookie, $csrf, (int) $report['id'], [
-            'status' => 'finalized',
-            'action_taken' => 'Subject turned over to the station for proper disposition.',
-        ]);
-        $this->assertSame(200, $ok['status']);
+        $this->assertSame(200, $res['status'], json_encode($res['body']));
     }
 
-    /** Migration 004: the IOC name is required to finalize as well. */
-    public function testFinalizeRequiresIoc(): void
+    /** Owner request (2026-11-02): completeness never blocks — a blank IOC finalizes. */
+    public function testFinalizeSucceedsWithABlankIoc(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');
         $report = $this->createReport($cookie, $csrf, ['ioc_name' => '']);
 
         $res = $this->patchReport($cookie, $csrf, (int) $report['id'], ['status' => 'finalized']);
-        $this->assertSame(422, $res['status']);
-        $this->assertStringContainsString('investigator-on-case', strtolower((string) ($res['body']['error'] ?? '')));
-
-        $ok = $this->patchReport($cookie, $csrf, (int) $report['id'], [
-            'status' => 'finalized',
-            'ioc_name' => 'Sgt. Test Investigator',
-        ]);
-        $this->assertSame(200, $ok['status']);
+        $this->assertSame(200, $res['status'], json_encode($res['body']));
     }
 
     /**
-     * The incident's OWN kind has to be recorded before it can be submitted.
-     * ReportRules::TYPE_RULES mirrors `required` on TYPE_FIELDS in
-     * src/lib/incidentTypes.js — the shape of the list is pinned there by
-     * tests/rules/reportRules.test.mjs, and this proves the API enforces it too:
-     * the form is only the first gate.
+     * Owner request (2026-11-02): completeness never blocks — a half-written
+     * blob finalizes. The mirror still derives Owner of Property from the
+     * victim row when the fields ARE supplied.
      */
-    public function testFinalizeRequiresTheIncidentTypesOwnFields(): void
+    public function testFinalizeSucceedsWithAHalfWrittenBlob(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');
         $report = $this->createReport($cookie, $csrf, [
@@ -157,18 +177,25 @@ final class ReportsTest extends BaseApiTestCase
         $this->assertSame(200, $saved['status'], json_encode($saved['body']));
 
         $res = $this->patchReport($cookie, $csrf, $id, ['status' => 'finalized']);
-        $this->assertSame(422, $res['status']);
-        $details = implode(' | ', (array) ($res['body']['details'] ?? []));
-        $this->assertStringContainsString('item_stolen', $details, $details);
-        $this->assertStringContainsString('how_property_was_taken', $details, $details);
-        // Owner of Property is NOT one of the things demanded here: the Victims
-        // row the officer already recorded carries it (it is derived from
-        // complainant[0].name — see ReportRules::MIRRORS), so the report cannot
-        // be told to say the same thing twice.
-        $this->assertStringNotContainsString('owner_of_property', $details, $details);
+        $this->assertSame(200, $res['status'], json_encode($res['body']));
+    }
 
-        // Supplying them in the same PATCH finalizes cleanly — and the owner is
-        // still on the record, because the victim's name fills it in.
+    /**
+     * The flat scalars the v3 groups superseded are still DERIVED on write,
+     * so a client that sends only the group rows produces a report the
+     * printed sheet can read — and the officer is never asked the same
+     * question twice.
+     */
+    public function testSuppliedFieldsStillRecordAndDeriveTheOwner(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $report = $this->createReport($cookie, $csrf, [
+            'type_specific' => ['complainant' => [['name' => 'Ana Cruz']]],
+        ]);
+        $id = (int) $report['id'];
+
+        // Supplying the fields in the same PATCH finalizes cleanly — and the
+        // owner is still on the record, because the victim's name fills it in.
         $ok = $this->patchReport($cookie, $csrf, $id, [
             'status' => 'finalized',
             'type_specific' => [
@@ -271,11 +298,11 @@ final class ReportsTest extends BaseApiTestCase
     }
 
     /**
-     * A row in a group is a record, not a placeholder: a victim with no name is
-     * caught (and an UNIDENTIFIED suspect stays recordable by description —
-     * covered on the JS side, where the shapes are pinned).
+     * Owner request (2026-11-02): completeness never blocks — a victim row
+     * with no name finalizes. (Shape violations still refuse; covered on the
+     * JS side, where the shapes are pinned.)
      */
-    public function testARecordedGroupRowMustBeARecord(): void
+    public function testFinalizeSucceedsWithANamelessVictimRow(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');
         $report = $this->createReport($cookie, $csrf, [
@@ -288,20 +315,16 @@ final class ReportsTest extends BaseApiTestCase
         ]);
 
         $res = $this->patchReport($cookie, $csrf, (int) $report['id'], ['status' => 'finalized']);
-        $this->assertSame(422, $res['status']);
-        $details = implode(' | ', (array) ($res['body']['details'] ?? []));
-        $this->assertStringContainsStringIgnoringCase('name required', $details, $details);
+        $this->assertSame(200, $res['status'], json_encode($res['body']));
     }
 
     /**
-     * A suspect nobody can name is still a person the report has to DESCRIBE.
-     *
-     * Once the identity is Unknown the name is not on the form, so the server
-     * cannot accept a name as the row's content either — and must refuse a row
-     * that answered "Unknown" and stopped there. Mirrors
-     * GROUP_ROW_RULES.requireAnyWhen in src/lib/incidentTypes.js.
+     * Owner request (2026-11-02): completeness never blocks — an undescribed
+     * unidentified suspect finalizes. The storage rule stands: a name the
+     * form never asked for is still stripped from an unidentified row.
+     * Mirrors GROUP_ROW_RULES.requireAnyWhen in src/lib/incidentTypes.js.
      */
-    public function testAnUnidentifiedSuspectMustBeDescribedNotNamed(): void
+    public function testFinalizeSucceedsForAnUndescribedUnidentifiedSuspect(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');
         $base = [
@@ -311,14 +334,13 @@ final class ReportsTest extends BaseApiTestCase
             'complainant' => [['name' => 'Ana Cruz']],
         ];
 
-        // Unknown, and nothing else: a status is not a description.
+        // Unknown, and nothing else: a status is not a description — and under
+        // the bypass it finalizes anyway.
         $bare = $this->createReport($cookie, $csrf, [
             'type_specific' => $base + ['respondent' => [['suspect_status' => 'Unidentified']]],
         ]);
         $bareRes = $this->patchReport($cookie, $csrf, (int) $bare['id'], ['status' => 'finalized']);
-        $this->assertSame(422, $bareRes['status']);
-        $details = implode(' | ', (array) ($bareRes['body']['details'] ?? []));
-        $this->assertStringContainsStringIgnoringCase('description of the person', $details, $details);
+        $this->assertSame(200, $bareRes['status'], json_encode($bareRes['body']));
 
         // Unknown WITH one descriptive detail is a record — and the name it
         // arrived with is not stored beside it.
@@ -342,8 +364,9 @@ final class ReportsTest extends BaseApiTestCase
         $ok = $this->patchReport($cookie, $csrf, (int) $described['id'], ['status' => 'finalized']);
         $this->assertSame(200, $ok['status'], json_encode($ok['body']));
 
-        // A name alone, while the identity is Unknown, is not a way out: the
-        // field is not on screen for that row.
+        // A name alone, while the identity is Unknown, finalizes too under
+        // the bypass — the field is not on screen for that row, so the name
+        // is stripped on the way in (asserted for the described row above).
         $named = $this->createReport($cookie, $csrf, [
             'type_specific' => $base + ['respondent' => [[
                 'suspect_status' => 'Unidentified',
@@ -351,7 +374,7 @@ final class ReportsTest extends BaseApiTestCase
             ]]],
         ]);
         $namedRes = $this->patchReport($cookie, $csrf, (int) $named['id'], ['status' => 'finalized']);
-        $this->assertSame(422, $namedRes['status']);
+        $this->assertSame(200, $namedRes['status'], json_encode($namedRes['body']));
 
         // Known, with a name: the ordinary case, unchanged.
         $known = $this->createReport($cookie, $csrf, [

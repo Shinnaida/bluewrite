@@ -200,3 +200,39 @@ export function correctNagaPlaceLinesHtml(html) {
     return fixed.text === value ? match : lead + head + fixed.text;
   });
 }
+
+// Certification issuance emphasis (owner request): a stored-HTML narrative
+// that carries the blotter's closing line still names its requestor plainly
+// (`... upon the request of "I Love You" for what ever ...`), so the paper
+// dresses the name at render — bold, ALL CAPS and underlined — while the
+// record keeps exactly what the officer wrote. Runs on sanitized html, so
+// the match can never span a tag; entities inside a name are preserved
+// byte-for-byte (only the letter runs are upper-cased). Idempotent: a
+// dressed name carries tags, which the name run excludes, so a second pass
+// changes nothing.
+const ISSUANCE_HTML =
+  /(upon the request of\s*)((?:"|&quot;|“|”)?)([^"“”<>]+?)((?:"|&quot;|“|”)?)(\s+for\s+what\s*ever\s+legal\s+purposes?\s+it\s+may\s+serve\.?)/gi;
+
+/**
+ * Dress the issuance line's requestor name in formatter-style html for the
+ * sheet: `"I Love You"` → `"<b><u>I LOVE YOU</u></b>"`. Plain narratives
+ * never reach here (they render as text); formatter output already carries
+ * its own ink and passes through unchanged.
+ *
+ * @param {unknown} html sanitized narrative html
+ * @returns {string}
+ */
+export function emphasizeIssuanceRequestorHtml(html) {
+  const src = String(html ?? '');
+  if (src === '' || !/upon the request of/i.test(src)) return src;
+  return src.replace(ISSUANCE_HTML, (match, pre, openQ, name, closeQ, post) => {
+    const clean = String(name ?? '').trim();
+    if (clean === '' || /<|>|&lt;|&gt;/.test(clean)) return match;
+    const upper = clean.replace(/&(?:#\d+|#x[0-9a-fA-F]+|[a-zA-Z]+);|[^&]+/g, (chunk) =>
+      chunk.startsWith('&') ? chunk : chunk.toUpperCase(),
+    );
+    const open = openQ !== '' ? openQ : (closeQ !== '' ? '"' : '');
+    const close = closeQ !== '' ? closeQ : (openQ !== '' ? '"' : '');
+    return `${pre}${open}<b><u>${upper}</u></b>${close}${post}`;
+  });
+}

@@ -37,8 +37,12 @@ DATES AND TIMES
   "last night" is the evening before TODAY unless the account says otherwise.
   Return incidentDatetime as YYYY-MM-DDTHH:MM in 24-hour time. Return an empty
   string when the account states no date, or no time, or neither — a date with
-  no time is NOT 00:00. Set timeApproximate true when the account hedges ("mga
-  alas otso", "around 8:00", "more or less 8:40 AM", "bandang gabi").
+  no time is NOT 00:00. Return incidentDate as YYYY-MM-DD whenever the account
+  states a calendar date, WITH or WITHOUT a clock time: a date with no time
+  still fills the report's date and only the time stays empty. Return an empty
+  string for incidentDate only when the account states no date at all. Set
+  timeApproximate true when the account hedges ("mga alas otso", "around
+  8:00", "more or less 8:40 AM", "bandang gabi", "around October 10").
 
   A blotter-style account carries TWO times and only one of them is the
   incident's: the logbook head ("10-20-26 10:00 AM RECKLESS IMPRUDENCE ...

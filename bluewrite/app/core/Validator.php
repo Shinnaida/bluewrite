@@ -44,6 +44,30 @@ final class Validator
         }
     }
 
+    /**
+     * Completeness bypass: forget refusals caused by BLANK values on the
+     * report's own identity fields, so a write with empty fields is not
+     * refused. Anything else stands — a malformed supplied value, and every
+     * other field's own rules, refuse exactly as before. Only emptiness is
+     * excused, and only where emptiness is the whole complaint.
+     */
+    public function dropBlankValueErrors(array $body): void
+    {
+        foreach (['incident_type', 'incident_types', 'incident_datetime', 'location'] as $field) {
+            // Absent or null is blank too: the API and older clients omit
+            // keys the officer never touched (JSON drops undefined), and a
+            // missing value is exactly what must not refuse the write.
+            if (!array_key_exists($field, $body) || $body[$field] === null) {
+                unset($this->errors[$field]);
+                continue;
+            }
+            $value = $body[$field];
+            if (is_string($value) && trim($value) === '') {
+                unset($this->errors[$field]);
+            }
+        }
+    }
+
     public function datetime(string $field, mixed $value, string $label): void
     {
         if (!is_string($value)) {
@@ -53,6 +77,12 @@ final class Validator
         $dt = \DateTime::createFromFormat('Y-m-d H:i:s', $value)
             ?: \DateTime::createFromFormat('Y-m-d\TH:i', $value)
             ?: \DateTime::createFromFormat('Y-m-d\TH:i:s', $value);
+        // A date with no recorded time (owner request): the report files a
+        // bare YYYY-MM-DD and the time stays unknown rather than refusing
+        // the save. Strict shape — trailing prose is not a date.
+        if ($dt === false && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1) {
+            $dt = \DateTime::createFromFormat('Y-m-d', $value);
+        }
         if ($dt === false) {
             $this->errors[$field] = "{$label} must be a valid date and time.";
         }

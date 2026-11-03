@@ -43,6 +43,27 @@ export function fmtLong(v) {
   return Number.isNaN(d.getTime()) ? String(v) : LONG_DATE.format(d);
 }
 
+// The incident's WHEN for the sheet: a recorded time prints with the date
+// (“Around 1:00 A.M., July 29, 2026”); a date with no recorded time prints
+// as the date alone — the sheet never invents a midnight. A bare stored
+// value (the date-only fill) and a composed midnight with no recorded time
+// both read as date-only; a real recorded midnight still prints its time.
+export function fmtIncidentWhen(report = {}) {
+  const dt = N(report.incident_datetime);
+  if (dt === '') {
+    const d = N(report.incident_date);
+    return d === '' ? '—' : fmtLong(d);
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dt)) return fmtLong(dt);
+  if (N(report.incident_time) === '') {
+    const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/.exec(dt);
+    if (m && m[2] === '00' && m[3] === '00' && (m[4] === undefined || m[4] === '00')) {
+      return fmtLong(m[1]);
+    }
+  }
+  return fmtIncidentLong(dt);
+}
+
 const N = (v) => String(v ?? '').trim();
 const has = (v) => N(v) !== '';
 const join = (...parts) => parts.map(N).filter(Boolean).join(', ');
@@ -318,7 +339,7 @@ export function buildTypeFacts(type, ctx) {
   const place = () => ({ label: 'Place', values: [has(report.location) ? correctNagaLocation(report.location).text : '—'] });
   const when = () => ({
     label: 'Date & Time of Incident',
-    values: [fmtIncidentLong(report.incident_datetime)],
+    values: [fmtIncidentWhen(report)],
   });
   // Task 7 — the scanned sheet's "Date of Discovery" line, when the officer
   // recorded one (it is distinct from the incident date). Formatted like every
@@ -442,7 +463,7 @@ export function buildTypeFacts(type, ctx) {
           label: 'Name of Missing Person',
           values: [personLine(mp) || join(ts.missing_person_name, ts.age, ts.sex) || '—'],
         },
-        { label: 'Last Seen', values: [lastSeen || `Around ${fmtIncidentLong(report.incident_datetime)}, ${has(report.location) ? conclusive(report.location) : '—'}`] },
+        { label: 'Last Seen', values: [lastSeen || `Around ${fmtIncidentWhen(report)}, ${has(report.location) ? conclusive(report.location) : '—'}`] },
         { label: 'Reporting Person', values: victims().length > 0 ? victims() : ['—'] },
         { label: 'Circumstances', values: [N(mp?.circumstances) || '—'] },
         { label: 'Distinguishing Marks/Clothing', values: [join(mp?.clothing_last_seen, mp?.physical_description) || join(ts.clothing_last_seen, ts.physical_description) || '—'] },
@@ -462,7 +483,7 @@ export function buildTypeFacts(type, ctx) {
           values: [
             join(conclusive(ts.location_last_seen), join(ts.date_last_seen, ts.time_last_seen)
               ? `${fmtLong(ts.date_last_seen)} ${fmtTimeOnly(ts.time_last_seen)}`.trim()
-              : '') || `Around ${fmtIncidentLong(report.incident_datetime)}, ${has(report.location) ? conclusive(report.location) : '—'}`,
+              : '') || `Around ${fmtIncidentWhen(report)}, ${has(report.location) ? conclusive(report.location) : '—'}`,
           ],
         },
         { label: 'Circumstances', values: [N(ts.circumstances_of_loss) || '—'] },

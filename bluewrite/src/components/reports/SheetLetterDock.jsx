@@ -48,6 +48,7 @@ export default function SheetLetterDock({
             report={sheet.report}
             ts={sheet.ts}
             stationHeader={sheet.stationHeader}
+            stationLetter={sheet.stationLetter ?? sheet.stationHeader ?? null}
             pending={pending}
             editable={editable}
             onEditNarrative={onEditNarrative}

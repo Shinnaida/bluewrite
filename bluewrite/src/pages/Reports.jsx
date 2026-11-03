@@ -131,7 +131,8 @@ import { stripLeadingBlotterRestatement } from '../lib/narrativeText.js';
 // The station's letterhead, for the sheet format's page. Same module the printed
 // sheet reads its header through, so the page you write on and the page that
 // prints carry the same lines.
-import { resolveHeader } from '../lib/stationSettings.js';
+import { resolveHeader, resolveLetterheadStyle, letterheadCss } from '../lib/stationSettings.js';
+import SealImg from '../components/reports/SealImg.jsx';
 // The path → control-id scheme, shared with the review step's second copy of a
 // field (see the module: two mounted copies per field is the whole reason it
 // exists). REVIEW_FIELD_PREFIX is the string those copies carry.
@@ -144,6 +145,7 @@ import {
   groupKeyVariants,
   incidentDatePart,
   incidentTimePart,
+  storedIncidentDatetime,
   reviewFieldId,
   reviewRowForPath,
   reviewRowValueId,
@@ -154,6 +156,7 @@ import RepeatableGroup from '../components/reports/RepeatableGroup.jsx';
 import RichTextArea from '../components/reports/RichTextArea.jsx';
 import SheetToolBox from '../components/reports/SheetToolBox.jsx';
 import BlotterCapture from '../components/reports/BlotterCapture.jsx';
+import Folder from '../components/reports/Folder.jsx';
 import { mergeBlotterText } from '../lib/blotterText.js';
 // Every option list on this screen: the two typeable boxes (the incident type
 // and the reporting party's capacity) and each per-type dropdown. Drawn rather
@@ -748,6 +751,13 @@ function scrollToSection(step) {
   for (const card of cards) flashTarget(card);
   cards[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+// Owner request (2026-11-02): completeness never blocks and never nags —
+// bypassed, not deleted. The rules still exist and still compute, but every
+// gate is bypassed: blanks never stop a save, a Generate or a Finalize, and
+// no problems banner or required-field error is raised. Set false to restore
+// refusal.
+const BYPASS_COMPLETENESS_GATES = true;
 
 function validate(r) {
   const errs = {};
@@ -2552,9 +2562,21 @@ export function ReportEditor({
   // with the selector when the language became detected. Nothing reads it now.
   recentReports = null,
   stationHeader = null,
+  // The full letterhead Station Settings saves (freed doc, style, seals).
+  // Shell passes it beside stationHeader; older callers pass nothing and the
+  // sheet falls back to the composed lines.
+  stationLetter = null,
+  // Jump to another draft (the register's own opener). The Phone files folder
+  // lists waiting phone drafts beside this report's files; picking one lands
+  // there. Null hides that jump — the folder then shows this report alone.
+  onOpenDraft = null,
 }) {
   const typeOptions = incidentTypes && incidentTypes.length > 0 ? incidentTypes : TYPES;
-  const letterhead = resolveHeader(stationHeader);
+  const letterSrc = stationLetter ?? null;
+  const letterHeadSrc = letterSrc && typeof letterSrc.header === 'object' ? letterSrc.header : stationHeader;
+  const letterhead = resolveHeader(letterHeadSrc);
+  const freedLetterDoc = letterSrc && typeof letterSrc.letterhead_html === 'string' ? letterSrc.letterhead_html.trim() : '';
+  const hasFreedLetterDoc = freedLetterDoc !== '';
   // For a new report, start with the empty form immediately; for an existing
   // one, null until fetched. (Starting null for BOTH would crash the first
   // render — effects run after render, so the new-report path must be ready.)
@@ -2910,9 +2932,7 @@ export function ReportEditor({
           ...r,
           incident_type: LEGACY_TYPE_MAP[r.incident_type] ?? r.incident_type,
           type_specific: ts,
-          incident_datetime: r.incident_datetime
-            ? String(r.incident_datetime).slice(0, 16).replace(' ', 'T')
-            : '',
+          incident_datetime: storedIncidentDatetime(r),
         });
         // Captures ride the same read — and the first one still waiting pops
         // the blotter dialog by itself (owner request: opening the draft IS
@@ -2941,6 +2961,125 @@ export function ReportEditor({
       alive = false;
     };
   }, [reportId]);
+
+  // Live captures: a phone send lands on the server while this draft is open
+  // (or finishes uploading seconds after the phone's draft is opened), so the
+  // capture inventory is re-read every few seconds. New arrivals drop into
+  // the Phone files folder with no reload; reviewing one stays a click.
+  useEffect(() => {
+    if (reportId === null) return undefined;
+    let alive = true;
+    const tick = async () => {
+      if (!alive || document.hidden) return;
+      try {
+        const d = await api(`/reports/${reportId}/captures`);
+        if (!alive) return;
+        const list = Array.isArray(d.captures) ? d.captures : [];
+        setCaptures((prev) => {
+          const a = Array.isArray(prev) ? prev : [];
+          if (a.length === list.length && a.every((c, i) => c && list[i] && c.id === list[i].id)) return a;
+          return list;
+        });
+      } catch {
+        // offline or gone — stay quiet, try again next tick
+      }
+    };
+    const iv = setInterval(tick, 8000);
+    return () => {
+      alive = false;
+      clearInterval(iv);
+    };
+  }, [reportId]);
+
+  // Phone arrivals in the folder: a phone send files as its OWN draft, so a
+  // send that lands while another report is open never touches this report's
+  // captures. The register names those waiting drafts (this officer's filings
+  // carrying captures), and each one's files ride in the Phone files folder
+  // beside this report's — opening one jumps to that draft, and a reviewed
+  // file (inserted, or its words already in the narrative) drops out.
+  const [arrivals, setArrivals] = useState([]); // [{ reportId, captures }]
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      if (!alive || document.hidden) return;
+      let list;
+      try {
+        list = await api('/reports?per_page=10');
+      } catch {
+        return; // offline — stay quiet, try again next tick
+      }
+      if (!alive) return;
+      const rows = Array.isArray(list?.reports) ? list.reports : [];
+      const waiting = rows
+        .filter((r) =>
+          Number(r.id) !== Number(reportId) &&
+          Number(r.created_by) === Number(user.id) &&
+          Number(r.capture_count) > 0 &&
+          r.status !== 'finalized'
+        )
+        .slice(0, 3);
+      const out = [];
+      for (const r of waiting) {
+        try {
+          const d = await api(`/reports/${r.id}/captures`);
+          if (!alive) return;
+          const caps = Array.isArray(d.captures) ? d.captures : [];
+          if (caps.length > 0) out.push({ reportId: Number(r.id), captures: caps });
+        } catch {
+          // skip this one this tick — the next tick retries
+        }
+      }
+      if (alive) setArrivals(out);
+    };
+    tick();
+    const iv = setInterval(tick, 12000);
+    return () => {
+      alive = false;
+      clearInterval(iv);
+    };
+  }, [reportId, user.id]);
+
+  // A capture leaves the Phone files folder once it is reviewed: inserted
+  // this sitting, or its words already sitting in the narrative.
+  const captureEdited = (c) => {
+    if (!c) return true;
+    if ((insertedCaptures || []).includes(c.id)) return true;
+    const head = String(c.ocr_text || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+    if (head.length >= 20) {
+      const plain = String(draft?.narrative || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+      if (plain.includes(head)) return true;
+    }
+    return false;
+  };
+  const captureSnippet = (c) => String(c.ocr_text || '').trim().replace(/\s+/g, ' ').slice(0, 90);
+  // This report's files first, then waiting phone drafts' files — reviewed
+  // ones dropped from both, so editing a file removes it from the folder.
+  const folderItems = [
+    ...(Array.isArray(captures) ? captures : [])
+      .filter((c) => !captureEdited(c))
+      .map((c) => ({
+        id: `cur-${c.id}`,
+        badge: null,
+        title: `Capture ${c.id ?? ''}`.trim(),
+        description: captureSnippet(c),
+        image: c.photo_url || null,
+        capture: c,
+        arrivalId: null,
+      })),
+    ...arrivals.flatMap((a) =>
+      (Array.isArray(a.captures) ? a.captures : [])
+        .filter((c) => !captureEdited(c))
+        .map((c) => ({
+          id: `arr-${a.reportId}-${c.id}`,
+          badge: `Draft #${a.reportId}`,
+          title: `Capture ${c.id ?? ''}`.trim(),
+          description: captureSnippet(c),
+          image: c.photo_url || null,
+          capture: c,
+          arrivalId: a.reportId,
+        }))
+    ),
+  ];
 
   // ---- The automatic save path -------------------------------------------
   // ONE writer for every save the officer did not press: the exit flush and the
@@ -3557,9 +3696,14 @@ export function ReportEditor({
       // still blocked and nothing said why" is the confusion this line exists
       // to end. It is a REPORT, not a gate — the read has made its changes and
       // nothing here blocks or retries anything.
-      const stillNeeded = validateReport(draftRef.current ?? {}, 'finalize')
-        .errors.filter((e) => String(e.path ?? '').startsWith('type_specific.'))
-        .map((e) => e.message);
+      // Completeness bypass (see BYPASS_COMPLETENESS_GATES): nothing is
+      // "still needed" — with no gate left to satisfy, the needed list is
+      // empty by definition. The fill receipt (filled, unstated) is untouched.
+      const stillNeeded = BYPASS_COMPLETENESS_GATES
+        ? []
+        : validateReport(draftRef.current ?? {}, 'finalize')
+          .errors.filter((e) => String(e.path ?? '').startsWith('type_specific.'))
+          .map((e) => e.message);
 
       return {
         ok: true,
@@ -3682,9 +3826,13 @@ export function ReportEditor({
   // stopped it or the server refused — so a caller that needs the save to have
   // happened (Print Slip reads the STORED copy) can wait for it.
   async function saveDraft() {
-    const errs = validate(draft);
-    setErrors(errs);
-    if (errs.incident_type || errs.incident_datetime || errs.location) return false;
+    // Completeness bypass (see BYPASS_COMPLETENESS_GATES): a draft saves with
+    // blanks — the three basics are reported, never required.
+    if (!BYPASS_COMPLETENESS_GATES) {
+      const errs = validate(draft);
+      setErrors(errs);
+      if (errs.incident_type || errs.incident_datetime || errs.location) return false;
+    }
     try {        const body = { ...draft, status: 'draft', narrative_source: narrativeSourceRef.current };
         if (editingId) {
           await api(`/reports/${editingId}`, { method: 'PATCH', body });
@@ -3821,6 +3969,16 @@ export function ReportEditor({
   // message for the same path — the rule set is the authority on anything it
   // covers, and this is only ever a gap it does not cover.
   function checkFullRules({ ignorePaths = [], extraErrors = null } = {}) {
+    // Completeness bypass (see BYPASS_COMPLETENESS_GATES): the report is
+    // reported clean without running the refusal — nothing is deleted, and
+    // the banner, the inline errors and the jump-to-field never fire.
+    if (BYPASS_COMPLETENESS_GATES) {
+      setErrors({});
+      setGroupErrors({});
+      setRuleWarnings(null);
+      setError(null);
+      return true;
+    }
     const { errors: ruleErrors, warnings: ruleWarnings } = validateReport(draft, 'finalize');
     const blocking = ruleErrors.filter((e) => !ignorePaths.includes(e.path));
     const errs = {};
@@ -4062,9 +4220,7 @@ export function ReportEditor({
                   ...r,
                   incident_type: canonicalType,
                   type_specific: ts,
-                  incident_datetime: r.incident_datetime
-                    ? String(r.incident_datetime).slice(0, 16).replace(' ', 'T')
-                    : '',
+                  incident_datetime: storedIncidentDatetime(r),
                 });
                 setLoading(false);
               })
@@ -4258,6 +4414,7 @@ export function ReportEditor({
         report: { ...(draft || {}), id: draft?.id ?? editingId },
         ts: inlineTs,
         stationHeader,
+        stationLetter: stationLetter ?? stationHeader,
       }}
       // Slim bar in the sheet format only (owner request, 2026-10-26): `sheet`
       // here is the FORMAT flag, not the panel's sheet object below — the bar
@@ -4872,14 +5029,26 @@ export function ReportEditor({
                 Outside the blank state's hiding rules deliberately: the
                 letterhead is not the form — it is the PAPER, and a stationery
                 sheet has it before anyone writes on it. */ }
-            {sheet && (
+            {sheet && (hasFreedLetterDoc ? (
+              <header className="ir-sheet-head ir-sheet-head--doc" style={letterheadCss(resolveLetterheadStyle(letterSrc?.letterhead_style))}>
+                {/* The freed letterhead Station Settings saved — the same doc
+                    the printed sheet renders, so the page written on and the
+                    page printed cannot disagree. */}
+                <SealImg url={letterSrc?.seal_left_url ?? null} fallback={pnpSeal} alt="PNP seal" className="ir-sheet-seal ir-sheet-seal--code" />
+                <div
+                  className="ir-sheet-head-lines"
+                  dangerouslySetInnerHTML={{ __html: sanitizeLetterHtml(freedLetterDoc) }}
+                />
+                <SealImg url={letterSrc?.seal_right_url ?? null} fallback={citySeal} alt="City of Naga Police Station seal" className="ir-sheet-seal ir-sheet-seal--station" />
+              </header>
+            ) : (
               <header className="ir-sheet-head">
                 {/* The printed sheet's header band, to the letter: the PNP seal
                     upper LEFT (square, so it never distorts), the organisation
                     block centered, the station's own seal upper RIGHT. The seals
                     carry the same alt text as the print sheet's — they are marks
                     of office, not decoration. */}
-                <img className="ir-sheet-seal ir-sheet-seal--code" src={pnpSeal} alt="PNP seal" />
+                <SealImg url={letterSrc?.seal_left_url ?? null} fallback={pnpSeal} alt="PNP seal" className="ir-sheet-seal ir-sheet-seal--code" />
                 <div className="ir-sheet-head-lines">
                   <div>{letterhead.agency}</div>
                   <div>{letterhead.commission}</div>
@@ -4888,13 +5057,9 @@ export function ReportEditor({
                   <div className="ir-sheet-head-strong">{letterhead.station_name}</div>
                   <div>{letterhead.station_location}</div>
                 </div>
-                <img
-                  className="ir-sheet-seal ir-sheet-seal--station"
-                  src={citySeal}
-                  alt="City of Naga Police Station seal"
-                />
+                <SealImg url={letterSrc?.seal_right_url ?? null} fallback={citySeal} alt="City of Naga Police Station seal" className="ir-sheet-seal ir-sheet-seal--station" />
               </header>
-            )}
+            ))}
             {/* The meta row under the band: the office code holding the left
                 margin, the report date on the right with its "Date" caption
                 beneath — the printed sheet's .pr-code-date, line for line.
@@ -5041,6 +5206,17 @@ export function ReportEditor({
                 last step, Review, where the report reads back in one piece. The stepper above
                 jumps straight there.
               </p>
+            )}
+            {/* ---- Write Report sheet footer: the station's "Noted by:"
+                sign-off, on the paper itself in every format — the same
+                footer the printed incident report carries. ---- */}
+            {sheet && (
+              <div className="pr-footer-block ir-sheet-foot">
+                <div className="pr-noted">
+                  <span className="pr-noted-label">Noted by:</span>
+                  <span className="pr-noted-name">DEXTER MALEZA CALACAR</span>
+                </div>
+              </div>
             )}
           </IrCard>
 
@@ -5624,6 +5800,19 @@ export function ReportEditor({
                 </button>
               )}
             </div>
+            {/* Phone files folder (owner request): the captures filed from the
+                phone app live beside the Edit/zoom controls — click to open,
+                click a page to review it. Desk chrome, never printed. */}
+            <Folder
+              label="Phone files"
+              items={folderItems}
+              onItemClick={(item) => {
+                if (item?.arrivalId && onOpenDraft) onOpenDraft(item.arrivalId);
+                else if (item?.capture) openCaptureReview(item.capture);
+                else if (item?.image) window.open(item.image, '_blank', 'noopener');
+              }}
+              emptyText="No files yet — a phone send lands here live, whether it files on this report or as its own waiting draft."
+            />
           </div>
           {/* PAPER MODE read-out: one line saying where corrections go while the clean paper is up. Desk chrome, never printed. */}
           {sheetLetterMount && canEdit && !letterEdit && (
@@ -6440,6 +6629,7 @@ export function ReportsTable({
   // with the selector when the language became detected. Nothing reads it now.
   recentReports = null,
   stationHeader = null,
+  stationLetter = null,
   // Tells the shell whether this list is showing its own editor panel. The
   // panel replaces the list WITHOUT changing `view.kind` (that is how the
   // list's filters and page survive closing a report), so the top bar
@@ -6939,6 +7129,7 @@ export function ReportsTable({
         reportId={openId}
         onMutated={onMutated}
         onClosed={() => setOpenId(null)}
+        onOpenDraft={(id) => setOpenId(id)}
         // Same display preference the editor gets from Shell when it is opened
         // from Home or a new report — one report, one layout, however it was
         // opened.
@@ -6948,6 +7139,7 @@ export function ReportsTable({
         // the bundle was built with.
         incidentTypes={incidentTypes}
         stationHeader={stationHeader}
+        stationLetter={stationLetter ?? stationHeader}
         // ...and the officer's own recent reports, which is where D7's
         // suggested language comes from. A report opened from the register is
         // an EXISTING report (its own language is shown), but the same editor

@@ -1237,7 +1237,7 @@ final class NarrativeService
     }
 
     /** Matches issuanceRequestor()'s groups: head, open-quote, name, close-quote, tail. */
-    private const ISSUANCE_NAME_RE = '/(issued upon the request of\s+)(["“”\']?)([^"“”\']+?)(["“”\']?)(\s+for\s+what\s*ever\s+legal\s+purposes)/i';
+    private const ISSUANCE_NAME_RE = '/(issued upon the request of\s+)(["“”\']?)([^"“”\']+?)(["“”\']?)(\s+for\s+what\s*ever\s+legal\s+purposes?)/i';
 
     /**
      * No name, or the formatter's own "name of who requested" stand-in:

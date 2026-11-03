@@ -97,6 +97,7 @@ final class StubNarrativeProvider implements AiNarrativeProvider
             'incident_type' => '',
             'incident_category' => '',
             'incident_datetime' => '',
+            'incident_date' => '',
             'incident_time_approximate' => false,
             'location' => '',
             'reporter_name' => '',

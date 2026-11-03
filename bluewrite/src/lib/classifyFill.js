@@ -167,6 +167,19 @@ export function buildClassifyFill(answer, draft, types = []) {
     if (f.incident_time_approximate === true) patch.incident_time_approximate = true;
   }
 
+  // A date with no time is still a date the report can carry (owner request):
+  // the form's own field holds a bare YYYY-MM-DD and the server files it with
+  // no recorded time, so an account that states "October 10, 2026" with no
+  // clock time still fills the date instead of stranding the save behind an
+  // empty field. A full datetime above wins; a filled field is never touched.
+  const DATEONLY = /^\d{4}-\d{2}-\d{2}$/;
+  const incidentDate = str(f.incident_date);
+  if (patch.incident_datetime === undefined && empty('incident_datetime') && DATEONLY.test(incidentDate)) {
+    patch.incident_datetime = incidentDate;
+    filled.push('Date of incident');
+    if (f.incident_time_approximate === true) patch.incident_time_approximate = true;
+  }
+
   for (const [key, label] of SCALAR_FIELDS) {
     if (key === 'incident_type' || key === 'incident_datetime') continue;
     const value = str(f[key]);

@@ -1,6 +1,10 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { api } from '../../lib/api.js';
-import assistantAvatar from '../../assets/White Robot Chatbot Icon.png';
+// Codex mascots (owner request) from the vibe-svgs community collection
+// (https://github.com/imMamdouhaboammar/vibe-svgs, svgs/mascots/): jumping
+// while the chat idles on its launcher, speaking while it is in use.
+import codexJumping from '../../assets/codex-jumping.svg';
+import codexSpeaking from '../../assets/codex-speaking.svg';
 import './TerminologyChatbot.css';
 
 const EXAMPLES = ['Probable cause', 'Chain of custody', 'Warrant of arrest'];
@@ -56,7 +60,7 @@ export default function TerminologyChatbot({ open, onOpen, onClose }) {
       {open ? (
         <section className={`terminology-chat${minimized ? ' is-minimized' : ''}`} aria-labelledby={`${id}-title`}>
           <header className="terminology-chat__head">
-            <img className="terminology-chat__avatar" src={assistantAvatar} alt="" width="40" height="40" />
+            <img className="terminology-chat__avatar" src={codexSpeaking} alt="" width="40" height="40" />
             <div className="terminology-chat__identity">
               <h2 id={`${id}-title`}>BlueWrite</h2>
               <p>Police terminology</p>
@@ -80,7 +84,7 @@ export default function TerminologyChatbot({ open, onOpen, onClose }) {
                 )}
                 {messages.map((message, i) => (
                   <div key={i} className={`terminology-chat__line is-${message.role}`}>
-                    {message.role === 'assistant' && <img className="terminology-chat__avatar terminology-chat__avatar--reply" src={assistantAvatar} alt="" width="28" height="28" />}
+                    {message.role === 'assistant' && <img className="terminology-chat__avatar terminology-chat__avatar--reply" src={codexSpeaking} alt="" width="28" height="28" />}
                     <div className="terminology-chat__column">
                       <div className={`terminology-chat__message is-${message.role}`}>
                         {message.role === 'assistant' && <span>BlueWrite Assistant</span>}
@@ -108,7 +112,7 @@ export default function TerminologyChatbot({ open, onOpen, onClose }) {
           )}
         </section>
       ) : (
-        <button className="terminology-launcher" type="button" onClick={() => { setMinimized(false); onOpen?.(); }} aria-label="Open police terminology chatbot" title="BlueWrite AI"><img className="terminology-launcher__icon" src={assistantAvatar} alt="" width="30" height="30" aria-hidden="true" /></button>
+        <button className="terminology-launcher" type="button" onClick={() => { setMinimized(false); onOpen?.(); }} aria-label="Open police terminology chatbot" title="BlueWrite AI"><img className="terminology-launcher__icon" src={codexJumping} alt="" width="30" height="30" aria-hidden="true" /></button>
       )}
     </div>
   );

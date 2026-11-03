@@ -963,6 +963,7 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             'properties' => [
                 'incidentType' => ['type' => 'string', 'enum' => $types],
                 'incidentDatetime' => ['type' => 'string'],
+                'incidentDate' => ['type' => 'string'],
                 'timeApproximate' => ['type' => 'boolean'],
                 'location' => ['type' => 'string'],
                 'reporterName' => ['type' => 'string'],
@@ -986,7 +987,7 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
                 ],
             ],
             'required' => [
-                'incidentType', 'incidentDatetime', 'timeApproximate', 'location',
+                'incidentType', 'incidentDatetime', 'incidentDate', 'timeApproximate', 'location',
                 'reporterName', 'reporterContact', 'reporterAddress', 'actionTaken',
                 'parties', 'unstated',
             ],
@@ -1012,7 +1013,9 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
      *
      * REJECTED rather than repaired: a datetime that is not YYYY-MM-DDTHH:MM.
      * A bare date, a bare time or a sentence is not a datetime, and an empty
-     * one is honest.
+     * one is honest. A stated calendar date rides separately as incident_date
+     * (strict YYYY-MM-DD, real month and day), so a date with no clock time
+     * still fills the report's date.
      *
      * A party with no name is dropped — a role is not a person — and a role
      * outside the list reads as 'other', which is what the report calls it too.
@@ -1065,6 +1068,17 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             $datetime = '';
         }
 
+        // A date with no time is still a date the report can carry: the
+        // client files a bare YYYY-MM-DD with no recorded time, so an account
+        // that states a calendar date but no clock time still fills the date
+        // instead of stranding the save. Strictly a real calendar date — a
+        // bare time, a sentence or an impossible month/day is not one.
+        $incidentDate = $str($parsed['incidentDate'] ?? '', 10);
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $incidentDate, $dm) !== 1
+            || checkdate((int) $dm[2], (int) $dm[3], (int) $dm[1]) === false) {
+            $incidentDate = '';
+        }
+
         $parties = [];
         foreach ((array) ($parsed['parties'] ?? []) as $p) {
             if (!is_array($p)) {
@@ -1093,6 +1107,7 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             'incident_type' => $type,
             'incident_category' => $category,
             'incident_datetime' => $datetime,
+            'incident_date' => $incidentDate,
             'incident_time_approximate' => !empty($parsed['timeApproximate']),
             'location' => $str($parsed['location'] ?? ''),
             'reporter_name' => $str($parsed['reporterName'] ?? '', 160),

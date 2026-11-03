@@ -13,6 +13,7 @@ use App\Core\ReportVerification;
 use App\Core\Response;
 use App\Core\RichText;
 use App\Core\Station;
+use App\Core\StationSeal;
 use App\Core\Validator;
 use App\Rules\ReportRules;
 use PDO;
@@ -21,6 +22,14 @@ final class ReportsController
 {
     /** Phase 1/2 legacy names — still accepted on input for old clients. */
     private const LEGACY_TYPES = ['Physical Injury', 'Vehicular Accident', 'Drug-related', 'Other'];
+
+    /**
+     * Owner request (2026-11-02): completeness never blocks — bypassed, not
+     * deleted. The rules still exist and still run, but a BLANK field never
+     * refuses a write. Shape validation (lengths, enums, formats, malformed
+     * values) is untouched. Set false to restore refusal.
+     */
+    private const BYPASS_COMPLETENESS = true;
 
     /**
      * The reporting-party fields a finalize PATCH may leave out, because the
@@ -312,6 +321,23 @@ final class ReportsController
      * v3 group arrays (per GroupRules config). Keys snake_case, scalars max
      * 500 chars, group items validated per-instance by ReportRules.
      */
+    /**
+     * Completeness bypass (see BYPASS_COMPLETENESS): keep only the complaints
+     * about MALFORMED values, dropping the complaints about blank fields. A
+     * required-field refusal always names the requirement ("is required",
+     * "required.", "must be recorded"); a shape refusal never does (see
+     * ReportRules::checkValue()).
+     *
+     * @param string[] $errors
+     * @return string[]
+     */
+    private static function shapeErrors(array $errors): array
+    {
+        return array_values(array_filter($errors, static function ($e): bool {
+            return preg_match('/\brequired\b|must be recorded/i', (string) $e) !== 1;
+        }));
+    }
+
     private function sanitizeTypeSpecific(mixed $raw, string|array|null $incidentType = null, bool $finalizing = false): ?string
     {
         if ($raw === null) {
@@ -412,6 +438,11 @@ final class ReportsController
                 continue;
             }
             $errors = array_merge($errors, ReportRules::validateTypeSpecific($clean, $type, $finalizing));
+        }
+        // Completeness bypass (see BYPASS_COMPLETENESS): blank fields do not
+        // refuse the write — only malformed values do.
+        if ($errors !== [] && self::BYPASS_COMPLETENESS) {
+            $errors = self::shapeErrors($errors);
         }
         if ($errors !== []) {
             Response::json(422, ['error' => 'The report has invalid fields.', 'details' => $errors]);
@@ -1035,6 +1066,15 @@ final class ReportsController
             $types,
             ($body['status'] ?? 'draft') === 'finalized',
         );
+        // Completeness bypass (see BYPASS_COMPLETENESS): blanks on the
+        // report's own identity fields never refuse the CREATE either — a
+        // finalize from an untouched form creates first, and that create
+        // must not 422 on the same blanks the finalize itself excuses.
+        // Only emptiness is excused: an unknown type, a malformed datetime
+        // and every other shape still refuses below via fail().
+        if (self::BYPASS_COMPLETENESS) {
+            $v->dropBlankValueErrors($body);
+        }
         $this->fail($v);
 
         $status = 'draft'; // created reports always start as drafts
@@ -1049,9 +1089,20 @@ final class ReportsController
         $incidentDate = $official['incident_date'];
         $incidentTime = $official['incident_time'];
         if ($incidentDate === null) {
-            $legacy = $this->normalizeDt((string) $body['incident_datetime']);
+            $legacy = $this->normalizeDt((string) ($body['incident_datetime'] ?? ''));
             $incidentDate = substr($legacy, 0, 10);
-            $incidentTime = substr($legacy, 11, 8);
+            // A blank legacy datetime leaves no date at all: the DATE column
+            // is NULLable, so unknown stores NULL — never '' (strict-mode
+            // MySQL rejects '' for DATE) and never a fabricated day.
+            if (trim((string) $incidentDate) === '') {
+                $incidentDate = null;
+            }
+            // A bare date carries no time: the time stays NULL (unknown),
+            // never a midnight that would read as a recorded fact.
+            $incidentTime = strlen($legacy) > 10 ? substr($legacy, 11, 8) : null;
+            if ($incidentTime === '' || $incidentTime === false) {
+                $incidentTime = null;
+            }
         }
 
         // Migration 023 — same guard as the list column above: a database a
@@ -1076,7 +1127,11 @@ final class ReportsController
         );
         $params = [
             ':created_by' => (int) $user['id'],
-            ':type' => $types[0],
+            // incident_type is NOT NULL: a report with no type yet stores ''
+            // (the sheet and register render it untyped), never a NULL that
+            // would violate the column. Bypass-only path: a supplied unknown
+            // type still 422s above, so '' here always means "no type given".
+            ':type' => $types[0] ?? '',
             ':report_date' => $official['report_date'] ?? date('Y-m-d'),
             ':blotter_no' => $official['blotter_no'],
             ':blotter_date' => $official['blotter_date'],
@@ -1268,10 +1323,16 @@ final class ReportsController
                     || (($body['status'] ?? null) === null && ($report['status'] ?? '') === 'finalized'),
             )
             : null;
+        // Completeness bypass (see BYPASS_COMPLETENESS): blanks on the
+        // report's own identity fields never refuse the write.
+        if (self::BYPASS_COMPLETENESS) {
+            $v->dropBlankValueErrors($body);
+        }
         $this->fail($v);
 
-        // If finalizing, the report must be complete.
-        if (($body['status'] ?? null) === 'finalized') {
+        // If finalizing, the report must be complete — unless completeness is
+        // bypassed (see BYPASS_COMPLETENESS): then nothing here refuses.
+        if (($body['status'] ?? null) === 'finalized' && !self::BYPASS_COMPLETENESS) {
             $merged = array_merge($report, array_intersect_key($body, $report));
             $narrative = array_key_exists('narrative', $body) ? trim((string) $body['narrative']) : trim((string) $report['narrative']);
             if ($narrative === '') {
@@ -1303,6 +1364,11 @@ final class ReportsController
                         $groupErrors,
                         ReportRules::validateTypeSpecific(is_array($storedBlob) ? $storedBlob : [], (string) $type, true)
                     );
+                }
+                // Completeness bypass (see BYPASS_COMPLETENESS): blank fields
+                // do not refuse the write — only malformed values do.
+                if ($groupErrors !== [] && self::BYPASS_COMPLETENESS) {
+                    $groupErrors = self::shapeErrors($groupErrors);
                 }
                 if ($groupErrors !== []) {
                     Response::json(422, [
@@ -1599,6 +1665,13 @@ n     * reports; Admin and Officer may print any.
         Response::json(200, [
             'report' => $report,
             'station' => Station::header(),
+            // The freed letterhead (doc, style, seals) travels with the header
+            // so Write Report and print render exactly what Station Settings
+            // saved — no second request, no stale fallback.
+            'letterhead_html' => Station::letterheadHtml(),
+            'letterhead_style' => Station::letterheadStyle(),
+            'seal_left_url' => StationSeal::url('left', Station::sealPath('left')),
+            'seal_right_url' => StationSeal::url('right', Station::sealPath('right')),
             'verification_status' => $status['code'],
             'verification_label' => $status['label'],
             'verifications' => $verifications,
@@ -1654,6 +1727,12 @@ n     * reports; Admin and Officer may print any.
         Response::json(200, [
             'report' => $report,
             'station' => Station::header(),
+            // Same freed letterhead as show(): the printed sheet must wear
+            // what Station Settings saved.
+            'letterhead_html' => Station::letterheadHtml(),
+            'letterhead_style' => Station::letterheadStyle(),
+            'seal_left_url' => StationSeal::url('left', Station::sealPath('left')),
+            'seal_right_url' => StationSeal::url('right', Station::sealPath('right')),
             'verification_status' => $status['code'],
             'verification_label' => $status['label'],
             'verifications' => $verifications,

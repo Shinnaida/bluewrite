@@ -41,7 +41,7 @@ const text = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
  */
 const KNOWN_ACRONYMS = new Set([
   'ctu', 'pnp', 'nbi', 'ioc', 'cctv', 'bfp', 'afp', 'lto', 'comelec', 'pdea',
-  'dpwh', 'deped',
+  'dpwh', 'deped', 'cr', 'dob',
 ]);
 
 const MINOR_WORDS = new Set([
@@ -180,7 +180,16 @@ function applyProperNouns(s, properNouns) {
  * @returns {string}
  */
 export function toSentenceCase(value, properNouns = []) {
-  const s = String(value ?? '').replace(/\s+/g, ' ').trim();
+  // Document markers and glued tokens the blotter/AI drops (live sheet bug:
+  // "or# 0716-819041", "250349DRIVEN"): OR only when a number follows it —
+  // otherwise it is the conjunction — and a `#`/digit or digit/keyword
+  // run-on takes a space. Plates (0718SR) never split; nothing is reworded.
+  const s = String(value ?? '')
+    .replace(/\bor\b(?=\s*[:.#\-]?\s*\d)/g, 'OR')
+    .replace(/([A-Za-z]#)(\d)/g, '$1 $2')
+    .replace(/(\d)(DRIVEN|OWNED|VALID|LICEN[CS]E|RESIDENT|PLATE)\b/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (s === '') return '';
   let out = '';
   let startOfSentence = true;

@@ -6459,6 +6459,30 @@ button.dash-kpi--link:focus-visible {
   object-fit: contain;
   flex-shrink: 0;
 }
+/* The freed letterhead Station Settings saves: the same doc the admin canvas
+   edits, rendered read-only. The saved style arrives as the header's own
+   inline style; these rules only lay out the seals around it. */
+.pr-head--doc {
+  flex-direction: column;
+}
+.pr-doc-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+}
+.pr-doc-top {
+  display: flex;
+  justify-content: center;
+  gap: 0.7rem;
+}
+.pr-head-right {
+  display: flex;
+  align-items: center;
+}
+.pr-org.pr-doc {
+  flex: 1;
+}
 .pr-org {
   flex: 1;
   font-size: 10.5pt;
@@ -6613,7 +6637,11 @@ button.dash-kpi--link:focus-visible {
    rule for a node that is never rendered is a rule that reads as a feature.) */
 
 .pr-narrative {
-  text-align: left;
+  /* Justified on the paper (owner request) — both Arrange Only and Enhance
+     Wording read here. The last line stays start-aligned by default, the
+     editing box keeps its own left alignment, and the ribbon's paragraph
+     alignment still wins where the officer set it. */
+  text-align: justify;
   text-indent: 0;
   margin: 0.85rem 0 0.9rem;
 }
@@ -7314,41 +7342,45 @@ select.pr-edit--inline { padding-right: 0.1rem; }
   color: #444;
 }
 
-.pr-footer-block { margin-top: 1.1rem; }
+.pr-footer-block { margin-top: 3.3rem; display: flex; justify-content: center; width: 100%; }
+/* Write Report sheet: the AI letter portals onto this mount and carries its
+   own footer — hide it there so the paper shows ONE sign-off: the sheet's
+   own footer below. Print and the AI card keep their own footers. */
+.ir-sheet-letter .pr-footer-block { display: none; }
 /* "Recorded by:" and "IOC:" print as two consecutive lines — no blank line
    between them (the line-height alone sets the spacing). */
 .pr-recorded { margin: 0; }
-/* "Noted by:" sits immediately above its signature rule and the printed
-   name — no blank space left for a signature. The block holds the RIGHT margin
-   of the page: the noting official signs the side the letter closes on, so the
-   name shuts to the right edge (the label itself is centered — see below).
-
-   BOTH properties, deliberately. `align-items` aligns the two BOXES, but the
-   text INSIDE a box follows `text-align`, and this sheet is full of centered
-   ancestors — the header band, the title, the appendix headings — so stating
-   `text-align` on the block settles the name (the wider box) against the right
-   edge in the same breath, and no ancestor can pull it back to the middle.
-   The label carries its own centering (see below). */
+/* "Noted by:" footer (owner request): the whole block sits on the RIGHT
+   side of the page — label on top, name below it, both shut to the right
+   edge. No signature rule, no reserved blank space. BOTH alignment
+   properties, deliberately: `align-items` aligns the two BOXES, while
+   `text-align` settles the ink inside them against the centered ancestors
+   (header band, title, appendix headings) so no ancestor can pull the
+   block back to the middle. */
 .pr-noted {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  text-align: right;
+  text-align: center;
   gap: 0;
-  margin-top: 1.4rem;
+  margin-top: 3.3rem;
+  width: 100%;
+  font-family: Arial, Helvetica, sans-serif;
 }
-/* The label alone is CENTERED (owner request): it spans the block and reads
-   from the middle, while the name below it stays shut to the right edge. */
-.pr-noted-label { font-weight: 700; align-self: stretch; text-align: center; }
-/* The noting official's name prints straight under "Noted by:" — no
-   signature rule above it and no reserved blank space — shut to the right
-   edge of the block. */
+/* The "Noted by:" label — centered in the footer. */
+.pr-noted-label { font-weight: 700; align-self: stretch; text-align: center !important; width: 100%; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; }
+/* The noting official's name prints under "Noted by:", shut to the right
+   edge — the station's footer format. */
 .pr-noted-name {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   min-width: 14rem;
+  align-self: flex-end;
   text-align: right;
+  margin-top: 0.9rem;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12pt;
 }
 
 .pr-foot {

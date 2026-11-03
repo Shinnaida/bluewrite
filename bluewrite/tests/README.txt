@@ -40,8 +40,9 @@ php phpunit.phar --bootstrap tests/bootstrap.php tests
   non-owner cannot edit, Admin can edit anyone's, finalized locked for
   non-admin but editable by Admin, last admin cannot be demoted,
   no self-deactivation, non-admin cannot list users.
-- **ReportsTest** — incident-type allowlist, missing location 422, invalid
-  datetime 422, finalize requires narrative, archive is soft-delete only,
+- **ReportsTest** — incident-type allowlist, blank location/type/date create
+  succeeds, malformed datetime still 422, finalize bypasses completeness
+  (blanks finalize; shapes still refuse), archive is soft-delete only,
   user deactivation is soft only, restore (Item 2) is Admin-only and writes a
   history snapshot, history endpoint shape (Item 1).
 - **SystemInstructionTest** — standalone (no server/DB): all 14 canonical

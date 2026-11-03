@@ -163,6 +163,49 @@ test('only a real datetime is taken', () => {
   assert.equal(good.patch.incident_datetime, '2026-09-19T23:30');
 });
 
+test('a date with no time still fills the incident date', () => {
+  // The account states "October 10, 2026" with no clock time: the read
+  // carries it as a bare date and the fill files it — no recorded time is
+  // invented, and the save is no longer stranded behind an empty field.
+  const fill = buildClassifyFill(
+    answer({ incident_datetime: '', incident_date: '2026-10-10' }),
+    draft(),
+    INCIDENT_TYPES,
+  );
+  assert.equal(fill.patch.incident_datetime, '2026-10-10');
+  assert.ok(fill.filled.includes('Date of incident'));
+});
+
+test('a full datetime wins over a date-only answer', () => {
+  const fill = buildClassifyFill(
+    answer({ incident_datetime: '2026-10-10T08:40', incident_date: '2026-10-10' }),
+    draft(),
+    INCIDENT_TYPES,
+  );
+  assert.equal(fill.patch.incident_datetime, '2026-10-10T08:40');
+  assert.ok(fill.filled.includes('Date & time of incident'));
+  assert.ok(!fill.filled.includes('Date of incident'));
+});
+
+test('a malformed date-only answer fills nothing', () => {
+  // Shape only — the provider rejects impossible months/days upstream, so
+  // the fill checks the YYYY-MM-DD shape a date input can carry.
+  for (const bad of ['October 10, 2026', '10/10/2026', '20:30', '2026-10-10T08:40', '2026-9-5', '']) {
+    const fill = buildClassifyFill(answer({ incident_datetime: '', incident_date: bad }), draft(), INCIDENT_TYPES);
+    assert.equal('incident_datetime' in fill.patch, false, `${bad || '(empty)'} is not a bare date`);
+  }
+});
+
+test('a hedged date-only answer carries the approximate flag', () => {
+  const fill = buildClassifyFill(
+    answer({ incident_datetime: '', incident_date: '2026-10-10', incident_time_approximate: true }),
+    draft(),
+    INCIDENT_TYPES,
+  );
+  assert.equal(fill.patch.incident_datetime, '2026-10-10');
+  assert.equal(fill.patch.incident_time_approximate, true);
+});
+
 test('a half-filled date is left alone rather than completed', () => {
   // The date and the time share one stored field, so a date typed with no time
   // is a FILLED field: completing it would write a time the officer left out.

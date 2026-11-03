@@ -581,11 +581,13 @@ final class ReportOfficialFieldsTest extends BaseApiTestCase
         $this->assertSame(201, $created['status'], json_encode($created['body']));
     }
 
-    public function testAReportCannotBeFinalizedWithoutTheReportingParty(): void
+    /**
+     * Owner request (2026-11-02): completeness never blocks — a submission
+     * with no reporting party and no contact number finalizes. Supplying
+     * both still records them.
+     */
+    public function testAReportFinalizesWithoutTheReportingParty(): void
     {
-        // WHO FILED IT is the report's minimum: a submission with no reporting
-        // party and no contact number is refused, field by field, so the editor
-        // can point at the two boxes that are missing.
         [$cookie, $csrf] = $this->login('t.officer');
         $created = $this->createReport($cookie, $csrf, [
             'reporter_name' => '',
@@ -594,16 +596,7 @@ final class ReportOfficialFieldsTest extends BaseApiTestCase
         $id = (int) $created['id'];
 
         $finalized = $this->patchReport($cookie, $csrf, $id, ['status' => 'finalized']);
-        $this->assertSame(422, $finalized['status']);
-        $this->assertArrayHasKey('reporter_name', $finalized['body']['fields']);
-        $this->assertArrayHasKey('reporter_contact', $finalized['body']['fields']);
-
-        // Supplying both is the whole fix.
-        $this->assertSame(200, $this->patchReport($cookie, $csrf, $id, [
-            'reporter_name' => 'Nita B. Ramos',
-            'reporter_contact' => '(032) 555-1234',
-        ])['status']);
-        $this->assertSame(200, $this->patchReport($cookie, $csrf, $id, ['status' => 'finalized'])['status']);
+        $this->assertSame(200, $finalized['status'], json_encode($finalized['body']));
     }
 
     public function testMalformedPartyDetailsAreRejectedOnSave(): void

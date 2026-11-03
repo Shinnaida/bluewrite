@@ -4762,6 +4762,17 @@ export function ReportEditor({
                 jumps straight there.
               </p>
             )}
+            {/* ---- Write Report sheet footer: the station's "Noted by:"
+                sign-off, on the paper itself in every format — the same
+                footer the printed incident report carries. ---- */}
+            {sheet && (
+              <div className="pr-footer-block ir-sheet-foot">
+                <div className="pr-noted">
+                  <span className="pr-noted-label">Noted by:</span>
+                  <span className="pr-noted-name">DEXTER MALEZA CALACAR</span>
+                </div>
+              </div>
+            )}
           </IrCard>
 
           {/* The Signatures panel used to close this grid: the reporting

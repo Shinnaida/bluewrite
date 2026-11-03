@@ -198,6 +198,18 @@ export default function Shell({
   }, [stationVersion]);
   const stationTypes = station && Array.isArray(station.incident_types) ? station.incident_types : null;
   const stationHeader = station && station.header ? station.header : null;
+  // The full letterhead Station Settings saves (freed document, style, seal
+  // URLs) — Write Report and print render exactly this, so a Save there
+  // shows on the sheet without a reload (bumpStation re-reads /station).
+  const stationLetter = station
+    ? {
+        header: station.header ?? null,
+        letterhead_html: typeof station.letterhead_html === 'string' ? station.letterhead_html : '',
+        letterhead_style: station.letterhead_style ?? null,
+        seal_left_url: station.seal_left_url ?? null,
+        seal_right_url: station.seal_right_url ?? null,
+      }
+    : null;
 
   // Shared workspace connection state: any child that hits an unreachable
   // server calls reportConn(classified) instead of rendering its own raw
@@ -590,6 +602,7 @@ export default function Shell({
             formFormat={formFormat}
             incidentTypes={stationTypes}
             stationHeader={stationHeader}
+            stationLetter={stationLetter}
             // The officer's own recent reports, already fetched above for the
             // Home list. D7 reads the most recent one's declared language to
             // pre-select the language selector on a NEW report — a suggestion
@@ -644,6 +657,7 @@ export default function Shell({
             formFormat={formFormat}
             incidentTypes={stationTypes}
             stationHeader={stationHeader}
+            stationLetter={stationLetter}
             // The officer's own recent reports, already fetched above for the
             // Home list. D7 reads the most recent one's declared language to
             // pre-select the language selector on a NEW report — a suggestion

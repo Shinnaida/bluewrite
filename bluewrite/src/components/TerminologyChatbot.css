@@ -1,25 +1,26 @@
 /* Scoped controls prevent global heading and button styles overriding the chat. */
 .terminology-dock { position: fixed; right: 18px; bottom: 18px; z-index: 60; }
 .terminology-dock .terminology-launcher {
-  position: relative; min-height: 36px; padding: 0.7rem; border-radius: 999px;
+  position: relative; min-height: 36px; padding: 0; border-radius: 999px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--cyan); color: var(--on-accent); border: 1px solid var(--cyan);
+  background: transparent; color: inherit; border: none;
   font-family: var(--font-body); font-size: 0.8rem; font-weight: 600;
-  box-shadow: var(--shadow-sm); letter-spacing: 0; white-space: nowrap;
+  box-shadow: none; letter-spacing: 0; white-space: nowrap;
 }
 .terminology-launcher__icon {
-  display: block; width: 32px; height: 32px; object-fit: contain; border-radius: 50%; pointer-events: none;
+  display: block; width: 80px; height: 80px; object-fit: contain; pointer-events: none;
+  filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.25));
 }
 .terminology-launcher__status {
   position: absolute; top: 1px; right: 1px; width: 14px; height: 14px; border-radius: 50%;
   background: #22C55E; border: 2px solid var(--panel, #fff);
 }
-.terminology-dock .terminology-launcher:hover { background: var(--cyan); color: var(--on-accent); border-color: var(--cyan); }
+.terminology-dock .terminology-launcher:hover { background: transparent; color: inherit; border-color: transparent; }
 .terminology-chat {
   display: flex; flex-direction: column; width: min(370px, calc(100vw - 36px));
   max-height: calc(100dvh - 100px); height: 510px;
   border: 1px solid var(--line-bright); border-radius: 18px;
-  background: var(--panel); color: var(--paper); overflow: hidden; box-shadow: var(--shadow-lg);
+  background: var(--panel); color: var(--paper); overflow: visible; box-shadow: var(--shadow-lg);
   /* One orchestrated entrance: the panel springs from the launcher it was
      opened from (bottom-right), rising a touch as it settles. Mount-only, so
      minimizing never replays it. */
@@ -57,6 +58,9 @@
 .terminology-chat__head {
   display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
   padding: 0.8rem 1rem; background: var(--ir-navy); color: #fff;
+  /* The panel no longer clips (the mascot pops out above it), so the header
+     carries its own top corners. */
+  border-radius: 18px 18px 0 0;
 }
 .terminology-chat .terminology-chat__head h2 {
   margin: 0; font-family: var(--font-body); font-size: 1rem; font-weight: 650;
@@ -64,7 +68,12 @@
 }
 .terminology-chat__identity { flex: 1; min-width: 0; }
 .terminology-chat__avatar { display: block; flex: none; border-radius: 13px; }
-.terminology-chat__head > .terminology-chat__avatar { margin-right: 0.25rem; }
+.terminology-chat__head > .terminology-chat__avatar {
+  width: 96px; height: 96px; margin: -3rem 0.25rem -0.6rem -0.25rem;
+  align-self: flex-start;
+  position: relative; z-index: 2; pointer-events: none;
+  filter: drop-shadow(0 3px 8px rgb(0 0 0 / 0.35));
+}
 .terminology-chat__avatar--reply { width: 36px; height: 36px; border-radius: 50%; margin-top: 2px; background: var(--ir-navy); padding: 2px; box-sizing: border-box; }
 .terminology-chat__head p { margin: 0.1rem 0 0; font-size: 0.75rem; color: #d3ddec; }
 .terminology-chat__actions { display: flex; gap: 0.15rem; }
@@ -74,7 +83,7 @@
 }
 .terminology-chat .terminology-chat__actions button:hover { background: rgba(255,255,255,0.12); color: #fff; }
 .terminology-chat__notice {
-  margin: 0; padding: 0.65rem 1rem; font-size: 0.74rem; line-height: 1.55;
+  margin: 0; padding: 0.65rem 1rem 0.65rem 7rem; font-size: 0.74rem; line-height: 1.55;
   color: var(--steel); background: var(--panel-raised); border-bottom: 1px solid var(--line);
 }
 .terminology-chat__transcript { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 1rem; }

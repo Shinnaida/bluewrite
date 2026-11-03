@@ -147,7 +147,7 @@ final class AiClassifyTest extends TestCase
         $schema = GeminiNarrativeProvider::classificationSchema(self::TYPES);
 
         $expected = [
-            'incidentType', 'incidentDatetime', 'timeApproximate', 'location',
+            'incidentType', 'incidentDatetime', 'incidentDate', 'timeApproximate', 'location',
             'reporterName', 'reporterContact', 'reporterAddress', 'actionTaken',
             'parties', 'unstated',
         ];
@@ -342,6 +342,40 @@ final class AiClassifyTest extends TestCase
         }
     }
 
+    /**
+     * A date with no time is still a date the report can carry: the account
+     * states a calendar date but no clock time, and the read fills the date
+     * while the time stays empty. Only a real calendar date survives — a
+     * bare time, prose or an impossible month/day is not one.
+     */
+    public function testADateWithNoTimeStillFillsTheIncidentDate(): void
+    {
+        $cases = [
+            '2026-10-10' => '2026-10-10',
+            '2026-09-19' => '2026-09-19',
+            '' => '',
+            '20:30' => '',
+            'October 10, 2026' => '',
+            '10/10/2026' => '',
+            '2026-13-10' => '',
+            '2026-02-30' => '',
+            '2026-9-5' => '',
+        ];
+        foreach ($cases as $given => $expected) {
+            $out = GeminiNarrativeProvider::normaliseClassification(
+                ['incidentDate' => $given],
+                self::TYPES,
+            );
+            $this->assertSame($expected, $out['incident_date'], "input: {$given}");
+        }
+        // A non-string answer degrades to empty rather than crashing.
+        $out = GeminiNarrativeProvider::normaliseClassification(
+            ['incidentDate' => 20261010],
+            self::TYPES,
+        );
+        $this->assertSame('', $out['incident_date']);
+    }
+
     /** The hedge is carried as a flag, not merged into the datetime prose. */
     public function testTheApproximateFlagIsACleanBoolean(): void
     {
@@ -430,7 +464,7 @@ final class AiClassifyTest extends TestCase
         $out = GeminiNarrativeProvider::normaliseClassification([], self::TYPES);
 
         $this->assertSame([
-            'incident_type', 'incident_category', 'incident_datetime', 'incident_time_approximate',
+            'incident_type', 'incident_category', 'incident_datetime', 'incident_date', 'incident_time_approximate',
             'location', 'reporter_name', 'reporter_contact', 'reporter_address',
             'action_taken', 'parties', 'unstated',
         ], array_keys($out));

@@ -73,6 +73,17 @@ test('toSentenceCase promotes a known institutional acronym typed in title case'
   assert.equal(toSentenceCase('the cat sat', []), 'The cat sat');
 });
 
+test('toSentenceCase promotes OR only before a number, and separates glued markers', () => {
+  // Live sheet bug: "or# 0716-819041" printed lowercase; the receipt is OR.
+  assert.equal(toSentenceCase('with plate #0718SR, or# 0716-819041', []), 'With plate #0718SR, OR# 0716-819041');
+  assert.equal(toSentenceCase('or 0716-819041, cr 258503221', []), 'OR 0716-819041, CR 258503221');
+  // A plain conjunction is untouched, even beside a sentence start.
+  assert.equal(toSentenceCase('tea or coffee. he left.', []), 'Tea or coffee. He left.');
+  // Glued document tokens take exactly one space; plates never split.
+  assert.equal(toSentenceCase('CR#0716-25-250349DRIVEN by Jose', []), 'CR# 0716-25-250349 DRIVEN by Jose');
+  assert.equal(toSentenceCase('plate #0718SR valid', []), 'Plate #0718SR valid');
+});
+
 test('labelCase is the one spelling used for a bold sheet label', () => {
   assert.equal(labelCase('name of missing person'), 'Name of Missing Person');
   assert.equal(labelCase('distinguishing marks/clothing'), 'Distinguishing Marks/Clothing');
