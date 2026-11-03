@@ -50,7 +50,15 @@ import SpecularButton from '../shared/SpecularButton.jsx';
 // private function here because the account form uses the same marker for the sentences
 // under its fields — see InfoHint.jsx for the whole of its contract.
 import InfoHint from '../shared/InfoHint.jsx';
-import { buildArrangeDraft, buildEnhancedDraft } from '../../lib/arrangeDraft.js';
+import { arrangeOutputIsFaithful, buildArrangeDraft, buildEnhancedDraft } from '../../lib/arrangeDraft.js';
+// Sheet theft completion (owner request): the long-ago theft reference as a
+// deterministic checklist — fills from the officer's own words, gaps as
+// advisories. Pure, tested (see tests/rules/theftCompletion.test.mjs).
+import { auditTheftCompletion, factsToText } from '../../lib/theftCompletion.js';
+import { buildTypeFacts } from '../../lib/sheetFacts.js';
+// Offline proofreader for the AI draft (Harper WASM + deterministic rules):
+// identifiers, names and places are never flagged — see harperGrammar.js.
+import { checkDraftGrammarEnhanced } from '../../lib/harperGrammar.js';
 import {
   formatIncidentReportHtml,
   reportHtmlToPlain,
@@ -108,6 +116,43 @@ const AI_GUIDED_HINT =
 // minute. (Waiting longer would hold the officer on a spinner longer than a
 // retry is worth; the retry control is there for that.)
 const READ_ATTEMPTS = 2;
+
+// Harper grammar hint under the AI draft (offline, record-safe): a count of
+// mechanical flags in the draft text. Advisory only — the draft is edited in
+// the box above, nothing is applied here.
+function AiDraftGrammarHint({ text, active }) {
+  const [count, setCount] = useState(-1);
+  useEffect(() => {
+    if (!active) {
+      setCount(-1);
+      return undefined;
+    }
+    const value = String(text ?? '');
+    if (value.trim() === '') {
+      setCount(0);
+      return undefined;
+    }
+    // Debounced like the sheet proofreader: one pass 500ms after typing
+    // stops, never a pass per keystroke.
+    let live = true;
+    const timer = setTimeout(() => {
+      checkDraftGrammarEnhanced(value).then((issues) => {
+        if (live) setCount(issues.length);
+      });
+    }, 500);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [text, active]);
+  if (!active || count < 0) return null;
+  if (count === 0) return <p className="field-hint">Proofreader: no grammar flags in this draft.</p>;
+  return (
+    <p className="field-hint">
+      Proofreader: {count} grammar {count === 1 ? 'flag' : 'flags'} in this draft — spelling of names, places and document codes is never flagged.
+    </p>
+  );
+}
 const READ_RETRY_WAIT_MS = 5000;
 
 // THE LEAF, IN CSS PIXELS. A sheet of short bond is 8.5 × 11in, and the page's
@@ -381,6 +426,10 @@ export default function AiNarrativePanel({
   onProvisionalApply,
   onRestoreProvisional,
   onKeepProvisional,
+  // Sheet theft completion (owner request): the host writes the audit's record
+  // fills into the type's own fields. Undefined off the sheet, where no audit
+  // runs and no fill button is offered.
+  onApplyRecordFills,
   // Phase 6 Stage 5 (Track C) — Apply for the guided flow's step 1: the editor
   // applies the reviewed draft to the form AND saves it, because the second step
   // is refused by the server while the STORED report still declares a
@@ -521,6 +570,10 @@ export default function AiNarrativePanel({
   // button itself.
   const [lastPress, setLastPress] = useState(null);
   const [residual, setResidual] = useState([]);
+  // Sheet theft completion (owner request): fills the audit offers from the
+  // officer's own words, one tap each — never auto-applied, cleared whenever
+  // the draft they describe goes away.
+  const [completionFills, setCompletionFills] = useState([]);
   // Whether the draft body is SHOWING in the assistant's card. It is inline
   // chrome, not a window: hiding it keeps the draft (which lives in this tab,
   // keyed by report id) and "A draft is ready" is the way back in.
@@ -559,6 +612,12 @@ export default function AiNarrativePanel({
   // False while the sheet is still typing. The gate stays closed until it is
   // true, so Accept can only be pressed on text the officer has watched land.
   const [sheetTyped, setSheetTyped] = useState(true);
+  // The paper's working state while an Arrange press runs: 'reading' (the
+  // account read), 'arranging' (the model + formatter pass), 'typing' (the
+  // paper typing the result in) — 'idle' otherwise. The sheet draws a
+  // status pill + shimmer from it, so the officer watches the press work
+  // instead of a frozen page.
+  const [arrangePhase, setArrangePhase] = useState('idle');
   // The card the typing happens in. Scrolled to when a new draft starts arriving
   // (this card's own Regenerate included), so the officer is never looking at the
   // wrong end of the page while the letter types.
@@ -1167,6 +1226,47 @@ export default function AiNarrativePanel({
   // labels the SOURCE carried, so an invented heading can never become a bold
   // field. Findings and Action Taken are left alone: this mode edits the report
   // text, not the record's own fields.
+  // SHEET THEFT COMPLETION (owner request): after an arrange/enhance draft
+  // lands, the paper is audited against the theft reference checklist (see
+  // src/lib/theftCompletion.js). Parts the record already states become
+  // one-tap fills the host writes into the type's own fields — the paper's
+  // fact lines then complete themselves; parts nothing states become
+  // possibleGaps advisories, which is also what retires the "No suggestions
+  // or gaps detected" line on a thin paper. Theft only: every other type
+  // keeps today's behaviour. Nothing is invented — each filled value traces
+  // to the officer's own words.
+  const withSheetCompletion = (built) => {
+    if (!sheet || !built) {
+      setCompletionFills([]);
+      return built;
+    }
+    try {
+      const entries = buildTypeFacts(sheet.report?.incident_type, { report: sheet.report ?? {}, ts: sheet.ts ?? {} });
+      const { fills, gaps } = auditTheftCompletion({
+        incidentType: sheet.report?.incident_type,
+        factsText: factsToText(entries),
+        narrativeText: reportHtmlToPlain(String(built.narrative ?? '')),
+        report: sheet.report ?? {},
+        ts: sheet.ts ?? {},
+      });
+      setCompletionFills(fills);
+      if (gaps.length > 0) return { ...built, possibleGaps: [...(built.possibleGaps ?? []), ...gaps] };
+      return built;
+    } catch {
+      setCompletionFills([]);
+      return built;
+    }
+  };
+  const applyOneFill = (fill) => {
+    if (!fill) return;
+    onApplyRecordFills?.([fill]);
+    setCompletionFills((prev) => prev.filter((f) => f.key !== fill.key));
+  };
+  const applyAllFills = () => {
+    if (completionFills.length === 0) return;
+    onApplyRecordFills?.(completionFills);
+    setCompletionFills([]);
+  };
   const enhanceReport = async ({ fromArranged = false } = {}) => {
     setLastPress({ kind: 'enhance' });
     let accountText = richTextToPlain(String(narrative || ''));
@@ -1261,7 +1361,7 @@ export default function AiNarrativePanel({
       // 'idle' while the officer's pre-arrange words stay snapshotted for
       // Discard.
       if (fromArranged) setProvisionalState('idle');
-      setDraft(buildEnhancedDraft({ enhancedText: enhanced, sourceText }));
+      setDraft(withSheetCompletion(buildEnhancedDraft({ enhancedText: enhanced, sourceText })));
       setResidual([]);
       presentDraftResult();
     } catch (err) {
@@ -1290,14 +1390,17 @@ export default function AiNarrativePanel({
   // for the officer to fill.
   const arrangeReport = async () => {
     setLastPress({ kind: 'arrange' });
+    setArrangePhase('reading');
     let accountText = richTextToPlain(String(narrative || ''));
     if (accountText.trim() === '') {
       if (onBeforeGenerate && !onBeforeGenerate()) {
+        setArrangePhase('idle');
         return;
       }
       setMessage('Write what happened first — there is nothing yet to arrange.');
       setMode('error');
       setPanelOpen(true);
+      setArrangePhase('idle');
       return;
     }
     // Arrange is a third run entry (see beginFreshRun): without the rewind it
@@ -1325,6 +1428,7 @@ export default function AiNarrativePanel({
         await runAccountRead(accountText, { arrangeOnly: true });
       }
       if (onBeforeGenerate && !onBeforeGenerate()) {
+        setArrangePhase('idle');
         return;
       }
       try {
@@ -1338,22 +1442,34 @@ export default function AiNarrativePanel({
       // resources/ai/arrange_report_prompt.txt). Best-effort: a provider
       // miss falls back to the deterministic formatter on the raw account.
       setMessage('Arranging the report...');
+      setArrangePhase('arranging');
       try {
         const arranged = await api('/ai/arrange', { method: 'POST', body: { account: accountText } });
         const text = String(arranged?.report ?? '').trim();
-        if (text !== '') accountText = text;
+        // The model arranges; it never invents. A name, plate, code or
+        // vehicle marker from nowhere is guessing, so the answer is dropped
+        // and the local formatter below arranges the officer's own words.
+        if (text !== '' && arrangeOutputIsFaithful(text, accountText)) accountText = text;
       } catch {
         // Local formatter below carries the press on its own.
       }
       setLastSource({ kind: 'notes', text: accountText, language: 'en' });
-      setDraft(buildArrangeDraft({ accountText, notableFindings: runFindings, actionTaken: runActionTaken }));
+      setDraft(withSheetCompletion(buildArrangeDraft({ accountText, notableFindings: runFindings, actionTaken: runActionTaken })));
       setResidual([]);
+      // The paper types the arranged result in (see letterProps) — the pill
+      // follows it there. Off-sheet hosts keep the inline reveal instead.
+      // Provisional arrivals draw whole by default (sheetTyped starts true),
+      // so an arranged draft would just pop onto the paper with no typing:
+      // reopen the gate and the sheet types it in like every other draft.
+      setArrangePhase(sheet ? 'typing' : 'idle');
       presentDraftResult();
+      if (sheet) setSheetTyped(false);
     } catch (err) {
       setThinkPhase('waiting');
       setMode('error');
       setMessage((err && err.message) || 'Arranging failed — the draft was not changed.');
       setPanelOpen(true);
+      setArrangePhase('idle');
     }
   };
 
@@ -1643,7 +1759,13 @@ export default function AiNarrativePanel({
     pending: sheetPending,
     revealPending: !sheetTyped,
     revealKey: genCounter,
-    onRevealComplete: () => setSheetTyped(true),
+    onRevealComplete: () => {
+      setSheetTyped(true);
+      setArrangePhase('idle');
+    },
+    // The paper's working state: the pill + shimmer the sheet draws while an
+    // Arrange press runs (false when idle, so every other run is untouched).
+    arranging: arrangePhase !== 'idle' ? arrangePhase : false,
     onProgress: followTyping,
     viewportRef: sheetViewportRef,
     onEditNarrative: handleLetterNarrative,
@@ -1789,6 +1911,7 @@ export default function AiNarrativePanel({
   const openDraftBoxes = () => {
     setBoxesOpen(true);
     setSheetTyped(true);
+    setArrangePhase('idle');
   };
 
   const closePanel = () => {
@@ -1804,6 +1927,8 @@ export default function AiNarrativePanel({
     // officer keeps reading the sheet they closed. Discard is the way back
     // to their own words; Keep confirms the paper.
     setSheetTyped(true);
+    setArrangePhase('idle');
+    setCompletionFills([]);
     setPanelOpen(false);
   };
 
@@ -2540,6 +2665,7 @@ export default function AiNarrativePanel({
                         />
                       )}
                     </div>
+                    <AiDraftGrammarHint text={draft.narrative} active={!typing('facts')} />
 
                     {/* What else this draft wrote, directly under the narrative
                         it belongs with (see draftDetail above). NOT gated on
@@ -2680,6 +2806,7 @@ export default function AiNarrativePanel({
                                 }
                                 onKeepProvisional?.();
                                 setProvisionalState('idle');
+                                setCompletionFills([]);
                               } else {
                                 const meta = lastSource && lastSource.language !== 'en' ? lastSource : null;
                                 acceptDraft(meta);
@@ -2745,7 +2872,7 @@ export default function AiNarrativePanel({
                           ) : (
                             <button type="button" onClick={() => setShowFeedback((v) => !v)}>Regenerate…</button>
                           )}
-                          {sheetProvisional && (<button type="button" onClick={() => { onRestoreProvisional?.(); setProvisionalState('idle'); setDraft(null); setMode('ready'); closePanel(); }} title="Removes the draft from the paper and brings back your words.">Discard draft</button>)}
+                          {sheetProvisional && (<button type="button" onClick={() => { onRestoreProvisional?.(); setProvisionalState('idle'); setDraft(null); setMode('ready'); setCompletionFills([]); closePanel(); }} title="Removes the draft from the paper and brings back your words.">Discard draft</button>)}
                           <button type="button" onClick={closePanel}>Close</button>
                         </>
                       )}
@@ -2790,6 +2917,27 @@ export default function AiNarrativePanel({
                         a simple fade, no char reveal. The wait is `revealing`
                         above, the same condition every other review note on
                         this panel waits on. */}
+                    {/* SHEET THEFT COMPLETION — parts the record already states,
+                        one tap each. Nothing is written until the officer fills
+                        it in; what nothing states arrives below as Possible
+                        gaps instead. */}
+                    {!revealing && onApplyRecordFills && completionFills.length > 0 && (
+                      <div className="ai-advice ai-advice-fade">
+                        <h4>Complete from your record</h4>
+                        <p className="field-hint">Found in your own words but missing from the paper.</p>
+                        <ul>
+                          {completionFills.map((f) => (
+                            <li key={f.key}>
+                              {f.label}: <strong>{f.preview}</strong>{' '}
+                              <button type="button" onClick={() => applyOneFill(f)}>Fill in</button>
+                            </li>
+                          ))}
+                        </ul>
+                        {completionFills.length > 1 && (
+                          <button type="button" onClick={applyAllFills}>Fill all</button>
+                        )}
+                      </div>
+                    )}
                     {!revealing && (draft.suggestions.length > 0 || draft.possibleGaps.length > 0 || (draft.addedContentWarnings?.length ?? 0) > 0 || (draft.redundancy?.length ?? 0) > 0 || (draft.narrativeRepetition?.length ?? 0) > 0) && (
                       <div className="ai-advice ai-advice-fade">
                         {draft.suggestions.length > 0 && (

@@ -18,10 +18,16 @@ STANDARD ORDER (top to bottom, emit only the parts the source carries):
 4. Time/Date of incident.
 5. Vehicles involved (each V1:/V2: row kept whole with its own words).
 6. Persons involved (victims, suspects, witnesses, backrider lines).
-7. Facts / narrative.
+7. Facts / narrative — the unlabeled account of what happened, whole and in
+   one place, BEFORE any closing line.
 8. Remarks.
 9. Recorded by.
 10. Certification issuance line (e.g. This certification is issued upon ...).
+
+The narrative is the body and the last three are the closing: Remarks,
+Recorded by and the issuance NEVER open the report and NEVER sit above the
+narrative. An unlabeled narrative paragraph is the Facts — it stays before
+any Remarks line, never under one.
 
 STRICT RULES
 - Preserve every word, spelling, number, name, plate/OR/CR/licence value,
@@ -30,7 +36,10 @@ STRICT RULES
 - Never add, rename, merge, split, move (across sections), drop or invent a
   field label, heading, section, category, vehicle row, person, fact, remark,
   disposition or legal classification. A part the source does not state stays
-  missing.
+  missing. If the source states no Remarks, emit no Remarks section — never
+  manufacture one out of narrative sentences (never summarize e.g. "reported
+  to this office for proper documentation and further investigation" into a
+  line like "Incident recorded and under investigation").
 - The incident title is emitted ONCE. The source often states it two or three
   times (quoted capitals, sentence case, wrapped over two lines): pick the
   charge-bearing heading and drop every other restatement of it, wherever it
@@ -42,6 +51,16 @@ STRICT RULES
   vehicles. Never tear a row apart and never fold a row into the facts.
 - Never move a date of birth, address, licence, plate, OR or CR number to
   another person or vehicle.
+- Keep every stated date, time and place written out exactly where the source
+  states it. Never collapse them into "aforementioned", "aforesaid",
+  "above-mentioned", "said" or "the same" — a narrative that names no
+  earlier date, time or place must still name its own, in full. Such a word
+  survives only if the source itself wrote it.
+- Copy every word exactly as spelled and capitalized in the source. Never
+  retitle-case ordinary words mid-sentence, never recase an amount, unit,
+  code or identifier, and never touch a capital the source already carries.
+- Every name, plate, OR/CR, licence, address, vehicle and identifier in the output must already be in the source, where it belongs: a driver stays with their own vehicle, a plate with its own vehicle, a person with their own role. An unnamed party, vehicle or casualty stays unnamed. Never assign a role the source does not state — no victim, suspect, complainant, driver or witness is named or created to fill the order.
+- Never assign the incident to a category the source does not state: keep the source's own title even when the facts suggest another offense.
 - Never turn an allegation, complaint or unverified report into an established
   fact. Keep allegedly, reported, claimed, according to the complainant.
 - Keep approximate times and quantities approximate. Never compute a value
@@ -54,6 +73,11 @@ SPACING (the page must read as one report, not pasted fragments)
   one space, never left as two fragments.
 - No leading blank line at the head of the report and no trailing blank line
   at its end.
+- The source may carry no line breaks at all. Section boundaries are the
+  field labels (PLACE OF INCIDENT:, T/D:, PERSONS INVOLVED:, COMPLAINANT:,
+  RESPONDENT:, FACTS:, REMARKS:, RECORDED BY:) wherever they sit — a missing
+  break never merges two sections, and a row's own details (DOB, age, address)
+  stay on its row.
 
 Return only the arranged report text. Nothing before it and nothing after it.
 No Markdown, no asterisks, no bullets, no code fences, no commentary.

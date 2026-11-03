@@ -9,7 +9,9 @@
 // It never adds a field label, a heading, a section or a fact. It only:
 //   * tidies whitespace/line layout,
 //   * arranges the parts the text already carries into the station's report
-//     order (owner request, 2026-11-02) — no part is added or dropped,
+//     order (owner request, 2026-11-02) — no part is added or dropped —
+//     except in Enhance Wording's `preserveLayout` mode, which keeps the
+//     source's own order and breaks (a copy-edit, never a rearrangement),
 //   * applies formal sentence case in Arrange Only (owner request, 2026-11-02):
 //     CAPITALISATION changes, nothing else. Words, spelling, grammar,
 //     punctuation, names, numbers and identifiers stay exactly as written;
@@ -234,6 +236,7 @@ const KNOWN_LABELS = new Set([
   'facts of the case',
   'statement',
   'statement of facts',
+  'narrative',
   'remarks',
   'remark',
   'recorded by',
@@ -276,6 +279,42 @@ const normalizeLabel = (value) =>
     .replace(/[.:\-–—]+$/, '')
     .trim()
     .toLowerCase();
+
+// A one-line account carries no line breaks, so the splitter below would read
+// the whole report as one prose block: no title, no sections, no order — and
+// the arrangement would live or die on the spacing the officer happened to
+// type. Section boundaries are the field labels themselves (PLACE OF
+// INCIDENT:, T/D:, PERSONS INVOLVED:, COMPLAINANT:, FACTS:, REMARKS:,
+// RECORDED BY:, …) wherever they sit, so the missing breaks are restored
+// here: a newline is inserted before a known label that opens mid-line with
+// its colon, and vestigial markdown bold (`**`) is dropped — the formatter
+// owns the bolding. Labels already at a line start are untouched, and prose
+// that merely mentions a label word without its colon is never split. Person
+// rows stay whole: no row-internal word (DOB, age, sex, address) is a known
+// label, so a row's own colons never break it apart.
+const INLINE_LABEL_RE = (() => {
+  const labels = [...KNOWN_LABELS]
+    .sort((a, b) => b.length - a.length)
+    .map((label) =>
+      label
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\//g, '\\s*/\\s*')
+        .replace(/\s+/g, '\\s+'),
+    );
+  // The certification closing is prose, not a label, but it is still a
+  // boundary: without its own break it stays glued to the remarks tail and
+  // never takes its closing place (or its dressed requestor name).
+  return new RegExp(
+    `(?<=\\S)[ \\t]*\\b(?:(${labels.join('|')})\\b\\s*:|(this\\s+certification\\s+is\\s+issued)\\b)`,
+    'gi',
+  );
+})();
+
+function segmentInlineLabels(text) {
+  return String(text ?? '')
+    .replace(/\*\*/g, '')
+    .replace(INLINE_LABEL_RE, (_, label, issuance) => (issuance ? `\n${issuance}` : `\n${label}:`));
+}
 
 const escapeHtml = (value) =>
   String(value ?? '')
@@ -435,6 +474,24 @@ function matchLabelLine(line) {
 
   // Colon form: "PLACE OF INCIDENT : value", "Place: value", "FACTS:".
   const colon = /^([^:]{1,70}?)\s*:\s*(.*)$/.exec(text);
+  // A slash compound naming the Facts on either side ("Narrative/facts:",
+  // "NARRATIVE / FACTS:") is that section's label, not prose — checked
+  // before the generic unknown-label rule below, which would otherwise file
+  // an ALL-CAPS compound as an unknown section after the closings. The
+  // sheet's own order words it "Facts / narrative", so either side
+  // identifies it. A compound of two real sections ("Victim/Suspect:")
+  // stays prose: it is genuinely ambiguous and must not fold under one.
+  if (colon) {
+    const parts = colon[1].split('/');
+    const factsSide = parts.find((part) => FACT_LABELS.test(normalizeLabel(part)));
+    if (factsSide !== undefined) {
+      return { label: factsSide.trim(), rest: colon[2], separator: ':' };
+    }
+    const known = parts.filter((part) => KNOWN_LABELS.has(normalizeLabel(part)));
+    if (known.length === 1) {
+      return { label: known[0].trim(), rest: colon[2], separator: ':' };
+    }
+  }
   if (colon && isLabelCandidate(colon[1])) {
     return { label: colon[1].trim(), rest: colon[2], separator: ':' };
   }
@@ -495,13 +552,19 @@ function isLabelCandidate(raw) {
  * parts are arranged into the station's report order (entry date, title, place,
  * T/D, persons, vehicles, facts, remarks, recorded-by, certification); only the
  * layout, the existing labels' presentation and the vehicle rows' V-markers
- * change. Text that cannot be classified is kept, never dropped or forced into
- * a field.
+ * change — unless `preserveLayout` is set (Enhance Wording), which keeps the
+ * source's own order and breaks. Text that cannot be classified is kept,
+ * never dropped or forced into a field.
  *
  * @param {string} text the officer's (or enhanced) report text
- * @param {{allowedLabels?: string[], sentenceCase?: boolean}} [options]
+ * @param {{allowedLabels?: string[], sentenceCase?: boolean, preserveLayout?: boolean}} [options]
  *   `allowedLabels` — labels permitted to be bold
  *   `sentenceCase` — Arrange Only's formal sentence case (capitalisation only)
+ *   `preserveLayout` — Enhance Wording's copy-edit contract (owner request):
+ *     the source's own section order and paragraph breaks are kept — no
+ *     standard-order re-sort, no injected breathing separators. The model is
+ *     handed the arranged page and must return its lines in order, so the
+ *     formatter must not rearrange what it returns either.
  * @returns {string} html using only the app's rich-text subset (<p>, <br>, <b>, <u>)
  *
  * The blotter certification's closing issuance line names who requested the
@@ -510,8 +573,11 @@ function isLabelCandidate(raw) {
  * `... upon the request of "<b><u>I LOVE YOU</u></b>" for what ever ...`.
  * Every other word keeps its wording (and Arrange Only's capitalisation).
  */
-export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceCase = false } = {}) {
-  const raw = String(text ?? '').replace(/\r\n?/g, '\n').trim();
+export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceCase = false, preserveLayout = false } = {}) {
+  // Spacing-independent first: a one-line paste segments on its labels before
+  // anything else reads lines, so the title, the sections and the order never
+  // depend on breaks the officer happened to type.
+  const raw = segmentInlineLabels(String(text ?? '').replace(/\r\n?/g, '\n')).trim();
   if (raw === '') return '';
   // A "Requested by: NAME" line names who asked for the copy (owner
   // request): the report closes with the certification issuance naming them.
@@ -538,7 +604,10 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
   // the title directly on every report. Every section is kept — an unknown
   // label or unclassified prose is never discarded — and the words inside each
   // section are never changed.
-  sections.sort((a, b) => a.rank - b.rank || a.order - b.order);
+  // Enhance Wording preserves the source's own order instead (see
+  // `preserveLayout`): the model returns the arranged page's lines in order,
+  // and the paper keeps them that way.
+  if (!preserveLayout) sections.sort((a, b) => a.rank - b.rank || a.order - b.order);
 
   // A part stated twice with the SAME words is one part (owner request,
   // 2026-11-02). This is what a page that already carries a copy of its own
@@ -595,9 +664,11 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
   }
   // Single blank-line breathing room (owner request) at four boundaries:
   // after Time/Date, before Facts, before Remarks, after Recorded-by — in
-  // both Arrange Only and Enhance Wording, which share this formatter. One
-  // separator per boundary even when two rules meet there, and never a
-  // leading or trailing blank.
+  // Arrange Only, which owns the page's rhythm. Enhance Wording keeps the
+  // source's own breaks instead (see `preserveLayout`): the arranged page's
+  // spacing is the spacing the officer approved. One separator per boundary
+  // even when two rules meet there, and never a leading or trailing blank.
+  if (preserveLayout) return parts.map((part) => part.html).join('');
   const SEP = '<p><br></p>';
   const out = [];
   parts.forEach((part, i) => {
@@ -734,6 +805,45 @@ function splitReportSections(raw, title) {
       collapsed.push(ln);
     }
     section.lines = collapsed;
+  }
+  // A closing part the source front-loads still closes the report. When a
+  // REMARKS / RECORDED BY / issuance section carries a trailing block of
+  // substance after it, that block is the narrative the account stated after
+  // it — it leaves the closing section for its own Facts section, which sorts
+  // ahead of every closing. A blank line marks the paragraph break; without
+  // one the bar is higher (a wrapped closing line must never read as a new
+  // paragraph) and the closing line itself must already be a finished
+  // sentence. Short continuations stay glued either way, so a closing written
+  // over several lines is never torn apart.
+  const CLOSING_RANKS = new Set([70, 80, 90]);
+  for (const section of sections) {
+    if (!CLOSING_RANKS.has(section.rank)) continue;
+    const firstIdx = section.lines.findIndex((l) => l.trim() !== '');
+    if (firstIdx === -1 || matchLabelLine(section.lines[firstIdx]) === null) continue;
+    const gapAt = section.lines.findIndex((l) => l.trim() === '');
+    let tail = [];
+    let headEnd = section.lines.length;
+    if (gapAt !== -1) {
+      for (const ln of section.lines.slice(gapAt + 1)) {
+        if (ln.trim() === '' && (tail.length === 0 || tail[tail.length - 1].trim() === '')) continue;
+        tail.push(ln);
+      }
+      while (tail.length > 0 && tail[tail.length - 1].trim() === '') tail.pop();
+      if (tail.join(' ').replace(/\s+/g, ' ').trim().length < 200) continue;
+      headEnd = gapAt;
+    } else {
+      // No paragraph break: only a long, fresh sentence after a finished
+      // closing line qualifies — anything else is the closing's own wrap.
+      const rest = section.lines.slice(firstIdx + 1).filter((l) => l.trim() !== '');
+      if (rest.length === 0) continue;
+      if (!/[.!?]["'”’)]*\s*$/.test(section.lines[firstIdx].trim())) continue;
+      if (!/^[A-Z]/.test(rest[0].trim())) continue;
+      if (rest.join(' ').replace(/\s+/g, ' ').trim().length < 500) continue;
+      tail = rest;
+      headEnd = firstIdx + 1;
+    }
+    section.lines = section.lines.slice(0, headEnd);
+    sections.push({ rank: 60, order: section.order, lines: tail });
   }
   return sections;
 }

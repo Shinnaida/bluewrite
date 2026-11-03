@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { cleanAccountText, buildArrangeDraft, buildEnhancedDraft } from '../../src/lib/arrangeDraft.js';
+import { arrangeOutputIsFaithful, cleanAccountText, buildArrangeDraft, buildEnhancedDraft } from '../../src/lib/arrangeDraft.js';
 import { formatIncidentReportHtml, reportHtmlToPlain, extractFieldLabels, unsupportedFieldLabels, detectIncidentTitle, stripAddedFieldRows } from '../../src/lib/reportFormat.js';
 import { emphasizeIssuanceRequestorHtml } from '../../src/lib/narrativeText.js';
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
@@ -38,6 +38,49 @@ test('buildArrangeDraft shapes the proposal with no LLM content', () => {
   assert.equal(d.findingsText, ['x', ' y '].join(LF));
   assert.equal(d.statusText, 'filed');
 });
+
+test('the arrange gate keeps a faithful reorder and drops a guessing one', () => {
+  // The BW-0442 defect: a road-accident arrangement that named a victim and
+  // a suspect the account never stated. Reordering and title-dedupe are the
+  // job and pass; a name, plate or marker from nowhere fails the press.
+  const account = [
+    'ROAD ACCIDENT',
+    'The Toyota Hilux driven by Mark Anthony Reyes collided with the Mitsubishi Mirage driven by Daniel Cruz.',
+    'Three persons died and two were hurt.',
+  ].join(LF);
+  const faithful = [
+    'ROAD ACCIDENT',
+    'The Toyota Hilux driven by Mark Anthony Reyes collided with the Mitsubishi Mirage driven by Daniel Cruz.',
+    'Three persons died and two were hurt.',
+  ].join(LF);
+  assert.equal(arrangeOutputIsFaithful(faithful, account), true, 'a reorder must pass');
+  assert.equal(
+    arrangeOutputIsFaithful('Victim: Ricardo Manuel Santos\nSuspect: Jerome Paul Garcia\n' + faithful, account),
+    false,
+    'invented victim/suspect must fail',
+  );
+  // Retitle-casing the account's own words is arrangement, not invention.
+  assert.equal(
+    arrangeOutputIsFaithful('The Toyota Hilux Driven By Mark Anthony Reyes Collided.', account),
+    true,
+    'the account\u2019s own words in another case must pass',
+  );
+  // Plates, document codes and vehicle markers obey the same rule.
+  const withPlate = 'Vehicle KJ-48213 was involved.\n' + faithful;
+  assert.equal(arrangeOutputIsFaithful(withPlate, account + ' Plate KJ-48213.'), true, 'a stated plate must pass');
+  assert.equal(arrangeOutputIsFaithful(withPlate, account), false, 'an invented plate must fail');
+  assert.equal(arrangeOutputIsFaithful('V1: Toyota Hilux.\n' + faithful, account), false, 'an invented vehicle marker must fail');
+  // A harmless month shortening is not a guessed code.
+  assert.equal(
+    arrangeOutputIsFaithful('On Oct 24 the Hilux driven by Mark Anthony Reyes collided.', 'On October 24 the Hilux driven by Mark Anthony Reyes collided.'),
+    true,
+    'a month shortening must pass',
+  );
+  assert.equal(arrangeOutputIsFaithful('', account), false, 'an empty answer must fail');
+  assert.equal(arrangeOutputIsFaithful(faithful, ''), false, 'an empty account must fail');
+  // The press wires the gate: a guessing answer never reaches the paper.
+  assert.ok(PANEL.includes('arrangeOutputIsFaithful(text, accountText)'), 'arrange does not gate the model answer');
+});
 test('a filled-then-unsaved read names the save, not missing basics', () => {
   // The screenshot defect: the read filled type/date/place and the save
   // behind the id still failed, and the panel claimed the basics were
@@ -67,7 +110,10 @@ test('one account reader serves both Generate paths, arrange builds via the lib'
   assert.ok(PANEL.includes('await runAccountRead(accountText, { arrangeOnly: true })'), 'arrange must pass arrangeOnly');
   assert.ok(REPORTS.includes('arrangeOnly'), 'sheet read must know arrangeOnly');
   assert.ok(REPORTS.includes("if (afterFirst.incident_type && !arrangeOnly)"), 'arrange must skip type-details');
-  assert.ok(PANEL.includes('setDraft(buildArrangeDraft({ accountText, notableFindings: runFindings, actionTaken: runActionTaken }))'), 'arrange must build via the lib');
+  assert.ok(PANEL.includes('setDraft(withSheetCompletion(buildArrangeDraft({ accountText, notableFindings: runFindings, actionTaken: runActionTaken })))'), 'arrange must build via the lib');
+  // Sheet theft completion (owner request): both sheet drafts run the audit —
+  // fills from the officer's own words, gaps as advisories.
+  assert.ok(PANEL.includes('withSheetCompletion(buildEnhancedDraft('), 'enhance skips the completion audit');
   assert.ok(PANEL.includes('Arrange is a third run entry'), 'arrange does not rewind before reading');
   assert.ok(!PANEL.includes('const cleaned = accountText'), 'inline cleaner must be gone');
 });
@@ -633,6 +679,117 @@ test('enhance keeps document codes capped and spaced without sentence-casing', (
   assert.ok(html.includes('0718SR'), 'enhance damaged a plate: ' + html);
   const prose = formatIncidentReportHtml('FACTS. Tea or coffee. He left.', {});
   assert.ok(prose.includes('or coffee'), 'conjunction was capped: ' + prose);
+});
+
+test('enhance keeps the source order and breaks instead of rearranging', () => {
+  // Owner request: Enhance is a copy-edit of the arranged page, never a
+  // rearrangement — the SAME lines in the SAME order. The formatter must
+  // not re-sort or inject breathing separators here (that rhythm is
+  // Arrange's); it only bolds the labels the source carried.
+  const src = [
+    'REMARKS: None.',
+    'PLACE: Naga City',
+    'FACTS: The wallet was lost.',
+  ].join(LF);
+  const draft = buildEnhancedDraft({ enhancedText: src, sourceText: src });
+  const html = draft.narrative;
+  const at = (s) => html.indexOf(s);
+  assert.ok(at('<b>REMARKS:</b>') < at('<b>PLACE:</b>'), 'enhance re-sorted the source order');
+  assert.ok(at('<b>PLACE:</b>') < at('<b>FACTS:</b>'), 'enhance re-sorted the source order');
+  assert.doesNotMatch(html, /<p><br><\/p>/, 'enhance injected a breathing separator');
+  // Arrange still owns the standard order and rhythm.
+  const arranged = formatIncidentReportHtml(src, { sentenceCase: true });
+  const bt = (s) => arranged.indexOf(s);
+  assert.ok(bt('Place:') < bt('Facts:'), 'arrange lost the standard order');
+  assert.ok(bt('Facts:') < bt('Remarks:'), 'arrange lost the standard order');
+  assert.ok(arranged.includes('<p><br></p>'), 'arrange lost its breathing room');
+});
+
+test('a slash-compound label opens its known section, never prose', () => {
+  // The BW-0441 defect: "Narrative/facts:" is the sheet's own "Facts /
+  // narrative" order written joined — the known side identifies the section,
+  // so the prose below it sorts as Facts instead of gluing onto Remarks.
+  const src = [
+    '"THEFT"',
+    '',
+    'Remarks: Incident recorded and under investigation.',
+    '',
+    'Narrative/facts:',
+    'Investigation revealed that the complainant reported that her wallet containing cash amounting to php 5,000.00 was missing from her bag inside a small store.',
+  ].join(LF);
+  const html = formatIncidentReportHtml(src, { sentenceCase: true });
+  assert.ok(html.includes('<b>Facts:</b>'), 'the compound label did not open Facts: ' + html);
+  assert.ok(!html.includes('Narrative/facts'), 'the compound label leaked through as prose');
+  // A compound of two real sections stays prose: it must not fold under one.
+  const both = formatIncidentReportHtml('Victim/Suspect: Ana Lopez / Juan Dela Cruz');
+  assert.ok(!both.includes('<b>Victim:</b>'), 'an ambiguous compound was folded under one label');
+  // The BW-0443 shape: an ALL-CAPS spaced compound. The generic unknown-label
+  // rule would file it as an unknown section after the closings — the Facts
+  // check runs first, so the shouting heading still opens Facts.
+  const shout = formatIncidentReportHtml('NARRATIVE / FACTS:\n\nINVESTIGATION REVEALED THAT A HILUX AND A MIRAGE COLLIDED ON THE HIGHWAY AND THREE PERSONS DIED WHILE TWO OTHERS WERE HURT AND ALL WERE BROUGHT TO THE HOSPITAL FOR TREATMENT AT ONCE.', { sentenceCase: true });
+  assert.ok(shout.includes('<b>Facts:</b>'), 'the shouting compound did not open Facts: ' + shout);
+  assert.ok(!/Narrative\/facts/i.test(reportHtmlToPlain(shout)), 'the compound leaked through as prose');
+});
+
+test('a front-loaded Remarks still closes the report', () => {
+  // The BW-0441 defect: the account states Remarks first and the narrative
+  // after it, and the paper printed them in that order — Remarks above the
+  // story. The station order owns the page: a blank-separated narrative of
+  // substance leaves the closing section for Facts and sorts ahead of it.
+  const prose = 'Investigation revealed that at the aforementioned date, time, and place of incident, the complainant reported that her wallet containing cash amounting to php 5,000.00, one (1) ATM card, and personal identification cards was missing from her bag. According to the complainant, she left her bag unattended inside a small store while attending to some personal matters, and upon returning she discovered that her wallet was no longer inside her bag.';
+  assert.ok(prose.length >= 200, 'fixture too thin to exercise the split');
+  const src = ['"THEFT"', '', 'Remarks: Incident recorded and under investigation.', '', 'Narrative/facts:', prose].join(LF);
+  const html = formatIncidentReportHtml(src, { sentenceCase: true });
+  const factsAt = html.indexOf('<b>Facts:</b>');
+  const remarksAt = html.indexOf('<b>Remarks:</b>');
+  assert.ok(factsAt !== -1 && remarksAt !== -1, 'both parts must print: ' + html);
+  assert.ok(factsAt < remarksAt, 'Remarks still opens the body: ' + html);
+  assert.ok(html.includes('Incident recorded and under investigation.'), 'the remarks wording was touched');
+  // A short continuation stays glued: a closing written over several lines
+  // is never torn apart for a one-line tail.
+  const short = formatIncidentReportHtml('REMARKS: Case under follow-up.\n\nStill open.', { sentenceCase: true });
+  assert.ok(short.indexOf('Still open') > short.indexOf('<b>Remarks:</b>'), 'a short continuation was split off');
+  // No blank lines at all (a model that squashed the breaks): a long fresh
+  // sentence after a finished closing line is still the narrative.
+  const longTail = 'Investigation revealed that at more or less 7:45 PM of October 24, 2026, a multi-vehicle road accident occurred involving one Hilux, one Mirage and one motorcycle. The Hilux lost control and collided with the Mirage before hitting the motorcycle. Three individuals died while two others were hurt and brought to hospital. All vehicles sustained damage of an undetermined amount. The incident was reported to this office for proper documentation and further investigation. Responding officers secured the area and coordinated with the proper authorities for appropriate legal action without delay.';
+  assert.ok(longTail.length >= 500, 'fixture too thin to exercise the no-blank split');
+  const squashed = reportHtmlToPlain(formatIncidentReportHtml('Remarks: Incident recorded and referred for further investigation.\n' + longTail, { sentenceCase: true }));
+  assert.ok(
+    squashed.indexOf('Investigation revealed') !== -1 && squashed.indexOf('Investigation revealed') < squashed.indexOf('Remarks:'),
+    'the squashed narrative still opens the body: ' + squashed.slice(0, 160),
+  );
+  // ...but a wrapped closing line (unfinished sentence) keeps its own tail.
+  const wrapped = formatIncidentReportHtml('Remarks: Incident recorded and referred\nfor further investigation at length ' + longTail, { sentenceCase: true });
+  assert.ok(!reportHtmlToPlain(wrapped).includes('Facts:'), 'a wrapped closing was torn apart');
+});
+
+test('a one-line paste with no breaks arranges like its spaced twin', () => {
+  // The BW-0446 defect: the same report pasted as one line arranged nothing
+  // — no title, no sections, no order — while the spaced twin arranged
+  // cleanly. Section boundaries are the labels themselves, wherever they sit:
+  // spacing must never decide the arrangement.
+  const oneLine = [
+    '**PHYSICAL INJURY RESULTING FROM A ROAD ALTERCATION** PLACE OF INCIDENT: PUROK 3, LANGTAD, CITY OF NAGA, CEBU',
+    'T/D OF INCIDENT: MORE OR LESS 5:30 PM OF 10-22-26 PERSONS INVOLVED: COMPLAINANT: MARK ANTHONY REYES, MALE, FILIPINO, 28 YEARS OLD, DOB: 06-15-1998, AND A RESIDENT OF PUROK 3.',
+    'RESPONDENT: RONALD JAMES GARCIA, MALE, FILIPINO, 30 YEARS OLD, DOB: 09-12-1996, AND A RESIDENT OF PUROK 5.',
+    'FACTS: INVESTIGATION REVEALED THAT THE COMPLAINANT AND THE RESPONDENT ARGUED. THE RESPONDENT ALLEGEDLY ASSAULTED THE COMPLAINANT.',
+    'RECORDED BY: KAINOA REMARKS: BOTH PARTIES WERE ADVISED TO SETTLE PEACEFULLY.',
+    'THIS CERTIFICATION IS ISSUED UPON THE REQUEST OF MARK ANTHONY REYES FOR WHATEVER LEGAL PURPOSES IT MAY SERVE.',
+  ].join(' ');
+  const html = formatIncidentReportHtml(oneLine, { sentenceCase: true });
+  const plain = reportHtmlToPlain(html);
+  assert.ok(!html.includes('**'), 'markdown vestige leaked onto the paper');
+  assert.ok(html.includes('<b>PHYSICAL INJURY RESULTING FROM A ROAD ALTERCATION</b>'), 'the one-line title was lost: ' + html.slice(0, 120));
+  const heads = ['<b>Place:', '<b>Time/Date:', '<b>Persons involved:', '<b>Complainant:', '<b>Respondent:', '<b>Facts:', '<b>Remarks:', '<b>Recorded by:'];
+  const at = heads.map((h) => html.indexOf(h));
+  assert.ok(at.every((p) => p !== -1), 'a section went missing: ' + JSON.stringify(at));
+  assert.ok(at.every((p, i) => i === 0 || p > at[i - 1]), 'the one-liner lost the station order');
+  // Person rows stay whole: the DOB never breaks away from its name.
+  assert.ok(/Mark Anthony Reyes[^]*?DOB: 06-15-1998/i.test(plain), 'the complainant row was torn apart');
+  assert.ok(/Ronald James Garcia[^]*?DOB: 09-12-1996/i.test(plain), 'the respondent row was torn apart');
+  // The closing issuance takes its own place, requestor dressed.
+  assert.ok(html.includes('<b><u>MARK ANTHONY REYES</u></b>'), 'the issuance requestor was not dressed');
+  assert.ok(plain.indexOf('for whatever legal') > plain.indexOf('Recorded by:'), 'the issuance did not close the report');
 });
 
 test('a Requested-by line builds the closing issuance with the named requestor', () => {
