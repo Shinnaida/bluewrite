@@ -126,6 +126,9 @@ export default function ReportSheetBody({
   revealPending = true,
   onRevealComplete,
   onProgress,
+  // Mirrors reports/ReportSheetBody: the Arrange working state the sheet
+  // draws as pill + shimmer (false when idle). See the live copy's note.
+  arranging = false,
 }) {
   const finalized = report.status === 'finalized';
   const reportNo = report.id ? `BW-${String(report.id).padStart(4, '0')}` : 'BW-____';
@@ -208,6 +211,8 @@ export default function ReportSheetBody({
   const [cursor, setCursor] = useState(() => (animate ? 0 : Number.MAX_SAFE_INTEGER));
   const slots = [];
   let slotAcc = 0;
+  // Mirrors reports/ReportSheetBody: the one slot holding the cursor draws
+  // the live caret (see .pr-caret in styles.css).
   const val = (text) => {
     const t = String(text ?? '');
     if (!typeOn) return t;
@@ -216,7 +221,7 @@ export default function ReportSheetBody({
     slots.push({ start, length: t.length });
     if (cursor >= start + t.length) return t;
     if (cursor <= start) return '';
-    return t.slice(0, cursor - start);
+    return (<>{t.slice(0, cursor - start)}<span className="pr-caret" aria-hidden="true" /></>);
   };
 
   // Only the values that belong to this reveal register a typed slot;
@@ -490,10 +495,21 @@ export default function ReportSheetBody({
   // the printed page) behaves exactly as before.
   return (
     <div
-      className={`pr-sheet-body${typing && !done ? ' pr-sheet-typing' : ''}`}
+      className={`pr-sheet-body${typing && !done ? ' pr-sheet-typing' : ''}${arranging ? ' pr-sheet-working' : ''}`}
       onClick={typing && !done ? skip : undefined}
       title={typing && !done ? 'Click to show the whole draft' : undefined}
     >
+      {/* Mirrors reports/ReportSheetBody: the Arrange working pill. */}
+      {arranging && (
+        <div className="pr-work" role="status" onClick={(e) => e.stopPropagation()}>
+          <span className="pr-work-dot" aria-hidden="true" />
+          {arranging === 'reading'
+            ? 'Reading your account…'
+            : arranging === 'arranging'
+              ? 'Arranging the report…'
+              : 'Typing onto the paper…'}
+        </div>
+      )}
       {/* One live announcement for assistive tech, once the sequence lands —
           the paced text itself is not a live region, so nothing chatters. */}
       {typing && done && (

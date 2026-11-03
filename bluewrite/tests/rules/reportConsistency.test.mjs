@@ -196,8 +196,9 @@ test('a long narrative is kept whole, in its own paragraphs', () => {
 
 test('field blocks breathe at four boundaries, nowhere else', () => {
   // Owner request: one blank-line separator after Time/Date, before Facts,
-  // before Remarks and after Recorded-by — in both Arrange Only and
-  // Enhance Wording, which share the formatter. One per boundary even
+  // before Remarks and after Recorded-by — in Arrange Only, which owns the
+  // page's rhythm. Enhance Wording keeps its source's own breaks instead
+  // (see preserveLayout). One per boundary even
   // when two rules meet there, and never a leading or trailing blank.
   const out = render(TRAFFIC);
   assert.ok(

@@ -4402,6 +4402,81 @@ body.users-fab-open .ir-page-head.users-head {
    shows the finished page immediately, which the component itself handles. */
 .ai-sheet-preview .pr-sheet-typing { cursor: pointer; }
 
+/* ---- The Arrange working reveal (premium typing, no new deps) ----------
+   While an Arrange press runs, the paper itself says what is happening:
+   a status pill (reading → arranging → typing) plus a soft shimmer sweep
+   across the leaf, and a live caret riding the typewriter cursor to the
+   word being written. Reference: Motion's Typewriter (natural human
+   pacing) and streaming-doc UIs — the page is the progress bar. The caret
+   inherits the surrounding ink (currentColor) so it reads on any value. */
+.pr-sheet-body { position: relative; }
+.pr-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: -0.15em;
+  background: currentColor;
+  animation: pr-caret-blink 1s steps(1) infinite;
+}
+@keyframes pr-caret-blink {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: 0; }
+}
+.pr-sheet-working::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 40%, rgba(59, 130, 246, 0.10) 50%, transparent 60%);
+  background-size: 250% 100%;
+  animation: pr-work-sweep 2.2s ease-in-out infinite;
+}
+@keyframes pr-work-sweep {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+.pr-work {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #e7eefc;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.35);
+  pointer-events: none;
+}
+.pr-work-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: #38bdf8;
+  animation: pr-work-pulse 1.1s ease-in-out infinite;
+}
+@keyframes pr-work-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.6); opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pr-caret { animation: none; }
+  .pr-sheet-working::after, .pr-work-dot { animation: none; }
+}
+@media print {
+  .pr-work { display: none; }
+  .pr-caret { display: none; }
+  .pr-sheet-working::after { display: none; }
+}
+
 /* ---- The Preview control, and the screen it opens -------------------------
    A sheet of short bond drawn at 50% in a column is a preview of a page, and
    the officer who wants to read the page asks for it at the paper: the control

@@ -20,6 +20,10 @@ export default function SheetLetterDock({
   revealKey,
   onRevealComplete,
   onProgress,
+  // The paper's working state while an Arrange press runs
+  // ('reading' | 'arranging' | 'typing', false when idle) — the status pill
+  // + shimmer the sheet draws, so the press is watched, not waited on.
+  arranging = false,
   viewportRef,
   editable,
   onEditNarrative,
@@ -68,6 +72,8 @@ export default function SheetLetterDock({
             onRevealComplete={onRevealComplete}
             // Task 10 — the frame follows the words (see AiNarrativePanel).
             onProgress={onProgress}
+            // The Arrange working state the sheet draws as pill + shimmer.
+            arranging={arranging}
           />
         </div>
       </div>

@@ -3565,6 +3565,45 @@ export function ReportEditor({
     setNarrativeUndo(null);
   }
 
+  // Sheet theft completion (owner request): writes the audit's record fills
+  // into the type's own fields through the same setters the account read uses,
+  // so the dirty flag, the autosave, the rule engine and the history see
+  // ordinary edits. A fill whose cell already holds the value is skipped (a
+  // read that landed mid-press), and group rows are only ever appended to or
+  // patched cell by cell — never rewritten, never invented.
+  function applyRecordFills(fills) {
+    const list = Array.isArray(fills) ? fills : [];
+    if (list.length === 0) return;
+    const d = draftRef.current ?? {};
+    const tsPatch = { ...(d.type_specific ?? {}) };
+    let touched = false;
+    for (const f of list) {
+      const t = f?.target;
+      if (!t) continue;
+      if (t.kind === 'ts-cell') {
+        const rows = Array.isArray(tsPatch[t.group]) ? tsPatch[t.group].map((r) => ({ ...r })) : [];
+        while (rows.length <= t.index) rows.push({});
+        if (String(rows[t.index][t.key] ?? '') === String(t.value ?? '')) continue;
+        rows[t.index] = { ...rows[t.index], [t.key]: t.value };
+        tsPatch[t.group] = rows;
+        touched = true;
+      } else if (t.kind === 'ts-row-add') {
+        const rows = Array.isArray(tsPatch[t.group]) ? [...tsPatch[t.group]] : [];
+        rows.push({ ...(t.row ?? {}) });
+        tsPatch[t.group] = rows;
+        touched = true;
+      } else if (t.kind === 'ts-scalar') {
+        if (String(tsPatch[t.key] ?? '') === String(t.value ?? '')) continue;
+        tsPatch[t.key] = t.value;
+        touched = true;
+      }
+    }
+    if (!touched) return;
+    draftRef.current = { ...d, type_specific: tsPatch };
+    dirtyRef.current = true;
+    setDraft((prev) => ({ ...prev, type_specific: tsPatch }));
+  }
+
   // Phase 7 — the account read (POST /ai/classify), wired to the AI panel's
   // Generate button IN THE SHEET FORMAT ONLY.
   //
@@ -4400,6 +4439,10 @@ export function ReportEditor({
       onProvisionalApply={sheet ? provisionalApplyAiDraft : undefined}
       onRestoreProvisional={sheet ? restoreProvisionalSnapshot : undefined}
       onKeepProvisional={sheet ? keepProvisionalApply : undefined}
+      // Sheet theft completion: one-tap fills the audit offers land in the
+      // type's own fields (never invented — every value traces to the
+      // officer's words), so the paper's fact lines complete themselves.
+      onApplyRecordFills={sheet ? applyRecordFills : undefined}
       // TASK 9 — the bondpaper, for the panel to type the draft into IN ITS OWN
       // CARD. This hands over exactly what the sheet needs to draw the letter
       // for the report on screen and nothing more; the panel owns the preview

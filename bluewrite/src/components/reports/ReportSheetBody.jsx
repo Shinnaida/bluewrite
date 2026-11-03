@@ -208,6 +208,11 @@ export default function ReportSheetBody({
   letterHtml = null,
   onEditLetterHtml = null,
   freeReview = false,
+  // The Arrange working state ('reading' | 'arranging' | 'typing', false
+  // when idle): the sheet draws a status pill + shimmer from it while the
+  // press runs, so the officer watches the work instead of a frozen page.
+  // Print and every non-Arrange host leave it off and read as before.
+  arranging = false,
 }) {
   const finalized = report.status === 'finalized';
   const reportNo = report.id ? `BW-${String(report.id).padStart(4, '0')}` : 'BW-____';
@@ -644,6 +649,10 @@ export default function ReportSheetBody({
   }, [freeEdit, letterHtml, cursor, revealKey]);
   const slots = [];
   let slotAcc = 0;
+  // The premium caret: the one slot the cursor sits inside renders a live
+  // caret after its revealed slice (see .pr-caret in styles.css) — the eye
+  // follows the typing instead of hunting the page for what changed. One
+  // slot holds the cursor at a time, so at most one caret ever draws.
   const val = (text) => {
     const t = String(text ?? '');
     if (!typeOn) return t;
@@ -652,7 +661,7 @@ export default function ReportSheetBody({
     slots.push({ start, length: t.length });
     if (cursor >= start + t.length) return t;
     if (cursor <= start) return '';
-    return t.slice(0, cursor - start);
+    return (<>{t.slice(0, cursor - start)}<span className="pr-caret" aria-hidden="true" /></>);
   };
 
   // Only the values that belong to this reveal register a typed slot;
@@ -1293,10 +1302,24 @@ export default function ReportSheetBody({
   return (
     <div
       ref={bodyRef}
-      className={`pr-sheet-body${typing && !done ? ' pr-sheet-typing' : ''}`}
+      className={`pr-sheet-body${typing && !done ? ' pr-sheet-typing' : ''}${arranging ? ' pr-sheet-working' : ''}`}
       onClick={typing && !done ? skip : undefined}
       title={typing && !done ? 'Click to show the whole draft' : undefined}
     >
+      {/* The Arrange working pill: what the press is doing, on the paper
+          itself — reading, arranging, then typing. A live region (polite:
+          it never interrupts), inert to the pointer so clicks still reach
+          the typing page and its click-to-finish. */}
+      {arranging && (
+        <div className="pr-work" role="status" aria-hidden={false} onClick={(e) => e.stopPropagation()}>
+          <span className="pr-work-dot" aria-hidden="true" />
+          {arranging === 'reading'
+            ? 'Reading your account…'
+            : arranging === 'arranging'
+              ? 'Arranging the report…'
+              : 'Typing onto the paper…'}
+        </div>
+      )}
       {/* One live announcement for assistive tech, once the sequence lands —
           the paced text itself is not a live region, so nothing chatters. */}
       {typing && done && (

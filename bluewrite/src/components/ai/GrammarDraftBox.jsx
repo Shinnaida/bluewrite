@@ -18,21 +18,16 @@
 // before it into a plain-text index. The finding under that index owns the
 // menu; a click elsewhere in the box opens no menu at all.
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { checkGrammar, applyGrammarSuggestion } from '../../lib/grammarCheck.js';
+import { checkHarperGrammar, mergeGrammarIssues, warmHarper } from '../../lib/harperGrammar.js';
 
 // Non-overlapping, in order — the checker already promises this, and the
 // twin below depends on it (spans are laid end to end, never nested).
-function orderedIssues(text) {
+function orderedIssues(text, extra) {
   const found = checkGrammar(text);
-  const kept = [];
-  let frontier = -1;
-  for (const i of found) {
-    if (i.start < frontier || i.end <= i.start) continue;
-    kept.push(i);
-    frontier = i.end;
-  }
-  return kept;
+  if (!extra || extra.length === 0) return found;
+  return mergeGrammarIssues(found, extra);
 }
 
 // Plain-text index of a point over the twin: sum every text node before the
@@ -104,7 +99,29 @@ const GrammarDraftBox = React.forwardRef(function GrammarDraftBox(
   forwardedRef,
 ) {
   const text = String(value ?? '');
-  const issues = useMemo(() => orderedIssues(text), [text]);
+  // Deterministic rules paint instantly; Harper (offline WASM) merges in when
+  // ready and adds only record-safe lints — identifiers never flagged.
+  const [harperIssues, setHarperIssues] = useState([]);
+  useEffect(() => {
+    warmHarper();
+  }, []);
+  useEffect(() => {
+    // Debounced: Harper lints 500ms after typing stops, so fast typing never
+    // queues redundant WASM passes — the deterministic rules cover the gap.
+    let live = true;
+    setHarperIssues([]);
+    if (text.trim() === '') return undefined;
+    const timer = setTimeout(() => {
+      checkHarperGrammar(text).then((extra) => {
+        if (live && extra.length > 0) setHarperIssues(extra);
+      });
+    }, 500);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [text]);
+  const issues = useMemo(() => orderedIssues(text, harperIssues), [text, harperIssues]);
   const twinRef = useRef(null);
   const areaRef = useRef(null);
   const wrapRef = useRef(null);

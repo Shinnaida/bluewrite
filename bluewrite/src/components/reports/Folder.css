@@ -1,0 +1,214 @@
+/* Phone-files folder on the Write Report sheet's desk bar.
+   Solid flap folder: tab on top, pages peeking out, click to open. */
+
+.rb-folder {
+  position: relative;
+  display: inline-block;
+}
+
+/* Seated in the sheet's desk bar beside the zoom pill. */
+.ir-sheet-bar .rb-folder {
+  align-self: center;
+}
+
+.rb-folder-hit {
+  position: relative;
+  display: inline-block;
+  width: 84px;
+  height: 62px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* No blue outline/plate on hover or focus — the folder keeps its own look.
+   (The app's global button:hover / :focus-visible would otherwise paint one.) */
+.rb-folder-hit:hover,
+.rb-folder-hit:focus,
+.rb-folder-hit:focus-visible,
+.rb-folder-hit:active {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  background: none;
+  color: inherit;
+}
+
+.rb-folder-back {
+  position: absolute;
+  inset: 10px 0 0 0;
+  border-radius: 4px 8px 8px 8px;
+  background: linear-gradient(180deg, #2f6fd6, #2456a8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.rb-folder-page {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  width: 44px;
+  height: 40px;
+  margin-left: -22px;
+  border-radius: 3px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  transition: transform 0.22s ease;
+}
+
+.rb-folder-page img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rb-folder-page--0 { transform: rotate(-4deg) translate(-6px, -4px); }
+.rb-folder-page--1 { transform: rotate(3deg) translate(6px, -6px); }
+.rb-folder-page--2 { transform: rotate(0deg) translate(0, -9px); }
+
+.rb-folder.is-open .rb-folder-page--0 { transform: rotate(-8deg) translate(-10px, -12px); }
+.rb-folder.is-open .rb-folder-page--1 { transform: rotate(7deg) translate(10px, -14px); }
+.rb-folder.is-open .rb-folder-page--2 { transform: translate(0, -17px); }
+
+.rb-folder-front {
+  position: absolute;
+  inset: 22px 0 0 0;
+  border-radius: 8px;
+  background: linear-gradient(160deg, #5b96f0 0%, #3d8bff 48%, #2f6fd6 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.rb-folder-tab {
+  position: absolute;
+  top: -10px;
+  right: 6px;
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 6px 6px 0 0;
+  background: #3d8bff;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.rb-folder-count {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #0f1c3f;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* ---- Open tray: a simple list anchored to the folder — no pictures here,
+   the photo shows when a row is clicked (review dialog), so no broken
+   thumbnails, just rows. ---- */
+.rb-folder-tray {
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 10px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 320px;
+  max-width: calc(100vw - 2rem);
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 10px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #dbe3f0;
+  box-shadow: 0 18px 44px rgba(15, 28, 63, 0.3);
+}
+
+.rb-folder-empty {
+  margin: 0;
+  color: #5b6b82;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.rb-folder-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+
+.rb-folder-item:focus-visible {
+  outline: 2px solid #3d8bff;
+  outline-offset: 2px;
+}
+
+.rb-folder-badge {
+  flex: none;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #0f1c3f;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.rb-folder-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.rb-folder-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #0f1c3f;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.rb-folder-item-sub {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: #5b6b82;
+  font-size: 11px;
+  line-height: 1.35;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+.rb-folder-go {
+  flex: none;
+  color: #93a3b8;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
