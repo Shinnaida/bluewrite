@@ -574,6 +574,7 @@ final class DashboardController
             'statusSeries' => $statusSeries,
             'locationBreakdown' => $locationBreakdown,
             'system' => $this->systemHealth(),
+            'system_detail' => $this->systemDetails(),
             'users' => [
                 'total' => array_sum($usersByRole),
                 'byRole' => $usersByRole,
@@ -700,6 +701,69 @@ final class DashboardController
             'accountsWithEmail' => $withEmail,
             'accountsWithRecovery' => $withRecovery,
             'accountsWithoutFactor' => $withoutFactor,
+        ];
+    }
+
+    /**
+     * GET /system/health — the status grid's own reading, without the rest of
+     * the dashboard: the panel re-asks on its own beat (see SystemGrid), so a
+     * stale grid is a minute old at most, never a session old. Admin-only like
+     * the dashboard it serves. Deliberately unthrottled: it runs no queries —
+     * the database reading holds by construction (an unreachable database is
+     * the 503 the client already draws), storage is a directory check, and AI
+     * is the provider's own configuration. `checked_at` is when taken.
+     */
+    public function health(): void
+    {
+        Auth::requireRole('Admin');
+        Response::json(200, [
+            'system' => $this->systemHealth(),
+            'system_detail' => $this->systemDetails(),
+            'checked_at' => date('c'),
+        ]);
+    }
+
+    /**
+     * The numbers the status grid wears under each state — measured beside
+     * systemHealth(), on the same beat, and with the same honesty rules: a
+     * reading that cannot be taken is null, never a zero or a guess, and the
+     * grid simply shows no number for it.
+     *
+     *   database  the round trip of one trivial query, in milliseconds.
+     *   storage   free room on the captures disk (whole GB/MB), so a full
+     *             disk is seen coming rather than discovered mid-capture.
+     *   ai        the model that would answer, straight from configuration —
+     *             a name, not a number, because a live ping would spend quota.
+     *   (notifications carries no number here: its unread count is the
+     *   bell's own feed, read client-side from /notifications.)
+     */
+    private function systemDetails(): array
+    {
+        $ping = null;
+        try {
+            $start = microtime(true);
+            Database::pdo()->query('SELECT 1')->fetch();
+            $ping = (int) round((microtime(true) - $start) * 1000);
+        } catch (\Throwable $e) {
+            $ping = null;
+        }
+        $free = null;
+        try {
+            $bytes = @disk_free_space(ReportCaptures::directory());
+            if ($bytes !== false && $bytes !== null) {
+                $free = $bytes >= 1073741824
+                    ? round($bytes / 1073741824, 1) . ' GB free'
+                    : (int) round($bytes / 1048576) . ' MB free';
+            }
+        } catch (\Throwable $e) {
+            $free = null;
+        }
+        $aiCfg = NarrativeService::aiConfig();
+        $model = $aiCfg['gemini']['model'] ?? null;
+        return [
+            'database' => $ping === null ? null : ($ping < 1 ? '<1 ms' : $ping . ' ms'),
+            'storage' => $free,
+            'ai' => is_string($model) && $model !== '' ? $model : null,
         ];
     }
 

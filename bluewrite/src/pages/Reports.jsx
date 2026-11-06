@@ -6646,6 +6646,13 @@ export function ReportsTable({
   onMutated,
   onConnError,
   initialStatus,
+  // The keyword the register was asked to open on — set by the dashboard map's
+  // "See details" link. It is the SAME key the query below already carries,
+  // seeded on mount so the search box shows it and the officer can clear it
+  // like any other filter. Only the mount value is read: after that the bar
+  // owns it (Shell keys the component on it, which is what makes a second
+  // visit with another place a second mount).
+  initialQ = '',
   // The day, and the incident type, the register was asked to open on — set by the
   // dashboard chart's right-click menu. They are the SAME keys the query below
   // already carries, seeded on mount rather than filtered by a new mechanism, so
@@ -6712,8 +6719,10 @@ export function ReportsTable({
     // The search term. No box on the toolbar carries it any more — the search
     // box left this row with Export CSV (owner request, 2026-10-06) — but it
     // stays in the query: it is the endpoint's own key, and Clear filters resets
-    // the whole query in one go.
-    q: '',
+    // the whole query in one go. The dashboard map can seed it with a place
+    // (see initialQ): the keyword search covers location, so the seeded
+    // register is the place's own reports.
+    q: initialQ || '',
     type: initialType || '',
     status: initialStatus ?? '',
     date_from: initialDateFrom || '',

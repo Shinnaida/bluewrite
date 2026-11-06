@@ -641,7 +641,7 @@ export default function Shell({
             // arrive with belongs in it: reaching the register twice with two
             // different days has to be two different mounts, or the second one
             // keeps the first one's range.
-            key={[view.status ?? 'all', view.date_from ?? '', view.date_to ?? '', view.type ?? ''].join('|')}
+            key={[view.status ?? 'all', view.date_from ?? '', view.date_to ?? '', view.type ?? '', view.q ?? ''].join('|')}
             user={user}
             notify={notify}
             onMutated={onReportMutated}
@@ -650,6 +650,7 @@ export default function Shell({
             initialDateFrom={view.date_from}
             initialDateTo={view.date_to}
             initialType={view.type}
+            initialQ={view.q}
             // The list opens a report in its OWN editor panel, so the display
             // preference has to reach it from here as well: without it that
             // editor fell back to the document format, and a report opened

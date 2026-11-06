@@ -8710,6 +8710,36 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    stay on the fields — only the outer page plate is borderless. */
 .dash--cmd .cmd-sys__box.is-online { border-color: color-mix(in srgb, var(--cmd-blue) 45%, var(--cmd-line)); }
 .dash--cmd .cmd-sys__state { color: var(--cmd-blue); }
+/* Status boxes, premium: one gradient tile per service, the state as a live
+   pill with a breathing dot, and the number as the card's hero under a
+   micro-caption. Online cards carry a soft green aura; trouble turns the
+   whole card amber; unknown stays quiet grey. */
+.dash--cmd .cmd-sys__box { overflow: hidden; }
+.dash--cmd .cmd-sys__box::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: #cbd5e1; }
+.dash--cmd .cmd-sys__box.is-online::before { background: linear-gradient(180deg, #22c55e, #86efac); }
+.dash--cmd .cmd-sys__box.is-warn::before { background: linear-gradient(180deg, var(--amber), #fcd34d); }
+.dash--cmd .cmd-sys__glow { position: absolute; inset: -40px -40px auto auto; width: 140px; height: 140px; border-radius: 50%; background: radial-gradient(circle, rgba(34, 197, 94, 0.14), transparent 70%); pointer-events: none; }
+.dash--cmd .cmd-sys__box.is-warn .cmd-sys__glow { background: radial-gradient(circle, rgba(245, 158, 11, 0.16), transparent 70%); }
+.dash--cmd .cmd-sys__icon { grid-area: icon; width: 38px; height: 38px; display: inline-grid; place-items: center; border-radius: 11px; color: #fff; box-shadow: 0 4px 10px -3px rgba(11, 37, 69, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35); }
+.dash--cmd .cmd-sys__icon svg { width: 19px; height: 19px; }
+.dash--cmd .cmd-sys__box--database .cmd-sys__icon { background: linear-gradient(135deg, #1d4ed8, #60a5fa); }
+.dash--cmd .cmd-sys__box--ai .cmd-sys__icon { background: linear-gradient(135deg, #6d28d9, #c4b5fd); }
+.dash--cmd .cmd-sys__box--storage .cmd-sys__icon { background: linear-gradient(135deg, #0e7490, #67e8f9); }
+.dash--cmd .cmd-sys__box--notifications .cmd-sys__icon { background: linear-gradient(135deg, #b45309, #fbbf24); }
+.dash--cmd .cmd-sys__label { grid-area: label; font-size: 13px; font-weight: 800; letter-spacing: 0.01em; }
+.dash--cmd .cmd-sys__state { grid-area: state; justify-self: end; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; padding: 3px 10px 3px 8px; border-radius: 999px; background: rgba(34, 197, 94, 0.12); color: #15803d; white-space: nowrap; }
+.dash--cmd .cmd-sys__box.is-warn .cmd-sys__state { background: rgba(245, 158, 11, 0.14); }
+.dash--cmd .cmd-sys__dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: cmd-sys-pulse 2s ease-out infinite; }
+@keyframes cmd-sys-pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); } 70% { box-shadow: 0 0 0 7px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+.dash--cmd .cmd-sys__metric { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 1px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
+.dash--cmd .cmd-sys__metric-cap { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: #94a3b8; }
+.dash--cmd .cmd-sys__metric-val { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; color: var(--ir-navy, #0b2545); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The grid's own pulse: when its readings were taken, and the hand that
+   retakes them. A real function, not furniture — the grid re-asks the server
+   every minute and on demand. */
+.dash--cmd .cmd-sys__foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #eef2f7; }
+.dash--cmd .cmd-sys__checked { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 700; color: #94a3b8; font-variant-numeric: tabular-nums; }
+.dash--cmd .cmd-sys__checked::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
 .dash--cmd .cmd-sys__box.is-warn .cmd-sys__state { color: var(--amber); }
 .dash-grid-trio { gap: 12px; margin-top: 12px; }
 
@@ -8738,6 +8768,28 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--cmd .cmd-donut__name { color: var(--cmd-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash--cmd .cmd-donut__count { color: var(--paper); font-weight: 700; font-variant-numeric: tabular-nums; }
 .dash--cmd .cmd-donut__pct { color: var(--cmd-muted); font-variant-numeric: tabular-nums; }
+/* Top Locations: the Map/List switch, the Naga City map, and its pins. The
+   map owns a stacking context so Leaflet's panes never escape over the shell. */
+.dash--cmd .cmd-loc-toggle { display: inline-flex; gap: 2px; background: #eef2f7; border: 1px solid #e2e8f0; border-radius: 999px; padding: 2px; }
+.dash--cmd .cmd-loc-toggle button { border: none; background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 11px; font-weight: 800; color: #5b6b84; cursor: pointer; transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease; }
+.dash--cmd .cmd-loc-toggle button.is-on { background: #fff; color: var(--ir-navy, #0b2545); box-shadow: 0 1px 2px rgba(15, 31, 61, 0.18); }
+.dash--cmd .cmd-loc-toggle button:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+.dash--cmd .cmd-locmap { display: flex; flex-direction: column; gap: 6px; }
+.dash--cmd .cmd-locmap__map { position: relative; z-index: 0; height: 380px; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; background: #eef2f7; }
+.dash--cmd .cmd-locmap__map.leaflet-container { font: inherit; }
+.dash--cmd .cmd-locmap__map .leaflet-control-attribution { font-size: 9px; background: rgba(255, 255, 255, 0.75); }
+.dash--cmd .cmd-map-pin { display: grid; place-items: center; border-radius: 50%; background: var(--ir-navy, #0b2545); border: 2px solid #fff; box-shadow: 0 2px 8px rgba(11, 37, 69, 0.45); }
+.dash--cmd .cmd-map-pin span { color: #fff; font-size: 11px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.dash--cmd .cmd-map-pin--top { background: var(--ir-gold, #f0b429); }
+.dash--cmd .cmd-map-pin--top span { color: var(--ir-navy, #0b2545); }
+.dash--cmd .cmd-locmap__note { margin: 0; font-size: 11px; font-weight: 600; color: #94a3b8; }
+.dash--cmd .cmd-locmap__link { border: none; background: none; padding: 0; font: inherit; font-weight: 800; color: #1d4ed8; cursor: pointer; }
+.dash--cmd .cmd-locmap__link:hover { text-decoration: underline; }
+/* The pin popup's own link: the popup is Leaflet's DOM, so its class is
+   styled here rather than in a component. Opens the register seeded with
+   the pin's place (see initialQ). */
+.dash--cmd .cmd-map-details { display: inline-block; margin-top: 6px; border: none; background: none; padding: 0; font-size: 12px; font-weight: 800; color: #1d4ed8; cursor: pointer; }
+.dash--cmd .cmd-map-details:hover { text-decoration: underline; }
 /* Top locations: one row per place, each bar a share of the busiest street. */
 .dash--cmd .cmd-places { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
 .dash--cmd .cmd-places li { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 13px; }
@@ -8748,27 +8800,25 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 /* System status: four boxes, each naming its state (owner request,
    2026-10-30 — Online in green when healthy). Anything but online paints
    amber, so trouble still reads at a glance. Each box fits its contents. */
-.dash--cmd .cmd-sys__dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .dash--cmd .cmd-sys__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .dash--cmd .cmd-sys__box {
+  position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-areas: "icon label" "icon state";
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "icon label state" "metric metric metric";
   column-gap: 10px;
   align-items: center;
-  background: var(--panel-raised);
+  background: linear-gradient(180deg, #ffffff, #f7fbff);
   border: 1px solid var(--cmd-line);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: 14px;
+  padding: 12px 12px 12px 15px;
+  box-shadow: 0 1px 2px rgba(15, 31, 61, 0.05);
+  transition: transform 160ms ease, box-shadow 160ms ease;
 }
+.dash--cmd .cmd-sys__box:hover { transform: translateY(-2px); box-shadow: 0 10px 22px -12px rgba(11, 37, 69, 0.35); }
 .dash--cmd .cmd-sys__box.is-warn { border-color: var(--amber); }
-.dash--cmd .cmd-sys__icon { grid-area: icon; width: 30px; height: 30px; display: inline-grid; place-items: center; border-radius: 8px; background: var(--cyan-bg); color: var(--cyan); }
-.dash--cmd .cmd-sys__icon svg { width: 16px; height: 16px; }
-.dash--cmd .cmd-sys__label { grid-area: label; font-size: 12.5px; font-weight: 600; color: var(--cmd-ink); }
-.dash--cmd .cmd-sys__state { grid-area: state; display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: var(--green-ink); }
-.dash--cmd .cmd-sys__box.is-online { border-color: color-mix(in srgb, var(--green-ok) 45%, var(--cmd-line)); }
-.dash--cmd .cmd-sys__box.is-online .cmd-sys__state { color: var(--green-ink); }
-.dash--cmd .cmd-sys__box.is-warn .cmd-sys__state { color: var(--amber); }
+.dash--cmd .cmd-sys__box.is-online .cmd-sys__state { color: #15803d; }
+.dash--cmd .cmd-sys__box.is-warn .cmd-sys__state { color: #b45309; }
 /* The hand-drawn charts keep the light base ink (chart-grid, chart-axis and the
    1px stack-band seams); the page adds nothing over them. Activity rows and
    status chips likewise wear the base light rules — except the System chip,
@@ -9453,7 +9503,11 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 /* One row per band: a full-height block of its ramp step, its name, its count.
    The rows abut with no gap, so the column of blocks IS the magnified stack and
    its silhouette matches the column in the plot. */
-.dash-mag__stack { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+/* The rows accept exactly one gesture — double-click opens the day's register
+   on that type — while the card around them stays click-through, so sweeps
+   across columns still pass through to the plot. */
+.dash-mag__stack { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; pointer-events: auto; }
+.dash-mag__stack li { cursor: pointer; }
 /* The narrowest this card can get is set by the LONGEST TYPE NAME, not by taste:
    "Property Damage / Malicious Mischief" has to stay on one line, because a row
    that wrapped would grow taller than the band it stands for and the magnified

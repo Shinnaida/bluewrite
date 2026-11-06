@@ -427,6 +427,14 @@ try {
         (new DashboardController())->stats();
     }
 
+    // GET /system/health — the System Status grid's live reading (see
+    // DashboardController::health): the same four measurements the dashboard
+    // carries, re-asked on the panel's own beat without reloading the range.
+    // Admin-only inside the controller, like the dashboard it serves.
+    if ($seg0 === 'system' && $seg1 === 'health' && $method === 'GET') {
+        (new DashboardController())->health();
+    }
+
     // The dashboard's "Search the news" panel: a proxy to the news API, so the
     // API token stays on the server. Admin-only (see NewsController).
     if ($seg0 === 'news' && $seg1 === 'search' && $method === 'GET') {

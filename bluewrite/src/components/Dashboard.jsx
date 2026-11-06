@@ -1,4 +1,9 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+// Leaflet's CSS is safe to bundle statically, but the library itself touches
+// `window` at import time — so it loads lazily inside LocationMap (see the
+// dynamic import there) and a static import here would break server-side
+// rendering (the rule-test harness renders this file in Node).
+import 'leaflet/dist/leaflet.css';
 import { api, apiBlobUrl, isUnreachable } from '../lib/api.js';
 import { ServerPhoto } from './Avatar.jsx';
 // The incident-category rank chart's rules — bucketing, per-bucket ranks, which types
@@ -200,15 +205,15 @@ function personIdBackImage(user, presence) {
     ctx.fillRect(0, 300, W, 14);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ffffff';
-    ctx.font = '800 60px system-ui, sans-serif';
-    ctx.fillText('STATION ID', W / 2, 150);
-    ctx.font = '700 44px system-ui, sans-serif';
+    ctx.font = '800 66px system-ui, sans-serif';
+    ctx.fillText('STATION ID', W / 2, 152);
+    ctx.font = '700 48px system-ui, sans-serif';
     ctx.fillStyle = gold;
-    ctx.fillText(String(user?.role ?? 'OFFICER').toUpperCase(), W / 2, 220);
+    ctx.fillText(String(user?.role ?? 'OFFICER').toUpperCase(), W / 2, 224);
     ctx.fillStyle = '#ffffff';
-    ctx.font = '800 76px system-ui, sans-serif';
+    ctx.font = '800 94px system-ui, sans-serif';
     const name = String(user?.full_name ?? 'Unknown');
-    ctx.fillText(name.length > 20 ? `${name.slice(0, 19)}…` : name, W / 2, 470);
+    ctx.fillText(name.length > 18 ? `${name.slice(0, 17)}…` : name, W / 2, 484);
     ctx.textAlign = 'left';
     const rows = [
       ['BADGE', String(user?.badge_number ?? '—')],
@@ -217,15 +222,17 @@ function personIdBackImage(user, presence) {
       ['STATUS', String(user?.status ?? 'active')],
       ['EMAIL', String(user?.email ?? '—')],
     ];
+    // Set large but bounded: labels 46px, values 56px, five rows of 150px
+    // ending at 1266 — clear of the status pill baked at 1292.
     let y = 600;
     rows.forEach(([k, v]) => {
       ctx.fillStyle = gold;
-      ctx.font = '800 38px system-ui, sans-serif';
+      ctx.font = '800 46px system-ui, sans-serif';
       ctx.fillText(k, 112, y);
       ctx.fillStyle = '#ffffff';
-      ctx.font = '700 44px system-ui, sans-serif';
-      const val = v.length > 28 ? `${v.slice(0, 27)}…` : v;
-      ctx.fillText(val, 112, y + 58);
+      ctx.font = '700 56px system-ui, sans-serif';
+      const val = v.length > 24 ? `${v.slice(0, 23)}…` : v;
+      ctx.fillText(val, 112, y + 66);
       y += 150;
     });
     drawStatusPill(ctx, W, H, presence ?? { state: 'offline', label: 'Offline' });
@@ -961,10 +968,325 @@ export function LocationBars({ places }) {
           </span>
           <span className="cmd-places__count">{fmt.format(p.count)}</span>
         </li>
-      ))}
-    </ul>
+      ))}      </ul>
   );
 }
+
+// ---- Top Locations as a real map ---------------------------------------------
+// Naga City, Cebu: the whole register is the station's own backyard, so the
+// map opens on it instead of the world. Every list row gets a pin: addresses
+// carrying a barangay resolve INSTANTLY against the baked-in centroids below
+// (no network, nothing to fail), and anything else goes to Nominatim —
+// OpenStreetMap's free geocoder, no key or account — with the city biasing
+// the ranking. A place nothing can place stays unpinned and listed; the map
+// never invents a pin.
+const NAGA_CENTER = [10.2083, 123.7585];
+// Nominatim viewbox: left,top,right,bottom around Naga City, Cebu — a ranking
+// bias only, never a hard bound. (A hard bound plus a full street address
+// silently resolves to nothing, which is how the map once lost every pin.)
+const NAGA_VIEWBOX = '123.66,10.28,123.85,10.12';
+const GEO_CACHE_KEY = 'naga-geo-v1';
+// Safety cap only: the register sends at most its top 5, and every one of
+// them gets pinned — nothing in the list is left off the map.
+const GEO_MAX = 12;
+// Naga City's 28 barangays with their true centroids (resolved once against
+// OpenStreetMap, baked in): the barangay is the reliable anchor in a
+// hand-typed address ("Public market, Purok 3, Brgy. West Poblacion" pins on
+// West Poblacion). Longest names match first so "East Poblacion" wins over a
+// bare "Poblacion".
+const NAGA_BARANGAY_PINS = {
+  Alpaco: [10.24206, 123.69424],
+  Bairan: [10.19771, 123.71968],
+  Balirong: [10.2567, 123.71077],
+  Cabungahan: [10.21364, 123.72028],
+  'Cantao-an': [10.24507, 123.75246],
+  'Central Poblacion': [10.20747, 123.75725],
+  Cogon: [10.26864, 123.73999],
+  Colon: [10.21989, 123.76149],
+  'East Poblacion': [10.20987, 123.75943],
+  Inayagan: [10.23645, 123.77452],
+  Inoburan: [10.18891, 123.73974],
+  Jaguimit: [10.22919, 123.70907],
+  Lanas: [10.27244, 123.71701],
+  Langtad: [10.18364, 123.73279],
+  Lutac: [10.24892, 123.72587],
+  Mainit: [10.21694, 123.73136],
+  Mayana: [10.2888, 123.69489],
+  Naalad: [10.20954, 123.74429],
+  'North Poblacion': [10.21241, 123.75879],
+  Pangdan: [10.23263, 123.72731],
+  Patag: [10.23024, 123.69931],
+  'South Poblacion': [10.20348, 123.75524],
+  Tagjaguimit: [10.26576, 123.68113],
+  Tangke: [10.21611, 123.75353],
+  Tinaan: [10.19356, 123.74513],
+  Tuyan: [10.22824, 123.76728],
+  Uling: [10.28019, 123.71152],
+  'West Poblacion': [10.21109, 123.75356],
+};
+
+// Named landmarks for the generic words registers love ("church in City of
+// Naga", "near the market"): each verified once against OpenStreetMap and
+// baked in. A barangay still wins over a landmark — "chapel, Brgy. Langtad"
+// pins on Langtad, not on the parish church across town.
+const NAGA_LANDMARKS = [
+  { keys: ['church', 'chapel', 'parish', 'simbahan', 'shrine'], name: 'Archdiocesan Shrine of St. Francis de Assisi', lat: 10.20883, lon: 123.75822 },
+  { keys: ['city hall', 'municipal hall', 'munisipyo', 'bulwagang'], name: 'Naga City Hall', lat: 10.20712, lon: 123.75993 },
+  { keys: ['public market', 'market', 'merkado', 'mercado'], name: 'City of Naga Public Market', lat: 10.20542, lon: 123.76003 },
+  { keys: ['park', 'plaza', 'ocean park', 'playground'], name: 'St. Francis Ocean Park', lat: 10.20832, lon: 123.76011 },
+];
+
+const normPlace = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+function findLandmark(label) {
+  const hay = ` ${normPlace(label)} `;
+  return NAGA_LANDMARKS.find((m) => m.keys.some((k) => hay.includes(` ${k} `))) ?? null;
+}
+
+function findBarangayPin(label) {
+  const hay = ` ${normPlace(label)} `;
+  const ranked = Object.keys(NAGA_BARANGAY_PINS).sort((a, b) => b.length - a.length);
+  const name = ranked.find((n) => hay.includes(` ${normPlace(n)} `)) ?? null;
+  if (!name) return null;
+  const [lat, lon] = NAGA_BARANGAY_PINS[name];
+  return { name, lat, lon };
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const escHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const escAttr = (s) => escHtml(s).replace(/"/g, '&quot;');
+
+function readGeoCache() {
+  try {
+    const raw = localStorage.getItem(GEO_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function geocodeNaga(label) {
+  const bare = String(label ?? '').trim();
+  if (!bare) return null;
+  // Only reached when no barangay was recognized: try the full address, then
+  // its head, against Cebu with the city biasing the ranking. Hits naming
+  // Naga win over same-named places elsewhere in the province.
+  const first = bare.split(',')[0].trim();
+  const tries = [bare, ...(first && first !== bare ? [first] : [])];
+  for (const q of tries) {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=3&countrycodes=ph&viewbox=${NAGA_VIEWBOX}&q=${encodeURIComponent(`${q}, Cebu, Philippines`)}`;
+      const res = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!res.ok) continue;
+      const hits = await res.json();
+      const list = Array.isArray(hits) ? hits : [];
+      const hit = list.find((h) => /naga/i.test(h.display_name || '')) ?? list[0] ?? null;
+      if (hit && Number.isFinite(Number(hit.lat)) && Number.isFinite(Number(hit.lon))) {
+        return { lat: Number(hit.lat), lon: Number(hit.lon) };
+      }
+    } catch {
+      // Offline or blocked: the place stays unpinned, the list still counts it.
+      return null;
+    }
+  }
+  return null;
+}
+
+// Pins for the map, in the list's own order (first = busiest). Re-resolves
+// whenever the range's places change; cached answers apply instantly.
+function usePlacePins(places) {
+  const [pins, setPins] = useState([]);
+  const [pending, setPending] = useState(false);
+  useEffect(() => {
+    const rows = (Array.isArray(places) ? places : []).filter((p) => p.count > 0).slice(0, GEO_MAX);
+    if (rows.length === 0) {
+      setPins([]);
+      setPending(false);
+      return undefined;
+    }
+    let live = true;
+    const cache = readGeoCache();
+    const save = () => {
+      try {
+        localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(cache));
+      } catch {
+        // A full or blocked store only costs re-lookups, never the pins.
+      }
+    };
+    setPending(true);
+    (async () => {
+      const out = [];
+      let idx = 0;
+      for (const row of rows) {
+        const key = String(row.location ?? '').trim().toLowerCase();
+        if (!key) continue;
+        // Barangay addresses never touch the network: the pin is known.
+        const instant = findBarangayPin(row.location);
+        if (instant) {
+          out.push({ location: row.location, count: row.count, lat: instant.lat, lon: instant.lon, top: idx === 0, placed: null });
+          idx += 1;
+          continue;
+        }
+        // Then the named landmarks: "church in City of Naga" pins on the
+        // parish church itself, not on a city-wide shrug.
+        const mark = findLandmark(row.location);
+        if (mark) {
+          out.push({ location: row.location, count: row.count, lat: mark.lat, lon: mark.lon, top: idx === 0, placed: mark.name });
+          idx += 1;
+          continue;
+        }
+        let hit = cache[key];
+        if (!hit) {
+          hit = await geocodeNaga(row.location);
+          if (!live) return;
+          if (hit) {
+            cache[key] = hit;
+            save();
+          }
+          await sleep(900);
+          if (!live) return;
+        }
+        if (hit) {
+          out.push({ location: row.location, count: row.count, lat: hit.lat, lon: hit.lon, top: idx === 0 });
+          idx += 1;
+        }
+      }
+      if (live) {
+        setPins(out);
+        setPending(false);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [places]);
+  return { pins, pending };
+}
+
+export function LocationMap({ places, onShowList, onSeeDetails }) {
+  const elRef = useRef(null);
+  const mapRef = useRef(null);
+  const layerRef = useRef(null);
+  const leafletRef = useRef(null);
+  const [mapsReady, setMapsReady] = useState(false);
+  // The popup is Leaflet's DOM, not React's: the "See details" button it
+  // carries reaches back through this ref, wired once on popupopen.
+  const seeRef = useRef(null);
+  seeRef.current = onSeeDetails;
+  const rows = (Array.isArray(places) ? places : []).filter((p) => p.count > 0).slice(0, GEO_MAX);
+  const { pins, pending } = usePlacePins(places);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer = null;
+    // Leaflet touches `window` at import time: lazy in the browser only, so
+    // server-side rendering (rule tests) never executes it.
+    import('leaflet').then(({ default: L }) => {
+      if (cancelled || !elRef.current || mapRef.current) return;
+      // minZoom 12 is the widest the map goes: the whole of Naga City and its
+      // coast, never the island, the country, or the world beyond it.
+      const map = L.map(elRef.current, { scrollWheelZoom: false, minZoom: 12 }).setView(NAGA_CENTER, 13);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      }).addTo(map);
+      // The page scrolls; the wheel only zooms once the map itself has focus.
+      map.on('focus', () => map.scrollWheelZoom.enable());
+      map.on('blur', () => map.scrollWheelZoom.disable());
+      map.on('popupopen', (ev) => {
+        const btn = ev.popup?.getElement()?.querySelector('[data-cmd-see-details]');
+        if (btn && !btn.dataset.wired) {
+          btn.dataset.wired = '1';
+          btn.addEventListener('click', () => seeRef.current?.(btn.getAttribute('data-loc') || ''));
+        }
+      });
+      mapRef.current = map;
+      layerRef.current = L.layerGroup().addTo(map);
+      leafletRef.current = L;
+      timer = setTimeout(() => map.invalidateSize(), 80);
+      setMapsReady(true);
+    }).catch(() => {
+      // No map library, no map: the list view still counts every place.
+    });
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      mapRef.current?.remove();
+      mapRef.current = null;
+      layerRef.current = null;
+      leafletRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const L = leafletRef.current;
+    const map = mapRef.current;
+    const layer = layerRef.current;
+    if (!L || !map || !layer) return;
+    layer.clearLayers();
+    if (pins.length === 0) {
+      map.setView(NAGA_CENTER, 13);
+      return;
+    }
+    const max = Math.max(...pins.map((p) => p.count), 1);
+    pins.forEach((p) => {
+      const size = 30 + Math.round((p.count / max) * 14);
+      L.marker([p.lat, p.lon], {
+        title: p.location,
+        icon: L.divIcon({
+          className: `cmd-map-pin${p.top ? ' cmd-map-pin--top' : ''}`,
+          html: `<span>${p.count}</span>`,
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size / 2],
+        }),
+      })
+        .bindPopup(`<strong>${escHtml(p.location)}</strong><br>${p.count} report${p.count === 1 ? '' : 's'} in range${p.placed ? `<br><em>pinned at ${escHtml(p.placed)}</em>` : ''}<br><button type="button" class="cmd-map-details" data-cmd-see-details="1" data-loc="${escAttr(p.location)}">See details &rarr;</button>`)
+        .addTo(layer);
+    });
+    map.fitBounds(L.latLngBounds(pins.map((p) => [p.lat, p.lon])).pad(0.25), { maxZoom: 15 });
+  }, [pins, mapsReady]);
+
+  if (rows.length === 0) return <EmptyNote>No places recorded in this range.</EmptyNote>;
+  const unplotted = rows.length - pins.length;
+  return (
+    <div className="cmd-locmap">
+      <div ref={elRef} className="cmd-locmap__map" role="application" aria-label="Map of report locations in Naga City, Cebu" />
+      {pending && pins.length === 0 ? (
+        <p className="cmd-locmap__note">Pinning places on the map…</p>
+      ) : unplotted > 0 && (
+        <p className="cmd-locmap__note">
+          {unplotted} place{unplotted === 1 ? '' : 's'} couldn&apos;t be pinned{onShowList ? (<> — <button type="button" className="cmd-locmap__link" onClick={onShowList}>see the list</button></>) : '.'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Top Locations with a Map/List switch: the map pins the range on Naga City,
+// the list keeps the exact counts. The toggle lives in the panel's own aside
+// slot, beside the title rather than inside the reading.
+function LocationsPanel({ places, loading, onOpenReports }) {
+  const [mode, setMode] = useState('map');
+  return (
+    <Panel
+      title="Top Locations"
+      aside={(
+        <div className="cmd-loc-toggle" role="group" aria-label="Top locations view">
+          <button type="button" className={mode === 'map' ? 'is-on' : ''} aria-pressed={mode === 'map'} onClick={() => setMode('map')}>Map</button>
+          <button type="button" className={mode === 'list' ? 'is-on' : ''} aria-pressed={mode === 'list'} onClick={() => setMode('list')}>List</button>
+        </div>
+      )}
+    >
+      {loading ? <PanelSkeleton /> : mode === 'map'
+        ? <LocationMap places={places} onShowList={() => setMode('list')} onSeeDetails={(loc) => onOpenReports?.({ q: loc })} />
+        : <LocationBars places={places} />}
+    </Panel>
+  );
+}
+
+/** Micro-caption over each box's number, so the figure reads instantly. */
+const SYSTEM_METRIC_CAP = { database: 'Ping', storage: 'Disk free', ai: 'Model', notifications: 'Inbox' };
 
 /** The four services the status grid names, in the grid's own order. */
 const SYSTEM_SERVICES = [
@@ -1001,28 +1323,78 @@ function ServiceMark({ name }) {
 }
 
 /**
- * THE STATION'S OWN PULSE, as four boxes: the database that answered this very
- * response, the captures disk, the AI provider, and the bell's feed — each
- * measured server-side and handed down in `data.system`, never guessed in the
- * browser. Every box names its state (owner request, 2026-10-30: Online in
- * green when healthy); anything else paints amber, so trouble still reads at
- * a glance.
+ * THE STATION'S OWN PULSE, as four boxes: the database that answers, the
+ * captures disk, the AI provider, and the bell's feed — each measured
+ * server-side, never guessed in the browser. The grid opens on the dashboard
+ * response's own readings, then re-asks `GET /system/health` on its own beat
+ * (mount + every minute) with a manual Recheck, so a stale grid is a minute
+ * old at most. A failed check keeps the last readings and says so — the grid
+ * never paints Online on a guess. Every box names its state (owner request,
+ * 2026-10-30: Online in green when healthy); anything else paints amber, and
+ * the bell's box carries its live unread count. A service the response does
+ * not name is UNKNOWN — a missing key means the read did not happen, not
+ * that the service is fine.
  */
 export function SystemGrid({ system }) {
-  const state = system && typeof system === 'object' ? system : {};
-  // A service the response does not name is UNKNOWN — never assumed online.
-  // The endpoint measures all four on every read, so a missing key means the
-  // read did not happen, not that the service is fine.
+  const initial = system && typeof system === 'object' ? system : {};
+  const [live, setLive] = useState(initial);
+  // The numbers under each state (ping ms, free disk, model name) — measured
+  // server-side beside the states, arriving on the same beat.
+  const [detail, setDetail] = useState({});
+  const [unread, setUnread] = useState(null);
+  const [checkedAt, setCheckedAt] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const recheck = useCallback(async () => {
+    setChecking(true);
+    try {
+      const [h, n] = await Promise.all([
+        api('/system/health').catch(() => null),
+        api('/notifications').catch(() => null),
+      ]);
+      if (h && h.system && typeof h.system === 'object') {
+        setLive(h.system);
+        setCheckedAt(h.checked_at ?? new Date().toISOString());
+        setFailed(false);
+      } else {
+        setFailed(true);
+      }
+      if (h && h.system_detail && typeof h.system_detail === 'object') setDetail(h.system_detail);
+      if (n && typeof n.unread === 'number') setUnread(n.unread);
+    } finally {
+      setChecking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    recheck();
+    const t = setInterval(recheck, 60000);
+    return () => clearInterval(t);
+  }, [recheck]);
+
+  const stamp = (() => {
+    if (!checkedAt) return null;
+    const d = new Date(checkedAt);
+    if (Number.isNaN(+d)) return null;
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  })();
+  const caption = checking ? 'Checking…' : failed ? 'Check failed — last reading kept' : stamp ? `Checked ${stamp}` : null;
+
   return (
     <div className="cmd-sys">
       <ul className="cmd-sys__grid">
         {SYSTEM_SERVICES.map((s) => {
-          const value = state[s.id];
+          const value = live[s.id];
           const ok = value === 'online';
           const un = value === undefined || value === null;
           const stateText = ok ? 'Online' : value === 'readonly' ? 'Read-only' : value === 'offline' ? 'Offline' : 'Unknown';
+          const sub = s.id === 'notifications'
+            ? (unread !== null ? (unread > 0 ? `${unread} unread` : 'All caught up') : null)
+            : (typeof detail[s.id] === 'string' && detail[s.id] !== '' ? detail[s.id] : null);
           return (
-            <li key={s.id} className={`cmd-sys__box${ok ? ' is-online' : ''}${!ok && !un ? ' is-warn' : ''}`} aria-label={`${s.label}: ${(stateText ?? 'unknown').toLowerCase()}`}>
+            <li key={s.id} className={`cmd-sys__box cmd-sys__box--${s.id}${ok ? ' is-online' : ''}${!ok && !un ? ' is-warn' : ''}`} aria-label={`${s.label}: ${(stateText ?? 'unknown').toLowerCase()}${sub ? `, ${sub}` : ''}`}>
+              <span className="cmd-sys__glow" aria-hidden="true" />
               <span className="cmd-sys__icon" aria-hidden="true">
                 <ServiceMark name={s.mark} />
               </span>
@@ -1031,10 +1403,21 @@ export function SystemGrid({ system }) {
                 <span className="cmd-sys__dot" aria-hidden="true" />
                 {stateText}
               </span>
+              {sub && (
+                <span className="cmd-sys__metric">
+                  <span className="cmd-sys__metric-cap">{SYSTEM_METRIC_CAP[s.id] ?? 'Detail'}</span>
+                  <span className="cmd-sys__metric-val">{sub}</span>
+                </span>
+              )}
             </li>
           );
         })}
       </ul>
+      {/* No button: the grid re-asks on its own beat (mount + every minute),
+          so the caption below is the whole control an officer needs. */}
+      <div className="cmd-sys__foot">
+        {caption && <span className="cmd-sys__checked">{caption}</span>}
+      </div>
     </div>
   );
 }
@@ -1889,7 +2272,7 @@ export default function Dashboard({
                         backImage={idFaces[person.id]?.back}
                         imageFit="cover"
                         cardColor="#ffffff"
-                        strapColor={person.role === 'Admin' ? '#b91c1c' : '#0b2545'}
+                        strapColor={person.role === 'Admin' ? '#1d4ed8' : '#eab308'}
                         metal="gold"
                         finish="glossy"
                         size={0.75}
@@ -1979,11 +2362,7 @@ export default function Dashboard({
           moved into the Total Reports plate, so two panels share this row:
           where it happened, and the station's own pulse. */}
       <div className="dash-grid-trio">
-        {loading ? <PanelSkeleton /> : (
-          <Panel title="Top Locations">
-            <LocationBars places={data?.locationBreakdown} />
-          </Panel>
-        )}
+        <LocationsPanel places={data?.locationBreakdown} loading={loading} onOpenReports={onOpenReports} />
         {loading ? <PanelSkeleton /> : (
           <Panel title="System Status">
             <SystemGrid system={data?.system} />
@@ -2670,12 +3049,15 @@ function StackedColumns({
           heights are proportional, so it is the column enlarged rather than a
           caption about it.
 
-          IT DOES NOT TAKE THE POINTER, on purpose. The chart's own boxes are the
-          input and this is the display, so every label is legible without hovering
-          anything, and the card cannot get in the way while the reader sweeps
-          across the columns. A card that accepted the pointer would sit in the path
-          from one day to the next and swallow the sweep, and any card that opened
-          under the cursor would end it entirely. */}
+          IT DOES NOT TAKE THE POINTER, on purpose — with ONE exception. The
+          chart's own boxes are the input and this is the display, so every label
+          is legible without hovering anything, and the card cannot get in the way
+          while the reader sweeps across the columns. A card that accepted the
+          pointer would sit in the path from one day to the next and swallow the
+          sweep, and any card that opened under the cursor would end it entirely.
+          The exception is the rows' DOUBLE-CLICK: it opens the register on that
+          day and type, and a double-click is not a sweep, so the one gesture the
+          card accepts is one the sweep never makes. */}
       {shownDay && (
         <div
           className="dash-mag"
@@ -2704,6 +3086,8 @@ function StackedColumns({
                 key={b.type}
                 className={picked === b.rank ? 'is-picked' : undefined}
                 style={{ minHeight: `${Math.max(MAG_BAND_MIN_H, Math.round(b.value * pxPerReport))}px` }}
+                title={`Double-click to open ${b.type} reports for ${shownDay.date} in All Reports`}
+                onDoubleClick={() => onOpenDay?.({ date: shownDay.date, type: b.type })}
               >
                 <span className="dash-mag__chip" style={{ background: rampColor(b.rank) }} aria-hidden="true" />
                 <span className="dash-mag__name">{b.type}</span>
