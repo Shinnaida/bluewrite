@@ -3091,37 +3091,36 @@ body.profile-panel-open {
    uppercase header row, a face beside each name, the role as a quiet tag, and the
    status as a dotted chip. Every rule restates a token, not a colour. */
 /* THE SCREEN'S PAGE: white, as All Reports is, with the station's gold as the accent.
-   Scoped to `body.users-fab-open`, the class the screen publishes for its whole lifetime
-   (Users.jsx), so the page is white on the directory, the account page and the form alike,
+   Scoped to the directory's own head, so the page is white on the directory
    and no other screen is touched. */
-body.users-fab-open .main.ir-body { background: #ffffff; }
+.main.ir-body:has(.ir-page-head.users-head) { background: #ffffff; }
 /* THE BLUE: the title band paints its own navy veil (.ir-page-head::after) over a tinted
    card, which is the gradient the screen showed. On this screen the band is white and the
    veil is off, so the head reads like All Reports' white surface. */
 /* NO BAND AROUND THE HEAD (owner request): the title and the count field now sit
    directly on the white page. The card's own fill, hairline and corner were the
    rectangle drawn around them. */
-body.users-fab-open .ir-page-head {
+.ir-page-head.users-head {
   background: transparent;
   border: 0;
   border-radius: 0;
   box-shadow: none;
 }
-body.users-fab-open .ir-page-head::after { background: none; }
-body.users-fab-open .users-table thead th { border-bottom: 2px solid var(--ir-border); }
+.ir-page-head.users-head::after { background: none; }
+.users-table thead th { border-bottom: 2px solid var(--ir-border); }
 /* THE SORTED COLUMN IS THE ONE IN BLUE: the directory's order has a control now
    (the rail's Sort key), so the column that order is read down wears the station
    blue — ink and rule together — while the rest of the header stays a quiet
    hairline. The audit trail's own gold rule is untouched (see its shared rule). */
-body.users-fab-open .users-table thead th.is-sorted { border-bottom-color: var(--ir-blue); color: var(--ir-blue); }
-body.users-fab-open .main .users-add.primary { background: var(--ir-gold); border-color: var(--ir-gold); color: var(--ir-navy); }
-body.users-fab-open .main .users-add.primary:hover { background: var(--ir-gold-hi); border-color: var(--ir-gold-hi); }
-body.users-fab-open .users-pager__page { background: var(--ir-gold); color: var(--ir-navy); }
+.users-table thead th.is-sorted { border-bottom-color: var(--ir-blue); color: var(--ir-blue); }
+.main .users-add.primary { background: var(--ir-gold); border-color: var(--ir-gold); color: var(--ir-navy); }
+.main .users-add.primary:hover { background: var(--ir-gold-hi); border-color: var(--ir-gold-hi); }
+.users-pager__page { background: var(--ir-gold); color: var(--ir-navy); }
 /* ARRANGED HEAD: the count and the toolbar share ONE row (owner request) — the
    pill sits beside the controls instead of floating above them. No navy paint
    (owner request): the head stays transparent on the white page, and the count
    keeps its own light field. */
-body.users-fab-open .ir-page-head.users-head {
+.ir-page-head.users-head {
   align-items: center;
   justify-content: flex-start;
   gap: 0.75rem;
@@ -4946,6 +4945,7 @@ body.users-fab-open .ir-page-head.users-head {
 .ai-advice ul { margin: 0; padding-left: 1.1rem; font-size: 0.84rem; }
 .ai-advice li { margin-bottom: 0.4rem; }
 .gap-warning { color: var(--amber, #f59e0b); }
+.gap-error { color: var(--red-text, #B3261E); font-weight: 600; }
 .gap-info { color: var(--steel, #8fa3c8); }
 @media (max-width: 640px) {
   /* On phones the docked panel would crush the form; fall back to the
@@ -8732,6 +8732,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 }
 .dash--cmd .dash-toprow {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
   gap: 12px;
   margin-bottom: 12px;
@@ -8740,6 +8741,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   display: flex;
   flex: none;
   align-items: center;
+  justify-content: flex-start;
   gap: 12px;
   margin-bottom: 0;
 }
@@ -8750,11 +8752,136 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
+.dash--cmd .dash-toprow .dash-kpis.cmd-kpis.cmd-kpis--hierarchy {
+  grid-template-columns: 520px minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  justify-content: start;
+}
+/* Hierarchy, premium: Total Reports is one navy-anchored register plate —
+   eyebrow, giant hero number, live composition bar — with Drafts + Filed as
+   two tinted child cards hanging off a branch connector. The bar proves the
+   children sum to the parent; the connector draws the family tree. */
+.dash--cmd .dash-toprow .cmd-total-group {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(11, 37, 69, 0.05), rgba(11, 37, 69, 0) 120px),
+    #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 31, 61, 0.06), 0 8px 24px -18px rgba(11, 37, 69, 0.45);
+  padding: 14px 14px 14px;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+.dash--cmd .dash-toprow .cmd-total-group::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--ir-navy, #0b2545) 0%, #2563eb 55%, var(--ir-gold, #f0b429) 100%);
+}
+.dash--cmd .dash-toprow .cmd-total-group:hover { transform: translateY(-2px); box-shadow: 0 6px 18px -8px rgba(15, 31, 61, 0.25); border-color: #cbd5e1; }
+.dash--cmd .dash-toprow .cmd-total-group > .cmd-cardlink { display: flex; flex-direction: column; justify-content: center; flex: none; width: 328px; min-width: 0; border-radius: 12px; }
+.dash--cmd .dash-toprow .cmd-total-parent { display: flex; flex-direction: column; justify-content: flex-start; gap: 8px; padding: 8px 10px; margin: 2px 0; height: 100%; }
+.dash--cmd .dash-toprow .cmd-total-hero { margin-top: 2px; }
+.dash--cmd .dash-toprow .cmd-total-track { margin-top: auto; }
+.dash--cmd .dash-toprow .cmd-total-scale { margin-bottom: 2px; }
+.dash--cmd .dash-toprow .cmd-total-parent__top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; row-gap: 4px; gap: 10px; }
+.dash--cmd .dash-toprow .cmd-total-eyebrow { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ir-navy, #0b2545); }
+.dash--cmd .dash-toprow .cmd-total-dot { width: 9px; height: 9px; border-radius: 50%; background: #2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14); flex: none; }
+.dash--cmd .dash-toprow .cmd-total-badge { font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #7c5e00; background: linear-gradient(180deg, #fef3c7, #fde68a); border: 1px solid #f5d76e; border-radius: 999px; padding: 1px 7px; }
+.dash--cmd .dash-toprow .cmd-total-view { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 800; color: #94a3b8; transition: color 160ms ease, gap 160ms ease; white-space: nowrap; }
+.dash--cmd .dash-toprow .cmd-total-view svg { width: 15px; height: 15px; transition: transform 160ms ease; }
+.dash--cmd .dash-toprow .cmd-total-group > .cmd-cardlink:hover .cmd-total-view { color: #1d4ed8; }
+.dash--cmd .dash-toprow .cmd-total-group > .cmd-cardlink:hover .cmd-total-view svg { transform: translateX(3px); }
+.dash--cmd .dash-toprow .cmd-total-hero { display: flex; align-items: flex-start; gap: 7px; flex-wrap: wrap; }
+.dash--cmd .dash-toprow .cmd-total-num { font-size: 54px; font-weight: 800; line-height: 0.95; letter-spacing: -0.035em; color: var(--ir-navy, #0b2545); font-variant-numeric: tabular-nums; text-shadow: 0 1px 0 #fff; }
+
+.dash--cmd .dash-toprow .cmd-total-track { position: relative; display: flex; height: 5px; border-radius: 999px; background: #eef2f7; border: 1px solid #e2e8f0; overflow: hidden; }
+.dash--cmd .dash-toprow .cmd-total-seg { display: block; height: 100%; transition: width 500ms cubic-bezier(0.22, 1, 0.36, 1); }
+.dash--cmd .dash-toprow .cmd-total-seg--draft { background: linear-gradient(90deg, #f59e0b, var(--ir-gold, #f0b429)); }
+.dash--cmd .dash-toprow .cmd-total-seg--filed { background: linear-gradient(90deg, #1d4ed8, #60a5fa); flex: 1; min-width: 0; }
+.dash--cmd .dash-toprow .cmd-total-scale { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10.5px; font-weight: 700; color: #5b6b84; }
+.dash--cmd .dash-toprow .cmd-total-scale__item { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.dash--cmd .dash-toprow .cmd-total-key { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+.dash--cmd .dash-toprow .cmd-total-key--draft { background: var(--ir-gold, #f0b429); }
+.dash--cmd .dash-toprow .cmd-total-key--filed { background: #2563eb; }
+/* The branch connector was removed (owner request) — parent and children
+   sit side by side with a clean gap instead. Kept hidden in case. */
+.dash--cmd .dash-toprow .cmd-total-branch { display: none; }
+.dash--cmd .dash-toprow .cmd-total-children { display: flex; flex-direction: column; justify-content: center; gap: 10px; flex: none; width: 170px; min-width: 0; margin: 2px 0; }
+.dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink { border-radius: 12px; }
+.dash--cmd .dash-toprow .cmd-child { position: relative; display: flex; align-items: center; gap: 8px; border-radius: 11px; border: 1px solid #e2e8f0; padding: 12px 12px 12px 14px; margin: 2px; background: #f8fafc; overflow: hidden; transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease; }
+.dash--cmd .dash-toprow .cmd-child::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; }
+.dash--cmd .dash-toprow .cmd-child--draft { background: linear-gradient(180deg, #fffdf3, #fef9e7); }
+.dash--cmd .dash-toprow .cmd-child--draft::before { background: linear-gradient(180deg, #f59e0b, var(--ir-gold, #f0b429)); }
+.dash--cmd .dash-toprow .cmd-child--filed { background: linear-gradient(180deg, #f5f9ff, #eff6ff); }
+.dash--cmd .dash-toprow .cmd-child--filed::before { background: linear-gradient(180deg, #1d4ed8, #60a5fa); }
+.dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink:hover .cmd-child,
+.dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink:focus-visible .cmd-child { transform: translateY(-2px); box-shadow: 0 8px 18px -10px rgba(15, 31, 61, 0.35); border-color: #cbd5e1; outline: none; }
+.dash--cmd .dash-toprow .cmd-child__icon { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: #fff; border: 1px solid #e2e8f0; color: var(--ir-navy, #0b2545); box-shadow: 0 1px 2px rgba(15, 31, 61, 0.08); }
+.dash--cmd .dash-toprow .cmd-child__icon svg { width: 16px; height: 16px; }
+.dash--cmd .dash-toprow .cmd-child--draft .cmd-child__icon { color: #92600a; border-color: #f5d76e; background: #fffbeb; }
+.dash--cmd .dash-toprow .cmd-child--filed .cmd-child__icon { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }
+.dash--cmd .dash-toprow .cmd-child__main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.dash--cmd .dash-toprow .cmd-child__label { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.09em; color: #5b6b84; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash--cmd .dash-toprow .cmd-child__num { font-size: 32px; font-weight: 800; letter-spacing: -0.035em; line-height: 0.95; color: var(--ir-navy, #0b2545); font-variant-numeric: tabular-nums; white-space: nowrap; max-width: 4ch; overflow: hidden; }
+.dash--cmd .dash-toprow .cmd-child__side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+.dash--cmd .dash-toprow .cmd-child__share { font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; border-radius: 999px; padding: 2px 8px; border: 1px solid; }
+.dash--cmd .dash-toprow .cmd-child--draft .cmd-child__share { color: #92600a; background: #fef3c7; border-color: #f5d76e; }
+.dash--cmd .dash-toprow .cmd-child--filed .cmd-child__share { color: #1d4ed8; background: #dbeafe; border-color: #bfdbfe; }
+.dash--cmd .dash-toprow .cmd-child__go { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #94a3b8; border: 1px solid #e2e8f0; background: #fff; transition: color 160ms ease, border-color 160ms ease, transform 160ms ease, background 160ms ease; }
+.dash--cmd .dash-toprow .cmd-child__go svg { width: 12px; height: 12px; }
+.dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink:hover .cmd-child__go,
+.dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink:focus-visible .cmd-child__go { color: #fff; background: var(--ir-navy, #0b2545); border-color: var(--ir-navy, #0b2545); transform: translateX(2px); }
+.dash--cmd .dash-toprow .cmd-kpis--hierarchy > .cmd-cardlink .cmd-card { transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease; }
+.dash--cmd .dash-toprow .cmd-kpis--hierarchy > .cmd-cardlink:hover .cmd-card,
+.dash--cmd .dash-toprow .cmd-kpis--hierarchy > .cmd-cardlink:focus-visible .cmd-card { transform: translateY(-2px); }
+.dash--cmd .dash-toprow .cmd-kpis--hierarchy > .cmd-cardlink { display: flex; flex-direction: column; border-radius: 16px; }
+.dash--cmd .dash-toprow .cmd-kpis--hierarchy > .cmd-cardlink .cmd-card {
+  flex: 1;
+  border-radius: 16px;
+  padding: 18px;
+  justify-content: center;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
+.dash--cmd .dash-toprow .cmd-kpis--hierarchy > .cmd-cardlink .cmd-card__label { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; }
+.dash--cmd .dash-toprow .cmd-kpis--hierarchy > .cmd-cardlink .cmd-card__value { font-size: 38px; letter-spacing: -0.035em; }
+@media (max-width: 900px) {
+  .dash--cmd .dash-toprow .dash-kpis.cmd-kpis.cmd-kpis--hierarchy { grid-template-columns: minmax(0, 1fr); }
+  .dash--cmd .dash-toprow .cmd-total-num { font-size: 48px; }
+  .dash--cmd .dash-toprow .cmd-total-group { flex-direction: column; }
+  .dash--cmd .dash-toprow .cmd-total-group > .cmd-cardlink { width: auto; flex: none; }
+  .dash--cmd .dash-toprow .cmd-total-children { width: auto; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  .dash--cmd .dash-toprow .cmd-total-group { gap: 10px; }
+}
+@media (max-width: 560px) {
+  .dash--cmd .dash-toprow .cmd-total-num { font-size: 44px; }
+  .dash--cmd .dash-toprow .cmd-total-group { padding: 8px 8px 10px; }
+  .dash--cmd .dash-toprow .cmd-total-children { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash--cmd .dash-toprow .cmd-total-group,
+  .dash--cmd .dash-toprow .cmd-child,
+  .dash--cmd .dash-toprow .cmd-total-seg,
+  .dash--cmd .dash-toprow .cmd-total-view svg,
+  .dash--cmd .dash-toprow .cmd-child__go { transition: none; }
+  .dash--cmd .dash-toprow .cmd-total-group:hover,
+  .dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink:hover .cmd-child { transform: none; }
+}
 .dash--cmd .dash-toprow .cmd-card { padding: 10px 12px; border-radius: 10px; gap: 8px; }
 .dash--cmd .dash-toprow .cmd-card__label { font-size: 12px; font-weight: 700; }
 .dash--cmd .dash-toprow .cmd-card__value { font-size: 20px; }
 .dash--cmd .dash-toprow .cmd-card__foot { font-size: 11px; }
-.dash--cmd .dash-toprow .dash-quick { flex-direction: column; align-items: stretch; margin-left: 0; }
+.dash--cmd .dash-toprow .dash-quick { flex-direction: row; align-items: center; justify-content: flex-start; margin-left: 0; align-self: flex-start; }
 .dash--cmd .dash-toprow .dash-quick__btn { white-space: nowrap; }
 @media (max-width: 1100px) {
   .dash--cmd .dash-toprow { flex-direction: column; }
@@ -10110,54 +10237,6 @@ body.profile-panel-open.ai-panel-open .dash-dock {
   right: calc(18px + var(--profile-panel-w) + min(var(--ai-panel-w, 420px), 92vw));
 }
 
-/* THE TWO OCCUPANTS OF ONE CORNER, KEPT OFF EACH OTHER'S SQUARE.
-
-   User Management used to put a create circle in the bottom-right corner, and the
-   chathead rail hangs UPWARD from that same corner — so without this the
-   button would sit on a colleague's face. The dock is lifted by exactly the button's
-   height plus the gap between them, and `--fab-lift` is the whole of that arithmetic,
-   written once: two rules that both need to know the button's size read one number,
-   which is the difference between a pair that agrees and a pair that used to agree.
-
-   THE VARIABLES LIVE ON THE CLASS, not on `.users-fab`, because the dock is Shell's
-   box and has to read them too. The class is published by the screen while it is open
-   (Users.jsx), so the corner belongs to presence on every other screen in the app.
-
-   NO MEDIA QUERY HERE, and this is the one place a breakpoint would be wrong: below
-   720px the rail is already gone (see above), and the class costs nothing when there
-   is no rail to lift. */
-/* THE CIRCLE: fixed in the corner, round, and filled with the screen's
-   primary — owned outright rather than inherited from the neutral button
-   (the exclusion chain in incident-report.css names it as a button it does
-   not paint). One control, wired in Users.jsx, with its name in `aria-label`
-   and `title` instead of a visible label. */
-.users-fab { position: fixed; right: 18px; bottom: 18px;
-  width: var(--fab-size, 56px); height: var(--fab-size, 56px);
-  border-radius: 50%; background: var(--ir-blue);
-  display: inline-flex; align-items: center; justify-content: center;
-  border: 0; padding: 0; cursor: pointer; color: var(--on-accent);
-  box-shadow: var(--shadow-md); z-index: 30;
-}
-body.users-fab-open {
-  --fab-size: 56px;
-  --fab-lift: calc(var(--fab-size) + 12px);
-}
-body.users-fab-open .dash-dock { bottom: calc(18px + var(--fab-lift)); }
-/* THE CHATBOX IS BOUNDED BY THE WINDOW, so lifting it without saying so would push
-   its title bar off the top of a short one: `100dvh` minus the lift is the same
-   subtraction the box already makes for the corner, moved up. */
-body.users-fab-open .messages-box {
-  height: min(28.75rem, calc(100dvh - 5rem - var(--fab-lift)));
-  max-height: calc(100dvh - 2.5rem - var(--fab-lift));
-}
-/* AND THE PAGE KEEPS A FLOOR. The circle floats over the last row of the table, so
-   the workspace's own bottom gutter grows by the same number: the lowest row stays
-   readable and the last account can still be reached without the button on top of
-   it. `--ir-gutter-bottom` is incident-report.css's, declared on this same element
-   (`main.ir-body`) and read here rather than restated. */
-body.users-fab-open .main {
-  padding-bottom: calc(var(--ir-gutter-bottom) + var(--fab-lift));
-}
 /* A RAIL WITHOUT ITS CHATBOX IS NOT THE SAME THING AS A CORNER WITHOUT ITS RAIL. Below
    900px the rail goes (a rail shifted left of a drawer would sit on top of the form it
    just uncovered) — but the CHATBOX STAYS, and this is the one place the two are

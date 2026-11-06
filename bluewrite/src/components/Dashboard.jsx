@@ -290,7 +290,7 @@ function KpiMark({ name }) {
  * mount test counts those plates, and a skeleton is a skeleton whatever the
  * card it stands in for looks like.
  */
-export function MetricCard({ tone, label, value, foot, loading = false }) {
+export function MetricCard({ tone, label, value, foot, loading = false, size }) {
   if (loading) {
     return (
       <div className="dash-kpi is-skeleton" aria-hidden="true">
@@ -301,7 +301,7 @@ export function MetricCard({ tone, label, value, foot, loading = false }) {
     );
   }
   return (
-    <div className={`cmd-card cmd-card--${tone}`}>
+    <div className={`cmd-card cmd-card--${tone}${size ? ` cmd-card--${size}` : ''}`}>
       <span className="cmd-card__main">
         <span className="cmd-card__label">{label}</span>
         <span className="cmd-card__value-row">
@@ -1276,24 +1276,17 @@ export default function Dashboard({
         </div>
       </header>
 
-      {/* ---- Dashboard toolbar: the quick actions ----------------------------
+      {/* ---- Dashboard toolbar: the quick action -------------------------------
           The rail stays the Admin's only chrome (bell and profile live there),
-          so this row is page furniture, not a second nav: the three jumps an
-          Admin reaches for — new report, open drafts, and the roster. */}
+          so this row is page furniture, not a second nav: the single jump an
+          Admin reaches for — new report. It stays top-left, with the metric
+          cards stacked below it. */}
       <div className="dash-toprow">
       <div className="dash-toolbar">
         <div className="dash-quick" role="group" aria-label="Quick actions">
           <button type="button" className="dash-quick__btn is-primary" onClick={() => onNewReport?.()}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
             New Report
-          </button>
-          <button type="button" className="dash-quick__btn" onClick={() => onOpenReports?.({ status: 'draft' })}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z" /><path d="M9 12h6M9 16h6" /></svg>
-            Review Drafts
-          </button>
-          <button type="button" className="dash-quick__btn" onClick={() => onOpenUsers?.()}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.2 3.4-5 6.5-5s5.7 1.8 6.5 5" /></svg>
-            Manage Users
           </button>
         </div>
       </div>
@@ -1308,40 +1301,95 @@ export default function Dashboard({
       )}
 
       {/* ---- Metric cards ---------------------------------------------------
-          FOUR READINGS, each saying one thing about the range being read: the
-          bold caption and the hero number. The three report cards read the
+          HIERARCHY: Total Reports is the parent reading (big hero number),
+          with Drafts in Progress and Finalized Reports as its children nested
+          beneath it — they sum to the total. The three report cards read the
           whole register (registerTotals), so they match All Reports whatever
           window the trend is reading; the panels below keep reading the window.
           Only the headcount keeps its admin/officer line
           (owner request, 2026-10-30). */}
-      <section className="dash-kpis cmd-kpis" aria-busy={loading}>
-        {/* Each card opens the register pre-filtered to what it counts — Total
-            reads the whole register, Drafts the open work, Finalized the filed
-            set (see ReportsTable's status filter), the headcount the roster. */}
-        <CardLink label="Total reports in the register" onGo={() => onOpenReports?.({})}>
-          <MetricCard
-            loading={loading}
-            tone="blue"
-            label="Total Reports"
-            value={hero ? fmt.format(hero.total) : '—'}
-          />
-        </CardLink>
-        <CardLink label="Drafts in progress" onGo={() => onOpenReports?.({ status: 'draft' })}>
-          <MetricCard
-            loading={loading}
-            tone="gold"
-            label="Drafts in Progress"
-            value={hero ? fmt.format(hero.pending) : '—'}
-          />
-        </CardLink>
-        <CardLink label="Finalized reports in the register" onGo={() => onOpenReports?.({ status: 'filed' })}>
-          <MetricCard
-            loading={loading}
-            tone="blue"
-            label="Finalized Reports"
-            value={hero ? fmt.format(hero.finalized) : '—'}
-          />
-        </CardLink>
+      <section className="dash-kpis cmd-kpis cmd-kpis--hierarchy" aria-busy={loading}>
+        {/* Total opens the whole register; each child opens the register
+            pre-filtered to what it counts (see ReportsTable's status filter).
+            Sibling anchors, never nested — an anchor inside an anchor is
+            invalid HTML and breaks keyboard navigation. */}
+        <div className="cmd-total-group">
+          <CardLink label="Total reports in the register" onGo={() => onOpenReports?.({})}>
+            <div className="cmd-total-parent">
+              <div className="cmd-total-parent__top">
+                <span className="cmd-total-eyebrow">
+                  <span className="cmd-total-dot" aria-hidden="true" />
+                  <span>Total Reports</span>
+                  <span className="cmd-total-badge">Register</span>
+                </span>
+                <span className="cmd-total-view" aria-hidden="true">
+                  View all
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></svg>
+                </span>
+              </div>
+              <div className="cmd-total-hero">
+                <span className="cmd-total-num" title={hero ? fmt.format(hero.total) : undefined}>{hero ? (hero.total > 99 ? '99+' : fmt.format(hero.total)) : '—'}</span>
+              </div>
+              {(() => {
+                const t = hero?.total ?? 0;
+                const d = hero?.pending ?? 0;
+                const f = hero?.finalized ?? 0;
+                const dp = t > 0 ? Math.round((d / t) * 100) : 0;
+                const fp = t > 0 ? Math.max(0, 100 - dp) : 0;
+                const _f = f;
+                void _f;
+                return (
+                  <>
+                    <div className="cmd-total-track" role="img" aria-label={t > 0 ? `${dp}% drafts, ${fp}% filed` : 'Register composition'}>
+                      <span className="cmd-total-seg cmd-total-seg--draft" style={{ width: `${loading ? 0 : dp}%` }} />
+                      <span className="cmd-total-seg cmd-total-seg--filed" style={{ width: `${loading ? 0 : fp}%` }} />
+                    </div>
+                    <div className="cmd-total-scale">
+                      <span className="cmd-total-scale__item">
+                        <i className="cmd-total-key cmd-total-key--draft" aria-hidden="true" />
+                        Drafts {loading ? '—' : `${dp}%`}
+                      </span>
+                      <span className="cmd-total-scale__item">
+                        <i className="cmd-total-key cmd-total-key--filed" aria-hidden="true" />
+                        Filed {loading ? '—' : `${fp}%`}
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </CardLink>
+          <div className="cmd-total-children">
+            <CardLink label="Drafts in progress" onGo={() => onOpenReports?.({ status: 'draft' })}>
+              <div className="cmd-child cmd-child--draft">
+                <span className="cmd-child__main">
+                  <span className="cmd-child__label">Draft</span>
+                  <span className="cmd-child__num" title={hero ? fmt.format(hero.pending) : undefined}>{hero ? (hero.pending > 99 ? '99+' : fmt.format(hero.pending)) : '—'}</span>
+                </span>
+                <span className="cmd-child__side">
+                  <span className="cmd-child__share">{hero && hero.total ? `${Math.round((hero.pending / hero.total) * 100)}%` : '—'}</span>
+                  <span className="cmd-child__go" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></svg>
+                  </span>
+                </span>
+              </div>
+            </CardLink>
+            <CardLink label="Finalized reports in the register" onGo={() => onOpenReports?.({ status: 'filed' })}>
+              <div className="cmd-child cmd-child--filed">
+                <span className="cmd-child__main">
+                  <span className="cmd-child__label">Finalize</span>
+                  <span className="cmd-child__num" title={hero ? fmt.format(hero.finalized) : undefined}>{hero ? (hero.finalized > 99 ? '99+' : fmt.format(hero.finalized)) : '—'}</span>
+                </span>
+                <span className="cmd-child__side">
+                  <span className="cmd-child__share">{hero && hero.total ? `${100 - Math.round((hero.pending / hero.total) * 100)}%` : '—'}</span>
+                  <span className="cmd-child__go" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></svg>
+                  </span>
+                </span>
+              </div>
+            </CardLink>
+          </div>
+        </div>
         <CardLink label="Active accounts" onGo={() => onOpenUsers?.()}>
           <MetricCard
             loading={loading}
