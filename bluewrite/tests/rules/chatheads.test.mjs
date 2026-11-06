@@ -166,17 +166,18 @@ test('somebody else\u2019s face is drawn whether or not this account can be matc
   assert.match(renderRail({ online: [{ id: 11, full_name: 'Elena Ramos', role: 'Officer' }] }), /Elena Ramos/);
 });
 
-test('a photograph is an image with only that face, not the initials too', async () => {
+test('a server photograph waits for the gate instead of 401ing inside an <img>', async () => {
   const { renderRail } = await loadRail();
   const html = renderRail();
 
-  // Exactly one colleague has a photograph, so exactly one <img> — and it is marked
-  // decorative, because the button already carries the name.
-  assert.equal((html.match(/<img/g) || []).length, 1);
-  assert.match(html, /src="\/api\/v1\/users\/9\/photo\?v=9"/);
-  assert.match(html, /alt=""/);
-  // And no initials beside it: a face is one or the other, never both.
-  assert.doesNotMatch(html, />JD</);
+  // The static render is the first frame: effects never run, so the gated bytes have
+  // not arrived — and the server URL appears NOWHERE in the markup, because an <img>
+  // pointed at it would 401 behind the tab gate (the years-long "uploaded but never
+  // appears" failure; see Avatar.jsx and `apiBlobUrl`). Juan therefore draws the
+  // initials underneath until his photograph arrives, like any officer with no photo.
+  assert.equal((html.match(/<img/g) || []).length, 0);
+  assert.doesNotMatch(html, /\/api\/v1\/users\/9\/photo/);
+  assert.match(html, />JD</);
 
   // The officer with no photo gets initials — "ER" for Elena Ramos, not the whole
   // name collapsed into one glyph.

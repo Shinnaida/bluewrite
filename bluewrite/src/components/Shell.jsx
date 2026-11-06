@@ -98,9 +98,10 @@ export default function Shell({
   onDensity,
 }) {
   // View model: { kind: 'welcome' } | { kind: 'report', id } |
-  // { kind: 'new' } | { kind: 'table' } | { kind: 'users' } | { kind: 'dashboard' }
+  // { kind: 'new' } | { kind: 'table' } | { kind: 'users', userId } | { kind: 'dashboard' }
   // | { kind: 'audits' } | { kind: 'station' } — status pre-fills the reports
-  // filter when arriving from a dashboard KPI click.
+  // filter when arriving from a dashboard KPI click, and userId opens one
+  // account when arriving from a dragged dashboard badge.
   // Admins land on the Dashboard (their home base); Officer/Staff start on Home.
   const [view, setView] = useState(
     user.role === 'Admin' ? { kind: 'dashboard' } : { kind: 'welcome' }
@@ -642,6 +643,10 @@ export default function Shell({
             // the keys are the list's own query keys (`status`, `date_from`,
             // `date_to`, `type`), so a new one needs no change in this file.
             onOpenReports={(filters) => setView({ kind: 'table', ...filters })}
+            // A dragged badge names the account it wants opened inside User
+            // Management; a plain click on the plate carries no id and opens
+            // the directory itself.
+            onOpenUsers={(userId) => setView(userId == null ? { kind: 'users' } : { kind: 'users', userId })}
           />
         )}
         {view.kind === 'table' && (
@@ -681,7 +686,7 @@ export default function Shell({
         {view.kind === 'audits' && isAdmin && (
           <Audits notify={notify} onConnError={reportConn} />
         )}
-        {view.kind === 'users' && isAdmin && <Users notify={notify} onConnError={reportConn} />}
+        {view.kind === 'users' && isAdmin && <Users key={view.userId ?? 'all'} notify={notify} onConnError={reportConn} initialUserId={view.userId ?? null} />}
         {view.kind === 'station' && isAdmin && (
           <StationSettings notify={notify} onConnError={reportConn} onSaved={bumpStation} />
         )}

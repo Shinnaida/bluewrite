@@ -36,9 +36,13 @@ test('an account with a photograph gets Replace and Remove', async () => {
   const html = renderProfile({ ...ACCOUNT, photo_url: '/api/v1/me/photo?v=3' });
 
   assert.match(html, /profile-photo__face/);
-  // The photograph is drawn twice — the identity block and the control — and both
-  // come from the one Avatar component, which is the point of having it.
-  assert.equal((html.match(/<img/g) || []).length, 2);
+  // The face is drawn twice — the identity block and the control — and both come
+  // from the one Avatar component, which is the point of having it. But a static
+  // render runs no effects, so the gated bytes have not arrived yet: BOTH faces draw
+  // the initials underneath, and there is no <img> at all until the fetch resolves
+  // (see Avatar.jsx — a server URL straight into src 401s behind the tab gate).
+  assert.equal((html.match(/<img/g) || []).length, 0);
+  assert.match(html, /profile-photo__face[^>]*>MS</);
   assert.match(html, /Replace photo/);
   assert.match(html, /profile-photo__remove/);
   // The picker is a label wrapping a real file input, so it opens from a keyboard.

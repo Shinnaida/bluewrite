@@ -153,10 +153,32 @@ test('one account gets one face, wherever it is drawn', async () => {
 
   // A PHOTOGRAPH IS NOT A GRADIENT, so the <img> carries no data-face at all — the
   // attribute belongs to the initials, and a broken photograph falls back to them (see
-  // Avatar.jsx on why that is state rather than a CSS background).
-  const photo = renderThread({ peerInfo: { ...ELENA, photo_url: '/api/v1/users/11/photo?v=1' } });
+  // Avatar.jsx on why that is state rather than a CSS background). The direct
+  // (already-bytes) URL paints synchronously; a server path arrives a frame late.
+  const photo = renderThread({ peerInfo: { ...ELENA, photo_url: 'blob:held-preview-11' } });
   assert.match(photo, /bw-avatar--photo/);
   assert.doesNotMatch(photo, /data-face/);
+});
+
+test('a server photograph is never handed to <img> directly', async () => {
+  const { renderPhoto } = await loadFixture('tests/fixtures/avatarFaces.jsx');
+
+  // THE LONG-RUNNING UPLOAD FAILURE, PINNED. A static render runs no effects, which
+  // is exactly the browser's first frame too — and a server photo URL sitting in an
+  // <img> 401s behind the tab gate (the <img> carries the cookie but not the tab
+  // header; see `apiBlobUrl`), so every uploaded photograph landed in the initials
+  // fallback. The first frame must therefore be initials, with the server URL nowhere
+  // in the markup at all.
+  const html = renderPhoto({ id: 9, full_name: 'Juan Dela Cruz', photo_url: '/api/v1/users/9/photo?v=4' });
+  assert.doesNotMatch(html, /<img/);
+  assert.doesNotMatch(html, /\/api\/v1\/users\/9\/photo/);
+  assert.match(html, />JD</);
+
+  // AND THE COMPONENT FETCHES IT THROUGH THE GATE instead: the same `apiBlobUrl` the
+  // capture dialog, the seal, the arrival thumbnail and the dashboard lanyards
+  // already had to learn.
+  const avatar = await readFile(path.join(root, 'src/components/Avatar.jsx'), 'utf8');
+  assert.match(avatar, /apiBlobUrl\(serverUrl\)/);
 });
 
 test('a face is a photograph, initials, or a blank somebody asked for by name', async () => {

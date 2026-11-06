@@ -40,8 +40,9 @@ const ROSTER = [
     login_age_seconds: 7200,
     photo_url: null,
   },
-  // A photograph, so the <img> half is exercised — and a name that would produce
-  // initials too, so a test can tell which one was actually drawn.
+  // A photograph ON FILE, so the gated-photo path is exercised — and a name that
+  // would produce initials too, so a test can tell which one was actually drawn.
+  // (The static render shows the initials until the fetch resolves; see Avatar.jsx.)
   {
     id: 9,
     full_name: 'Juan Dela Cruz',

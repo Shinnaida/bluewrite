@@ -238,7 +238,7 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
   );
 }
 
-export default function Users({ notify }) {
+export default function Users({ notify, initialUserId = null }) {
   const [users, setUsers] = useState(null);
   const [form, setForm] = useState(null); // null = list view, object = edit/create
   const [editingId, setEditingId] = useState(null);
@@ -298,8 +298,13 @@ export default function Users({ notify }) {
   // lives in `users`, which `load()` replaces after every change, so an edit made from
   // this page is reflected on it the moment the list comes back — where a captured copy
   // would keep showing the name somebody just corrected.
-  const [profileId, setProfileId] = useState(null);
+  const [profileId, setProfileId] = useState(initialUserId);
   const [profileNonce, setProfileNonce] = useState(0);
+  // Deep-link from the dashboard's hanging badges: dragging a badge to the
+  // bottom opens that account here, so a new id prop opens its page.
+  useEffect(() => {
+    if (initialUserId !== null && initialUserId !== undefined) setProfileId(initialUserId);
+  }, [initialUserId]);
   // What the page has read so far. `reports` is { rows, total }; `signIns` and `activity`
   // are the audit trail's own entries; `sheet` is the trail counted per day, for the year
   // (see the view's note on where each number comes from).
@@ -416,23 +421,6 @@ export default function Users({ notify }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [confirm, resetFor, profileId]);
-
-  // THE CORNER IS THE PRESENCE RAIL'S, SO THIS SCREEN ASKS FOR IT RATHER THAN
-  // TAKING IT. The create circle is fixed in the bottom-right square (`.users-fab`)
-  // and the chathead rail is anchored in that same square, so the rail is lifted by
-  // exactly the button's height instead of the two landing on each other with a
-  // colleague underneath. That lift is `body.users-fab-open .dash-dock` in
-  // styles.css — a body class is the only way a screen can reach a box that Shell
-  // renders, and it is the mechanism the docked panels already use to move this same
-  // corner sideways (ProfilePanel, AiNarrativePanel).
-  //
-  // PUBLISHED FOR THE LIFETIME OF THE SCREEN, NOT OF THE BUTTON. Tying it to the
-  // form would drop the rail back into the corner every time somebody pressed "+",
-  // which is the edge of the window jumping for no reason an administrator can see.
-  useEffect(() => {
-    document.body.classList.add('users-fab-open');
-    return () => document.body.classList.remove('users-fab-open');
-  }, []);
 
   async function runConfirm() {
     const c = confirm;
@@ -1277,41 +1265,6 @@ export default function Users({ notify }) {
               for anyone reading by screen reader. A standing sentence above the
               table is read once and then skimmed forever. */}
 
-          {/* THE SCREEN'S ONE PRIMARY ACTION, HELD OVER THE TABLE. It was a labelled
-              button on a line of its own, which spent a whole row of the page on one
-              word and put "create an account" above "read the accounts" — and the
-              corner is where an operator already looks for "add".
-
-              THE LABEL IS NOT VISIBLE AND IS NOT GONE. A plus is a shape every
-              officer reads and a screen reader cannot, so what it does travels in
-              `aria-label`, and the same two words are in `title` for the pointer that
-              has never met a floating button. Stroked SVG rather than a "+" glyph for
-              the reason ThemeIcons.jsx gives: a glyph is the font's to draw, and it
-              lands off-centre in a circle at the first station with a different
-              default font. The stroke is a little heavier than the chrome icons —
-              this is the heaviest control on the screen — and the drawing itself is
-              in styles.css's `.users-fab` contract. */}
-          <button
-            type="button"
-            className="users-fab"
-            onClick={startCreate}
-            aria-label="Create account"
-            title="Create account"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <path d="M12 5.5v13M5.5 12h13" />
-            </svg>
-          </button>
-
           <form className="reports-toolbar" role="search" onSubmit={(e) => e.preventDefault()}>
             {/* `users-filters` IS WHY THIS ROW IS ONE LINE. `.reports-toolbar-row` is a plain
                 block shared with the audit trail's toolbar, and this is the one screen with
@@ -1388,9 +1341,8 @@ export default function Users({ notify }) {
               </button>
               {/* THE SCREEN'S PRIMARY ACTION, in the rail where the filters are
                   (owner request): a labelled Add User beside the keys, so creating
-                  an account is found where the directory is read — the floating
-                  plus below stays as the thumb's way in. Its label is visible,
-                  so it needs no aria-label of its own. */}
+                  an account is found where the directory is read. Its label is
+                  visible, so it needs no aria-label of its own. */}
               <button type="button" className="primary users-add" onClick={startCreate}>
                 <svg
                   width="14"

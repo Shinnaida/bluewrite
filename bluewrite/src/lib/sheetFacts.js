@@ -640,3 +640,52 @@ export function buildStructuredActions(ts) {
   if (has(ts.fire_department_response)) actions.push(`Fire department response: ${N(ts.fire_department_response)}.`);
   return actions;
 }
+
+// ---------------------------------------------------------------------------
+// One person, one place on the sheet.
+//
+// The head facts ("Victim:", "Suspect:") are printed from the structured record,
+// while the officer's own narrative often carries a "Persons involved" block that
+// names the SAME people under their own role words ("Complainant:", "Respondent:")
+// with their age, DOB and address. Printing both made the sheet read as if there
+// were four people (a victim AND a complainant, a suspect AND a respondent) when
+// there are two. A head party line is therefore left out when every person on it
+// is already named on a party line of the narrative; an unnamed person (an
+// "unidentified male, about 30 …" suspect) is never matched, so it always stays.
+// Pure: facts in, facts out, nothing recorded is ever changed or lost.
+// ---------------------------------------------------------------------------
+const PARTY_FACT_LABELS = new Set([
+  'Victim', 'Complainant', 'Complainant/Victim', 'Reporting Person',
+  'Suspect', 'Suspect(s)', 'Suspect (if any)', 'Respondent',
+]);
+const NARRATIVE_ROLE_LINE =
+  /^\s*(?:complainants?|respondents?|victims?|suspects?|accused|subjects?|witness(?:es)?|reporting\s+person|persons?\s+involved)\b[^:\n]*:\s*(.+)$/i;
+const nameKey = (s) =>
+  String(s ?? '').toLowerCase().replace(/[^a-z0-9ñ\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/**
+ * @param {Array} facts buildTypeFacts() entries
+ * @param {string} narrativePlain the narrative as plain text
+ * @returns {Array} facts without party lines the narrative already prints
+ */
+export function omitPartiesRestatedInNarrative(facts, narrativePlain) {
+  const partyText = String(narrativePlain ?? '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .filter((line) => NARRATIVE_ROLE_LINE.test(line))
+    .map(nameKey)
+    .join(' | ');
+  if (partyText === '') return facts;
+  const restated = (value) => {
+    const name = nameKey(String(value ?? '').split(',')[0]);
+    // A name is at least two letters and not a description ("one unidentified male").
+    if (name.length < 3 || /\b(?:unidentified|unknown|unnamed)\b/.test(name)) return false;
+    return partyText.includes(name);
+  };
+  return (Array.isArray(facts) ? facts : []).filter((entry) => {
+    if (!entry || !PARTY_FACT_LABELS.has(entry.label)) return true;
+    const values = (Array.isArray(entry.values) ? entry.values : []).filter((v) => String(v ?? '').trim() !== '');
+    if (values.length === 0) return true;
+    return !values.every(restated);
+  });
+}

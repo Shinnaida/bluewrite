@@ -49,6 +49,7 @@ import {
 } from '../../lib/reportVerification.js';
 import {
   buildTypeFacts,
+  omitPartiesRestatedInNarrative,
   buildStructuredFindings,
   buildStructuredActions,
   fmtIncidentWhen,
@@ -67,6 +68,8 @@ import {
   stripLeadingBlotterRestatement,
   stripRedundantSheetHeader,
   stripRedundantSheetHeaderHtml,
+  stripRedundantSheetFooter,
+  stripRedundantSheetFooterHtml,
   correctNagaPlaceLines,
   correctNagaPlaceLinesHtml,
   emphasizeIssuanceRequestorHtml,
@@ -282,11 +285,21 @@ export default function ReportSheetBody({
   // each respondent row it described; the facts block draws it in place of the
   // record's composed line. A tighten carries none: it rewrites the officer's
   // prose, not the record's facts.
-  const facts = buildTypeFacts(report.incident_type, {
+  const allFacts = buildTypeFacts(report.incident_type, {
     report,
     ts,
     suspectLines: pending && pending.scope !== 'tighten' ? pending.suspectLines : null,
   });
+  // One person, one place: a Victim/Suspect line is left out of the READING view
+  // when the narrative's own party lines (Complainant:, Respondent:, ...) already
+  // name the same people with their details. Editing keeps every row so the
+  // record's fields stay reachable (see omitPartiesRestatedInNarrative).
+  const facts = editInner
+    ? allFacts
+    : omitPartiesRestatedInNarrative(
+      allFacts,
+      richTextToPlain(String(pending && pending.narrative != null ? pending.narrative : report.narrative || '')),
+    );
   // The recording officer is the report's own creator — never the account
   // currently viewing it. A not-yet-saved draft has no creator, so the line
   // reads blank until the first save rather than borrowing the login name.
@@ -533,10 +546,13 @@ export default function ReportSheetBody({
   // Redundant header lines (owner request, 2026-11-02): the account's own
   // opening date/time and title restate the certification line and the quoted
   // title, so the sheet skips them — paper only, the record is untouched.
+  // Redundant CLOSING lines (owner request, 2026-11-04): an Enhance answer
+  // echoes the incident title below Remarks; the sheet already prints the
+  // title quoted above the facts, so the echo is skipped the same way.
   const sheetTitle = reportTitle(report, ts);
   const narrativeText = narrativeRich
     ? ''
-    : caseValue(correctNagaPlaceLines(stripRedundantSheetHeader(stripLeadingBlotterRestatement(narrativeRaw), sheetTitle))) || '—';
+    : caseValue(correctNagaPlaceLines(stripRedundantSheetFooter(stripRedundantSheetHeader(stripLeadingBlotterRestatement(narrativeRaw), sheetTitle), sheetTitle))) || '—';
 
   // NOTABLE FINDINGS / ACTION TAKEN: a generate proposal replaces them; a
   // tighten (or no proposal) leaves the committed values untouched.
@@ -1006,7 +1022,7 @@ export default function ReportSheetBody({
         ) : narrativeRich ? (
           <div
             className="pr-narrative-html"
-            dangerouslySetInnerHTML={{ __html: emphasizeIssuanceRequestorHtml(correctNagaPlaceLinesHtml(sanitizeRichHtml(stripRedundantSheetHeaderHtml(narrativeRaw, sheetTitle)))) }}
+            dangerouslySetInnerHTML={{ __html: emphasizeIssuanceRequestorHtml(correctNagaPlaceLinesHtml(sanitizeRichHtml(stripRedundantSheetFooterHtml(stripRedundantSheetHeaderHtml(narrativeRaw, sheetTitle), sheetTitle)))) }}
           />
         ) : (
           <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(narrativeText); })()}</span>

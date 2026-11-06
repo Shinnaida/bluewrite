@@ -3535,12 +3535,10 @@
    difference IS the message. They are excluded here for the reason above: the
    variants below are deliberate exceptions, not defaults to be corrected.
 
-   .users-fab IS THE THIRD OF THAT KIND, one screen further on: User
-   Management's create circle owns its own fill, its own shape and its own
-   corner (styles.css), so it enters none of this. A circle that inherited this
-   fill would be a grey ring around a grey plus half a pixel from the bottom of
-   the window — and it is the only control on that screen that CREATES anything,
-   which is the one fact its colour has to carry.
+   .users-fab IS A RETIRED NAME in that chain, kept so the selector keeps its
+   shape: User Management's floating create circle is gone (its creation lives
+   in the toolbar's labelled Add User), and the exclusion stays behind as a
+   no-op rather than a rewrite of the two long selectors.
 
    .glass-folder__open IS THE LAST OF THEM, and the one this selector damaged
    most: a folder is not a button that wears a face, it is a SILHOUETTE — a
@@ -9234,20 +9232,26 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
 /* ---- The assistant docks on the right on wide screens (owner request) ----
    Below the paper the assistant is a long scroll away from the account it
    works on. Where the viewport fits the paper (8.5in) plus a rail, the panel
-   parks at the right edge, vertically centred and always in reach; the reveal
-   toggle, zoom and hints stay below the paper where they belong. Narrower
-   screens keep the stacked desk unchanged. Print is unaffected (the deskbar
-   carries no-print). The rail keeps the dialog layer clear (dialogs sit at
-   60+), and the mode cards stack single-file at rail width. */
+   parks at the right edge, BELOW the navy masthead with a clear gap, and
+   always in reach; the reveal toggle, zoom and hints stay below the paper
+   where they belong. Narrower screens keep the stacked desk unchanged. Print
+   is unaffected (the deskbar carries no-print). The rail keeps the dialog
+   layer clear (dialogs sit at 60+), and the mode cards stack single-file at
+   rail width. */
 @media (min-width: 1280px) {
   .ir-sheet-deskbar > .ir-sheet-ai {
     position: fixed;
     right: 1.25rem;
-    top: 50%;
-    transform: translateY(-50%);
+    /* Below the masthead, never over it: the hero band (top bar + navy
+       banner) occupies roughly the first 12rem of the viewport, so the
+       docked panel parks under it with a ~1.25rem breathing gap instead of
+       centring on the viewport and sliding up over the banner. No vertical
+       centring transform — the top edge stays put while the page scrolls. */
+    top: 13.5rem;
+    transform: none;
     width: 22rem;
     max-width: calc(100vw - 2.5rem);
-    max-height: calc(100vh - 7rem);
+    max-height: calc(100vh - 15rem);
     overflow-y: auto;
     margin: 0;
     padding: 0.85rem 0.9rem;

@@ -411,7 +411,11 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             ],
             'generationConfig' => [
                 // Editing, not writing: keep the model close to the source.
-                'temperature' => 0.1,
+                // Temperature 0 plus a fixed seed makes the same report give
+                // the same wording every time (consistency); the client-side
+                // wording gate (src/lib/enhanceGuard.js) enforces accuracy.
+                'temperature' => 0.0,
+                'seed' => 7,
                 // An enhanced report is the source's length plus a little; the
                 // default narrative ceiling is too tight for a long account.
                 'maxOutputTokens' => max($this->maxOutputTokens, 8192),

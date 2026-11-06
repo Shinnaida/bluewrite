@@ -27,7 +27,11 @@ import MessagesPanel, {
   MessagesBoxHead,
 } from '../../src/components/MessagesPanel.jsx';
 
-/** A colleague with a photograph, so the <img> half of Avatar is exercised. */
+/**
+ * A colleague with a photograph on file. The static render shows initials until the
+ * gated bytes arrive (see Avatar.jsx) — the <img> half is exercised by direct
+ * (already-bytes) URLs, as in avatarFaces.jsx.
+ */
 const JUAN = {
   id: 9,
   full_name: 'Juan Dela Cruz',

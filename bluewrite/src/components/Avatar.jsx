@@ -15,6 +15,19 @@
 // is reset whenever the URL changes, so a re-upload gets a fresh attempt instead of
 // inheriting the refusal that belonged to the old file.
 //
+// A SERVER PHOTOGRAPH IS NEVER HANDED TO <img> DIRECTLY. The photo endpoints sit
+// behind the same tab gate as every other read: an <img> carries the session cookie
+// but NOT the tab header, so the server reads it as the `''` context and answers
+// 401 — which is how years of uploaded photographs all landed in this component's
+// initials fallback. The bytes are fetched with the same headers as every other
+// `api` call (see `apiBlobUrl`, and the four places that already had to learn this:
+// SealImg, BlotterCapture, PhoneArrivalWatcher, the dashboard lanyards) and the
+// object URL is what the <img> draws. While those bytes are in flight the circle
+// draws the initials it always drew, so a face is never an empty hole — and a
+// photograph that fails to arrive is initials, the same as a photograph that was
+// never uploaded. Direct `blob:`/`data:` URLs — the held preview while an account
+// is being created — are already bytes and need no fetch.
+//
 // SIZE IS CSS's, unless a caller states one. The three existing call sites each
 // size their avatar in their own stylesheet (26px in the bar, 32px in its menu,
 // 46px in the panel), and passing a number here would quietly overrule all three.
@@ -29,8 +42,9 @@
 // nobody yet. Callers that pass nothing keep exactly what they had — which is why
 // this is a prop and not a change of behaviour.
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { initialsOf } from '../lib/profile.js';
+import { apiBlobUrl } from '../lib/api.js';
 
 /**
  * The silhouette a blank face wears: a head and a pair of shoulders, clipped by the
@@ -52,9 +66,75 @@ export function PersonGlyph() {
   );
 }
 
+/** Already bytes — a held preview from the create form, or an inline image. */
+function isDirectPhoto(url) {
+  return typeof url === 'string' && (url.startsWith('blob:') || url.startsWith('data:'));
+}
+
+/**
+ * The drawable URL for a photograph, or null while there is nothing to draw.
+ *
+ * Server paths are read through the tab gate (`apiBlobUrl`) for the reason above;
+ * direct URLs pass straight through. A fetched object URL is revoked when the
+ * photograph changes or the face unmounts; a direct URL belongs to whoever made it
+ * (the create form revokes its own held preview) and is never touched here.
+ */
+export function useServerPhoto(serverUrl) {
+  const [objectUrl, setObjectUrl] = useState(null);
+  const owned = useRef(null);
+  useEffect(() => {
+    if (owned.current) {
+      URL.revokeObjectURL(owned.current);
+      owned.current = null;
+    }
+    setObjectUrl(null);
+    if (!serverUrl || isDirectPhoto(serverUrl)) return undefined;
+    let alive = true;
+    apiBlobUrl(serverUrl).then(
+      (url) => {
+        if (!alive) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        owned.current = url;
+        setObjectUrl(url);
+      },
+      () => {
+        // A face whose photograph cannot be fetched is initials, not an error:
+        // the caller below draws the fallback when there is nothing to draw.
+      }
+    );
+    return () => {
+      alive = false;
+    };
+  }, [serverUrl]);
+  useEffect(
+    () => () => {
+      if (owned.current) URL.revokeObjectURL(owned.current);
+    },
+    []
+  );
+  if (!serverUrl) return null;
+  return isDirectPhoto(serverUrl) ? serverUrl : objectUrl;
+}
+
+/**
+ * An <img> for a gated photograph that draws NOTHING until its bytes arrive —
+ * no torn glyph, no 401-flavoured flash, just the caller's fallback underneath
+ * until the fetch resolves. (Avatar's own fallback is the initials beside it.)
+ */
+export function ServerPhoto({ src, ...rest }) {
+  const url = useServerPhoto(src);
+  if (!url) return null;
+  return <img src={url} {...rest} />;
+}
+
 export default function Avatar({ user, className = '', decorative = true, size = null, placeholder = null }) {
   const photo = user?.photo_url ?? null;
   const [failed, setFailed] = useState(false);
+  // The bytes arrive a frame late; until then `src` is null and the circle below
+  // draws the initials it would draw if there were no photograph at all.
+  const src = useServerPhoto(photo);
 
   // A NEW URL GETS A NEW TRY. Without this, an officer whose photo failed to load
   // once would keep seeing initials until they reloaded the page, even after
@@ -83,12 +163,12 @@ export default function Avatar({ user, className = '', decorative = true, size =
   const face = Number.isFinite(id) ? (Math.abs(Math.trunc(id)) % 6) + 1 : 1;
   const hidden = decorative ? { 'aria-hidden': 'true' } : {};
 
-  if (photo && !failed) {
+  if (src && !failed) {
     return (
       <img
         className={`${classes} bw-avatar--photo`}
         style={style}
-        src={photo}
+        src={src}
         alt={decorative ? '' : String(user?.full_name ?? '')}
         onError={() => setFailed(true)}
         {...hidden}

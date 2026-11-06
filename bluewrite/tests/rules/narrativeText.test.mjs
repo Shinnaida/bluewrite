@@ -13,6 +13,8 @@ import {
   stripLeadingBlotterRestatement,
   stripRedundantSheetHeader,
   stripRedundantSheetHeaderHtml,
+  stripRedundantSheetFooter,
+  stripRedundantSheetFooterHtml,
 } from '../../src/lib/narrativeText.js';
 
 test('a leading "Blotter Entry No. …" restatement is removed', () => {
@@ -95,6 +97,52 @@ test('skipping never blanks the paper', () => {
   assert.equal(stripRedundantSheetHeader('10-20-26 10:00 AM', TITLE), '10-20-26 10:00 AM');
   assert.equal(stripRedundantSheetHeader(TITLE, TITLE), TITLE);
   assert.equal(stripRedundantSheetHeader('', TITLE), '');
+});
+
+// ---- Redundant sheet footer (owner request, 2026-11-04) --------------------
+// An Enhance answer echoes the incident title as a closing line below
+// Remarks; the sheet already prints the title quoted above the facts, so the
+// echo is skipped on the paper only — the record keeps every word.
+
+test('a trailing title echo below Remarks is skipped', () => {
+  const body = `Remarks: Follow-up investigation is ongoing.\n\n${TITLE}`;
+  assert.equal(stripRedundantSheetFooter(body, TITLE), 'Remarks: Follow-up investigation is ongoing.');
+  // Lowercase echo and a trailing bare date/time go the same way.
+  assert.equal(
+    stripRedundantSheetFooter(`Facts: The wallet was lost.\n${TITLE.toLowerCase()}\n10-20-26 10:00 AM\n`, TITLE),
+    'Facts: The wallet was lost.',
+  );
+});
+
+test('body lines mentioning the title are never touched', () => {
+  const body = `FACTS. At 10:00 AM the witness arrived.\nThe ${TITLE} was discussed.\nRemarks: None.`;
+  assert.equal(stripRedundantSheetFooter(body, TITLE), body);
+  const prose = 'On October 20, 2026, the complainant reported the loss.';
+  assert.equal(stripRedundantSheetFooter(prose, TITLE), prose);
+});
+
+test('skipping a footer never blanks the paper', () => {
+  assert.equal(stripRedundantSheetFooter('10-20-26 10:00 AM', TITLE), '10-20-26 10:00 AM');
+  assert.equal(stripRedundantSheetFooter(TITLE, TITLE), TITLE);
+  assert.equal(stripRedundantSheetFooter('', TITLE), '');
+});
+
+test('enhanced HTML drops a trailing title paragraph only', () => {
+  const html =
+    '<p>Remarks: Follow-up investigation is ongoing.</p>' +
+    `<p><b>${TITLE}</b></p>`;
+  assert.equal(
+    stripRedundantSheetFooterHtml(html, TITLE),
+    '<p>Remarks: Follow-up investigation is ongoing.</p>',
+  );
+  // A title mentioned inside prose is not a closing echo.
+  const prose =
+    `<p>FACTS. The ${TITLE} was discussed.</p>` +
+    '<p>Remarks: None.</p>';
+  assert.equal(stripRedundantSheetFooterHtml(prose, TITLE), prose);
+  // Officer rich text in another shape renders as stored.
+  const other = '<div>Remarks: None.</div>';
+  assert.equal(stripRedundantSheetFooterHtml(other, TITLE), other);
 });
 
 test('arranged HTML drops redundant leading paragraphs only', () => {

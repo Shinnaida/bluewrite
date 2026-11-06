@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { api, isUnreachable } from '../lib/api.js';
+import { api, apiBlobUrl, isUnreachable } from '../lib/api.js';
+import { ServerPhoto } from './Avatar.jsx';
 // The incident-category rank chart's rules — bucketing, per-bucket ranks, which types
 // earn a line, the sentence under it. Pure, and tested on its own because a rank chart
 // drawn wrong still looks like a rank chart (see tests/rules/categoryRank.test.mjs).
@@ -45,6 +46,7 @@ import {
 // stands in front of, masked into the header's right edge. Imported rather than
 // referenced, so the bundle carries it and the LAN needs no internet to draw it.
 import stationPhoto from '../assets/Modern Philippine Police Station at Dusk.png';
+import Lanyard from './Lanyard.jsx';
 // The same right-click menu the register's rows use, so a day of the chart offers
 // its actions the way the rest of the app does rather than by a second idiom.
 import RowMenu from './RowMenu.jsx';
@@ -57,6 +59,196 @@ import ReportTypeIcon from './ReportTypeIcon.jsx';
 import { typeHue, typeIcon } from '../lib/reportFolder.js';
 // The "Search the news" panel: a search of the open web through the server's news
 // proxy, so the API token never reaches the browser (see NewsController.php).
+
+/**
+ * Active Accounts ID art: FRONT is the person's photograph (fetched as bytes so
+ * it passes the same tab gate as every other `api` call, then handed to the
+ * lanyard as a blob URL). BACK — and the front fallback when there is no photo
+ * — is drawn here from the database row, so flipping the card reads the same
+ * identity User Management shows. Data URLs, so the LAN build needs no files.
+ */
+function personInitials(name) {
+  const parts = String(name ?? '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '··';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+/**
+ * Status pill baked into the card artwork (bottom-right, on the card), so it
+ * swings, flips and drags WITH the badge instead of floating over it.
+ */
+function drawStatusPill(ctx, W, H, presence) {
+  const dot = presence.state === 'active' ? '#22c55e' : presence.state === 'away' ? '#f59e0b' : '#94a3b8';
+  ctx.save();
+  ctx.font = '800 46px system-ui, sans-serif';
+  const tw = ctx.measureText(presence.label).width;
+  const dotR = 20;
+  const padX = 34;
+  const gap = 18;
+  const pillW = padX * 2 + dotR * 2 + gap + tw;
+  const pillH = 104;
+  const x = W - 44 - pillW;
+  const y = H - 44 - pillH;
+  ctx.shadowColor = 'rgba(11, 37, 69, 0.35)';
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 8;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, pillW, pillH, pillH / 2);
+  else ctx.rect(x, y, pillW, pillH);
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.fillStyle = dot;
+  ctx.beginPath();
+  ctx.arc(x + padX + dotR, y + pillH / 2, dotR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#0b2545';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(presence.label, x + padX + dotR * 2 + gap, y + pillH / 2 + 2);
+  ctx.restore();
+}
+/** Photo front with the status pill printed on it: cover-fit portrait, pill
+ * bottom-right, so the whole badge reads as one ID. */
+function paintIdPhotoFront(img, presence) {
+  try {
+    const W = 1024;
+    const H = 1440;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx || !img) return undefined;
+    const s = Math.max(W / img.width, H / img.height);
+    const w = img.width * s;
+    const h = img.height * s;
+    ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+    drawStatusPill(ctx, W, H, presence);
+    return canvas.toDataURL('image/png');
+  } catch {
+    return undefined;
+  }
+}
+const loadPhotoImage = (url) => new Promise((resolve) => {
+  const img = new Image();
+  img.onload = () => resolve(img);
+  img.onerror = () => resolve(null);
+  img.src = url;
+});
+function personIdFallbackFront(user, presence) {
+  try {
+    const W = 1024;
+    const H = 1440;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return undefined;
+    const navy = '#0b2545';
+    const gold = '#f0b429';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = navy;
+    ctx.fillRect(0, 0, W, 300);
+    ctx.fillStyle = gold;
+    ctx.fillRect(0, 300, W, 14);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '800 60px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('STATION ID', W / 2, 150);
+    ctx.font = '700 44px system-ui, sans-serif';
+    ctx.fillStyle = gold;
+    ctx.fillText(String(user?.role ?? 'OFFICER').toUpperCase(), W / 2, 220);
+    ctx.beginPath();
+    ctx.arc(W / 2, 620, 220, 0, Math.PI * 2);
+    ctx.fillStyle = '#1d4ed8';
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '800 170px system-ui, sans-serif';
+    ctx.fillText(personInitials(user?.full_name), W / 2, 685);
+    ctx.fillStyle = navy;
+    ctx.font = '800 68px system-ui, sans-serif';
+    const name = String(user?.full_name ?? 'Unknown');
+    ctx.fillText(name.length > 22 ? `${name.slice(0, 21)}…` : name, W / 2, 980);
+    ctx.fillStyle = '#5b6b84';
+    ctx.font = '700 48px system-ui, sans-serif';
+    ctx.fillText(`ID ${String(user?.badge_number ?? '—')}`, W / 2, 1050);
+    drawStatusPill(ctx, W, H, presence ?? { state: 'offline', label: 'Offline' });
+    return canvas.toDataURL('image/png');
+  } catch {
+    return undefined;
+  }
+}
+function personIdBackImage(user, presence) {
+  try {
+    const W = 1024;
+    const H = 1440;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return undefined;
+    const navy = '#0b2545';
+    const gold = '#f0b429';
+    ctx.fillStyle = '#101f3c';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = navy;
+    ctx.fillRect(0, 0, W, 300);
+    ctx.fillStyle = gold;
+    ctx.fillRect(0, 300, W, 14);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '800 60px system-ui, sans-serif';
+    ctx.fillText('STATION ID', W / 2, 150);
+    ctx.font = '700 44px system-ui, sans-serif';
+    ctx.fillStyle = gold;
+    ctx.fillText(String(user?.role ?? 'OFFICER').toUpperCase(), W / 2, 220);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '800 76px system-ui, sans-serif';
+    const name = String(user?.full_name ?? 'Unknown');
+    ctx.fillText(name.length > 20 ? `${name.slice(0, 19)}…` : name, W / 2, 470);
+    ctx.textAlign = 'left';
+    const rows = [
+      ['BADGE', String(user?.badge_number ?? '—')],
+      ['USERNAME', `@${String(user?.username ?? '—')}`],
+      ['ROLE', String(user?.role ?? '—')],
+      ['STATUS', String(user?.status ?? 'active')],
+      ['EMAIL', String(user?.email ?? '—')],
+    ];
+    let y = 600;
+    rows.forEach(([k, v]) => {
+      ctx.fillStyle = gold;
+      ctx.font = '800 38px system-ui, sans-serif';
+      ctx.fillText(k, 112, y);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 44px system-ui, sans-serif';
+      const val = v.length > 28 ? `${v.slice(0, 27)}…` : v;
+      ctx.fillText(val, 112, y + 58);
+      y += 150;
+    });
+    drawStatusPill(ctx, W, H, presence ?? { state: 'offline', label: 'Offline' });
+    return canvas.toDataURL('image/png');
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Presence for a badge: green while the heartbeat is fresh, "Active Nm ago"
+ * while the desk has only just gone quiet, Offline past the hour. Read off
+ * `last_seen_at`, which PresenceBeat refreshes every thirty seconds.
+ */
+function presenceOf(lastSeen) {
+  if (!lastSeen) return { state: 'offline', label: 'Offline' };
+  const t = new Date(String(lastSeen).replace(' ', 'T')).getTime();
+  if (Number.isNaN(t)) return { state: 'offline', label: 'Offline' };
+  const mins = Math.floor((Date.now() - t) / 60000);
+  if (mins < 1) return { state: 'active', label: 'Active' };
+  if (mins < 60) return { state: 'away', label: `Active ${mins}m ago` };
+  return { state: 'offline', label: 'Offline' };
+}
 
 /**
  * Phase 4 — Dashboard monitoring (UC-017). ADMIN-ONLY view: the shell only
@@ -696,9 +888,11 @@ export function RangeSelect({ preset, onPick }) {
  * slice in the trend chart's own ramp order, and everything else is one grey
  * Others slice — a fourth colour for a fifth type would be precision the
  * legend cannot spend. Counts AND shares beside every name, because a slice
- * says nothing about how many reports it is.
+ * says nothing about how many reports it is. `legend={false}` draws the ring
+ * alone, for the Total Reports plate where the clickable type rows beside it
+ * already carry the names and counts.
  */
-export function TypeDonut({ slices }) {
+export function TypeDonut({ slices, legend = true }) {
   const rows = (Array.isArray(slices) ? slices : []).filter((s) => s.count > 0);
   const total = rows.reduce((n, s) => n + s.count, 0);
   if (rows.length === 0 || total <= 0) return <EmptyNote>Nothing in range to break down.</EmptyNote>;
@@ -732,16 +926,18 @@ export function TypeDonut({ slices }) {
         <text className="cmd-donut__total" x="70" y="66" textAnchor="middle">{total}</text>
         <text className="cmd-donut__caption" x="70" y="84" textAnchor="middle">reports</text>
       </svg>
-      <ul className="cmd-donut__legend">
-        {rows.map((s) => (
-          <li key={s.label}>
-            <span className="cmd-donut__dot" style={{ background: s.color }} aria-hidden="true" />
-            <span className="cmd-donut__name">{s.label}</span>
-            <span className="cmd-donut__count">{fmt.format(s.count)}</span>
-            <span className="cmd-donut__pct">{Math.round((s.count / total) * 100)}%</span>
-          </li>
-        ))}
-      </ul>
+      {legend && (
+        <ul className="cmd-donut__legend">
+          {rows.map((s) => (
+            <li key={s.label}>
+              <span className="cmd-donut__dot" style={{ background: s.color }} aria-hidden="true" />
+              <span className="cmd-donut__name">{s.label}</span>
+              <span className="cmd-donut__count">{fmt.format(s.count)}</span>
+              <span className="cmd-donut__pct">{Math.round((s.count / total) * 100)}%</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -996,6 +1192,22 @@ export default function Dashboard({
   // The open self-service recovery requests (Phase 1, S-04), read from their own
   // endpoint so a failure there cannot take the charts down with it.
   const [requests, setRequests] = useState(null);
+  // The ID roster for Active Accounts: the live directory (Admin-only), so the
+  // one container holds every person's hanging badge — photo front, database
+  // identity back. Bare lanyards only, no text or picker inside the plate.
+  const [roster, setRoster] = useState(null);
+  const [idFaces, setIdFaces] = useState({});
+  const [idView, setIdView] = useState('card');
+  // Drag-to-open: a badge flicked to the plate's bottom edge and released
+  // quickly opens that account inside User Management (see Shell's userId).
+  const cardRef = useRef(null);
+  const badgeGesture = useRef(null);
+  const suppressBadgeClick = useRef(false);
+  const [dropTarget, setDropTarget] = useState(null);
+  // The badge under the pointer paints above the whole row while it is dragged,
+  // so a flicked card never slides underneath its neighbours.
+  const [dragId, setDragId] = useState(null);
+  const faceBlobs = useRef({});
   const live = useRef(true);
 
   useEffect(() => {
@@ -1083,6 +1295,86 @@ export default function Dashboard({
   useEffect(() => {
     loadRequests();
   }, [loadRequests]);
+
+  // The ID roster: active accounts only, alphabetical, so the picker walks the
+  // same directory User Management shows. A failure here leaves the headcount up
+  // and the lanyard on its fallback art — the card is a reading first.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const out = await api('/users');
+        const rows = Array.isArray(out?.users) ? out.users : [];
+        const actives = rows
+          .filter((r) => (r?.status ?? 'active') === 'active')
+          .sort((a, b) => String(a?.full_name ?? '').localeCompare(String(b?.full_name ?? '')));
+        if (!cancelled && live.current) setRoster(actives);
+      } catch {
+        if (!cancelled && live.current) setRoster([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Every badge in the one container: backs drawn from each row, fronts are the
+  // saved photographs (fetched as bytes behind the tab gate) with the status
+  // pill printed on, falling back to drawn initials where there is no photo or
+  // it cannot be read. Re-prints when the minute turns, so "6m ago" cannot go
+  // stale while the dashboard sits open.
+  const minuteBucket = Math.floor(Date.now() / 60000);
+  useEffect(() => {
+    let cancelled = false;
+    if (!roster || roster.length === 0) {
+      setIdFaces({});
+      return undefined;
+    }
+    const initial = {};
+    roster.forEach((person) => {
+      const p = presenceOf(person.last_seen_at);
+      initial[person.id] = {
+        front: personIdFallbackFront(person, p),
+        back: personIdBackImage(person, p),
+      };
+    });
+    setIdFaces(initial);
+    (async () => {
+      for (const person of roster) {
+        const p = presenceOf(person.last_seen_at);
+        const url = person?.photo_url ?? null;
+        if (!url) continue;
+        try {
+          const blobUrl = await apiBlobUrl(url);
+          if (cancelled || !live.current) {
+            URL.revokeObjectURL(blobUrl);
+            continue;
+          }
+          if (faceBlobs.current[person.id]) URL.revokeObjectURL(faceBlobs.current[person.id]);
+          faceBlobs.current[person.id] = blobUrl;
+          const img = await loadPhotoImage(blobUrl);
+          if (cancelled || !live.current) continue;
+          const front = (img && paintIdPhotoFront(img, p)) || personIdFallbackFront(person, p);
+          setIdFaces((prev) => ({
+            ...prev,
+            [person.id]: { front, back: prev[person.id]?.back ?? personIdBackImage(person, p) },
+          }));
+        } catch {
+          // Keep the initials fallback — a missing face is not a broken card.
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [roster, minuteBucket]);
+
+  useEffect(() => () => {
+    Object.values(faceBlobs.current).forEach((url) => {
+      try { URL.revokeObjectURL(url); } catch { /* already gone */ }
+    });
+    faceBlobs.current = {};
+  }, []);
 
   /** Clear a request's flag once an Admin has acted on it. The ACT itself is done
    *  in User Management and is audited there; this only closes the flag. */
@@ -1180,6 +1472,92 @@ export default function Dashboard({
     if (rest > 0) top.push({ label: 'Others', count: rest, color: '#c9a227' });
     return top;
   }, [data?.categoryBreakdown]);
+
+  // The incident-type strip under Total Reports: the range's own
+  // categoryBreakdown, already ordered by volume as the server sends it.
+  // Reads the same register response as the donut, so the strip can never
+  // disagree with the charts under it.
+  const typeStrip = useMemo(() => {
+    const cats = Array.isArray(data?.categoryBreakdown) ? data.categoryBreakdown : [];
+    const total = cats.reduce((n, c) => n + Number(c?.count || 0), 0);
+    return {
+      total,
+      top: cats.slice(0, 4).map((c) => ({ type: c.type, count: Number(c?.count || 0) })),
+      rest: Math.max(0, cats.length - 4),
+    };
+  }, [data?.categoryBreakdown]);
+
+  // Bottom-edge drop: the plate's own box is the target, so a badge flicked
+  // down and released fast opens that account. Slow drags and clicks just
+  // swing or flip the badge — only a quick drop to the edge navigates.
+  const inDropZone = (clientY) => {
+    const box = cardRef.current?.getBoundingClientRect();
+    if (!box) return false;
+    return clientY >= box.bottom - 100;
+  };
+  // Hover swing: the badge swings from its strap toward the pointer — hover
+  // the left half and it swings left, the right half and it swings right.
+  // Direct DOM style (no re-render), and fully off while a badge is dragged
+  // or any button is held, so it never fights the drag physics. Release
+  // gets a springy settle, like a real badge wobbling back onto its hook.
+  const tiltBadge = (e) => {
+    if (e.pointerType === 'touch' || e.buttons !== 0 || dragId != null) return;
+    const stage = e.currentTarget.querySelector('.lanyard');
+    if (!stage) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    if (!r.width) return;
+    const t = (e.clientX - r.left) / r.width - 0.5;
+    stage.style.transition = 'transform 0.15s ease-out';
+    stage.style.transform = `rotate(${(t * 18).toFixed(2)}deg) translateX(${(t * 16).toFixed(1)}px)`;
+  };
+  const untiltBadge = (e) => {
+    const stage = e.currentTarget.querySelector('.lanyard');
+    if (!stage || !stage.style.transform) return;
+    stage.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.45, 0.64, 1)';
+    stage.style.transform = '';
+  };
+  const badgeDragHandlers = (person) => ({
+    onPointerDown: (e) => {
+      badgeGesture.current = { id: person.id, sx: e.clientX, sy: e.clientY, t: performance.now() };
+    },
+    onPointerMove: (e) => {
+      tiltBadge(e);
+      const g = badgeGesture.current;
+      if (!g || g.id !== person.id) return;
+      if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) > 6) setDragId(person.id);
+      setDropTarget(inDropZone(e.clientY) ? person.id : null);
+    },
+    onPointerLeave: (e) => {
+      untiltBadge(e);
+    },
+    onPointerUp: (e) => {
+      const g = badgeGesture.current;
+      badgeGesture.current = null;
+      setDropTarget(null);
+      setDragId(null);
+      if (!g || g.id !== person.id) return;
+      const quick = performance.now() - g.t < 600;
+      const dropped = e.clientY - g.sy > 40 && inDropZone(e.clientY);
+      if (quick && dropped) {
+        suppressBadgeClick.current = true;
+        e.preventDefault();
+        e.stopPropagation();
+        onOpenUsers?.(person.id);
+      }
+    },
+    onPointerCancel: () => {
+      badgeGesture.current = null;
+      setDropTarget(null);
+      setDragId(null);
+    },
+    onClickCapture: (e) => {
+      if (suppressBadgeClick.current) {
+        suppressBadgeClick.current = false;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    },
+  });
 
   return (
     <div className="dash dash--cmd">
@@ -1314,6 +1692,7 @@ export default function Dashboard({
             Sibling anchors, never nested — an anchor inside an anchor is
             invalid HTML and breaks keyboard navigation. */}
         <div className="cmd-total-group">
+         <div className="cmd-total-row">
           <CardLink label="Total reports in the register" onGo={() => onOpenReports?.({})}>
             <div className="cmd-total-parent">
               <div className="cmd-total-parent__top">
@@ -1389,39 +1768,147 @@ export default function Dashboard({
               </div>
             </CardLink>
           </div>
+          </div>
+          {/* Incident types live here, under the total they belong to: the
+              strip fills the plate out to the lanyard wall and each row opens
+              the register pre-filtered to that type (see initialType). */}
+          <div className="cmd-total-types">
+            <div className="cmd-total-types__head">
+              <span className="cmd-total-eyebrow">
+                <span className="cmd-total-dot cmd-total-dot--gold" aria-hidden="true" />
+                <span>Incident Type</span>
+              </span>
+              {typeStrip.total > 0 && (
+                <span className="cmd-total-types__count">{fmt.format(typeStrip.total)} in range</span>
+              )}
+            </div>
+            {typeStrip.top.length === 0 ? (
+              <p className="cmd-total-types__empty">{loading ? 'Reading the register…' : 'No incidents in this range yet.'}</p>
+            ) : (
+              <div className="cmd-total-types__body">
+                <div className="cmd-total-types__pie">
+                  {loading && donutRows.length === 0 ? (
+                    <div className="cmd-donut__blank" aria-hidden="true" />
+                  ) : (
+                    <TypeDonut slices={donutRows} legend={false} />
+                  )}
+                </div>
+                <div className="cmd-total-types__rows">
+                  <ul className="cmd-total-types__list">
+                    {typeStrip.top.map((t) => {
+                      const share = typeStrip.total > 0 ? Math.round((t.count / typeStrip.total) * 100) : 0;
+                      return (
+                        <li key={t.type}>
+                          <button
+                            type="button"
+                            className="cmd-type-row"
+                            title={`Open ${t.type} reports in the register`}
+                            onClick={() => onOpenReports?.({ type: t.type })}
+                          >
+                            <span className="cmd-type-row__name">{t.type}</span>
+                            <span className="cmd-type-row__track" aria-hidden="true">
+                              <span className="cmd-type-row__fill" style={{ width: `${loading ? 0 : share}%` }} />
+                            </span>
+                            <span className="cmd-type-row__num">{fmt.format(t.count)}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {typeStrip.rest > 0 && (
+                    <button type="button" className="cmd-total-types__more" onClick={() => onOpenReports?.({})}>
+                      +{typeStrip.rest} more in the register
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         <CardLink label="Active accounts" onGo={() => onOpenUsers?.()}>
-          <MetricCard
-            loading={loading}
-            tone="gold"
-            label="Active Accounts"
-            value={data?.users ? fmt.format(data.users.total) : '—'}
-            // Beside the headcount (owner request, 2026-10-30): yellow only,
-            // sitting on the number's own line — the words name the roles, so
-            // the colour is emphasis, never the only signal.
-            foot={data?.users?.byRole ? (
-              <span className="cmd-role-line">
-                <span className="cmd-role cmd-role--yellow">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                    <circle cx="12" cy="8" r="3.5" />
-                    <path d="M5 20c.9-3.6 3.7-5.5 7-5.5s6.1 1.9 7 5.5" />
-                  </svg>
-                  {data.users.byRole.Admin ?? 0} admin
-                </span>
-                <span className="cmd-role-sep" aria-hidden="true">·</span>
-                <span className="cmd-role cmd-role--yellow">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                    <circle cx="9" cy="8" r="3.5" />
-                    <path d="M2.5 20c.8-3.2 3.4-5 6.5-5s5.7 1.8 6.5 5" />
-                    <path d="M17 8.5h4M19 6.5v4" />
-                  </svg>
-                  {data.users.byRole.Officer ?? 0} officers
-                </span>
+          {loading ? (
+            <MetricCard loading tone="gold" label="Active Accounts" value="—" />
+          ) : (
+            <div ref={cardRef} className="cmd-card cmd-card--gold cmd-active-lanyard-card is-bare">
+              <span className="cmd-id-view" onClick={(e) => e.preventDefault()}>
+                <button
+                  type="button"
+                  className="cmd-id-view__btn is-active"
+                  aria-pressed={idView === 'list'}
+                  title={idView === 'card' ? 'Switch to list view' : 'Switch to card view'}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIdView((v) => (v === 'card' ? 'list' : 'card')); }}
+                >{idView === 'card' ? 'List' : 'Card'}</button>
               </span>
-            ) : (
-              'across the station'
-            )}
-          />
+              {idView === 'list' ? (
+                <span className="cmd-id-list" onClick={(e) => e.preventDefault()}>
+                  {(roster ?? []).map((person) => (
+                    <span
+                      key={person.id}
+                      className="cmd-id-row"
+                      role="button"
+                      tabIndex={0}
+                      title={`Open ${person.full_name ?? 'account'} in User Management`}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenUsers?.(person.id); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenUsers?.(person.id); } }}
+                    >
+                      <span className="cmd-id-row__face" aria-hidden="true">
+                        {person.photo_url ? (
+                          <ServerPhoto src={person.photo_url} alt="" loading="lazy" />
+                        ) : null}
+                        <span className="cmd-id-row__initials">{personInitials(person.full_name)}</span>
+                      </span>
+                      <span className="cmd-id-row__main">
+                        <span className="cmd-id-row__name" title={person.full_name}>{person.full_name ?? '—'}</span>
+                        <span className="cmd-id-row__sub">ID {person.badge_number ?? '—'} · {person.role ?? '—'} · @{person.username ?? '—'}</span>
+                      </span>
+                      {(() => {
+                        const p = presenceOf(person.last_seen_at);
+                        return (
+                          <span className={`cmd-pres cmd-pres--static cmd-pres--${p.state}`} title={p.label}>
+                            <i aria-hidden="true" />
+                            {p.label}
+                          </span>
+                        );
+                      })()}
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                <>
+                <span className="cmd-id-lanyards" onClickCapture={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                  {(roster ?? []).map((person) => (
+                    <span
+                      key={person.id}
+                      className="cmd-active-lanyard cmd-active-lanyard--mini"
+                      style={{ width: '200px', height: '300px', zIndex: dragId === person.id ? 999 : undefined }}
+                      title={`Drag down to open ${person.full_name ?? 'account'}`}
+                      {...badgeDragHandlers(person)}
+                    >
+                      <Lanyard
+                        frontImage={idFaces[person.id]?.front}
+                        backImage={idFaces[person.id]?.back}
+                        imageFit="cover"
+                        cardColor="#ffffff"
+                        strapColor={person.role === 'Admin' ? '#b91c1c' : '#0b2545'}
+                        metal="gold"
+                        finish="glossy"
+                        size={0.75}
+                        strapLength={0.35}
+                        breeze={0.25}
+                        intro={false}
+                      />
+                    </span>
+                  ))}
+                </span>
+              {dropTarget != null ? (
+                <span className="cmd-id-drop" aria-live="polite">
+                  Release to open {(roster ?? []).find((p) => p.id === dropTarget)?.full_name ?? 'account'}
+                </span>
+              ) : null}
+              </>
+              )}
+            </div>
+          )}
         </CardLink>
       </section>
       </div>
@@ -1486,17 +1973,12 @@ export default function Dashboard({
         />
       </div>
 
-      {/* ---- Trio: kind, place, pulse — above the brief ----------------------
+      {/* ---- Duo: place, pulse — above the brief --------------------------------
           Moved above AI Insights (owner request, 2026-10-30): the register's
-          own facts read first, the analyst's advice after them. Three equal
-          panels, one row: the composition, where it happened, and the
-          station's own pulse. */}
+          own facts read first, the analyst's advice after them. The composition
+          moved into the Total Reports plate, so two panels share this row:
+          where it happened, and the station's own pulse. */}
       <div className="dash-grid-trio">
-        {loading ? <PanelSkeleton /> : (
-          <Panel title="Incident Types">
-            <TypeDonut slices={donutRows} />
-          </Panel>
-        )}
         {loading ? <PanelSkeleton /> : (
           <Panel title="Top Locations">
             <LocationBars places={data?.locationBreakdown} />

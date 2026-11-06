@@ -17,8 +17,16 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import Avatar, { PersonGlyph } from '../../src/components/Avatar.jsx';
 
-/** A photograph: the <img> branch, with no gradient of its own. */
-export function renderPhoto(user = { id: 9, full_name: 'Juan Dela Cruz', photo_url: '/api/v1/users/9/photo?v=4' }) {
+/**
+ * A photograph: the <img> branch, with no gradient of its own.
+ *
+ * A DIRECT (already-bytes) URL, the way the create form's held preview arrives — it
+ * paints synchronously. A SERVER path arrives a frame late through the tab gate (see
+ * Avatar.jsx and `apiBlobUrl`), so a static render of one is initials, never an
+ * <img>: handing it to <img> directly is the 401 that hid every uploaded photograph
+ * for years, and avatar.test.mjs pins that separately.
+ */
+export function renderPhoto(user = { id: 9, full_name: 'Juan Dela Cruz', photo_url: 'blob:avatar-held-preview-9' }) {
   return renderToStaticMarkup(React.createElement(Avatar, { user, className: 'face' }));
 }
 

@@ -465,23 +465,6 @@ export default function Users({ notify }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [confirm, resetFor, profileId]);
 
-  // THE CORNER IS THE PRESENCE RAIL'S, SO THIS SCREEN ASKS FOR IT RATHER THAN
-  // TAKING IT. The chat rail is anchored in the bottom-right square of the window
-  // and the chathead rail is anchored in that same square, so the rail is lifted by
-  // exactly the button's height instead of the two landing on each other with a
-  // colleague underneath. That lift is `body.users-fab-open .dash-dock` in
-  // styles.css — a body class is the only way a screen can reach a box that Shell
-  // renders, and it is the mechanism the docked panels already use to move this same
-  // corner sideways (ProfilePanel, AiNarrativePanel).
-  //
-  // PUBLISHED FOR THE LIFETIME OF THE SCREEN, NOT OF THE BUTTON. Tying it to the
-  // form would drop the rail back into the corner every time somebody pressed Add User,
-  // which is the edge of the window jumping for no reason an administrator can see.
-  useEffect(() => {
-    document.body.classList.add('users-fab-open');
-    return () => document.body.classList.remove('users-fab-open');
-  }, []);
-
   async function runConfirm() {
     const c = confirm;
     setConfirm(null);

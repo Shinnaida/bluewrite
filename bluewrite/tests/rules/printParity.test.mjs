@@ -64,13 +64,15 @@ test('the shared sheet renders one html for screen and print', () => {
   // The rich narrative renders through the sanitizer minus redundant header
   // paragraphs (owner request, 2026-11-02): an arranged account's own
   // opening date/time and title restate the certification line and the quoted
-  // title, so the sheet skips them — the record itself is untouched. The
-  // place line then takes the conclusive City of Naga spelling at render
-  // (owner request, 2026-11-02), and the issuance line's requestor name
-  // prints bold, ALL CAPS and underlined (owner request).
+  // title, so the sheet skips them — the record itself is untouched. An
+  // Enhance answer's closing title echo below Remarks is skipped the same
+  // way (owner request, 2026-11-04). The place line then takes the
+  // conclusive City of Naga spelling at render (owner request, 2026-11-02),
+  // and the issuance line's requestor name prints bold, ALL CAPS and
+  // underlined (owner request).
   assert.match(
     LEAF,
-    /dangerouslySetInnerHTML=\{\{ __html: emphasizeIssuanceRequestorHtml\(correctNagaPlaceLinesHtml\(sanitizeRichHtml\(stripRedundantSheetHeaderHtml\(narrativeRaw, sheetTitle\)\)\)\) \}\}/,
+    /dangerouslySetInnerHTML=\{\{ __html: emphasizeIssuanceRequestorHtml\(correctNagaPlaceLinesHtml\(sanitizeRichHtml\(stripRedundantSheetFooterHtml\(stripRedundantSheetHeaderHtml\(narrativeRaw, sheetTitle\), sheetTitle\)\)\)\) \}\}/,
     'the rich narrative stopped rendering its stored html',
   );
   assert.match(

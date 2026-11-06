@@ -262,56 +262,28 @@ test('the directory filters in place, and every empty state says which one it is
   assert.match(src, /if \(e\.key !== 'Escape'\) return;/);
 });
 
-test('the create circle owns the corner, and the presence rail is lifted clear of it', async () => {
+test('the floating create circle is gone — creation lives in the toolbar Add User', async () => {
   const src = flat(await readSrc());
   const css = flat(await readFile(path.join(root, 'src/styles.css'), 'utf8'));
   const ir = flat(await readFile(path.join(root, 'src/incident-report.css'), 'utf8'));
 
-  // ONE CONTROL, WIRED, WITH A NAME. A plus is a shape, not a label, so `aria-label`
-  // and `title` ARE the accessible name here — an icon-only button without them is a
-  // button a screen reader announces as nothing at all.
-  assert.match(
-    src,
-    /<button type="button" className="users-fab" onClick=\{startCreate\} aria-label="Create account" title="Create account" >/
-  );
-  // Stroked SVG rather than a "+" glyph, for the reason ThemeIcons.jsx gives: a glyph
-  // is the font's to draw, and it lands off-centre in a circle the first time a
-  // station runs a different default font.
-  assert.match(src, /<path d="M12 5\.5v13M5\.5 12h13" \/>/);
+  // THE BUTTON. No icon-only floating plus anywhere: no markup, no accessible
+  // name for it, no corner rule, no body class lifting the presence rail for it.
+  assert.doesNotMatch(src, /users-fab/);
+  assert.doesNotMatch(src, /Create account/);
+  assert.doesNotMatch(css, /\.users-fab \{/);
+  assert.doesNotMatch(css, /users-fab-open/);
   // The labelled button it replaced is gone from both sides — the markup and its rule.
   assert.doesNotMatch(src, /className="users-actions"/);
   assert.doesNotMatch(css, /\.users-actions/);
 
-  // THE CIRCLE: fixed in the corner, round, and filled with the screen's primary —
-  // owned outright rather than inherited from the neutral button (see below).
-  assert.match(css, /\.users-fab \{ position: fixed; right: 18px; bottom: 18px;/);
-  assert.match(css, /width: var\(--fab-size, 56px\); height: var\(--fab-size, 56px\);/);
-  assert.match(css, /border-radius: 50%; background: var\(--ir-blue\);/);
+  // ITS REPLACEMENT. One visible primary action in the toolbar rail, wired to the
+  // same creator — its label is visible, so it needs no aria-label of its own.
+  assert.match(src, /<button type="button" className="primary users-add" onClick=\{startCreate\}>/);
 
-  // THE COLLISION THIS PINS. The chathead rail hangs upward from this same corner, so
-  // the dock is lifted by the button's height plus the gap. ONE VARIABLE serves the
-  // rule that draws the button and the rule that moves the rail, which is the
-  // difference between a pair that agrees and a pair that used to: two restated
-  // numbers are two numbers that drift.
-  assert.match(css, /body\.users-fab-open \{ --fab-size: 56px; --fab-lift: calc\(var\(--fab-size\) \+ 12px\); \}/);
-  assert.match(css, /body\.users-fab-open \.dash-dock \{ bottom: calc\(18px \+ var\(--fab-lift\)\); \}/);
-  // The chatbox is bounded by the viewport height, so it comes up with the dock
-  // instead of losing its title bar off the top of a short window.
-  assert.match(css, /body\.users-fab-open \.messages-box \{/);
-  // And the directory keeps a floor, so the last account is not under the circle.
-  assert.match(
-    css,
-    /body\.users-fab-open \.main \{ padding-bottom: calc\(var\(--ir-gutter-bottom\) \+ var\(--fab-lift\)\); \}/
-  );
-  // The SCREEN publishes the class, not the button: toggling it with the form would
-  // drop the rail back into the corner every time somebody pressed "+".
-  assert.match(src, /document\.body\.classList\.add\('users-fab-open'\)/);
-  assert.match(src, /return \(\) => document\.body\.classList\.remove\('users-fab-open'\)/);
-
-  // THE THIRD ENTRY IN THE EXCLUSION CHAIN, and the same bug the other two exist for:
-  // the neutral fill collected every button in the workspace, including the two
-  // variants that were supposed to say something. This one has its own fill, so it
-  // never enters the chain — asserted on both copies of the rule, base and hover.
+  // THE RETIRED NAME in the neutral-button exclusion chain stays behind as a
+  // no-op so the two long selectors keep their shape — asserted on both copies
+  // of the rule, base and hover.
   assert.equal((ir.match(/:not\(\.users-fab\)/g) || []).length, 2);
 });
 

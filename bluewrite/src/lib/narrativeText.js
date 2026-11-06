@@ -145,6 +145,67 @@ export function stripRedundantSheetHeaderHtml(html, title) {
   return kept.join('</p><p>');
 }
 
+/**
+ * Remove redundant closing lines from the END of a plain narrative: trailing
+ * blank lines, a bare date/time line and a restatement of the quoted title.
+ * An Enhance/Arrange answer echoes the title as a closing line; the sheet
+ * already prints the title quoted above the facts and signs "Noted by"
+ * below, so the echo would print the title twice — paper only, the record
+ * keeps every word. Never blanks the paper.
+ *
+ * @param {unknown} value the narrative text
+ * @param {string} title the sheet's quoted title
+ * @returns {string}
+ */
+export function stripRedundantSheetFooter(value, title) {
+  const text = String(value ?? '');
+  if (text.trim() === '') return text;
+  const lines = text.split('\n');
+  let end = lines.length;
+  while (
+    end > 0 &&
+    (lines[end - 1].trim() === '' || isBareDateTimeLine(lines[end - 1]) || isTitleLine(lines[end - 1], title))
+  ) {
+    end -= 1;
+  }
+  if (end === lines.length) return text;
+  const kept = lines.slice(0, end).join('\n').trim();
+  return kept === '' ? text : kept;
+}
+
+/**
+ * The same rule for formatter-style HTML (`<p>…</p>` runs, as Arrange Only
+ * and Enhance Wording produce): trailing paragraphs whose whole text is
+ * blank, a bare date/time or the quoted title are not rendered. Anything
+ * else renders exactly as stored, and the paper is never blanked.
+ *
+ * @param {unknown} html
+ * @param {string} title the sheet's quoted title
+ * @returns {string}
+ */
+export function stripRedundantSheetFooterHtml(html, title) {
+  const src = String(html ?? '');
+  if (src.trim() === '') return src;
+  const blocks = src.split(/<\/p\s*>\s*<p\s*>/i);
+  if (blocks.length < 2) return src;
+  if (!/^\s*<p\s*>/i.test(blocks[0]) || !/<\/p\s*>\s*$/.test(blocks[blocks.length - 1])) return src;
+  const innerText = (b) => b.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '');
+  let drop = 0;
+  for (let k = blocks.length - 1; k >= 0; k -= 1) {
+    const lines = innerText(blocks[k]).split('\n');
+    const redundant = lines.length > 0 && lines.every((ln) => ln.trim() === '' || isBareDateTimeLine(ln) || isTitleLine(ln, title));
+    if (!redundant) break;
+    drop += 1;
+  }
+  if (drop === 0) return src;
+  const kept = blocks.slice(0, blocks.length - drop);
+  if (kept.join('').replace(/<[^>]*>/g, '').trim() === '') return src;
+  // The split consumed each block's closing </p>: restore the last kept
+  // block's closer so the run stays well-formed paragraphs.
+  if (!/<\/p\s*>\s*$/i.test(kept[kept.length - 1])) kept[kept.length - 1] = `${kept[kept.length - 1]}</p>`;
+  return kept.join('</p><p>');
+}
+
 // ---- Conclusive Naga place for the narrative's place line (owner request) --
 // The account keeps the place as written (the AI is told never to respell it),
 // and the sheet prints the conclusive City of Naga spelling for the value

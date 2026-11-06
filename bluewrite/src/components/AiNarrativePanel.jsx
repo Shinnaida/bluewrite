@@ -2370,7 +2370,7 @@ export default function AiNarrativePanel({
                             <h4>Possible gaps (advisory)</h4>
                             <ul>
                               {draft.possibleGaps.map((g, i) => (
-                                <li key={i} className={g.severity === 'warning' ? 'gap-warning' : 'gap-info'}>
+                                <li key={i} className={g.severity === 'error' ? 'gap-error' : g.severity === 'warning' ? 'gap-warning' : 'gap-info'}>
                                   {g.description}
                                 </li>
                               ))}
