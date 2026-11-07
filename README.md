@@ -82,6 +82,24 @@ docs/                    architecture notes and brand assets
 ROADMAP.md               phase plan and progress
 ```
 
+## Run it (Windows workstation)
+
+The checkout ships a launcher — **`BlueWrite.exe`**, sitting beside the
+`bluewrite/` folder. Double-click it: it starts the API (8099), the dev
+server (5180), and MySQL (3306) through `bluewrite\scripts\serve.cmd`,
+then opens the app in your browser. Keep the `.exe` beside the
+`bluewrite/` folder; moved elsewhere it cannot find the app. `Start
+BlueWrite.bat` does the same thing from a console window.
+
+- `BlueWrite.exe --no-open` — start the servers without opening a browser
+  (for a shortcut that runs at sign-in).
+- Other PCs on the same Wi-Fi need no install: they open
+  `http://<server-ip>:8099/` in a browser — see
+  [`bluewrite/docs/LAN_SETUP.md`](bluewrite/docs/LAN_SETUP.md).
+- To rebuild the launcher after editing its source:
+  `bluewrite\scripts\launcher\build.cmd` (uses the .NET Framework
+  `csc.exe` already in Windows — nothing to install).
+
 ## Quick start (from a fresh clone)
 
 Prerequisites: **PHP 8.2+**, **MySQL 8**, **Node 20+**. Laragon on Windows
