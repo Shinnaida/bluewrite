@@ -563,6 +563,199 @@ final class NarrativeController
     }
 
     /**
+     * POST /ai/arrange/stream — live-streamed Arrange Only.
+     *
+     * Same answer as /ai/arrange (same guards, same provider, same
+     * faithfulness gate), but the sheet fills WHILE Gemini is still writing:
+     * the provider forwards each longer prefix, and every grown section is
+     * emitted as `event: section` {index, text, total} the moment it grows —
+     * the ChatGPT-style arrival instead of one pop. Then `event: done`.
+     *
+     * A guessing answer cannot be taken back once painted, so the gate runs
+     * BEFORE the first byte is trusted: if the finished text names a person,
+     * plate, code or vehicle marker the account never stated, a `reset` event
+     * carries the raw account (the client formats it deterministically,
+     * exactly like its own fallback). A provider miss before the first
+     * section answers as plain JSON so the client falls back to /ai/arrange;
+     * a miss mid-stream answers as `event: error` and the client replays the
+     * classic path. A client without ReadableStream keeps using /ai/arrange.
+     */
+    public function arrangeStream(): void
+    {
+        $user = Auth::requireUser();
+        if (!NarrativeService::enabled()) {
+            Response::json(503, ['error' => 'AI assistance is disabled. Continue with the report as written.']);
+        }
+
+        $body = NarrativeController::jsonBody();
+        $account = trim((string) ($body['account'] ?? ''));
+        if ($account === '') {
+            Response::json(422, ['error' => 'Write the report first — there is nothing yet to arrange.']);
+        }
+        $account = mb_substr($account, 0, 20000);
+
+        $emit = static function (string $event, mixed $data): void {
+            echo 'event: ' . $event . "\n";
+            echo 'data: ' . json_encode($data, JSON_UNESCAPED_UNICODE) . "\n\n";
+            flush();
+        };
+        $openStream = static function () use ($emit): void {
+            header('Content-Type: text/event-stream');
+            header('Cache-Control: no-cache');
+            header('X-Accel-Buffering: no');
+            if (function_exists('apache_setenv')) {
+                @apache_setenv('no-gzip', '1');
+            }
+            @ini_set('zlib.output_compression', '0');
+            while (ob_get_level() > 0) {
+                ob_end_flush();
+            }
+            @ob_implicit_flush(true);
+            // Bytes on the wire BEFORE the Gemini wait: this commits the
+            // headers through fastcgi/proxy buffers that would otherwise hold
+            // every section until the answer is complete (one pop instead of
+            // a stream). SSE ignores ':' comment lines, and so does the
+            // panel reader — only event:/data: lines are read.
+            echo ": open\n";
+            echo ':' . str_repeat(' ', 2048) . "\n\n";
+            flush();
+        };
+
+        // Open first, ask Gemini second: with the headers already committed,
+        // every failure below answers as `error` and the panel replays the
+        // classic single-answer path (with its typewriter) instead of a pop.
+        $openStream();
+
+        $service = new NarrativeService();
+        $sent = [];
+        try {
+            $out = $service->streamArrangeReport($account, function (string $plain) use (&$sent, $emit): void {
+                $sections = self::splitArrangeSections($plain);
+                $total = count($sections);
+                foreach ($sections as $i => $text) {
+                    if (($sent[$i] ?? null) !== $text) {
+                        $sent[$i] = $text;
+                        $emit('section', ['index' => $i, 'text' => $text, 'total' => $total]);
+                    }
+                }
+            });
+        } catch (AiUnavailableException $e) {
+            $emit('error', ['error' => $e->getMessage()]);
+            return;
+        } catch (AiProviderException $e) {
+            $emit('error', ['error' => self::providerFailureMessage($e)]);
+            return;
+        }
+
+        // The faithfulness gate (see arrangeOutputIsFaithful in
+        // src/lib/arrangeDraft.js — keep the two in sync): a guessing answer
+        // is dropped for the raw account, repainted whole via `reset`.
+        if (!self::arrangeOutputIsFaithful($out, $account)) {
+            $emit('reset', ['text' => $account]);
+            $out = $account;
+        }
+
+        Audit::log((int) $user['id'], 'ai.arrange', 'report', null, sprintf(
+            'chars_in: %d, chars_out: %d (stream)',
+            mb_strlen($account),
+            mb_strlen($out),
+        ));
+
+        $emit('done', new \stdClass());
+    }
+
+    /**
+     * Split arranged plain text into its paper sections, heading-led so the
+     * client can land them top-to-bottom. The title (everything before the
+     * first known heading) is section zero; the issuance closing line opens
+     * its own final section. Unknown layouts fall back to one section per
+     * blank-separated block so nothing is ever dropped.
+     */
+    private static function splitArrangeSections(string $plain): array
+    {
+        $plain = trim(str_replace(["\r\n", "\r"], "\n", $plain));
+        if ($plain === '') {
+            return [];
+        }
+        $parts = preg_split(
+            '/^(?=(?:PLACE(?: OF (?:INCIDENT|OCCURRENCE))?|LOCATION|T\/D(?: OF INCIDENT)?|TIME\/DATE(?: OF INCIDENT)?|TIME AND DATE(?: OF INCIDENT)?|VEHICLES? INVOLVED|FACTS(?: OF THE CASE)?|REMARKS?|RECORDED BY|THIS CERTIFICATION IS ISSUED)\b)/mi',
+            $plain
+        );
+        if (!is_array($parts)) {
+            return [$plain];
+        }
+        $sections = array_values(array_filter(array_map('trim', $parts), static fn($s) => $s !== ''));
+        return $sections === [] ? [$plain] : $sections;
+    }
+
+    /**
+     * Server-side port of arrangeOutputIsFaithful (src/lib/arrangeDraft.js).
+     * The stream paints sections as they land, so the check runs BEFORE the
+     * first byte — a guessing answer never streams. Keep in sync with the JS.
+     */
+    private static function arrangeOutputIsFaithful(string $output, string $account): bool
+    {
+        $src = mb_strtolower(str_replace(["\u{20B1}", '₱'], 'PHP ', $account));
+        $src = (string) preg_replace('/\s+/u', ' ', $src);
+        if (trim($src) === '') {
+            return false;
+        }
+        $out = str_replace(["\u{20B1}", '₱'], 'PHP ', $output);
+        if (trim($out) === '') {
+            return false;
+        }
+        $rsq = chr(0xE2) . chr(0x80) . chr(0x99);
+        $word = "(?:[A-Z][A-Za-z'" . $rsq . "-]*|[A-Z]{3,}|de|la|del|las|los|van|von|y|bin|binti|mc|mac)";
+        $runRe = '/\\b' . $word . '(?:\\s+' . $word . ')+\\b/u';
+        $nameyRe = "/^(?:[A-Z][a-z'" . $rsq . "-]+|[A-Z]{3,})\$/u";
+        $seen = [];
+        if (preg_match_all($runRe, $out, $m)) {
+            foreach ($m[0] as $run) {
+                $words = preg_split('/\s+/u', $run) ?: [];
+                $strong = 0;
+                foreach ($words as $w) {
+                    if (preg_match($nameyRe, $w)) {
+                        $strong++;
+                    }
+                }
+                if ($strong < 2) {
+                    continue;
+                }
+                $norm = trim((string) preg_replace('/\s+/u', ' ', mb_strtolower($run)));
+                if (isset($seen[$norm])) {
+                    continue;
+                }
+                $seen[$norm] = true;
+                if (mb_strpos($src, $norm) === false) {
+                    return false;
+                }
+            }
+        }
+        $flat = (string) preg_replace('/[^a-z0-9]+/', '', $src);
+        $seenCode = [];
+        if (preg_match_all('/[A-Za-z]{2,}[\s-]*\d[\dA-Za-z-]*|\bV\d+\b|\b(?:OR|CR)\s*#?\s*\d[\d-]*/i', $out, $m)) {
+            foreach ($m[0] as $cand) {
+                $letters = '';
+                if (preg_match('/^[A-Za-z]+/', $cand, $lm)) {
+                    $letters = $lm[0];
+                }
+                if (preg_match('/^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*$/i', $letters)) {
+                    continue;
+                }
+                $code = (string) preg_replace('/[^a-z0-9]+/', '', mb_strtolower($cand));
+                if ($code === '' || isset($seenCode[$code])) {
+                    continue;
+                }
+                $seenCode[$code] = true;
+                if (strpos($flat, $code) === false) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
      * Phase 7 — POST /ai/classify/details
      *
      * The second half of the account read: the incident type's OWN fields. Same
@@ -697,12 +890,20 @@ final class NarrativeController
      * HTTP status), so the sentence follows that, and the catch keeps the
      * generic wording for the one case that has no status: a call that
      * COMPLETED but could not be read as an answer.
+     *
+     * 401 gets its own sentence: it means Google rejected the station's key
+     * itself (revoked, mistyped, or the wrong kind of token), which only an
+     * administrator can fix by installing a valid key — retrying the button
+     * can never clear it, so it must not read like a try-again failure.
      */
     private static function providerFailureMessage(AiProviderException $e): string
     {
         $status = $e->httpStatus;
         if ($status === 429) {
             return 'The AI service is busy right now. Wait a minute and try again.';
+        }
+        if ($status === 401) {
+            return 'The AI service rejected this station\'s key. An administrator needs to install a valid key — your report is not affected.';
         }
         if ($status !== null && $status >= 400 && $status < 500) {
             return 'The AI service rejected this station\'s request. Tell an administrator — your report is not affected.';
