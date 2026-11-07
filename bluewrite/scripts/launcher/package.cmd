@@ -17,7 +17,9 @@ if exist "%STAGE%" rmdir /s /q "%STAGE%"
 mkdir "%STAGE%\package\bluewrite" >nul 2>&1
 
 echo [bluewrite] staging app files ...
-robocopy "%SRC%" "%STAGE%\package\bluewrite" /MIR /NFL /NDL /NJH /NJS /XD node_modules .git .sheet-revert-backup storage offline-copy public\handwriting public\ocr docs tests /XF *.log phpunit.phar .phpunit.result.cache *.onnx *.bin .tmp-* eng.traineddata  >nul
+REM NEVER SHIP SECRETS: config.php (db+gmail), app ai.php (gemini key),
+REM mfa.key stay on the server only. Setup recreates config.php from sample.
+robocopy "%SRC%" "%STAGE%\package\bluewrite" /MIR /NFL /NDL /NJH /NJS /XD node_modules .git .sheet-revert-backup storage offline-copy public\handwriting public\ocr docs tests /XF *.log phpunit.phar .phpunit.result.cache *.onnx *.bin .tmp-* eng.traineddata config.php ai.php mfa.key  >nul
 if errorlevel 8 (
   echo [bluewrite] stage failed.
   exit /b 1
