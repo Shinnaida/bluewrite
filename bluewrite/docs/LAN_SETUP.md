@@ -21,7 +21,7 @@ ipconfig
 ```
 
 Use the **IPv4 Address** under the Wi-Fi or Ethernet adapter that is connected
-to the shared network (for example `192.168.0.108`). Ignore `169.254.x.x`
+to the shared network (currently `192.168.0.107` on this server). Ignore `169.254.x.x`
 (no DHCP) and `127.0.0.1` (this machine only).
 
 ## 2. Server: start BlueWrite
@@ -58,7 +58,7 @@ For a longer-running deployment, put Apache or Nginx with PHP-FPM in front of
 emails:
 
 ```php
-'base_url' => 'http://192.168.0.108:8099',
+'base_url' => 'http://192.168.0.107:8099',
 ```
 
 It must match the IP and the port the clients type. If the server's IP changes,
@@ -100,7 +100,7 @@ reservation" or "Static DHCP"). Bind the server's MAC address (`ipconfig /all`,
 On another computer or a phone on the same network:
 
 ```
-http://192.168.0.108:8099/
+http://192.168.0.107:8099/
 ```
 
 Replace the IP with the server's address. The port is `8099`. The app opens the
