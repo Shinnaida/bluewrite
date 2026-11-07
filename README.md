@@ -84,7 +84,13 @@ ROADMAP.md               phase plan and progress
 
 ## Run it (Windows workstation)
 
-The checkout ships a launcher — **[⬇ Download BlueWrite.exe](https://github.com/Shinnaida/bluewrite/raw/main/BlueWrite.exe)** — sitting beside the
+> **New PC? Get the installer:** **[⬇ Download BlueWrite-Setup.exe](https://github.com/Shinnaida/bluewrite/raw/main/BlueWrite-Setup.exe)** —
+> copy it to the other PC, double-click it, and it downloads the app from
+> GitHub, installs missing PHP / Node.js / MySQL via `winget`, creates
+> `config.php`, builds the frontend, starts everything and opens the system.
+> Needs internet on first run. Re-run it any time as a repair tool.
+
+The checkout also ships a daily launcher — **[⬇ Download BlueWrite.exe](https://github.com/Shinnaida/bluewrite/raw/main/BlueWrite.exe)** — sitting beside the
 `bluewrite/` folder. Double-click it: it starts the API (8099), the dev
 server (5180), and MySQL (3306) through `bluewrite\scripts\serve.cmd`,
 then opens the app in your browser. Keep the `.exe` beside the

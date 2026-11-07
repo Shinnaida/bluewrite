@@ -33,6 +33,7 @@ if not exist "%CSC%" (
 
 REM BlueWrite.exe goes beside the bluewrite folder: launcher\ -> scripts\ -> bluewrite\ -> checkout root.
 set "OUT=%HERE%..\..\..\BlueWrite.exe"
+set "SETUP_OUT=%HERE%..\..\..\BlueWrite-Setup.exe"
 
 echo [bluewrite] compiling the launcher ...
 "%CSC%" /nologo /target:exe /platform:anycpu /optimize+ /out:"%OUT%" "%HERE%BlueWrite.cs"
@@ -43,4 +44,14 @@ if errorlevel 1 (
 
 for %%f in ("%OUT%") do echo [bluewrite] built %%~ff  (%%~zf bytes)
 echo [bluewrite] double-click it, or run it with --no-open to start the stack only.
+
+echo [bluewrite] compiling the setup (second-PC installer) ...
+"%CSC%" /nologo /target:exe /platform:anycpu /optimize+ /out:"%SETUP_OUT%" "%HERE%BlueWriteSetup.cs"
+if errorlevel 1 (
+  echo [bluewrite] the setup did not compile - see the errors above.
+  exit /b 1
+)
+
+for %%f in ("%SETUP_OUT%") do echo [bluewrite] built %%~ff  (%%~zf bytes)
+echo [bluewrite] BlueWrite-Setup.exe: run on a fresh PC, it downloads the app, installs what is missing, then opens it.
 endlocal
