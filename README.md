@@ -84,7 +84,7 @@ ROADMAP.md               phase plan and progress
 
 ## Run it (Windows workstation)
 
-The checkout ships a launcher — **`BlueWrite.exe`**, sitting beside the
+The checkout ships a launcher — **[⬇ Download BlueWrite.exe](https://github.com/Shinnaida/bluewrite/raw/main/BlueWrite.exe)** — sitting beside the
 `bluewrite/` folder. Double-click it: it starts the API (8099), the dev
 server (5180), and MySQL (3306) through `bluewrite\scripts\serve.cmd`,
 then opens the app in your browser. Keep the `.exe` beside the
