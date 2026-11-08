@@ -185,6 +185,25 @@ test('the final formal letter types itself in once, behind the same gates', () =
   assert.match(LEAF, /const narrativeRaw = pendingOn && pending\.narrative/, 'the narrative source stopped staying pending-only');
 });
 
+test('the reveal types the final format, not a raw blob', () => {
+  // Task 12 — a rich draft types line by line in its finished shape:
+  // finished lines draw their formatted html while only the current line
+  // types as plain words, so the letter never reads as one raw blob
+  // mid-sequence. The finished still branch is untouched — the reveal
+  // splits the SAME html it draws (see printParity), so the typing
+  // converges exactly on the final letter.
+  assert.match(LEAF, /splitHtmlLines,/, 'the sheet no longer splits the finished letter');
+  assert.match(LEAF, /const blocks = splitHtmlLines\(narrativeHtml\);/, 'the reveal stopped reading the finished letter');
+  assert.match(LEAF, /dangerouslySetInnerHTML=\{\{ __html: finished \}\}/, 'finished lines no longer draw formatted');
+  assert.match(LEAF, /richTextToPlain\(blocks\[current\]\.html\)/, 'the current line stopped typing as plain words');
+  // Slot discipline: completed lines advance the shared cursor, the current
+  // line slices through it, future lines advance after — one 6s pace.
+  assert.match(LEAF, /slotAcc \+= b\.text\.length;/, 'a line stopped registering its text with the cursor');
+  // A pending draft still owns the words: the plain fallback and the data
+  // selection stay exactly as they were.
+  assert.match(LEAF, /return val\(narrativeText\);/, 'the plain narrative stopped typing whole');
+});
+
 test('the slim bar portals the letter onto the paper, under the narrative', () => {
   // The paper-side mount is a prop, defaulting off for the deck formats.
   assert.match(SRC, /letterMount = null,/, 'the paper mount prop is gone');

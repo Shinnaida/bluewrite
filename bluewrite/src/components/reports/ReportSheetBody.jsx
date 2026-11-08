@@ -73,6 +73,7 @@ import {
   correctNagaPlaceLines,
   correctNagaPlaceLinesHtml,
   emphasizeIssuanceRequestorHtml,
+  splitHtmlLines,
 } from '../../lib/narrativeText.js';
 import { sanitizeRichHtml, containsRichTags, richTextToPlain, sanitizeLetterHtml } from '../../lib/richText.js';
 import RichTextArea from './RichTextArea.jsx';
@@ -572,6 +573,10 @@ export default function ReportSheetBody({
   // title quoted above the facts, so the echo is skipped the same way.
   const sheetTitle = reportTitle(report, ts);
   const narrativeText = caseValue(correctNagaPlaceLines(stripRedundantSheetFooter(stripRedundantSheetHeader(stripLeadingBlotterRestatement(richTextToPlain(String(narrativeRaw ?? ''))), sheetTitle), sheetTitle))) || '—';
+  // The finished letter's own html (see the narrative block): the progressive
+  // reveal below splits THIS, so the typing converges exactly on the final
+  // format instead of swapping it in at the end.
+  const narrativeHtml = emphasizeIssuanceRequestorHtml(correctNagaPlaceLinesHtml(sanitizeRichHtml(stripRedundantSheetFooterHtml(stripRedundantSheetHeaderHtml(narrativeRaw, sheetTitle), sheetTitle))));
 
   // NOTABLE FINDINGS / ACTION TAKEN: a generate proposal replaces them; a
   // tighten (or no proposal) leaves the committed values untouched.
@@ -1065,8 +1070,45 @@ export default function ReportSheetBody({
         ) : narrativeRich && !animate ? (
           <div
             className="pr-narrative-html"
-            dangerouslySetInnerHTML={{ __html: emphasizeIssuanceRequestorHtml(correctNagaPlaceLinesHtml(sanitizeRichHtml(stripRedundantSheetFooterHtml(stripRedundantSheetHeaderHtml(narrativeRaw, sheetTitle), sheetTitle)))) }}
+            dangerouslySetInnerHTML={{ __html: narrativeHtml }}
           />
+        ) : narrativeRich ? (
+          // Task 12 — the reveal types the FINAL format: finished lines draw
+          // their formatted html while only the current line types as plain
+          // words (narrativeRich with animate — the still branch above owns
+          // !animate — so the letter never reads as one raw blob mid-sequence).
+          // Slot discipline matches val(): completed lines advance the shared
+          // cursor past their text, the current line slices through it, and
+          // future lines advance after — the whole sheet keeps one 6s pace.
+          <div className="pr-narrative-html">{(() => {
+            typeOn = typeBody;
+            const blocks = splitHtmlLines(narrativeHtml);
+            let finished = '';
+            let current = -1;
+            let off = slotAcc;
+            blocks.forEach((b, i) => {
+              if (b.text.length > 0 && current === -1 && cursor < off + b.text.length) current = i;
+              off += b.text.length;
+            });
+            blocks.forEach((b, i) => {
+              if (current !== -1 && i >= current) return;
+              slotAcc += b.text.length;
+              finished += b.html;
+            });
+            const typed = current === -1
+              ? null
+              : val(caseValue(correctNagaPlaceLines(richTextToPlain(blocks[current].html))));
+            blocks.forEach((b, i) => {
+              if (current === -1 || i <= current) return;
+              slotAcc += b.text.length;
+            });
+            return (
+              <>
+                {finished !== '' && <span dangerouslySetInnerHTML={{ __html: finished }} />}
+                {typed !== null && <span className="pr-narrative-text">{typed}</span>}
+              </>
+            );
+          })()}</div>
         ) : (
           <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(narrativeText); })()}</span>
         )}

@@ -86,8 +86,13 @@ test('the shared sheet renders one html for screen and print', () => {
   // underlined (owner request).
   assert.match(
     LEAF,
-    /dangerouslySetInnerHTML=\{\{ __html: emphasizeIssuanceRequestorHtml\(correctNagaPlaceLinesHtml\(sanitizeRichHtml\(stripRedundantSheetFooterHtml\(stripRedundantSheetHeaderHtml\(narrativeRaw, sheetTitle\), sheetTitle\)\)\)\) \}\}/,
+    /const narrativeHtml = emphasizeIssuanceRequestorHtml\(correctNagaPlaceLinesHtml\(sanitizeRichHtml\(stripRedundantSheetFooterHtml\(stripRedundantSheetHeaderHtml\(narrativeRaw, sheetTitle\), sheetTitle\)\)\)\);/,
     'the rich narrative stopped rendering its stored html',
+  );
+  assert.match(
+    LEAF,
+    /dangerouslySetInnerHTML=\{\{ __html: narrativeHtml \}\}/,
+    'the finished letter no longer draws the one html the reveal converges on',
   );
   assert.match(
     LEAF,

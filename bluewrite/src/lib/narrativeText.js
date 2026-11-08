@@ -297,3 +297,46 @@ export function emphasizeIssuanceRequestorHtml(html) {
     return `${pre}${open}<b><u>${upper}</u></b>${close}${post}`;
   });
 }
+
+/**
+ * Split formatter-style html (`<p>…</p>` runs with `<br>` line breaks, as
+ * Arrange Only and Enhance Wording produce) into its visual lines for the
+ * sheet's progressive reveal: finished lines draw their FINAL formatted html
+ * while only the current line types as plain words, so the letter never
+ * reads as one raw blob mid-sequence. Lossless — joining every block's html
+ * returns the input byte for byte — so the reveal converges exactly on the
+ * finished letter. A block's text is its collapsed inner text (breaks read
+ * as spaces, entities unescaped); a block with no text carries spacing only
+ * and rides with the previous block, so the reveal never parks on nothing.
+ *
+ * @param {unknown} html
+ * @returns {Array<{html: string, text: string}>}
+ */
+export function splitHtmlLines(html) {
+  const src = String(html ?? '');
+  if (src === '') return [];
+  const tokens = src.split(/(<br\s*\/?>|<\/p\s*>\s*<p\s*>)/i);
+  const blocks = [];
+  for (let i = 0; i < tokens.length; i += 2) {
+    const chunk = (tokens[i] ?? '') + (tokens[i + 1] ?? '');
+    const text = chunk
+      .replace(/<br\s*\/?>/gi, ' ')
+      .replace(/<\/(p|li|ul|ol|div|h[1-6]|tr|table)>/gi, ' ')
+      .replace(/<(p|li|ul|ol|tr)\b[^>]*>/gi, ' ')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'")
+      .replace(/[ \t\n\r]+/g, ' ')
+      .trim();
+    if (text === '' && blocks.length > 0) {
+      blocks[blocks.length - 1].html += chunk;
+    } else {
+      blocks.push({ html: chunk, text });
+    }
+  }
+  return blocks.filter((b) => b.html !== '');
+}
