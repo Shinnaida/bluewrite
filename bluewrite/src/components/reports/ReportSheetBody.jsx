@@ -36,7 +36,7 @@
 // click on the sheet does the same (a manual Skip).
 
 import React, { useEffect, useRef, useState, useLayoutEffect } from 'react';
-import { resolveHeader, resolveLetterheadStyle, letterheadCss } from '../../lib/stationSettings.js';
+import { resolveHeader, resolveLetterheadStyle, letterheadCss, resolveNotedBy } from '../../lib/stationSettings.js';
 import SealImg from './SealImg.jsx';
 import { languageLabel } from '../../lib/reportLanguages.js';
 import {
@@ -83,9 +83,9 @@ import pnpLogo from '../../assets/pnp-logo.png';
 import citySeal from '../../assets/city-of-naga-seal.png';
 
 // The reviewing official who signs the "Noted by:" line of every printed
-// station report. Fixed by the station (not per-report data), so it prints on
+// station report. Fixed by the station (not per-report data): the saved
+// sign-off from Station Settings, else the built-in name — so it prints on
 // drafts and finalized reports alike.
-const NOTED_BY_NAME = 'DEXTER MALEZA CALACAR';
 
 const N = (v) => String(v ?? '').trim();
 const has = (v) => N(v) !== '';
@@ -98,11 +98,6 @@ const has = (v) => N(v) !== '';
 const TYPE_TICK_MS = 16;
 const TYPE_TARGET_MS = 6000;
 
-// Item amounts print bare ("- 284,370.00"), matching the scanned sheet.
-function fmtItemValue(v) {
-  return N(v).replace(/^[₱P]\s*/, '');
-}
-
 function prefersReducedMotion() {
   return (
     typeof window !== 'undefined' &&
@@ -110,6 +105,13 @@ function prefersReducedMotion() {
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
   );
 }
+
+// Item amounts print bare ("- 284,370.00"), matching the scanned sheet.
+function fmtItemValue(v) {
+  return N(v).replace(/^[₱P]\s*/, '');
+}
+
+
 
 /**
  * @param {object} props
@@ -130,6 +132,14 @@ function prefersReducedMotion() {
  *   TYPE itself in (default true). A host drawing a draft it has already shown
  *   the officer once — one restored from the tab's store after a reload — passes
  *   false, and the proposal is drawn whole rather than replaying the sequence.
+ * @param {boolean} [props.revealFinal]       Task 11 — type the COMMITTED sheet
+ *   in once (the final formal letter), with no pending draft. Hosts showing
+ *   the finished report (print preview, finalize review, the register's sheet
+ *   page) pass true until onRevealComplete fires, then false — the same
+ *   one-shot contract as revealPending, and the same reason the rich read
+ *   path returns after it. Pending wins when both are set; the auto-print
+ *   dialog never passes it (a dialog that prints mid-sequence would print a
+ *   half-typed page).
  * @param {Function} [props.onRevealComplete] fires once the whole sequence lands
  * @param {Function} [props.onProgress] Task 10 — how much of the sequence has
  *   been typed, as a fraction (0..1), reported once per tick while it runs. A
@@ -201,6 +211,7 @@ export default function ReportSheetBody({
   revealKey = 0,
   revealPending = true,
   onRevealComplete,
+  revealFinal = false,
   onProgress,
   editable = false,
   onEditNarrative = null,
@@ -276,11 +287,10 @@ export default function ReportSheetBody({
         ariaLabel={typeof fb === 'string' ? fb : k}
       />
     ) : (fb);
-  // The signing official — ALWAYS "DEXTER MALEZA CALACAR" on every printed
-  // incident report (owner request). Fixed by the station, not per-report
-  // data and not the station setting, so no override chain: drafts and
-  // finalized reports alike carry the same footer. Never a blank line.
-  const notedName = NOTED_BY_NAME;
+  // The signing official — the station's saved sign-off (Station Settings),
+  // falling back to the built-in name when none is on file. Same footer on
+  // drafts and finalized reports alike. Never a blank line.
+  const notedName = resolveNotedBy(letterHeadSrc);
   // Task 9 — a draft under review brings the model's own Suspect sentence for
   // each respondent row it described; the facts block draws it in place of the
   // record's composed line. A tighten carries none: it rewrites the officer's
@@ -522,14 +532,24 @@ export default function ReportSheetBody({
   };
 
   // Task 9 — when a proposal is being typed, the sheet renders the PROPOSAL's
-  // values in place of the committed ones; `scope` says whether the fact values
-  // belong to this reveal too (a generate) or only the narrative does (a
-  // tighten, which rewrites the officer's own prose and leaves the rest alone).
+  // values in place of the committed ones; `scope` says whether the fact data
+  // belongs to this reveal too (a generate) or only the narrative does (a
+  // tighten, which rewrites the officer's own prose and leaves the record
+  // alone). The TYPING itself no longer follows scope (owner request):
+  // generate, enhance, arrange and tighten all replay the whole sheet letter
+  // by letter, so the gates below ride the proposal, never its kind.
   const pendingOn = !!pending;
-  const typeFacts = pendingOn && pending.scope !== 'tighten';
-  const typeBody = pendingOn; // narrative (both scopes)
-  const typeFindings = typeFacts;
-  const typeStatus = typeFacts;
+  // Task 11 — the final formal letter types itself in too. With no pending
+  // draft, `revealFinal` replays the same top-to-bottom sequence over the
+  // COMMITTED values, so the finished report arrives the way the draft did.
+  // The four gates below are the only thing the typing rides; the data
+  // selection above stays pending-only, so a final replay can never overlay
+  // a proposal's values onto the record.
+  const finalOn = revealFinal && !pendingOn;
+  const typeFacts = pendingOn || finalOn;
+  const typeBody = pendingOn || finalOn;
+  const typeFindings = pendingOn || finalOn;
+  const typeStatus = pendingOn || finalOn;
 
   // What the narrative slot prints: the proposal's text while it is being
   // reviewed, the committed narrative otherwise. The blotter-strip and casing
@@ -537,12 +557,13 @@ export default function ReportSheetBody({
   const narrativeRaw = pendingOn && pending.narrative != null ? pending.narrative : report.narrative;
   // Word-like ink (owner request): a narrative carrying the allowlisted subset
   // renders its html as-is — casing and the blotter-strip only ever read
-  // PLAIN text, and walking them over tags would mangle the ink. AI drafts
-  // never carry tags, so proposals always take the cased plain path below.
+  // PLAIN text, and walking them over tags would mangle the ink.
+  // Arrange/Enhance drafts DO carry tags (the shared formatter bolds the
+  // officer's own labels), so a proposal can absolutely arrive rich — and a
+  // rich proposal must still type. The plain below is the typing path while
+  // the reveal runs; the finished paper draws the rich html (see the
+  // narrative block).
   const narrativeRich = containsRichTags(narrativeRaw);
-  // The cased plain path below never sees tags: a rich narrative renders its
-  // html as-is, so its casing is not computed at all rather than computed
-  // over markup it would mangle.
   // Redundant header lines (owner request, 2026-11-02): the account's own
   // opening date/time and title restate the certification line and the quoted
   // title, so the sheet skips them — paper only, the record is untouched.
@@ -550,9 +571,7 @@ export default function ReportSheetBody({
   // echoes the incident title below Remarks; the sheet already prints the
   // title quoted above the facts, so the echo is skipped the same way.
   const sheetTitle = reportTitle(report, ts);
-  const narrativeText = narrativeRich
-    ? ''
-    : caseValue(correctNagaPlaceLines(stripRedundantSheetFooter(stripRedundantSheetHeader(stripLeadingBlotterRestatement(narrativeRaw), sheetTitle), sheetTitle))) || '—';
+  const narrativeText = caseValue(correctNagaPlaceLines(stripRedundantSheetFooter(stripRedundantSheetHeader(stripLeadingBlotterRestatement(richTextToPlain(String(narrativeRaw ?? ''))), sheetTitle), sheetTitle))) || '—';
 
   // NOTABLE FINDINGS / ACTION TAKEN: a generate proposal replaces them; a
   // tighten (or no proposal) leaves the committed values untouched.
@@ -561,8 +580,9 @@ export default function ReportSheetBody({
   // carry the allowlisted subset. Everything the sheet DERIVES from them —
   // the line split, the emptiness filter, the casing, the routing-line test —
   // reads the PLAIN text, while the committed html itself is what the rich
-  // read path renders and the letter editor writes. AI proposals never carry
-  // tags, so a draft under review always takes the plain path below.
+  // read path renders and the letter editor writes. While the reveal runs
+  // the plain path types (see the findings block); the finished paper draws
+  // the rich html.
   const pendingFindings = pendingOn && pending.findingsText != null ? String(pending.findingsText) : null;
   const findingsHtml = pendingFindings ?? String(ts.notable_findings ?? '');
   const findingsRich = containsRichTags(findingsHtml);
@@ -591,9 +611,17 @@ export default function ReportSheetBody({
 
   // ---- The typewriter: one character cursor over every typed slot, in
   // document order. `val()` registers a value's FINAL text (in `slots`, with
-  // its own start offset) and returns the part revealed so far. Slots that do
-  // not type (Task 9's chrome — labels, headers, boilerplate) render whole and
-  // are on screen from the first frame.
+  // its own start offset) and returns the part revealed so far. On a proposal
+  // (generate scope) the sheet types from the POLICE REPORT title all the way
+  // down to the Noted by signature: headings, labels and boilerplate ride the
+  // same cursor as the values through `typeChrome`, so the page writes itself
+  // top to bottom and the viewport follows it there — office-code row to
+  // appendix included (owner request: everything types except the
+  // letterhead, which always draws whole). Scope still decides which data a
+  // proposal overlays, never what types: a tighten rewrites prose, so its
+  // facts stay the record's own — but they type like everything else.
+  // Only seals and editors appear
+  // whole: images cannot type, and inputs draw as themselves.
   //
   // The cursor is state, so the slice is computed DURING body construction from
   // the current render's `cursor` — no ordering problem, and a cursor change
@@ -601,7 +629,10 @@ export default function ReportSheetBody({
   // A proposal that must not be replayed (see `revealPending`) — or one with no
   // values to type — draws whole from the first frame, exactly as the committed
   // sheet does.
-  const animate = revealPending && pendingOn;
+  // Generate-ready animation: a fresh proposal replays the sheet letter by
+  // letter (see `revealPending`); a saved or reopened report draws whole
+  // unless its host replays the final letter (see `revealFinal`).
+  const animate = (revealPending && pendingOn) || finalOn
   const [cursor, setCursor] = useState(() => (animate ? 0 : Number.MAX_SAFE_INTEGER));
   // The free canvas seeds itself from the composed body it replaces: the
   // hidden copy below renders read-only, so its innerHTML is clean paper
@@ -684,6 +715,17 @@ export default function ReportSheetBody({
   // everything else renders whole. `typeOn` is the gate for the CURRENT value
   // and is set immediately before each `val` call, so the JSX stays declarative.
   let typeOn = false;
+  // Chrome that types with the sheet, gated exactly like the fact values:
+  // generate scope types it, tighten scope (and plain reading) draws it whole.
+  // The `animate` check at each call site keeps the chrome editors intact — a
+  // SheetText editor is an element, not typeable text, and it only ever shows
+  // when the reveal is not running, which is exactly when these call sites
+  // render it directly. The guard below is the belt beside that suspenders.
+  const typeChrome = (text) => {
+    if (typeof text !== 'string') return text;
+    typeOn = typeFacts;
+    return val(text);
+  };
 
   // The composed middle — everything the free canvas replaces (office
   // code row through action taken) and everything a kept letter overrides.
@@ -692,7 +734,7 @@ export default function ReportSheetBody({
     <>
       {/* ---- Office code | Date: one row under the seals. CHROME. ---- */}
       <div className="pr-code-date">
-        <span className="pr-office-code">{CL('head office code', head.office_code)}</span>
+        <span className="pr-office-code">{animate ? typeChrome(head.office_code) : CL('head office code', head.office_code)}</span>
         <span className="pr-date">
           {factEdit ? (
             <WordField
@@ -702,23 +744,24 @@ export default function ReportSheetBody({
               ariaLabel="Report date — type 23/10/2026"
               placeholder="Report date"
             />
-          ) : (fmtLong(report.report_date || new Date()))}
-          <span className="pr-date-label">{CL('date label', "Date")}</span>
+          ) : (typeChrome(fmtLong(report.report_date || new Date())))}
+          <span className="pr-date-label">{animate ? typeChrome("Date") : CL('date label', "Date")}</span>
         </span>
       </div>
 
-      <h1 className="pr-title">{CL('title', "POLICE REPORT")}</h1>
+      <h1 className="pr-title">{animate ? typeChrome(CL('title', "POLICE REPORT")) : CL('title', "POLICE REPORT")}</h1>
 
-      <p className="pr-salutation">{CL('salutation', "To whom it may concern:")}</p>
+      <p className="pr-salutation">{animate ? typeChrome(CL('salutation', "To whom it may concern:")) : CL('salutation', "To whom it may concern:")}</p>
 
       {/* CHROME — the certification line's boilerplate, with only its two
           recorded values (blotter no. and date) filled in. Those are template
           facts the officer's own record supplies, not AI output. */}
       <p className="pr-certify">
-        {CL('certify a', "This is to certify that, according to the police")}{' '}
-        <strong>blotter entry # {reportNo}</strong>, dated{' '}
-        <strong>{fmtLong(report.incident_datetime)},</strong>{' '}
-        {CL('certify b', "appeared among other things the following data to wit;")}
+        {animate ? typeChrome(`${CL('certify a', "This is to certify that, according to the police")} `) : (<>{CL('certify a', "This is to certify that, according to the police")}{' '}</>)}
+        <strong>{typeChrome(`blotter entry # ${reportNo}`)}</strong>
+        {animate ? typeChrome(', dated ') : ', dated '}
+        <strong>{typeChrome(`${fmtLong(report.incident_datetime)},`)}</strong>
+        {animate ? typeChrome(` ${CL('certify b', "appeared among other things the following data to wit;")}`) : (<>{' '}{CL('certify b', "appeared among other things the following data to wit;")}</>)}
       </p>
 
       {/* Full caps: the quoted category follows the letter's own convention —
@@ -726,7 +769,7 @@ export default function ReportSheetBody({
           incident type. Hidden when blank (owner request, 2026-11-02): an
           unrecorded title prints no empty quotes on any incident's sheet. */}
       {N(reportTitle(report, ts)) !== '' && (
-        <p className="pr-incident-type">&ldquo;{CL('incident type', toUpperCase(reportTitle(report, ts)))}&rdquo;</p>
+        <p className="pr-incident-type">{animate ? typeChrome(`\u201C${CL('incident type', toUpperCase(reportTitle(report, ts)))}\u201D`) : (<>&ldquo;{CL('incident type', toUpperCase(reportTitle(report, ts)))}&rdquo;</>)}</p>
       )}
 
       {/* ---- Per-type labeled facts — bold chrome LABELS, typed values ---- */}
@@ -749,7 +792,7 @@ export default function ReportSheetBody({
               return (
                 <div className="pr-items" key={`fact-${i}`}>
                   <div className="pr-fact">
-                    <span className="pr-fact-label">{CL(`label ${entry.label}`, labelCase(entry.label))}:</span>
+                    <span className="pr-fact-label">{animate ? typeChrome(`${CL(`label ${entry.label}`, labelCase(entry.label))}:`) : (<>{CL(`label ${entry.label}`, labelCase(entry.label))}:</>)}</span>
                   </div>
                   {stolenRows.map((row, j) => (
                     <div className="pr-item-edit" key={`item-${j}`}>
@@ -797,7 +840,7 @@ export default function ReportSheetBody({
             return (
               <div className="pr-items" key={`fact-${i}`}>
                 <div className="pr-fact">
-                  <span className="pr-fact-label">{CL(`label ${entry.label}`, labelCase(entry.label))}:</span>
+                  <span className="pr-fact-label">{animate ? typeChrome(`${CL(`label ${entry.label}`, labelCase(entry.label))}:`) : (<>{CL(`label ${entry.label}`, labelCase(entry.label))}:</>)}</span>
                 </div>
                 {entry.items.map((it, j) => {
                   typeOn = typeFacts;
@@ -821,7 +864,7 @@ export default function ReportSheetBody({
           if (factEdit && entry.label === 'Place') {
             return (
               <div className="pr-fact" key={`fact-${i}`}>
-                <span className="pr-fact-label">{CL(`label ${entry.label}`, labelCase(entry.label))}:</span>
+                <span className="pr-fact-label">{animate ? typeChrome(`${CL(`label ${entry.label}`, labelCase(entry.label))}:`) : (<>{CL(`label ${entry.label}`, labelCase(entry.label))}:</>)}</span>
                 <WordField
                   className="pr-edit--inline pr-edit--grow"
                   value={N(report.location)}
@@ -835,7 +878,7 @@ export default function ReportSheetBody({
           if (factEdit && entry.label === 'Date & Time of Incident') {
             return (
               <div className="pr-fact" key={`fact-${i}`}>
-                <span className="pr-fact-label">{CL(`label ${entry.label}`, labelCase(entry.label))}:</span>
+                <span className="pr-fact-label">{animate ? typeChrome(`${CL(`label ${entry.label}`, labelCase(entry.label))}:`) : (<>{CL(`label ${entry.label}`, labelCase(entry.label))}:</>)}</span>
                 <span className="pr-fact-value">
                   <WordField
                     className="pr-edit--inline pr-edit--grow"
@@ -851,7 +894,7 @@ export default function ReportSheetBody({
           if (factEdit && entry.label === 'Date of Discovery') {
             return (
               <div className="pr-fact" key={`fact-${i}`}>
-                <span className="pr-fact-label">{CL(`label ${entry.label}`, labelCase(entry.label))}:</span>
+                <span className="pr-fact-label">{animate ? typeChrome(`${CL(`label ${entry.label}`, labelCase(entry.label))}:`) : (<>{CL(`label ${entry.label}`, labelCase(entry.label))}:</>)}</span>
                 <span className="pr-fact-value">
                   <WordField
                     className="pr-edit--inline pr-edit--grow"
@@ -870,7 +913,7 @@ export default function ReportSheetBody({
           if (factEdit && VICTIM_LABELS.has(entry.label)) {
             return (
               <div className="pr-fact pr-fact--people" key={`fact-${i}`}>
-                <span className="pr-fact-label">{CL(`label ${entry.label}`, labelCase(entry.label))}:</span>
+                <span className="pr-fact-label">{animate ? typeChrome(`${CL(`label ${entry.label}`, labelCase(entry.label))}:`) : (<>{CL(`label ${entry.label}`, labelCase(entry.label))}:</>)}</span>
                 <span className="pr-fact-value">
                   {complainantRows.length > 0
                     ? complainantRows.map((row, j) => personEditor(row, j, 'complainant', entry.label))
@@ -893,7 +936,7 @@ export default function ReportSheetBody({
           if (factEdit && SUSPECT_LABELS.has(entry.label)) {
             return (
               <div className="pr-fact pr-fact--people" key={`fact-${i}`}>
-                <span className="pr-fact-label">{CL(`label ${entry.label}`, labelCase(entry.label))}:</span>
+                <span className="pr-fact-label">{animate ? typeChrome(`${CL(`label ${entry.label}`, labelCase(entry.label))}:`) : (<>{CL(`label ${entry.label}`, labelCase(entry.label))}:</>)}</span>
                 <span className="pr-fact-value">
                   {respondentRows.length > 0
                     ? respondentRows.map((row, j) => suspectEditor(row, j))
@@ -929,7 +972,7 @@ export default function ReportSheetBody({
           if (factSpec) {
             return (
               <div className="pr-fact" key={`fact-${i}`}>
-                <span className="pr-fact-label">{CL(`label ${entry.label}`, labelCase(entry.label))}:</span>
+                <span className="pr-fact-label">{animate ? typeChrome(`${CL(`label ${entry.label}`, labelCase(entry.label))}:`) : (<>{CL(`label ${entry.label}`, labelCase(entry.label))}:</>)}</span>
                 <span className="pr-fact-value">
                   {factSpec.editors.map((ed, k) => (
                     <React.Fragment key={k}>
@@ -977,7 +1020,7 @@ export default function ReportSheetBody({
           // wrap aligns under the FIRST value character (hanging indent).
           return (
             <div className="pr-fact" key={`fact-${i}`}>
-              <span className="pr-fact-label">{CL(`label ${entry.label}`, labelCase(entry.label))}:</span>
+              <span className="pr-fact-label">{animate ? typeChrome(`${CL(`label ${entry.label}`, labelCase(entry.label))}:`) : (<>{CL(`label ${entry.label}`, labelCase(entry.label))}:</>)}</span>
               <span className="pr-fact-value">
                 {values.map((line, j) => {
                   typeOn = typeFacts;
@@ -1019,7 +1062,7 @@ export default function ReportSheetBody({
             rows={10}
             toolbar="none"
           />
-        ) : narrativeRich ? (
+        ) : narrativeRich && !animate ? (
           <div
             className="pr-narrative-html"
             dangerouslySetInnerHTML={{ __html: emphasizeIssuanceRequestorHtml(correctNagaPlaceLinesHtml(sanitizeRichHtml(stripRedundantSheetFooterHtml(stripRedundantSheetHeaderHtml(narrativeRaw, sheetTitle), sheetTitle)))) }}
@@ -1051,7 +1094,7 @@ export default function ReportSheetBody({
           lines genuinely has nothing to say. */}
       {(effectiveFindings.length > 0 || (editInner && onEditFindings)) && (
         <div className="pr-section">
-          <strong>{CL('findings head', "NOTABLE FINDINGS:")}</strong>
+          <strong>{animate ? typeChrome(CL('findings head', "NOTABLE FINDINGS:")) : CL('findings head', "NOTABLE FINDINGS:")}</strong>
           {editInner && onEditFindings ? (
             <RichTextArea
               value={findingsHtml}
@@ -1062,7 +1105,7 @@ export default function ReportSheetBody({
               rows={Math.min(12, Math.max(3, effectiveFindings.length + 1))}
               toolbar="none"
             />
-          ) : findingsRich ? (
+          ) : findingsRich && !animate ? (
             <>
               <div
                 className="pr-findings-html"
@@ -1138,8 +1181,12 @@ export default function ReportSheetBody({
   );
 
   // What sits between the letterhead and the signature block: the free
-  // canvas (with its hidden seed copy) while freeing, the freed text while
-  // kept, the composed body otherwise.
+  // canvas (with its hidden seed copy) while freeing; the composed body
+  // while a proposal is under review — the typed reveal and the static
+  // proposal after it lands are what the officer is reviewing, so kept ink
+  // steps aside for them (kept text on top would hide the new draft
+  // entirely, typing and all); the freed text while kept with no proposal
+  // on the paper, the composed body otherwise.
   const midHost = freeEdit ? (
     <>
       <div ref={seedRef} hidden>{midPart}</div>
@@ -1154,13 +1201,13 @@ export default function ReportSheetBody({
         sanitize={sanitizeLetterHtml}
       />
     </>
-  ) : letterHtml ? (
+  ) : (pending || !letterHtml) ? (
+    midPart
+  ) : (
     <div
       className="pr-letter-html"
       dangerouslySetInnerHTML={{ __html: correctNagaPlaceLinesHtml(sanitizeLetterHtml(letterHtml)) }}
     />
-  ) : (
-    midPart
   );
 
   // The sheet body is built with `val`, which is what fills `slotAcc`.
@@ -1184,8 +1231,9 @@ export default function ReportSheetBody({
   const body = (
     <>
       {/* ---- Agency header: the saved letterhead when Station Settings holds
-           a freed document, else the composed lines. CHROME — rendered
-           immediately, never typed. ---- */}
+           a freed document, else the composed lines. Whole-sheet animation:
+           the composed lines type with everything else; seals (images) and
+           a freed HTML document draw immediately. ---- */}
       {hasFreedDoc ? (
         <header className="pr-head pr-head--doc" style={letterCss}>
           {letterSeals('top').length > 0 && (
@@ -1206,17 +1254,17 @@ export default function ReportSheetBody({
           <SealImg url={sealLeftUrl} fallback={pnpLogo} alt="PNP seal" className="pr-code-logo" />
         </div>
         <div className="pr-org">
-          {CL('head agency', head.agency)}
+          {animate ? typeChrome(head.agency) : CL('head agency', head.agency)}
           <br />
-          {CL('head commission', head.commission)}
+          {animate ? typeChrome(head.commission) : CL('head commission', head.commission)}
           <br />
-          <strong>{CL('head regional office', head.regional_office)}</strong>
+          <strong>{animate ? typeChrome(head.regional_office) : CL('head regional office', head.regional_office)}</strong>
           <br />
-          <strong>{CL('head provincial office', head.provincial_office)}</strong>
+          <strong>{animate ? typeChrome(head.provincial_office) : CL('head provincial office', head.provincial_office)}</strong>
           <br />
-          <strong>{CL('head station name', head.station_name)}</strong>
+          <strong>{animate ? typeChrome(head.station_name) : CL('head station name', head.station_name)}</strong>
           <br />
-          {CL('head station location', head.station_location)}
+          {animate ? typeChrome(head.station_location) : CL('head station location', head.station_location)}
         </div>
         <SealImg url={sealRightUrl} fallback={citySeal} alt="City of Naga Police Station seal" className="pr-seal" />
       </header>
@@ -1229,15 +1277,15 @@ export default function ReportSheetBody({
           when the report already fills the leaf. */}
       <div ref={spacerRef} className="pr-fill" aria-hidden="true" />
 
-      {/* ---- Signature block: ALWAYS "Noted by: DEXTER MALEZA CALACAR" on
+      {/* ---- Signature block: the station's saved "Noted by:" sign-off on
            every incident's sheet (owner request). Not editable, not
            overridable — the same footer on drafts and finalized reports. ---- */}
       <div className="pr-footer-block">
         {/* Recorded by / IOC hidden by owner request (2026-11-02): kept in
             code but not rendered on any incident's sheet. */}
         <div className="pr-noted">
-          <span className="pr-noted-label">{CL('noted label', "Noted by:")}</span>
-          <span className="pr-noted-name">{notedName}</span>
+          <span className="pr-noted-label">{animate ? typeChrome(CL('noted label', "Noted by:")) : CL('noted label', "Noted by:")}</span>
+          <span className="pr-noted-name">{typeChrome(notedName)}</span>
         </div>
       </div>
 
@@ -1246,12 +1294,12 @@ export default function ReportSheetBody({
            chrome here: it never types. ---- */}
       {showAppendix && (
         <section className="pr-appendix">
-          <h2 className="pr-appendix-title">{APPENDIX_HEADING}</h2>
-          <p className="pr-appendix-intro">{appendixIntro(sourceLanguageLabel)}</p>
-          <div className="pr-appendix-label">{appendixSourceLabel(sourceLanguageLabel)}</div>
-          <p className="pr-appendix-source">{report.narrative_source_text}</p>
-          <p className="pr-appendix-note">{reviewLine}</p>
-          <p className="pr-appendix-close">{appendixCloseLine}</p>
+          <h2 className="pr-appendix-title">{animate ? typeChrome(APPENDIX_HEADING) : APPENDIX_HEADING}</h2>
+          <p className="pr-appendix-intro">{animate ? typeChrome(appendixIntro(sourceLanguageLabel)) : appendixIntro(sourceLanguageLabel)}</p>
+          <div className="pr-appendix-label">{animate ? typeChrome(appendixSourceLabel(sourceLanguageLabel)) : appendixSourceLabel(sourceLanguageLabel)}</div>
+          <p className="pr-appendix-source">{typeChrome(report.narrative_source_text)}</p>
+          <p className="pr-appendix-note">{typeChrome(reviewLine)}</p>
+          <p className="pr-appendix-close">{typeChrome(appendixCloseLine)}</p>
         </section>
       )}
     </>
@@ -1276,21 +1324,28 @@ export default function ReportSheetBody({
       // A proposal with nothing to type (no values at all) still has to release
       // the editor's gate, or Accept could never be pressed. Non-proposal
       // renders (the print portal) must not fire it.
-      if (pendingOn) onRevealComplete?.();
+      if (pendingOn || finalOn) onRevealComplete?.();
       return undefined;
     }
     if (prefersReducedMotion()) {
       setCursor(totalChars);
+      progressRef.current?.(1);
       onRevealComplete?.();
       return undefined;
     }
     setCursor(0);
     progressRef.current?.(0); // a new reveal starts at the top of the letter
-    const perTick = Math.max(1, Math.ceil(totalChars / (TYPE_TARGET_MS / TYPE_TICK_MS)));
-    let shown = 0;
+    // Eased pacing: the old linear perTick gave short tail sections (findings
+    // + footer) only a few ticks, so the bottom flashed instant while the top
+    // visibly typed. Ease in-out over the same 6s budget so the head and the
+    // tail both linger and the whole sheet reads top-to-bottom.
+    const t0 = (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+    const nowOf = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+    const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
     const timer = setInterval(() => {
-      shown += perTick;
-      if (shown >= totalChars) {
+      const p = Math.min(1, (nowOf() - t0) / TYPE_TARGET_MS);
+      const shown = Math.floor(easeInOut(p) * totalChars);
+      if (p >= 1) {
         clearInterval(timer);
         setCursor(totalChars);
         progressRef.current?.(1);
@@ -1320,7 +1375,7 @@ export default function ReportSheetBody({
       ref={bodyRef}
       className={`pr-sheet-body${typing && !done ? ' pr-sheet-typing' : ''}${arranging ? ' pr-sheet-working' : ''}`}
       onClick={typing && !done ? skip : undefined}
-      title={typing && !done ? 'Click to show the whole draft' : undefined}
+      title={typing && !done ? (finalOn ? 'Click to show the whole report' : 'Click to show the whole draft') : undefined}
     >
       {/* The Arrange working pill: what the press is doing, on the paper
           itself — reading, arranging, then typing. A live region (polite:
@@ -1339,7 +1394,7 @@ export default function ReportSheetBody({
       {/* One live announcement for assistive tech, once the sequence lands —
           the paced text itself is not a live region, so nothing chatters. */}
       {typing && done && (
-        <div className="sr-only" role="status">Draft typed into the report sheet.</div>
+        <div className="sr-only" role="status">{finalOn ? 'Report typed into the sheet.' : 'Draft typed into the report sheet.'}</div>
       )}
       {body}
     </div>

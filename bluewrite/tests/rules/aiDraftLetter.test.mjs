@@ -154,7 +154,9 @@ test('the AI draft is not persisted, and any stored copy is deleted', () => {
   // still typing animates, a restored one does not.
   assert.match(SRC, /revealPending(=\{!sheetTyped\}|: !sheetTyped)/, 'the sheet is not told whether to type');
   assert.match(LEAF, /revealPending = true,/, 'the sheet no longer takes the flag');
-  assert.match(LEAF, /const animate = revealPending && pendingOn;/, 'the animation is no longer gated on the flag');
+  assert.match(LEAF, /revealFinal = false,/, 'the sheet no longer takes the final-replay flag');
+  assert.match(LEAF, /const finalOn = revealFinal && !pendingOn;/, 'the final replay is no longer pending-only');
+  assert.match(LEAF, /const animate = \(revealPending && pendingOn\) \|\| finalOn/, 'the animation is no longer gated on the flag');
   assert.match(LEAF, /const typing = animate && totalChars > 0;/, 'the typing is no longer gated on the flag');
   // The cursor starts at the end for anything that must not animate — the
   // committed sheet, and a restored proposal.
@@ -163,6 +165,24 @@ test('the AI draft is not persisted, and any stored copy is deleted', () => {
     /useState\(\(\) => \(animate \? 0 : Number\.MAX_SAFE_INTEGER\)\)/,
     'a proposal that must not animate no longer draws whole',
   );
+});
+
+test('the final formal letter types itself in once, behind the same gates', () => {
+  // Task 11 — the finished report (print preview, finalize review, the
+  // register's sheet page) replays the sheet's own typing sequence over the
+  // COMMITTED values, once per report. The proposal path is untouched: a
+  // pending draft still wins when both flags are set, and the data selection
+  // stays pending-only so a final replay can never overlay proposal values.
+  // The auto-print dialog never replays — it prints ~150ms after load, and a
+  // page that prints mid-sequence would print half-typed (see printParity).
+  assert.match(LEAF, /const typeFacts = pendingOn \|\| finalOn;/, 'the facts no longer type on the final replay');
+  assert.match(LEAF, /const typeBody = pendingOn \|\| finalOn;/, 'the narrative no longer types on the final replay');
+  assert.match(LEAF, /const typeFindings = pendingOn \|\| finalOn;/, 'the findings no longer type on the final replay');
+  assert.match(LEAF, /const typeStatus = pendingOn \|\| finalOn;/, 'the status no longer types on the final replay');
+  assert.match(LEAF, /if \(pendingOn \|\| finalOn\) onRevealComplete\?\.\(\);/, 'the final replay never releases its host');
+  // A pending draft still wins: the data selection never reads the flag.
+  assert.doesNotMatch(LEAF, /finalOn && pending/, 'the final replay can overlay a proposal');
+  assert.match(LEAF, /const narrativeRaw = pendingOn && pending\.narrative/, 'the narrative source stopped staying pending-only');
 });
 
 test('the slim bar portals the letter onto the paper, under the narrative', () => {
