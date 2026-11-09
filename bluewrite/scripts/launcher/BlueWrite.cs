@@ -41,6 +41,7 @@ internal static class BlueWriteLauncher
     private static int Main(string[] args)
     {
         bool openBrowser = true;
+        bool doUninstall = false;
 
         foreach (string arg in args)
         {
@@ -49,6 +50,11 @@ internal static class BlueWriteLauncher
                 // The stack, and no browser: for a shortcut that runs at sign-in,
                 // or for anyone checking that the servers come up.
                 openBrowser = false;
+            }
+            else if (string.Equals(arg, "--uninstall", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(arg, "--remove", StringComparison.OrdinalIgnoreCase))
+            {
+                doUninstall = true;
             }
             else if (string.Equals(arg, "--help", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(arg, "-h", StringComparison.OrdinalIgnoreCase)
@@ -71,6 +77,32 @@ internal static class BlueWriteLauncher
         // shortcut happened to hand it.
         string exeDir = AppDomain.CurrentDomain.BaseDirectory;
         string appDir = Path.Combine(exeDir, "bluewrite");
+        if (doUninstall)
+        {
+            string uninstall = Path.Combine(appDir, Path.Combine("scripts", "uninstall.cmd"));
+            if (!File.Exists(uninstall))
+            {
+                Console.WriteLine("BlueWrite could not find the uninstall script.");
+                Console.WriteLine("  looked for: " + uninstall);
+                Pause();
+                return 1;
+            }
+            Console.WriteLine("BlueWrite — removing the station server (data is kept).");
+            Console.WriteLine();
+            int ucode = Run("cmd.exe", "/c \"" + uninstall + "\"", appDir);
+            if (ucode != 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine("Uninstall finished with warnings (exit code " + ucode.ToString() + ").");
+            }
+            else
+            {
+                Console.WriteLine();
+                Console.WriteLine("Uninstall done. Config and data were kept.");
+            }
+            Pause();
+            return ucode;
+        }
         string serve = Path.Combine(appDir, Path.Combine("scripts", "serve.cmd"));
 
         if (!File.Exists(serve))
@@ -102,6 +134,20 @@ internal static class BlueWriteLauncher
             return code;
         }
 
+        // The watchdog syncs config/config.php base_url to the current LAN IP,
+        // so other PCs do not need a stale 192.168.0.x address. Read it back
+        // here and tell the room the address clients type.
+        string clientUrl = ReadBaseUrl(appDir);
+        if (clientUrl == null) {
+            string lan = LanIp();
+            if (lan != null) clientUrl = "http://" + lan + ":8099/";
+        }
+        if (clientUrl != null) {
+            Console.WriteLine();
+            Console.WriteLine("Other PCs on this Wi-Fi open:");
+            Console.WriteLine("  " + clientUrl);
+        }
+
         if (openBrowser)
         {
             if (!Open(Url))
@@ -120,6 +166,49 @@ internal static class BlueWriteLauncher
         }
 
         return 0;
+    }
+
+    /** config/config.php base_url, kept current by the watchdog. Null when unreadable. */
+    private static string ReadBaseUrl(string appDir)
+    {
+        try
+        {
+            string cfg = Path.Combine(appDir, Path.Combine("config", "config.php"));
+            if (!File.Exists(cfg)) return null;
+            string text = File.ReadAllText(cfg);
+            int at = text.IndexOf("'base_url'");
+            if (at < 0) return null;
+            int q1 = text.IndexOf("'http", at);
+            if (q1 < 0) return null;
+            int q2 = text.IndexOf("'", q1 + 1);
+            if (q2 < 0) return null;
+            string url = text.Substring(q1 + 1, q2 - q1 - 1).Trim();
+            if (!url.EndsWith("/")) url += "/";
+            return url;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /** This PC's LAN IPv4, for the fallback when config.php cannot be read. */
+    private static string LanIp()
+    {
+        try
+        {
+            System.Net.IPHostEntry host = System.Net.Dns.GetHostEntry(System.Net.Dns.GetHostName());
+            foreach (System.Net.IPAddress a in host.AddressList)
+            {
+                if (a.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
+                string s = a.ToString();
+                if (s.StartsWith("127.")) continue;
+                if (s.StartsWith("169.254.")) continue;
+                return s;
+            }
+        }
+        catch (Exception) { }
+        return null;
     }
 
     /** One child process, its output flowing to this console. */
@@ -181,9 +270,10 @@ internal static class BlueWriteLauncher
     {
         Console.WriteLine("BlueWrite — the station's incident-reporting system.");
         Console.WriteLine();
-        Console.WriteLine("  BlueWrite.exe            start the server and open BlueWrite in the browser");
-        Console.WriteLine("  BlueWrite.exe --no-open  start the server only");
-        Console.WriteLine("  BlueWrite.exe --help     this text");
+        Console.WriteLine("  BlueWrite.exe              start the server and open BlueWrite in the browser");
+        Console.WriteLine("  BlueWrite.exe --no-open    start the server only");
+        Console.WriteLine("  BlueWrite.exe --uninstall  remove watchdog task, stop 8099/5180, remove firewall rule");
+        Console.WriteLine("  BlueWrite.exe --help       this text");
         Console.WriteLine();
         Console.WriteLine("Keep BlueWrite.exe beside the bluewrite folder; it starts exactly what");
         Console.WriteLine("Start BlueWrite.bat starts, through the same scripts.");

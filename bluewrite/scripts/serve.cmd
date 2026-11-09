@@ -90,4 +90,11 @@ powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0watch-
 if errorlevel 1 exit /b 1
 echo [bluewrite] done.
 
+REM ---- LAN address clients use (auto-detected, base_url synced by watchdog) ---
+REM The watchdog updates config/config.php base_url to the current LAN IP, so
+REM clients never need a stale 192.168.0.x address. Print it here so the officer
+REM running this file can read it to the room.
+for /f "delims=" %%i in ('powershell -NoProfile -NonInteractive -Command "Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | Select-Object -ExpandProperty IPAddress -First 1"') do set "LANIP=%%i"
+if defined LANIP echo [bluewrite] clients on this Wi-Fi open http://%LANIP%:8099/
+
 endlocal

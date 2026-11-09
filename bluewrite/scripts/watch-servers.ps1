@@ -328,6 +328,53 @@ function Repair-Db {
   Write-Note ('db   {0} DOWN - started {1} but it never answered on the port (read the .err file in {2})' -f $DbPort, $mysqld, $DbDataDir)
 }
 
+# ---- The LAN address clients use (http://<lan-ip>:8099/) ---------------------
+# The server moves networks (192.168.0.x -> 192.168.1.x), and config.php
+# base_url goes stale with it — the client then sees "can't be reached" while
+# the server itself answers fine. This keeps base_url pointed at THIS machine's
+# current LAN IP, so Start BlueWrite.bat / BlueWrite.exe heals the address
+# without anyone running ipconfig.
+function Get-LanIp {
+  try {
+    $route = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop |
+      Sort-Object RouteMetric | Select-Object -First 1
+    if ($route) {
+      $onRoute = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $route.InterfaceIndex -ErrorAction Stop |
+        Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
+        Select-Object -First 1
+      if ($onRoute) { return $onRoute.IPAddress }
+    }
+  } catch {}
+  try {
+    $any = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+      Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
+      Select-Object -First 1
+    if ($any) { return $any.IPAddress }
+  } catch {}
+  return $null
+}
+
+function Sync-BaseUrl {
+  $config = Join-Path $root 'config/config.php'
+  if (-not (Test-Path $config)) { return }
+  $port = $ApiPort[0]
+  $ip = Get-LanIp
+  if (-not $ip) { return }
+  $want = ('http://{0}:{1}' -f $ip, $port)
+  try { $text = Get-Content -Path $config -Raw -ErrorAction Stop }
+  catch { return }
+  if ($text -match "'base_url'\s*=>\s*'([^']*)'") {
+    $have = $Matches[1]
+    if ($have -ne $want) {
+      $updated = $text -replace "'base_url'\s*=>\s*'[^']*'", ("'base_url' => '{0}'" -f $want)
+      try {
+        [System.IO.File]::WriteAllText($config, $updated)
+        Write-Note ('lan  base_url {0} -> {1} (server IP changed)' -f $have, $want)
+      } catch {}
+    }
+  }
+}
+
 function Repair-All {
   # Startup and the scheduled check may overlap. Never launch two MySQLs (or
   # two servers) while the first is still opening its listening socket.
@@ -340,6 +387,7 @@ function Repair-All {
     Repair-Db
     Repair-Api
     Repair-Dev
+    Sync-BaseUrl
   } finally {
     if ($held) { $mutex.ReleaseMutex() }
     $mutex.Dispose()
