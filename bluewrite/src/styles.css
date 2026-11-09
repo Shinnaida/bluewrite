@@ -1545,6 +1545,42 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   color: var(--paper);
 }
 
+/* The name pill: the whole "AI Writing assistant" string sits on ONE dark navy
+   pill, shaped like the old AI badge but in the bar navy. Inside the pill the
+   badge's own fill is dropped — the pill IS the background now — and both
+   words read white on it. */
+.ai-assist-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--ir-navy, #0b2545);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem 0.2rem 0.45rem;
+}
+.ai-assist-pill .ai-assist-badge {
+  font-size: 0.85rem;
+  background: none;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  color: #fff;
+}
+.ai-assist-pill .ai-assist-title {
+  font-size: 1rem;
+  color: #fff;
+}
+
+/* The assistant's face in the heading row: a small blinking mark beside the
+   name, sized to the title's line so the head stays one row high. It is
+   decoration — the name beside it carries the meaning — so it is hidden from
+   assistive technology at the markup. */
+.ai-assist-gif {
+  flex: none;
+  height: 3.4rem;
+  width: auto;
+  border-radius: 0.35rem;
+}
+
 /* ONE toolbar row, not two stacked pairs.
 
    Generate and Tighten are the two things an officer can ask the AI for, and
@@ -1582,10 +1618,16 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   margin-top: 0.2rem;
   accent-color: var(--ir-navy);
 }
+/* The mode names sit on the same dark navy pill as the block head, so the
+   two choices read as the assistant's own options. */
 .ai-generate-mode__title {
+  display: inline-block;
   font-weight: 700;
   font-size: 0.85rem;
-  color: inherit;
+  color: #fff;
+  background: var(--ir-navy, #0b2545);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
 }
 .ai-generate-mode__hint {
   grid-column: 2;
@@ -5277,7 +5319,8 @@ body.profile-panel-open {
    underneath and re-emerges. */
 .conn-banner {
   position: fixed;
-  right: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
   bottom: 1.1rem;
   z-index: 30;
   width: min(24rem, calc(100vw - 1.5rem));
@@ -6082,9 +6125,10 @@ body.station-white .st-role--officer { background: #dcf5e6; border-color: #15803
   text-align: right;
   padding-right: 0.3cm;
   border-right: 1px solid var(--line);
-  font-family: var(--font-stamp);
-  font-size: 0.72rem;
-  color: var(--cyan-dim);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--paper);
 }
 /* The day, written once and ruled, with its entries running under it. That is how
    a blotter rules a page, and it is why the When column carries a time and
@@ -6118,17 +6162,22 @@ body.station-white .st-role--officer { background: #dcf5e6; border-color: #15803
   box-shadow: inset 3px 0 0 var(--ir-gold);
   background: var(--amber-bg);
 }
-.audit-when { font-family: var(--font-stamp); font-size: 0.78rem; white-space: nowrap; color: var(--paper); }
-.audit-system { color: var(--cyan-dim); font-style: italic; }
-.audit-entity { font-family: var(--font-stamp); font-size: 0.78rem; }
+/* One reading voice for the whole row (owner request): every cell wears the
+   same sans, size and ink, so Time, Who, On and IP read as one record instead
+   of four faint micro-labels. The Action pill keeps its own colours — it names
+   the severity, not the record. */
+.audit-when { font-family: inherit; font-size: 0.85rem; font-weight: 500; white-space: nowrap; color: var(--paper); }
+.audit-system { color: var(--paper); font-style: normal; font-weight: 500; }
+.audit-entity { font-family: inherit; font-size: 0.85rem; font-weight: 500; color: var(--paper); }
+.audits-table td[data-label="Who"] { font-size: 0.85rem; font-weight: 500; color: var(--paper); }
 /* The flexible column (see above) and the only one that may wrap: every other
    cell is nowrap so the table cannot be squeezed below its content, and a detail
    is the one value whose length is not known in advance. It carries no
    `max-width` of its own either — a cap here (it was 26rem) is smaller than the
    space the table has to give, so the leftover went straight back to the narrow
    columns as gaps. */
-.audit-detail { color: var(--paper); word-break: break-word; white-space: normal; }
-.audit-ip { font-family: var(--font-stamp); font-size: 0.75rem; color: var(--cyan-dim); }
+.audit-detail { font-family: inherit; font-size: 0.85rem; font-weight: 500; color: var(--paper); word-break: break-word; white-space: normal; }
+.audit-ip { font-family: inherit; font-size: 0.85rem; font-weight: 500; color: var(--paper); white-space: nowrap; }
 .audit-action {
   display: inline-block;
   padding: 0.1rem 0.5rem;
@@ -8517,7 +8566,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--cmd .cmd-hero__wash {
   position: absolute;
   inset: 0;
-  background: linear-gradient(105deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.82) 38%, rgba(255, 255, 255, 0.35) 62%, transparent 85%);
+  background: linear-gradient(105deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.55) 38%, rgba(255, 255, 255, 0.18) 62%, transparent 85%);
 }
 .dash--cmd .cmd-hero__station {
   position: absolute;
@@ -8532,36 +8581,11 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--cmd .cmd-hero__text { position: relative; min-width: 0; flex: none; max-width: 36%; margin-right: auto; display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 2px; }
 .dash--cmd .cmd-hello { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.01em; color: #0f1f3d; }
 .dash--cmd .cmd-hello span { color: #1d4ed8; }
-.dash--cmd .cmd-sub { margin: 2px 0 0; font-size: 13.5px; color: #5b6b84; }
-.dash--cmd .cmd-clock {
-  position: absolute;
-  left: 50%;
-  top: 12px;
-  transform: translateX(-50%);
-  z-index: 2;
-  flex: none;
-  order: 0;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  white-space: nowrap;
-  gap: 0;
-  margin: 0;
-  background: transparent;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  box-shadow: none;
-  text-shadow: 0 1px 8px rgba(255, 255, 255, 0.9);
-}
-.dash--cmd .cmd-clock__date,.dash--cmd .cmd-clock__day,.dash--cmd .cmd-clock__time { font-family: inherit; font-size: 15px; font-weight: 800; letter-spacing: 0.02em; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.dash--cmd .cmd-clock__date { color: #0f1f3d; margin-right: 10px; }
-.dash--cmd .cmd-clock__day { color: #5b6b84; margin-right: 10px; padding-left: 10px; border-left: 1px solid #e2e8f0; }
-.dash--cmd .cmd-clock__time { color: #b45309; padding-left: 10px; border-left: 1px solid #e2e8f0; }
+.dash--cmd .cmd-sub { margin: 2px 0 0; display: flex; flex-direction: row; align-items: center; white-space: nowrap; }
+.dash--cmd .cmd-sub__date,.dash--cmd .cmd-sub__day,.dash--cmd .cmd-sub__time { font-family: inherit; font-size: 15px; font-weight: 800; letter-spacing: 0.02em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dash--cmd .cmd-sub__date { color: #0f1f3d; margin-right: 10px; }
+.dash--cmd .cmd-sub__day { color: #5b6b84; margin-right: 10px; padding-left: 10px; border-left: 1px solid #e2e8f0; }
+.dash--cmd .cmd-sub__time { color: #b45309; padding-left: 10px; border-left: 1px solid #e2e8f0; }
 
 /* ---- Metric cards: the bold caption, the hero number, one line -----------
    Four tones, one shape: the number's echo wears the card's own family, and
@@ -8647,8 +8671,9 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--cmd .cmd-pres--away i { background: #f59e0b; }
 .dash--cmd .cmd-pres--offline { color: #64748b; }
 .dash--cmd .cmd-pres--offline i { background: #94a3b8; }
-.dash--cmd .cmd-pres--static { position: static; margin-left: auto; }
-.dash--cmd .cmd-id-view { display: flex; gap: 2px; margin: 0 0 6px auto; }
+.dash--cmd .cmd-pres--static { position: static; margin-left: auto; }  .dash--cmd .cmd-id-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 6px; }
+  .dash--cmd .cmd-id-head__title { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #0b2545; }
+  .dash--cmd .cmd-id-view { display: flex; gap: 2px; margin: 0; }
 .dash--cmd .cmd-id-view__btn { border: 0; background: transparent; color: #5b6b84; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; padding: 4px 8px; cursor: pointer; border-bottom: 2px solid transparent; }
 .dash--cmd .cmd-id-view__btn:hover { color: #0b2545; }
 .dash--cmd .cmd-id-view__btn.is-active { color: #0b2545; border-bottom-color: #f0b429; }
@@ -8832,7 +8857,6 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   .dash--cmd .dash-kpis.cmd-kpis { grid-template-columns: minmax(0, 1fr); }
   .dash--cmd .cmd-hero { flex-direction: column; align-items: stretch; }
   .dash--cmd .cmd-hero__text { align-items: flex-start; max-width: none; }
-  .dash--cmd .cmd-clock { position: relative; left: auto; top: auto; transform: none; margin: 0 auto; align-items: center; text-align: center; }
   .dash--cmd .cmd-hero__photo { width: 100%; opacity: 0.35; }
   .dash--cmd .cmd-donut { flex-direction: column; }
   .dash--cmd .dash-toolbar { flex-direction: column; align-items: stretch; }
@@ -9156,11 +9180,6 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   border-color: #cbd5e1;
 }
 .dash--cmd .dash-quick__btn:hover { box-shadow: 0 1px 2px rgba(15, 31, 61, 0.06); }
-/* ---- Clock in white, for the dark backdrop (owner request) ----------------
-   The date, day and time sit on the navy lines now, so all three read white. */
-.dash--cmd .cmd-clock__date { color: #0f1f3d; }
-.dash--cmd .cmd-clock__day { color: #5b6b84; }
-.dash--cmd .cmd-clock__time { color: #b45309; }
 .dash--cmd .dash-panel__sub { color: #5b6b84; }
 .dash--cmd .dash-panel__mark {
   background: rgba(47, 107, 237, 0.1);

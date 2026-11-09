@@ -127,7 +127,8 @@ test('roles wear their colour on the drawing, the roster and the legend', async 
   assert.match(html, /conn-hub__count-icon/);
   assert.doesNotMatch(html, /conn-hub__orbit-ring/, 'the dashed orbit ring is back on the drawing');
   assert.doesNotMatch(html, /conn-hub__sat/, 'an orbit satellite is back on the drawing');
-  assert.match(html, /BlueWrite<\/text>/);
+  assert.doesNotMatch(html, /BlueWrite<\/text>/, 'the server carries no name tag');
+  assert.match(html, /conn-hub__server/, 'the hub is drawn as a server');
   assert.match(html, /conn-hub__seen-dot/);
 });
 

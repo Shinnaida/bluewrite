@@ -291,7 +291,7 @@ export default function ReportSheetBody({
   // The signing official — the station's saved sign-off (Station Settings),
   // falling back to the built-in name when none is on file. Same footer on
   // drafts and finalized reports alike. Never a blank line.
-  const notedName = resolveNotedBy(letterHeadSrc);
+  const notedName = report.noted_by_name || resolveNotedBy(letterHeadSrc);
   // Task 9 — a draft under review brings the model's own Suspect sentence for
   // each respondent row it described; the facts block draws it in place of the
   // record's composed line. A tighten carries none: it rewrites the officer's

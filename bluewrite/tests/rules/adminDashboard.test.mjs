@@ -49,10 +49,11 @@ test('the page mounts, and paints its head, its range card and its skeletons', a
     assert.ok(!html.includes(label), `the ${label} filter is back on the dashboard`);
   }
 
-  // The first load draws SKELETONS rather than four empty cards: one per reading,
-  // the trend panel's and the activity list's.
+  // The first load draws SKELETONS rather than empty cards: the Active Accounts
+  // lanyard plate (the one MetricCard left — the hero Total plate draws its own
+  // register shell), the trend panel's and the activity list's.
   const skeletons = html.match(/dash-kpi is-skeleton/g) ?? [];
-  assert.equal(skeletons.length, 4, `the loading strip drew ${skeletons.length} skeletons, not four`);
+  assert.equal(skeletons.length, 1, `the loading strip drew ${skeletons.length} skeletons, not one`);
   assert.ok(html.includes('dash-panel is-skeleton'), 'the trend panel drew no loading state');
   assert.match(html, /dash-activity__list is-skeleton/);
 });
@@ -89,9 +90,10 @@ test('each reading is a card: a tinted disc, the caption, the number, one line',
   assert.doesNotMatch(html, /cmd-card__foot/, 'a removed foot line is back on the cards');
   assert.ok(html.includes('cmd-card__value-row'), 'the value row is missing');
   const page = readFileSync(new URL('../../src/components/Dashboard.jsx', import.meta.url), 'utf8');
-  assert.match(page, /cmd-role cmd-role--yellow/, 'the headcount split lost its yellow marks');
-  assert.doesNotMatch(page, /cmd-role cmd-role--admin/, 'the Admin split is still blue');
-  assert.doesNotMatch(page, /cmd-role cmd-role--officer/, 'the Officer split still uses its own colour');
+  // Headcount split retired with the lanyard card (owner request): no role-coloured
+  // split remains on the page — the Active Accounts plate draws lanyards instead.
+  assert.doesNotMatch(page, /cmd-role cmd-role--/, 'a removed role split is back on the cards');
+  assert.match(page, /cmd-active-lanyard-card/, 'the Active Accounts lanyard plate is missing');
 
   // NO MINIS: the cards are readings, not charts — no bars beside the numbers.
   assert.equal(
@@ -206,7 +208,6 @@ test('the chart card is headed by its name and the range control', () => {
   for (const title of [
     'Reports Overview',
     'AI Insights',
-    'Incident Types',
     'Top Locations',
     'System Status',
   ]) {
@@ -300,12 +301,15 @@ test('the trio answers three questions: kind, place, pulse — above the brief',
   // trend's own head already carries the range, and this row is the reference's
   // Incident Types, Top Locations and System Status.
   const src = readFileSync(new URL('../../src/components/Dashboard.jsx', import.meta.url), 'utf8');
-  for (const title of ['Incident Types', 'Top Locations', 'System Status']) {
+  // Incident Types lives in the Total Reports hero plate (owner request,
+  // 2026-10-30), not as its own trio panel — the trio is place + pulse.
+  for (const title of ['Top Locations', 'System Status']) {
     assert.match(src, new RegExp(`title="${title}"`), `the ${title} panel is missing`);
   }
-  assert.match(src, /<TypeDonut slices=\{donutRows\} \/>/);
-  assert.match(src, /<LocationBars places=\{data\?\.locationBreakdown\} \/>/);
-  assert.match(src, /<SystemGrid system=\{data\?\.system\} \/>/);
+  assert.match(src, /cmd-total-types/, 'the Incident Types hero strip is missing');
+  assert.match(src, /<TypeDonut slices=\{donutRows\}[^>]*\/>/);
+  assert.match(src, /<LocationBars places=\{/);
+  assert.match(src, /<SystemGrid system=\{/);
   // ORDER (owner request, 2026-10-30): the register's own facts read first,
   // the analyst's advice after them — trio above, brief below.
   assert.ok(
@@ -334,7 +338,7 @@ test('the trio answers three questions: kind, place, pulse — above the brief',
   assert.ok(html.includes('National Highway'), 'the places lost their busiest street');
   assert.match(html, /width: ?100%/, 'the busiest street is not drawn longest');
   // Four boxes, each naming its service — and silence where the chorus was.
-  assert.equal((html.match(/cmd-sys__box/g) ?? []).length, 4, 'the grid does not draw four boxes');
+  assert.equal((html.match(/cmd-sys__box--/g) ?? []).length, 4, 'the grid does not draw four boxes');
   for (const label of ['Database', 'AI Service', 'File Storage', 'Notification']) {
     assert.ok(html.includes(label), `the grid lost its ${label} box`);
   }

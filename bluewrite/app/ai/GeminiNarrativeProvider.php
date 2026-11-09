@@ -516,6 +516,177 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
     }
 
     /**
+     * Arrange Only over the streaming endpoint: the SAME body as
+     * arrangeReport (same instruction, same JSON schema) via
+     * streamGenerateContent, so the first words land while the model is still
+     * writing — the ChatGPT-style arrival the sheet paints live. $onText
+     * receives the growing plain report prefix (the schema wrapper is peeled
+     * here, never forwarded); the return is the final validated report text,
+     * exactly as arrangeReport() would return it.
+     *
+     * @param callable(string):void $onText called with each longer prefix
+     */
+    public function streamArrangeReport(string $account, callable $onText): string
+    {
+        if ($this->apiKey === '') {
+            throw new AiProviderException('Gemini API key is not configured.', retryable: false);
+        }
+        $account = trim($account);
+        if ($account === '') {
+            throw new AiProviderException('No report text was sent with the request.', retryable: false);
+        }
+
+        $body = [
+            'contents' => [
+                ['role' => 'user', 'parts' => [['text' => $account]]],
+            ],
+            'generationConfig' => [
+                'temperature' => 0.0,
+                'maxOutputTokens' => max($this->maxOutputTokens, 8192),
+                'responseMimeType' => 'application/json',
+                'responseSchema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'report' => ['type' => 'string'],
+                    ],
+                    'required' => ['report'],
+                ],
+            ],
+        ];
+        if ($this->thinkingLevel !== '') {
+            $body['generationConfig']['thinkingConfig'] = ['thinkingLevel' => $this->thinkingLevel];
+        }
+        $body = self::attachInstruction($body, null, self::arrangeInstruction());
+
+        $url = sprintf(
+            'https://generativelanguage.googleapis.com/v1beta/models/%s:streamGenerateContent?alt=sse',
+            rawurlencode($this->model)
+        );
+        $raw = '';
+        $buf = '';
+        $sent = null;
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'x-goog-api-key: ' . $this->apiKey,
+            ],
+            CURLOPT_POSTFIELDS => json_encode($body, JSON_UNESCAPED_UNICODE),
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => max(90, $this->timeoutSeconds + 60),
+            CURLOPT_WRITEFUNCTION => function ($handle, string $chunk) use (&$buf, &$raw, &$sent, $onText): int {
+                $buf .= $chunk;
+                while (($pos = strpos($buf, "\n\n")) !== false) {
+                    $block = substr($buf, 0, $pos);
+                    $buf = substr($buf, $pos + 2);
+                    $this->consumeStreamBlock($block, $raw, $sent, $onText);
+                }
+                return strlen($chunk);
+            },
+        ]);
+        $ok = curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+        if (trim($buf) !== '') {
+            $this->consumeStreamBlock($buf, $raw, $sent, $onText);
+        }
+
+        if ($ok === false) {
+            throw new AiProviderException('AI provider unreachable: ' . $err);
+        }
+        if ($status === 429) {
+            throw new AiProviderException('AI provider rate limit reached.', retryable: true, httpStatus: 429);
+        }
+        if ($status >= 500) {
+            throw new AiProviderException("AI provider error (HTTP {$status}).", retryable: true, httpStatus: $status);
+        }
+        if ($status >= 400) {
+            throw new AiProviderException("AI provider rejected the request (HTTP {$status}).", retryable: false, httpStatus: $status);
+        }
+        if (trim($raw) === '') {
+            throw new AiProviderException('Gemini streamed no arranged report.');
+        }
+        $parsed = self::parseNarrativeJson($raw);
+        if (!is_array($parsed) || !isset($parsed['report']) || !is_string($parsed['report'])) {
+            throw new AiProviderException('Gemini stream payload did not match the response schema.');
+        }
+        return trim($parsed['report']);
+    }
+
+    /**
+     * One SSE block from streamGenerateContent: append the block's
+     * non-thought text to $raw and forward the growing report prefix.
+     */
+    private function consumeStreamBlock(string $block, string &$raw, ?string &$sent, callable $onText): void
+    {
+        foreach (explode("\n", $block) as $line) {
+            $line = trim($line);
+            if (!str_starts_with($line, 'data:')) {
+                continue;
+            }
+            $payload = trim(substr($line, 5));
+            if ($payload === '' || $payload === '[DONE]') {
+                continue;
+            }
+            $decoded = json_decode($payload, true);
+            if (!is_array($decoded)) {
+                continue;
+            }
+            if (isset($decoded['error'])) {
+                $message = is_array($decoded['error']) ? ($decoded['error']['message'] ?? 'AI provider error.') : 'AI provider error.';
+                throw new AiProviderException('AI provider stream error: ' . (string) $message, retryable: true);
+            }
+            $parts = $decoded['candidates'][0]['content']['parts'] ?? [];
+            $delta = '';
+            foreach (is_array($parts) ? $parts : [] as $p) {
+                if (!is_array($p) || !isset($p['text']) || !is_string($p['text'])) {
+                    continue;
+                }
+                if (!empty($p['thought'])) {
+                    continue; // model reasoning — never part of the answer
+                }
+                $delta .= $p['text'];
+            }
+            if ($delta === '') {
+                continue;
+            }
+            $raw .= $delta;
+            $prefix = self::extractReportPrefix($raw);
+            if ($prefix !== null && $prefix !== '' && $prefix !== $sent) {
+                $sent = $prefix;
+                $onText($prefix);
+            }
+        }
+    }
+
+    /**
+     * The report string so far from a still-growing JSON answer: the longest
+     * leading run that decodes as a JSON string body, so a chunk cut
+     * mid-escape waits for its tail instead of mangling the paper.
+     * Pure/static for testability. Null when the key has not opened yet.
+     */
+    public static function extractReportPrefix(string $raw): ?string
+    {
+        if (!preg_match('/"report"\s*:\s*"/s', $raw, $m, PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+        $cap = substr($raw, $m[0][1] + strlen($m[0][0]));
+        for ($cut = 0; $cut <= 8; $cut++) {
+            $try = $cut === 0 ? $cap : substr($cap, 0, -$cut);
+            if ($try === false) {
+                break;
+            }
+            $decoded = json_decode('"' . $try . '"');
+            if (is_string($decoded)) {
+                return $decoded;
+            }
+        }
+        return null;
+    }
+
+    /**
      * The Arrange Only instruction (resources/ai/arrange_report_prompt.txt).
      * Public for tests; maintainer '#' comment lines are stripped.
      */
@@ -533,6 +704,12 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
         return 'Arrange the supplied police incident report into the station report order '
             . 'without changing any word, spelling, number or identifier. '
             . 'Emit the incident title once, keep every part the source carries, add nothing, drop nothing. '
+            . 'Read every break and decide whether it is a genuine boundary or continuation data: '
+            . 'join wrapped continuations with one space, keep breaks only for genuine boundaries '
+            . '(a period after an abbreviation such as Brgy. or DOB. is not a finished sentence). '
+            . 'Keep each field label on the same line as its data with one space after the colon; '
+            . 'a label split from its data across a break rejoins it, while a heading that owns '
+            . 'the lines beneath it (VEHICLES INVOLVED:, PERSONS INVOLVED:) keeps its own line. '
             . 'One blank line between sections, no trailing spaces. Return only the arranged report text.';
     }
 
@@ -551,7 +728,14 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
                 return $trimmed;
             }
         }
-        return 'Improve the grammar, punctuation and clarity of the supplied police incident report. '
+        return 'Proofread the supplied police incident report for grammar, spelling, spacing, punctuation, '
+            . 'capitalization and consistency, correcting casual wording to formal, objective, third-person, '
+            . 'past-tense police terminology and removing slang, emotional wording and personal opinions. '
+            . 'Standardize dates, times, plate numbers and ID numbers without changing any value. '
+            . 'Join wrapped continuation lines with one space; keep breaks only for genuine boundaries '
+            . '(a period after an abbreviation such as Brgy. or DOB. is not a finished sentence). '
+            . 'Keep each field label on the same line as its data with one space after the colon; '
+            . 'join a label split from its data across a break. '
             . 'Preserve every fact, name, date, time, number, identifier and field label exactly. '
             . 'Preserve the incident title exactly as written; invent no title and no offense classification. '
             . 'Add no label, section or fact, and return only the enhanced report text.';

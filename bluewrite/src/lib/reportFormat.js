@@ -316,6 +316,72 @@ function segmentInlineLabels(text) {
     .replace(INLINE_LABEL_RE, (_, label, issuance) => (issuance ? `\n${issuance}` : `\n${label}:`));
 }
 
+/**
+ * Reflow obvious phone/OCR hard wraps before sectioning (owner request).
+ *
+ * Text pasted from a phone often wraps mid-sentence with a hard break and no
+ * blank line. Joining is conservative here on purpose: only a line that is
+ * clearly unfinished — trailing comma/semicolon/hyphen, or a dangling word
+ * like BY/OF/AND — rejoins with the next line. Anything else keeps its break
+ * so a title, a new section, a new vehicle row or a fresh sentence is never
+ * glued onto the line above it. The remaining wraps (a sentence split with
+ * no trailing comma) rejoin after sectioning instead, where the section
+ * boundary is already decided (see joinSectionContinuations). Wording is
+ * untouched; only the break becomes a space (a trailing hyphen joins
+ * directly).
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function reflowWrappedLines(text) {
+  const lines = String(text ?? '').replace(/\r\n?/g, '\n').split('\n');
+  if (lines.length < 2) return String(text ?? '');
+  const out = [];
+  for (const rawLine of lines) {
+    if (out.length === 0) {
+      out.push(rawLine);
+      continue;
+    }
+    const prev = out[out.length - 1];
+    if (prev.trim() === '' || rawLine.trim() === '') {
+      out.push(rawLine);
+      continue;
+    }
+    if (!isObviousWrap(prev, rawLine)) {
+      out.push(rawLine);
+      continue;
+    }
+    const p = prev.replace(/[ \t]+$/, '');
+    const c = rawLine.replace(/^[ \t]+/, '');
+    if (/-$/.test(p) && /^[A-Za-z0-9]/.test(c)) out[out.length - 1] = p + c;
+    else out[out.length - 1] = `${p} ${c}`;
+  }
+  return out.join('\n');
+}
+
+// A line that cannot be anything but a wrap: it ends mid-phrase (comma,
+// semicolon, hyphen, or a dangling connector) and the next line is not a
+// genuine boundary. Row-internal colons (DOB:, OR/CR) are never boundaries —
+// only labels the sheet knows, vehicle rows, the issuance and timestamps
+// keep their break — so a wrapped row rejoins instead of tearing apart.
+const WRAP_END = /(,|;|-|\u2013|\u2014|\b(?:AND|OR|BY|OF|TO|FOR|WITH|IN|ON|AT|FROM|A|AN|THE))\s*$/i;
+
+function isObviousWrap(prev, cur) {
+  const p = String(prev ?? '').trim();
+  const c = String(cur ?? '').trim();
+  if (p === '' || c === '') return false;
+  // Genuine boundaries never rejoin here, however unfinished the line reads.
+  const curHit = matchLabelLine(cur);
+  if (curHit !== null && KNOWN_LABELS.has(normalizeLabel(curHit.label))) return false;
+  const prevHit = matchLabelLine(prev);
+  if (prevHit !== null && prevHit.rest.trim() === '' && KNOWN_LABELS.has(normalizeLabel(prevHit.label))) return false;
+  if (/^V\d+\b/i.test(c)) return false;
+  if (/^this certification is issued\b/i.test(c)) return false;
+  if (isBareTimestamp(p) || isBareTimestamp(c)) return false;
+  if (/[.!?]["'\u201C\u201D\)\]]*\s*$/.test(p)) return false;
+  return WRAP_END.test(p);
+}
+
 const escapeHtml = (value) =>
   String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -576,8 +642,10 @@ function isLabelCandidate(raw) {
 export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceCase = false, preserveLayout = false } = {}) {
   // Spacing-independent first: a one-line paste segments on its labels before
   // anything else reads lines, so the title, the sections and the order never
-  // depend on breaks the officer happened to type.
-  const raw = segmentInlineLabels(String(text ?? '').replace(/\r\n?/g, '\n')).trim();
+  // depend on breaks the officer happened to type. A phone paste with hard
+  // wraps reflows next, so wrapped sentences read as one line like any other
+  // report even when the source spaced them as fragments.
+  const raw = reflowWrappedLines(segmentInlineLabels(String(text ?? '').replace(/\r\n?/g, '\n'))).trim();
   if (raw === '') return '';
   // A "Requested by: NAME" line names who asked for the copy (owner
   // request): the report closes with the certification issuance naming them.
@@ -632,10 +700,13 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
       parts.push({ rank: 15, html: `<p><b>${escapeHtml(title)}</b></p>` });
       continue;
     }
-    // A vehicle row the blotter wrapped stays ONE row (see
-    // joinVehicleContinuations): the rider, licence and address details print
-    // with the vehicle they describe, never as a loose line of their own.
-    const lines = section.rank === 40 ? joinVehicleContinuations(section.lines) : section.lines;
+    // A wrapped row stays ONE row (see joinSectionContinuations): a phone
+    // paste splits sentences across hard breaks with no blank line, so a
+    // continuation rejoins with a space inside its own section — the rider,
+    // licence and address details print with the vehicle they describe, and
+    // the facts read as flowing prose, never as loose fragments. Section
+    // boundaries are already decided, so no part can glue onto another one.
+    const lines = joinSectionContinuations(section.lines, section.rank === 40);
     // Sentence-case state travels through the section: a line that continues
     // the previous sentence stays lower-case, a new sentence or paragraph
     // starts with a capital. A blank line starts a new paragraph.
@@ -746,9 +817,12 @@ function splitReportSections(raw, title) {
         titleLeft = titleLeft.slice(upper.length).trimStart();
         continue;
       }
-      // Any other line ends the title run: a fragment is never matched out of
-      // order, or across an unrelated line.
-      titleLeft = '';
+      // Only an interruption BETWEEN fragments ends the title run: a fragment
+      // is never matched out of order, or across an unrelated line. Lines
+      // before the first fragment (the entry timestamp, earlier sections) are
+      // not interruptions — a phone paste wraps the heading wherever it sits,
+      // so the run stays open until its first fragment is seen.
+      if (titleLeft !== titleNorm) titleLeft = '';
     }
     // A labelled source title ("TITLE: …") is the same heading; its label is
     // chrome, not a field the officer wrote.
@@ -858,6 +932,24 @@ function splitReportSections(raw, title) {
  * @returns {string[]}
  */
 function joinVehicleContinuations(lines) {
+  return joinSectionContinuations(lines, true);
+}
+
+/**
+ * Join wrapped continuations inside one already-split section.
+ *
+ * A phone paste wraps every ~40 characters with a hard break: the break is
+ * spacing, not a paragraph, so a line that continues the sentence above it
+ * rejoins with one space. Only genuine breaks survive: a blank line, a
+ * finished sentence (.?!), or — inside VEHICLES INVOLVED — a new V1:/V2:
+ * row opening. Labels never reach here as continuations (each opens its own
+ * section), so row-internal colons (DOB:, OR/CR) safely rejoin.
+ *
+ * @param {string[]} lines the section's source lines
+ * @param {boolean} vehicles whether this is the vehicles section
+ * @returns {string[]}
+ */
+function joinSectionContinuations(lines, vehicles = false) {
   const out = [];
   for (const line of lines) {
     const text = String(line ?? '');
@@ -865,10 +957,12 @@ function joinVehicleContinuations(lines) {
     const continues =
       prev.trim() !== '' &&
       text.trim() !== '' &&
-      !/^\s*V\d+\b/i.test(text) &&
+      (!vehicles || !/^\s*V\d+\b/i.test(text)) &&
       !endsSentence(prev);
     if (continues) {
-      out[out.length - 1] = `${prev} ${text.trim()}`;
+      const p = prev.replace(/[ \t]+$/, '');
+      const c = text.replace(/^[ \t]+/, '');
+      out[out.length - 1] = /-$/.test(p) && /^[A-Za-z0-9]/.test(c) ? p + c : `${p} ${c}`;
       continue;
     }
     out.push(line);
@@ -1160,7 +1254,15 @@ const FUNCTION_WORDS = new Set([
 ]);
 
 const ENDS_SENTENCE = /[.!?]["'”’)]*\s*$/;
-const endsSentence = (value) => ENDS_SENTENCE.test(String(value ?? '').trim());
+// A period after an abbreviation is not a finished sentence: a wrapped row
+// ending "ot, Brgy." continues on the next line ("Mainit, ..."), so the two
+// rejoin instead of the place opening a line of its own (owner request).
+const ABBREV_END = /\b(?:brgy|d\.?o\.?b|dob|st|ave|blvd|no|nos|mr|mrs|ms|dr|sr|jr|gen|lt|col|sgt|capt|km|blk|lot|rd)\.\s*$/i;
+const endsSentence = (value) => {
+  const s = String(value ?? '').trim();
+  if (ABBREV_END.test(s)) return false;
+  return ENDS_SENTENCE.test(s);
+};
 
 const capitalizeFirst = (word) => {
   const i = word.search(/[A-Za-z]/);

@@ -219,6 +219,18 @@ final class NarrativeService
     }
 
     /**
+     * Streaming Arrange Only: same answer as arrangeReport(), delivered live.
+     * $onText receives each longer plain-text prefix while Gemini is still
+     * writing; the return is the final validated report text.
+     *
+     * @param callable(string):void $onText
+     */
+    public function streamArrangeReport(string $account, callable $onText): string
+    {
+        return $this->provider->streamArrangeReport($account, $onText);
+    }
+
+    /**
      * Photo OCR (owner request): the blotter photo read by the provider's
      * own vision model through the station's already-configured key.
      *

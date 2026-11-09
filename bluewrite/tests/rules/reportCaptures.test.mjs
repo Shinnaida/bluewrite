@@ -120,6 +120,42 @@ test('a phone filing banners the moment it lands, on any screen', () => {
   assert.match(CSS, /\.arrival-toast/);
 });
 
+test('a reviewed file leaves Phone files for good, never deleted', () => {
+  // Owner request: opening a phone file, generating the BW-numbered draft
+  // over its words and putting it on the web removes the file from Phone
+  // files. Reviewed is a server flag (migration 029), not a local hide, so
+  // the file stays gone across reloads while the row and photo stay as
+  // evidence — nothing here deletes anything.
+  const fs = readFileSync(new URL('../../migrations/029_capture_reviewed.sql', import.meta.url), 'utf8');
+  assert.match(fs, /reviewed_at/);
+  assert.match(fs, /reviewed_by/);
+  // The review route, beside the photo bytes.
+  assert.match(ROUTES, /captures[\s\S]*review[\s\S]*CapturesController[\s\S]*review/);
+  // The controller marks (idempotent), answers the flag, and audits.
+  assert.match(CTRL, /function review/);
+  assert.match(CTRL, /reviewed_at/);
+  assert.match(CTRL, /report\.capture_review/);
+  // Append-only still holds: no update, no destroy, no delete route.
+  assert.doesNotMatch(CTRL, /function (update|destroy|delete)/i);
+  // The register counts only WAITING files, so a consumed filing drops out of
+  // the arrivals — with a column guard, so a database before 029 reads on.
+  assert.match(SHOW, /reviewed_at IS NULL/);
+  assert.match(SHOW, /capture_count/);
+  // The sheet hides reviewed files everywhere a waiting one would pop.
+  assert.match(FORM, /if \(c\.reviewed_at\) return true/);
+  assert.match(FORM, /c\.reviewed_at \|\| inserted\.includes/);
+  // Insert reviews the file it just merged, and Accept/Keep reviews every
+  // file the kept words were generated over.
+  assert.match(FORM, /reviewCapture\(pending\.reportId, pending\.id\)/);
+  assert.match(FORM, /reviewConsumedCaptures\(parts\.narrative\)/);
+  assert.match(FORM, /reviewConsumedCaptures\(draftRef\.current\?\.narrative\)/);
+  // The review dialog remembers whose draft the file belongs to, so an
+  // arrival file reviews against its own draft, not the open one.
+  assert.match(FORM, /reportId: reportId \?\? editingId/);
+  // The arrival banner only fires for files still waiting.
+  assert.match(WATCHER, /reviewed_at/);
+});
+
 test('both report reads carry the inventory for the sheet', () => {
   assert.match(SHOW, /CapturesController::listFor/);
   assert.match(SHOW, /'captures' => \$captures/);

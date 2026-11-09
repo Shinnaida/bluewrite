@@ -14,7 +14,7 @@ import RowMenu from '../components/shared/RowMenu.jsx';
 // The report row's actions (Open / History / Print / Archive) and the dialogs
 // that ask for them. Shared with Home, which offers the same actions on the same
 // records — see the module for what is shared and what is the caller's.
-import { SnapshotDiff, useReportRowActions } from '../components/reports/ReportActions.jsx';
+import { useReportRowActions } from '../components/reports/ReportActions.jsx';
 // The register is a SHELF OF FOLDERS now: one glass folder per incident type
 // per status shelf, and opening a folder lists the reports inside it.
 import GlassFolder from '../components/shared/GlassFolder.jsx';
@@ -131,7 +131,7 @@ import { stripLeadingBlotterRestatement } from '../lib/narrativeText.js';
 // The station's letterhead, for the sheet format's page. Same module the printed
 // sheet reads its header through, so the page you write on and the page that
 // prints carry the same lines.
-import { resolveHeader, resolveLetterheadStyle, letterheadCss } from '../lib/stationSettings.js';
+import { resolveHeader, resolveLetterheadStyle, letterheadCss, resolveNotedBy } from '../lib/stationSettings.js';
 import SealImg from '../components/reports/SealImg.jsx';
 // The path → control-id scheme, shared with the review step's second copy of a
 // field (see the module: two mounted copies per field is the whole reason it
@@ -2575,6 +2575,10 @@ export function ReportEditor({
   const letterSrc = stationLetter ?? null;
   const letterHeadSrc = letterSrc && typeof letterSrc.header === 'object' ? letterSrc.header : stationHeader;
   const letterhead = resolveHeader(letterHeadSrc);
+  // The "Noted by:" name is the station's saved sign-off, not a fixed
+  // string: saving the sign-off re-reads /station (Shell's bumpStation), so
+  // the footer below answers the save without a reload.
+  const notedName = resolveNotedBy(letterHeadSrc);
   const freedLetterDoc = letterSrc && typeof letterSrc.letterhead_html === 'string' ? letterSrc.letterhead_html.trim() : '';
   const hasFreedLetterDoc = freedLetterDoc !== '';
   // For a new report, start with the empty form immediately; for an existing
@@ -2646,19 +2650,77 @@ export function ReportEditor({
   // first capture whose text is not already in the narrative pops the
   // moment the draft's reads land; each Insert advances to the next
   // waiting one; Cancel stays closed until the draft is reopened.
+  // Marking a capture reviewed (migration 029): its words are in a draft,
+  // so the Phone files folder drops it for good instead of re-offering it
+  // next reload. Best-effort and idempotent — a missed press simply leaves
+  // the file waiting for the next review. The local lists update at once so
+  // the folder answers without waiting for the next poll tick.
+  const reviewCapture = (reportId, captureId) => {
+    if (!reportId || !captureId) return;
+    api(`/reports/${reportId}/captures/${captureId}/review`, { method: 'POST' })
+      .then((d) => {
+        const updated = d && d.capture ? d.capture : null;
+        const stamp = updated && updated.reviewed_at ? updated.reviewed_at : new Date().toISOString();
+        const by = updated && updated.reviewed_by != null ? updated.reviewed_by : null;
+        setCaptures((prev) =>
+          Array.isArray(prev)
+            ? prev.map((c) => (c && c.id === captureId ? { ...c, reviewed_at: stamp, reviewed_by: by } : c))
+            : prev,
+        );
+        setArrivals((prev) =>
+          Array.isArray(prev)
+            ? prev.map((a) =>
+                Number(a.reportId) === Number(reportId)
+                  ? {
+                      ...a,
+                      captures: (a.captures || []).map((c) =>
+                        c && c.id === captureId ? { ...c, reviewed_at: stamp, reviewed_by: by } : c,
+                      ),
+                    }
+                  : a,
+              )
+            : prev,
+        );
+      })
+      .catch(() => {
+        // Offline or un-migrated server: the file stays waiting, and the next
+        // review retries. Nothing on the paper changes either way.
+      });
+  };
+  // Every unreviewed capture whose words sit in the given narrative is
+  // consumed by it: opening a phone file, generating the report over its
+  // text and putting the BW-numbered draft on the web is exactly this —
+  // the files leave Phone files instead of lingering beside the new draft.
+  const reviewConsumedCaptures = (narrativeHtml) => {
+    const plain = String(narrativeHtml || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+    const consider = (c, rid) => {
+      if (!c || c.reviewed_at || !rid) return;
+      const head = String(c.ocr_text || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+      if (head.length >= 20 && plain.includes(head)) reviewCapture(rid, c.id);
+    };
+    (Array.isArray(captures) ? captures : []).forEach((c) => consider(c, editingId));
+    (Array.isArray(arrivals) ? arrivals : []).forEach((a) =>
+      (Array.isArray(a.captures) ? a.captures : []).forEach((c) => consider(c, a.reportId)),
+    );
+  };
   const firstWaitingCapture = (list, narrativeHtml, inserted) => {
     const plain = String(narrativeHtml || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
     return (
       (Array.isArray(list) ? list : []).find((c) => {
-        if (!c || inserted.includes(c.id)) return false;
+        if (!c || c.reviewed_at || inserted.includes(c.id)) return false;
         const head = String(c.ocr_text || '').trim().replace(/\s+/g, ' ').slice(0, 80);
         return head.length >= 20 && !plain.includes(head);
       }) || null
     );
   };
-  const openCaptureReview = (c) => {
+  const openCaptureReview = (c, reportId = null) => {
     if (!c || !canEdit) return;
-    pendingCaptureRef.current = { id: c.id, text: c.ocr_text || '' };
+    pendingCaptureRef.current = { id: c.id, text: c.ocr_text || '', reportId: reportId ?? editingId };
+    // A capture the server already marked reviewed stays reviewed: reopening
+    // its photo must not resurrect it in the folder.
+    if (c.reviewed_at && !(insertedCaptures || []).includes(c.id)) {
+      setInsertedCaptures((prev) => (Array.isArray(prev) && prev.includes(c.id) ? prev : [...(prev || []), c.id]));
+    }
     blotterRef.current?.reviewCapture?.({
       photoUrl: c.photo_url,
       text: c.ocr_text || '',
@@ -3039,10 +3101,12 @@ export function ReportEditor({
     };
   }, [reportId, user.id]);
 
-  // A capture leaves the Phone files folder once it is reviewed: inserted
-  // this sitting, or its words already sitting in the narrative.
+  // A capture leaves the Phone files folder once it is reviewed: marked on
+  // the server (migration 029, survives reloads), inserted this sitting, or
+  // its words already sitting in the narrative.
   const captureEdited = (c) => {
     if (!c) return true;
+    if (c.reviewed_at) return true;
     if ((insertedCaptures || []).includes(c.id)) return true;
     const head = String(c.ocr_text || '').trim().replace(/\s+/g, ' ').slice(0, 80);
     if (head.length >= 20) {
@@ -3560,9 +3624,13 @@ export function ReportEditor({
   }
 
   // Keep confirms: the narrative snapshot is dropped, the paper stands, and
-  // the field undos survive exactly as after an old-style Accept.
+  // the field undos survive exactly as after an old-style Accept. The kept
+  // words consume the phone files they were generated over: reviewed on the
+  // server, so the files leave Phone files instead of lingering beside the
+  // BW-numbered draft.
   function keepProvisionalApply() {
     setNarrativeUndo(null);
+    reviewConsumedCaptures(draftRef.current?.narrative);
   }
 
   // Sheet theft completion (owner request): writes the audit's record fills
@@ -4432,7 +4500,12 @@ export function ReportEditor({
       // does. It stays fully editable afterwards. The source tag lands in
       // report_history via the next save/finalize. In sheet format the draft
       // is already on the paper — Accept then only confirms.
-      onAccept={applyAiDraft}
+      onAccept={(parts, sourceMeta) => {
+        applyAiDraft(parts, sourceMeta);
+        // Accepting an AI draft written over a capture's words consumes it:
+        // reviewed on the server, so the file leaves Phone files for good.
+        if (parts && parts.narrative) reviewConsumedCaptures(parts.narrative);
+      }}
       // Sheet provisional arrival: the arrival's write, the way back, and the
       // confirm (see the three functions above). Undefined outside the sheet
       // format, where the Accept-writes rule stands exactly as it was.
@@ -5146,6 +5219,10 @@ export function ReportEditor({
                       if (pending && pending.text) {
                         const head = pending.text.trim().replace(/\s+/g, ' ').slice(0, 80);
                         const plain = String(draft.narrative || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+                        // The file's words are in this draft (or land below):
+                        // reviewed on the server, so it leaves Phone files for
+                        // good and not just for this sitting.
+                        if (pending.reportId && pending.id) reviewCapture(pending.reportId, pending.id);
                         const done = [...insertedCaptures, pending.id].filter((x) => x != null);
                         setInsertedCaptures(done);
                         pendingCaptureRef.current = null;
@@ -5257,7 +5334,7 @@ export function ReportEditor({
               <div className="pr-footer-block ir-sheet-foot">
                 <div className="pr-noted">
                   <span className="pr-noted-label">Noted by:</span>
-                  <span className="pr-noted-name">DEXTER MALEZA CALACAR</span>
+                  <span className="pr-noted-name">{notedName}</span>
                 </div>
               </div>
             )}
@@ -5776,30 +5853,6 @@ export function ReportEditor({
               {sheetFields ? 'Hide the report fields' : 'Review extracted fields'}
             </button>
             )}
-            {/* PAPER MODE (owner request, 2026-10-26): one toggle — View is the clean official paper, Edit frees the letter. Beside the zoom steppers, in the same quiet voice. Shown once the mount is up on an editable report. */}
-            {sheetLetterMount && canEdit && (
-              <div className="ir-sheet-viewedit" role="group" aria-label="Paper mode">
-                <button
-                  type="button"
-                  className="ir-sheet-zoom-btn"
-                  aria-pressed={letterEdit}
-                  onClick={() => setLetterEdit((v) => !v)}
-                  title={letterEdit ? 'Back to the clean official paper.' : 'Type freely anywhere on the letter — it keeps its own text.'}
-                >
-                  {letterEdit ? 'Edit' : 'View'}
-                </button>
-                {!!draft?.letter_html && (
-                  <button
-                    type="button"
-                    className="ir-sheet-zoom-btn"
-                    onClick={() => set('letter_html', '')}
-                    title="Drop the letter's own text and compose from the fields again."
-                  >
-                    Revert
-                  </button>
-                )}
-              </div>
-            )}
             {/* The sheet's own size: the steppers move only the paper (see
                 `--sheet-zoom` on the mount), never the desk around it. */}
             <div className="ir-sheet-zoom" role="group" aria-label="Sheet size">
@@ -5844,28 +5897,31 @@ export function ReportEditor({
               )}
             </div>
             {/* Phone files folder (owner request): the captures filed from the
-                phone app live beside the Edit/zoom controls — click to open,
+                phone app live beside the zoom controls — click to open,
                 click a page to review it. Desk chrome, never printed. */}
             <Folder
               label="Phone files"
               items={folderItems}
               onItemClick={(item) => {
                 if (item?.arrivalId && onOpenDraft) onOpenDraft(item.arrivalId);
-                else if (item?.capture) openCaptureReview(item.capture);
+                else if (item?.capture) openCaptureReview(item.capture, item?.arrivalId ?? null);
                 else if (item?.image) window.open(item.image, '_blank', 'noopener');
               }}
               emptyText="No files yet — a phone send lands here live, whether it files on this report or as its own waiting draft."
             />
           </div>
-          {/* PAPER MODE read-out: one line saying where corrections go while the clean paper is up. Desk chrome, never printed. */}
+          {/* PAPER MODE read-out: one line saying where the desk stands while
+              the clean paper is up. Desk chrome, never printed. (The manual
+              Edit toggle is gone by request — a generated letter still frees
+              itself for corrections on arrival.) */}
           {sheetLetterMount && canEdit && !letterEdit && (
-            <p className="field-hint no-print" style={{ textAlign: 'center' }}>Clean paper — switch to Edit above to type corrections on the letter.</p>
+            <p className="field-hint no-print" style={{ textAlign: 'center' }}>Clean paper — this is the official sheet as it will print.</p>
           )}
           {/* FREE EDIT read-out: the letter is keeping its own text, so the
-              fields no longer describe what is on the paper. Revert (above)
-              drops the kept text; saving keeps it. Desk chrome, never printed. */}
+              fields no longer describe what is on the paper. Saving keeps it.
+              Desk chrome, never printed. */}
           {sheetLetterMount && canEdit && !!draft?.letter_html && (
-            <p className="field-hint no-print" style={{ textAlign: 'center' }}>This letter keeps its own text — Revert above to compose it from the fields again.</p>
+            <p className="field-hint no-print" style={{ textAlign: 'center' }}>This letter keeps its own text — saving keeps it.</p>
           )}
         </div>
       )}
@@ -5968,6 +6024,10 @@ export function ReportEditor({
             {history && history.length > 0 && (
               <ol style={{ paddingLeft: '1.2rem', margin: '0.5rem 0' }}>
                 {history.map((h) => (
+                  // The history is a reading list, not a data dump: the raw
+                  // JSON snapshot stays out of Write Report (the register's
+                  // own history dialog still offers it), so every entry reads
+                  // as one line — what changed, who did it, and when.
                   <li key={h.id} style={{ marginBottom: '0.6rem' }}>
                     <div>
                       <strong>{h.change_note}</strong>{' '}
@@ -5975,7 +6035,6 @@ export function ReportEditor({
                         — {h.changed_by}, {String(h.created_at).replace('T', ' ')}
                       </span>
                     </div>
-                    {h.snapshot && <SnapshotDiff snapshot={h.snapshot} />}
                   </li>
                 ))}
               </ol>

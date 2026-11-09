@@ -3,9 +3,10 @@ import { api } from '../lib/api.js';
 import './ConnectionHub.css';
 
 /**
- * ConnectionHub — who is on the station right now, drawn as nodes on rings
- * around a hub. Each signed-in account is a node, and the list under the
- * drawing names them.
+ * ConnectionHub — who is on the station right now, drawn as PCs on rings
+ * around the station server. Each signed-in account is a workstation in its
+ * role ink (blue PC for an Admin, gold PC for an Officer), and the list
+ * under the drawing names them.
  *
  * "Connected" means the server saw the account active within ACTIVE_WINDOW_MS
  * (`users.last_seen_at`, refreshed every thirty seconds by PresenceBeat). It is a
@@ -44,12 +45,24 @@ function parseStamp(value) {
   return Number.isNaN(t) ? null : t;
 }
 
-/** Node positions on an ellipse around the hub, spread evenly. */
-function positionFor(index, count) {
-  const angle = (Math.PI * 2 * index) / Math.max(count, 1) - Math.PI / 2;
+/** Workstation desks, scattered — not marched around the hub. Each account rolls
+ * its own angle and radius from its id, so the scatter looks random but a desk
+ * never moves between re-renders: the window tick below must not reshuffle the
+ * room every thirty seconds. The jitter stays inside a band that keeps every
+ * node on the view box with its label under it. */
+function positionFor(index, count, id) {
+  let h = (Number(id) || index + 1) >>> 0 || 1;
+  const rand = () => {
+    h = (h * 1664525 + 1013904223) >>> 0;
+    return h / 4294967296;
+  };
+  const base = ((Math.PI * 2 * index) / Math.max(count, 1)) - Math.PI / 2;
+  const angle = base + (rand() - 0.5) * 0.9;
+  const rx = VIEW.w * ORBIT.x + (rand() - 0.5) * 90;
+  const ry = VIEW.h * ORBIT.y + (rand() - 0.5) * 30;
   return {
-    x: HUB.x + Math.cos(angle) * (VIEW.w * ORBIT.x),
-    y: HUB.y + Math.sin(angle) * (VIEW.h * ORBIT.y),
+    x: HUB.x + Math.cos(angle) * rx,
+    y: HUB.y + Math.sin(angle) * ry,
   };
 }
 
@@ -141,6 +154,7 @@ export default function ConnectionHub({ users: usersProp }) {
     <section className="conn-hub" aria-labelledby="conn-hub-title">
       <div className="conn-hub__head">
         <div className="conn-hub__heading">
+          <span className="conn-hub__eyebrow">Live presence</span>
           <h2 id="conn-hub-title">Connected <span className="conn-hub__now">now</span></h2>
           <p className="conn-hub__sub">Real-time view of all active users in the system.</p>
         </div>
@@ -186,33 +200,65 @@ export default function ConnectionHub({ users: usersProp }) {
           ))}
         </g>
 
+
         {/* NO ORBIT RING (owner request): the dashed ellipse read as another
             broken line, so the rings alone floor the drawing. */}
-        {/* NO BEAMS (owner request): the dashed lines from the hub to each
-            node read as broken wires, so a connected account is a node on
-            the rings and a row in the roster — nothing strung between. */}
+        {/* CONNECTED STRINGS (owner request): each workstation is strung to the
+            server by a solid hairline in its role ink — solid, not dashed, so it
+            reads as a live link and never as a broken wire. Trimmed at both ends
+            so it slips under the server and the PC instead of poking through. */}
+        <g className="conn-hub__links" aria-hidden="true">
+          {shown.map((u, i) => {
+            const p = positionFor(i, shown.length, u.id);
+            const dx = p.x - HUB.x;
+            const dy = p.y - HUB.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const ux = dx / len;
+            const uy = dy / len;
+            return (
+              <line
+                key={`link-${u.id}`}
+                className={`conn-hub__link${roleInk(u) ? ` ${roleInk(u)}` : ''}`}
+                x1={HUB.x + ux * 26}
+                y1={HUB.y + uy * 26}
+                x2={p.x - ux * 24}
+                y2={p.y - uy * 24}
+              />
+            );
+          })}
+        </g>
         {shown.map((u, i) => {
-          const p = positionFor(i, shown.length);
+          const p = positionFor(i, shown.length, u.id);
           return (
             <g key={`node-${u.id}`} className={`conn-hub__node${roleInk(u) ? ` ${roleInk(u)}` : ''}`} transform={`translate(${p.x} ${p.y})`}>
-              {/* A photograph would be the honest face here, and this drawing is
-                  deliberately initials: the panel is read at a glance from across a
-                  room, and a 40px circle is where a photograph becomes a smudge. The
-                  directory and the account page both draw real faces. */}
+              {/* A workstation, not a face: the initials ride the monitor glass and
+                  the role ink paints the shell — blue PC for an Admin, gold PC for
+                  an Officer. The directory and the account page draw real faces. */}
               <circle className="conn-hub__node-halo" r={NODE_R + 5} />
-              <circle r={NODE_R} />
-              <text y="5" textAnchor="middle">{initials(u)}</text>
-              <text className="conn-hub__label" y="40" textAnchor="middle">{firstName(u)}</text>
+              <g className="conn-hub__pc-float">
+                <rect className="conn-hub__pc-screen" x="-17" y="-16" width="34" height="24" rx="4" />
+                <rect className="conn-hub__pc-glass" x="-13.5" y="-12.5" width="27" height="12" rx="2" />
+                <text className="conn-hub__pc-user" y="-3" textAnchor="middle">{initials(u)}</text>
+                <rect className="conn-hub__pc-neck" x="-2.5" y="8" width="5" height="5" />
+                <rect className="conn-hub__pc-base" x="-10" y="13" width="20" height="3.5" rx="1.75" />
+                <text className="conn-hub__label" y="40" textAnchor="middle">{firstName(u)}</text>
+              </g>
             </g>
           );
         })}
 
+        {/* THE CENTRE IS THE STATION SERVER: a rack chassis with three drive bays
+            and live LEDs, wearing the office's name on its glass tag. Every
+            workstation on the rings reports to this box. */}
         <g className="conn-hub__core" transform={`translate(${HUB.x} ${HUB.y})`}>
-          <circle className="conn-hub__pulse" r="26" />
-          <circle r="22" />
-          <text y="5" textAnchor="middle">BW</text>
-          <rect className="conn-hub__core-tag" x="-52" y="28" width="104" height="20" rx="10" />
-          <text className="conn-hub__core-tag-text" y="42" textAnchor="middle">BlueWrite</text>
+          <ellipse className="conn-hub__server-shadow" cx="0" cy="23" rx="20" ry="3.5" />
+          <rect className="conn-hub__server" x="-15" y="-21" width="30" height="42" rx="6" />
+          <rect className="conn-hub__server-bay" x="-10" y="-15" width="20" height="5" rx="2.5" />
+          <rect className="conn-hub__server-bay" x="-10" y="-7" width="20" height="5" rx="2.5" />
+          <rect className="conn-hub__server-bay" x="-10" y="1" width="20" height="5" rx="2.5" />
+          <circle className="conn-hub__server-led is-on" cx="6.5" cy="-12.5" r="1.7" />
+          <circle className="conn-hub__server-led is-on is-alt" cx="6.5" cy="-4.5" r="1.7" />
+          <circle className="conn-hub__server-led is-warn" cx="6.5" cy="3.5" r="1.7" />
         </g>
       </svg>
       </div>

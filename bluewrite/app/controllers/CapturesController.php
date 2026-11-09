@@ -60,6 +60,22 @@ final class CapturesController
         return $report;
     }
 
+    /** Whether the database carries the review columns (migration 029). */
+    private function hasReviewedColumn(PDO $pdo): bool
+    {
+        try {
+            $probe = $pdo->prepare(
+                "SELECT 1 FROM information_schema.COLUMNS
+                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'report_captures' AND COLUMN_NAME = 'reviewed_at'
+                  LIMIT 1"
+            );
+            $probe->execute();
+            return (bool) $probe->fetchColumn();
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
     /** One capture row as the draft sheet reads it (never the bytes). */
     public static function serialize(PDO $pdo, array $row, int $reportId): array
     {
@@ -69,6 +85,10 @@ final class CapturesController
             'id' => (int) $row['id'],
             'ocr_text' => $row['ocr_text'] === null ? null : (string) $row['ocr_text'],
             'engine' => $row['engine'] === null ? null : (string) $row['engine'],
+            // Migration 029: a reviewed capture stops counting as waiting.
+            // `?? null` keeps an un-migrated database reading like before.
+            'reviewed_at' => $row['reviewed_at'] ?? null,
+            'reviewed_by' => isset($row['reviewed_by']) ? (int) $row['reviewed_by'] : null,
             'created_by_name' => (string) ($nameStmt->fetchColumn() ?: ''),
             'created_at' => $row['created_at'],
             'photo_url' => ReportCaptures::url($reportId, (int) $row['id']),
@@ -155,6 +175,52 @@ final class CapturesController
         $row = $pdo->prepare('SELECT * FROM report_captures WHERE id = :id');
         $row->execute([':id' => $captureId]);
         Response::json(201, ['capture' => self::serialize($pdo, $row->fetch(), (int) $id)]);
+    }
+
+    /**
+     * POST /reports/:id/captures/:cid/review — the draft took in the words.
+     *
+     * Inserting a capture, or accepting/keeping an AI draft written over its
+     * text, marks it REVIEWED: the Phone files folder drops it for good (the
+     * register counts only unreviewed captures) while the row and the photo
+     * stay as evidence. Idempotent — reviewing twice answers the same row.
+     */
+    public function review(string $id, string $captureId): void
+    {
+        $user = Auth::requireUser();
+        $pdo = Database::pdo();
+        $this->requireReport($pdo, $id, $user, true);
+        if (!$this->hasReviewedColumn($pdo)) {
+            Response::json(422, ['error' => 'The station database needs migration 029 before captures can be marked reviewed.']);
+        }
+
+        $stmt = $pdo->prepare(
+            'UPDATE report_captures
+             SET reviewed_at = NOW(), reviewed_by = :uid
+             WHERE id = :cid AND report_id = :rid AND reviewed_at IS NULL'
+        );
+        $stmt->execute([
+            ':uid' => (int) $user['id'],
+            ':cid' => (int) $captureId,
+            ':rid' => (int) $id,
+        ]);
+        if ($stmt->rowCount() === 0) {
+            $check = $pdo->prepare(
+                'SELECT * FROM report_captures WHERE id = :cid AND report_id = :rid'
+            );
+            $check->execute([':cid' => (int) $captureId, ':rid' => (int) $id]);
+            $existing = $check->fetch();
+            if ($existing === false) {
+                Response::json(404, ['error' => 'That capture was not found on this report.']);
+            }
+            // Already reviewed: the same answer as the first time.
+        }
+
+        Audit::log((int) $user['id'], 'report.capture_review', 'report', (string) (int) $id, 'capture ' . (int) $captureId);
+
+        $row = $pdo->prepare('SELECT * FROM report_captures WHERE id = :id');
+        $row->execute([':id' => (int) $captureId]);
+        Response::json(200, ['capture' => self::serialize($pdo, $row->fetch(), (int) $id)]);
     }
 
     /**

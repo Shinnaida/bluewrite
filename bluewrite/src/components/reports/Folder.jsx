@@ -1,4 +1,5 @@
-// Phone-files folder beside the Write Report sheet's Edit/zoom controls.
+// Phone-files folder on the Write Report sheet's desk bar (it carries the
+// bar alone since the Edit/zoom controls were removed).
 //
 // A small, dependency-free take on the React Bits <Folder /> idea: a folder
 // that stands on the sheet's desk bar and holds the files coming from the
@@ -17,7 +18,11 @@ export default function Folder({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
-  const shown = items.slice(0, 6);
+  // Every file, scrollable (owner request): the tray used to stop at six and
+  // the rest were unreachable. It already caps its height and scrolls
+  // (`max-height` + `overflow-y` in Folder.css), so the whole list rides in
+  // it now — the count above names the true total.
+  const shown = items;
 
   useEffect(() => {
     if (!open) return undefined;

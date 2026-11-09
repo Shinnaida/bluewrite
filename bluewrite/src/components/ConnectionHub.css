@@ -227,7 +227,9 @@
 .conn-hub__ring:nth-child(2) { opacity: 0.35; }
 .conn-hub__ring:nth-child(3) { opacity: 0.22; }
 
-.conn-hub__node circle { fill: #ffffff; stroke: #2563eb; stroke-width: 1.6; }
+/* WORKSTATIONS ON THE RINGS: a monitor in role ink on a neutral stand, the
+   account's initials on the glass. Blue PC for an Admin, gold PC for an
+   Officer — so the drawing says whose desk it is before the list is read. */
 .conn-hub__node .conn-hub__node-halo {
   fill: none;
   stroke: #2563eb;
@@ -241,15 +243,17 @@
   font-family: var(--font-body);
 }
 .conn-hub__node .conn-hub__label { font-size: 11px; font-weight: 500; fill: #5b6b85; }
-/* ROLE INK ON THE RINGS (owner request): an Admin circle wears station blue with
-   white initials, an Officer circle wears station gold with navy initials — so the
-   drawing says whose desk it is before the list below it is read. */
-.conn-hub__node.is-admin circle:not(.conn-hub__node-halo) { fill: #2563eb; stroke: #2563eb; }
+.conn-hub__node .conn-hub__pc-user { font-size: 10px; font-weight: 800; }
+.conn-hub__node .conn-hub__pc-screen { stroke-width: 1.6; }
+.conn-hub__node.is-admin .conn-hub__pc-screen { fill: #2563eb; stroke: #1d4ed8; }
 .conn-hub__node.is-admin .conn-hub__node-halo { stroke: #2563eb; }
 .conn-hub__node.is-admin text:not(.conn-hub__label) { fill: #fff; }
-.conn-hub__node.is-officer circle:not(.conn-hub__node-halo) { fill: #f5b301; stroke: #f5b301; }
+.conn-hub__node.is-officer .conn-hub__pc-screen { fill: #f5b301; stroke: #d99a00; }
 .conn-hub__node.is-officer .conn-hub__node-halo { stroke: #f5b301; }
 .conn-hub__node.is-officer text:not(.conn-hub__label) { fill: #0f2447; }
+.conn-hub__node .conn-hub__pc-glass { fill: rgba(255, 255, 255, 0.3); }
+.conn-hub__node .conn-hub__pc-neck,
+.conn-hub__node .conn-hub__pc-base { fill: #5b6b85; }
 /* THE LEGEND: two solid dots naming the ink above, set as a quiet key so it
    reads as part of the instrument rather than as a footnote. */
 .conn-hub__legend {
@@ -278,24 +282,14 @@
 .conn-hub__swatch.is-admin { background: #2563eb; }
 .conn-hub__swatch.is-officer { background: #f5b301; }
 
-.conn-hub__core circle:not(.conn-hub__pulse):not(.conn-hub__core-tag) { fill: #0b1e3a; stroke: #dbe7fb; stroke-width: 2; }
-.conn-hub__core text { fill: #fff; font-size: 12px; font-weight: 700; font-family: var(--font-body); }
+/* THE STATION SERVER: a navy rack chassis, drive bays, and live LEDs. */
+.conn-hub__core .conn-hub__server { fill: #0b1e3a; stroke: #dbe7fb; stroke-width: 2; }
+.conn-hub__core .conn-hub__server-bay { fill: #274a73; }
+.conn-hub__core .conn-hub__server-led.is-on { fill: #22c55e; }
+.conn-hub__core .conn-hub__server-led.is-warn { fill: #f59e0b; }
 /* The office's name on a glass tag under the hub, the way the mock draws it. */
 .conn-hub__core-tag { fill: rgba(255, 255, 255, 0.92); stroke: #d7e3f8; stroke-width: 1; }
 .conn-hub__core text.conn-hub__core-tag-text { fill: #0f2447; font-size: 10px; font-weight: 700; font-family: var(--font-body); }
-.conn-hub__pulse {
-  fill: none;
-  stroke: #2563eb;
-  stroke-width: 2;
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: conn-hub-pulse 2.4s ease-out infinite;
-}
-@keyframes conn-hub-pulse {
-  0% { opacity: 0.8; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.9); }
-}
 @keyframes conn-hub-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
@@ -385,11 +379,91 @@
 .conn-hub__person--more .conn-hub__seen { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .conn-hub__pulse, .conn-hub__count-dot, .conn-hub__seen-dot, .conn-hub-toggle__dot { animation: none; }
-  .conn-hub__pulse { opacity: 0.25; }
+  .conn-hub__count-dot, .conn-hub__seen-dot, .conn-hub-toggle__dot { animation: none; }
 }
 
 @media (max-width: 640px) {
   .conn-hub__stage { padding: 0; }
   .conn-hub__seen { display: none; }
 }
+
+/* ---- Blended board restyle ----------------------------------------------------
+   The drawing melts into the panel instead of sitting in a dark box: a soft blue
+   wash for a stage, glowing rings, workstations that breathe, and a server with
+   blinking LEDs — all in the panel's own light. */
+
+/* TRANSPARENT STAGE (owner request): no wash, no border, no grid — the rings
+   and the machines float straight on the panel's own ground. */
+.conn-hub__stage {
+  position: relative;
+  margin-top: 0.7rem;
+  padding: 0.5rem 0;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: transparent;
+  box-shadow: none;
+  overflow: hidden;
+}
+.conn-hub__stage::before { display: none; }
+/* A faint engineering grid, vignetted so it never shouts past the rings. */
+.conn-hub__stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(37, 99, 235, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, 0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
+  -webkit-mask-image: radial-gradient(75% 90% at 50% 50%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(75% 90% at 50% 50%, #000 30%, transparent 100%);
+}
+.conn-hub__rings { filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.35)); }
+.conn-hub__ring { stroke: #6f9bef; }
+/* Names set in slate on the light wash. */
+.conn-hub__node .conn-hub__label { fill: #5b6b85; }
+/* Role glow: each workstation carries its own light. */
+.conn-hub__node.is-admin .conn-hub__pc-screen { filter: drop-shadow(0 0 7px rgba(59, 130, 246, 0.9)); }
+.conn-hub__node.is-officer .conn-hub__pc-screen { filter: drop-shadow(0 0 7px rgba(245, 179, 1, 0.85)); }
+/* Workstations breathe: a slow hover bob, staggered across the rings. The float\n   wraps the PC in its own group because the outer node carries the layout\n   translate — animating that transform would unpin the node. */
+.conn-hub__pc-float {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: conn-hub-float 4.5s ease-in-out infinite alternate;
+}
+.conn-hub__svg > g.conn-hub__node:nth-of-type(even) .conn-hub__pc-float { animation-delay: -2.25s; }
+@keyframes conn-hub-float {
+  from { transform: translateY(-2.5px); }
+  to { transform: translateY(2.5px); }
+}
+/* The server sits in its own pool of light, with working LEDs. */
+.conn-hub__core .conn-hub__server { filter: drop-shadow(0 4px 10px rgba(15, 36, 71, 0.35)); }
+.conn-hub__server-shadow { fill: rgba(15, 36, 71, 0.18); }
+.conn-hub__server-led.is-on { animation: conn-hub-led 1.8s ease-in-out infinite; }
+.conn-hub__server-led.is-on.is-alt { animation-delay: 0.9s; }
+.conn-hub__server-led.is-warn { animation: conn-hub-led-warn 3.2s ease-in-out infinite; }
+@keyframes conn-hub-led {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+@keyframes conn-hub-led-warn {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+/* The roster answers the board: livelier hover, and the seen pill goes green so\n   "active now" reads as a status, not a timestamp. */
+.conn-hub__person:hover {
+  transform: translateY(-2px);
+  border-color: #fff;
+  box-shadow: 0 16px 30px -20px rgba(15, 36, 71, 0.55);
+}
+.conn-hub__seen { background: #e6f9ee; color: #15803d; }
+.conn-hub__seen-dot { animation: conn-hub-blink 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .conn-hub__pc-float, .conn-hub__server-led { animation: none; }
+}
+
+/* CONNECTED STRINGS: solid hairlines in role ink tying each workstation to the\n   server — blue for an Admin, deep gold for an Officer (gold lightened for glow\n   would wash out on the panel, so the string runs darker than the shell). */
+.conn-hub__link { stroke-width: 1.5; opacity: 0.35; }
+.conn-hub__link.is-admin { stroke: #2563eb; }
+.conn-hub__link.is-officer { stroke: #c98a00; }

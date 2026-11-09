@@ -9610,7 +9610,15 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
    `no-print`. Docked left, clear of the chatbot button. */
 .ir-sheet-deskbar > .ir-sheet-bar {
   position: fixed;
-  left: 1.1rem;
+  /* Shifted left ~20% (owner request): the bar used to ride 1.1rem in AND
+     wear the paper's inch of inset padding, so its buttons sat ~5vw deep of
+     the screen edge. Docked to the edge with only a breathing sliver instead
+     — every control stays fully on screen at any viewport width. */
+  left: 0;
   bottom: 1.1rem;
   z-index: 60;
+  padding-inline: 0.5rem;
+  /* Eased back right 10% of its own width (owner request) after the left
+     dock — a self-scaling nudge, so it holds on any viewport width. */
+  transform: translateX(10%);
 }

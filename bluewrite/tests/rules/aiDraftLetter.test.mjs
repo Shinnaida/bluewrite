@@ -219,7 +219,7 @@ test('the slim bar portals the letter onto the paper, under the narrative', () =
   // ONE HOME ONLY (owner request): the slim bar portals onto the paper mount
   // and renders nothing elsewhere — never a missing draft, and never a second
   // copy in the bar. Deck formats keep the page in the card.
-  assert.match(SRC, /\{sheeted && \(slim/, 'the letter is no longer gated on the mount');
+  assert.match(SRC, /\{sheeted && slim/, 'the letter is no longer gated on the mount');
   assert.match(SRC, /letterMount \? createPortal\(<SheetLetterDock \{\.\.\.letterProps\} freeReview=\{slim && letterEdit\} \/>, letterMount\) : null/, 'the slim bar still draws a second copy');
   // Every sheeted draft draws the letter — plain arrivals as a static police-
   // format proposal (their sheetTyped is already true, so nothing replays),
@@ -680,22 +680,22 @@ test('the static lines type too — letterhead, labels, headings, signatures', (
   // CL is a plain helper (not a component) so the focused field keeps its
   // caret across re-renders — an inline component would remount mid-word.
   assert.match(LEAF, /const CL = \(k, fb\) =>/, 'the chrome helper lost its remount-safe shape');
-  assert.match(LEAF, /\{CL\('head agency', head\.agency\)\}/, 'the agency line does not type');
-  assert.match(LEAF, /\{CL\('title', "POLICE REPORT"\)\}/, 'the title does not type');
+  assert.match(LEAF, /CL\('head agency', head\.agency\)/, 'the agency line does not type');
+  assert.match(LEAF, /CL\('title', "POLICE REPORT"\)/, 'the title does not type');
   assert.match(LEAF, /\{CL\(`label \$\{entry\.label\}`, labelCase\(entry\.label\)\)\}/, 'fact labels do not type');
   // Owner request (2026-11-02): the heading over the narrative was removed,
   // so the account reads on its own on every incident's sheet.
   assert.doesNotMatch(LEAF, /FACTS OF THE CASE/, 'the narrative heading is back on the sheet');
-  assert.match(LEAF, /\{CL\('noted label',/, 'the noted-by label does not type');
+  assert.match(LEAF, /CL\('noted label',/, 'the noted-by label does not type');
   // Read-only stays read-only: the editor renders only under `editable`,
   // and the fallback ink is the template default, never an empty box.
   assert.match(LEAF, /chromeEdit \? \(/, 'chrome edits leak into the read path');
   // The blotter number stays derived — typing it would falsify the record's
   // own reference — while the signing name resolves per-report, then the
   // station default.
-  assert.match(LEAF, /blotter entry # \{reportNo\}/, 'the blotter reference stopped being derived');
+  assert.match(LEAF, /blotter entry # \$\{reportNo\}/, 'the blotter reference stopped being derived');
   assert.match(LEAF, /report\.noted_by_name \|\|/, 'the report\u2019s own noting official no longer wins');
-  assert.match(LEAF, /stationHeader\?\.noted_by/, 'the station default no longer stands behind it');
+  assert.match(LEAF, /resolveNotedBy/, 'the station default no longer stands behind it');
   // Overrides clear cleanly instead of storing blanks.
   assert.match(SHEET_TEXT, /clean === ''/, 'clearing a line no longer drops its override');
   assert.match(SHEET_TEXT, /export function sheetKeyName/, 'the override key builder is gone');
@@ -767,7 +767,7 @@ test('the View/zoom strip is pinned to the screen corner, not the page flow', ()
   const bar = FORM_CSS.match(/\.ir-sheet-deskbar > \.ir-sheet-bar \{[^}]*\}/);
   assert.ok(bar, 'the deskbar bar rule is gone');
   assert.match(bar[0], /position:\s*fixed;/, 'the strip scrolls away with the page');
-  assert.match(bar[0], /left:\s*1\.1rem;/, 'the strip is not docked left, clear of the chatbot button');
+  assert.match(bar[0], /left:\s*0;/, 'the strip is not docked to the edge, clear of the chatbot button');
   assert.match(bar[0], /bottom:\s*1\.1rem;/, 'the strip is not docked to the bottom');
   assert.match(bar[0], /z-index:\s*60;/, 'the strip lost its place among the floating chrome');
 });

@@ -97,7 +97,7 @@ test('the tally is derived per row, and the fields it reads never leave the endp
   // …and every field it read is dropped before the response, exactly as the
   // narrative always has been: the register carries a count, not the officer's
   // own words.
-  const strip = CTRL.match(/unset\(\s*\$row\['narrative'\][\s\S]*?\);/)?.[0] ?? '';
+  const strip = CTRL.match(/unset\([\s\S]*?\$row\['narrative'\][\s\S]*?\);/)?.[0] ?? '';
   assert.ok(strip, 'the list stopped stripping the fields it read');
   for (const field of [
     'narrative',

@@ -292,3 +292,23 @@ test('a wrapped vehicle row keeps every detail with its own vehicle', () => {
     'the fix added, dropped or reworded a word',
   );
 });
+
+test('a wrap ending in an abbreviation period rejoins its continuation (Brgy.)', () => {
+  // The officer's V2 row wrapped as "ot, Brgy." / "Mainit, ...": the period
+  // after Brgy. is an abbreviation, not a finished sentence, so the place
+  // stays on the row's own line instead of opening a line of its own.
+  const source = lines(
+    'VEHICLES INVOLVED:',
+    'V2: Honda XRM with plate GF39118, OR 0741-206152, CR 258503221, owned by Galeo Cabrere,',
+    'driven by Hero Sanoria Canque, male, Filipino, 19 yrs old, DOB.: 9-22-2006. And a resident of Purok Tal-',
+    'ot, Brgy.',
+    'Mainit, city of Naga, Cebu. No driver license.',
+    'Backrider Vilma Sanoria Canque',
+  );
+  const plain = reportHtmlToPlain(render(source));
+  assert.ok(
+    plain.includes('Purok Tal-ot, Brgy. Mainit, city of Naga, Cebu. No driver license.'),
+    'the Brgy. continuation opened a line of its own: ' + JSON.stringify(plain),
+  );
+  assert.deepEqual(words(plain), words(source), 'the join added, dropped or reworded a word');
+});

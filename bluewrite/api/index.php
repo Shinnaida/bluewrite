@@ -403,6 +403,13 @@ try {
         (new NarrativeController())->arrange();
     }
 
+    // POST /ai/arrange/stream — section-streamed Arrange Only (SSE). Same
+    // answer as /ai/arrange, delivered section by section; see
+    // NarrativeController::arrangeStream.
+    if ($seg0 === 'ai' && $seg1 === 'arrange' && ($parts[2] ?? null) === 'stream' && !isset($parts[3]) && $method === 'POST') {
+        (new NarrativeController())->arrangeStream();
+    }
+
     // POST /ocr/read — the online photo reader (owner request). Online-first
     // with local fallback: with no key the controller answers
     // `configured: false` and the client reads on-device; on any upstream
@@ -582,6 +589,11 @@ try {
             }
             if ($parts[2] === 'captures' && isset($parts[3]) && ($parts[4] ?? null) === 'photo' && !isset($parts[5]) && $method === 'GET') {
                 (new CapturesController())->photo((string) $seg1, (string) $parts[3]);
+            }
+            // A capture leaves the Phone files folder once its words are in a
+            // draft (migration 029): reviewed, never deleted.
+            if ($parts[2] === 'captures' && isset($parts[3]) && ($parts[4] ?? null) === 'review' && !isset($parts[5]) && $method === 'POST') {
+                (new CapturesController())->review((string) $seg1, (string) $parts[3]);
             }
             if ($parts[2] === 'print' && $method === 'GET') {
                 $c->printData((string) $seg1);

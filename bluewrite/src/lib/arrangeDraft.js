@@ -9,7 +9,7 @@
 // shouted account reads formally while its words, spelling, grammar,
 // punctuation and identifiers stay exactly as the officer wrote them. Enhance
 // Wording keeps its own answer's casing.
-import { extractFieldLabels, formatIncidentReportHtml } from './reportFormat.js';
+import { extractFieldLabels, formatIncidentReportHtml, reflowWrappedLines } from './reportFormat.js';
 
 const BS = String.fromCharCode(92);
 const LF = String.fromCharCode(10);
@@ -18,13 +18,20 @@ const SP_TAB = new RegExp('[ ' + BS + 't]+', 'g');
 const TRIPLE = new RegExp(BS + 'n{3,}', 'g');
 
 // Collapse trailing whitespace at line ends, runs of spaces/tabs, and 3+ blank
-// lines - the officer's words and order are otherwise untouched.
+// lines, then reflow phone hard wraps - the officer's words and order are
+// otherwise untouched.
 export function cleanAccountText(text) {
-  return String(text == null ? '' : text)
+  const collapsed = String(text == null ? '' : text)
+    .replace(/\r\n?/g, LF)
     .replace(WS_NL, LF)
     .replace(SP_TAB, ' ')
     .replace(TRIPLE, LF + LF)
     .trim();
+  if (collapsed === '') return '';
+  // A phone paste wraps every ~40 characters with a hard break and no blank
+  // line: that break is spacing, not a paragraph, so it rejoins with a space
+  // here (and again in the formatter) while genuine boundaries keep theirs.
+  return reflowWrappedLines(collapsed).replace(TRIPLE, LF + LF).trim();
 }
 
 // Faithfulness gate for the provider's arrangement (owner request): Arrange

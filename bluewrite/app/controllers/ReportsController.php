@@ -175,17 +175,28 @@ final class ReportsController
 
     private function hasReportColumn(PDO $pdo, string $column): bool
     {
+        return $this->hasColumn($pdo, 'reports', $column);
+    }
+
+    /**
+     * Does a table carry a column? (report_captures.reviewed_at, migration
+     * 029.) Same guard as hasReportColumn, generalized: a database a
+     * migration behind answers the old reading instead of failing the
+     * whole register.
+     */
+    private function hasColumn(PDO $pdo, string $table, string $column): bool
+    {
         try {
             $probe = $pdo->prepare(
-                "SELECT 1 FROM information_schema.COLUMNS
-                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'reports' AND COLUMN_NAME = :c
-                  LIMIT 1"
+                'SELECT 1 FROM information_schema.COLUMNS
+                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :t AND COLUMN_NAME = :c
+                  LIMIT 1'
             );
-            $probe->execute([':c' => $column]);
+            $probe->execute([':t' => $table, ':c' => $column]);
             return (bool) $probe->fetchColumn();
         } catch (Throwable $e) {
             // No rights on information_schema: take the safer half of the bet,
-            // which is the one every deployment before 020 is in.
+            // which is the one every deployment before the migration is in.
             return false;
         }
     }
@@ -488,9 +499,15 @@ final class ReportsController
         // the same guard for the report_captures table (migration 025).
         $hasTypes = $this->hasReportColumn($pdo, 'incident_types');
         $hasCaptures = $this->hasTable($pdo, 'report_captures');
-        $captureSelect = $hasCaptures
-            ? '(SELECT COUNT(*) FROM report_captures c WHERE c.report_id = r.id) AS capture_count, '
-            : '';
+        // Migration 029: a reviewed capture is filed, not waiting — the Phone
+        // files folder counts only unreviewed captures, so a consumed phone
+        // filing drops out of the arrivals. Before 029 every capture waits.
+        $hasReviewed = $hasCaptures && $this->hasColumn($pdo, 'report_captures', 'reviewed_at');
+        $captureSelect = !$hasCaptures
+            ? ''
+            : ($hasReviewed
+                ? '(SELECT COUNT(*) FROM report_captures c WHERE c.report_id = r.id AND c.reviewed_at IS NULL) AS capture_count, '
+                : '(SELECT COUNT(*) FROM report_captures c WHERE c.report_id = r.id) AS capture_count, ');
         $sql = "SELECT r.id, r.incident_type, " . ($hasTypes ? 'r.incident_types, ' : '') . "r.report_date, r.blotter_no, r.blotter_date,
                     r.incident_datetime, r.incident_date, r.incident_time,
                     r.incident_time_approximate, r.location, r.status,

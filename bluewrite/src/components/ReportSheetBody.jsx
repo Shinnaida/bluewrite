@@ -464,11 +464,15 @@ export default function ReportSheetBody({
     }
     setCursor(0);
     progressRef.current?.(0); // a new reveal starts at the top of the letter
-    const perTick = Math.max(1, Math.ceil(totalChars / (TYPE_TARGET_MS / TYPE_TICK_MS)));
-    let shown = 0;
+    // Eased pacing (see reports/ReportSheetBody): the linear perTick left the
+    // short tail sections only a few ticks, flashing the bottom instant.
+    const t0 = (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+    const nowOf = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+    const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
     const timer = setInterval(() => {
-      shown += perTick;
-      if (shown >= totalChars) {
+      const p = Math.min(1, (nowOf() - t0) / TYPE_TARGET_MS);
+      const shown = Math.floor(easeInOut(p) * totalChars);
+      if (p >= 1) {
         clearInterval(timer);
         setCursor(totalChars);
         progressRef.current?.(1);

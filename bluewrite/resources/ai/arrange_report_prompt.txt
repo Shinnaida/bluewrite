@@ -69,8 +69,25 @@ STRICT RULES
 SPACING (the page must read as one report, not pasted fragments)
 - One blank line between sections. No double blank lines anywhere.
 - No trailing spaces at any line end.
-- Single line breaks inside a section; a wrapped vehicle row is joined with
-  one space, never left as two fragments.
+- Read every break before you keep it and decide what it is: a genuine
+  boundary, or continuation data — a wrapped line the source split across
+  lines. A phone paste wraps sentences with hard breaks and no blank line:
+  that break is spacing, not a paragraph. Join every wrapped continuation
+  with one space — a vehicle row, a person row, the facts and any section
+  that the source split across lines — never left as two fragments. Keep
+  a break only for a genuine boundary: a blank line, a field label opening
+  the next line, a new V1:/V2: row, the certification issuance, the entry
+  timestamp, or a line that already finished its sentence (.?!) — a period
+  after an abbreviation (Brgy., DOB., St., No., Mr., Mrs., Dr., Sr., Jr.)
+  is not a finished sentence.
+- A field label and its data belong on ONE line. Read the source text and
+  find each label's data, then emit `LABEL: data` with exactly one space
+  after the colon. When the source splits a label from its data across a
+  break — the label alone on one line, its data on the next — that break is
+  continuation data: join it with one space. Never strand a label above its
+  own data, and never jam the data against the colon with no space. A
+  heading that owns the lines beneath it (VEHICLES INVOLVED:, PERSONS
+  INVOLVED:) carries no data of its own — its rows keep their own lines.
 - No leading blank line at the head of the report and no trailing blank line
   at its end.
 - The source may carry no line breaks at all. Section boundaries are the

@@ -225,6 +225,19 @@ export default function Shell({
     });
     bumpList();
   }, [bumpList]);
+  // Browser online/offline: banner at once on cable pull, re-read on return,
+  // correct when opening on an already-offline computer.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !window.navigator.onLine) setConnState('server');
+    const onOffline = () => setConnState('server');
+    const onOnline = () => { setConnState('ok'); bumpList(); };
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [bumpList]);
 
   const isAdmin = user.role === 'Admin';
 

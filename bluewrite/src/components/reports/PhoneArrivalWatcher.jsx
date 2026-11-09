@@ -86,9 +86,12 @@ export default function PhoneArrivalWatcher({ user, openReportId = null, onOpenR
         const captures = Array.isArray(print?.captures) ? print.captures : [];
         // Own phone filing only: a draft this officer's phone created carries
         // captures; anything else (a web draft, a colleague's page) stays silent.
+        // Reviewed captures are filed, not waiting (migration 029) — a draft
+        // whose files were all taken into a report never banners again.
         // The thumbnail is fetched like the dialog photo (see apiBlobUrl): a
         // bare <img> names no tab and the server answers 401.
-        if (captures.length > 0 && Number(report?.created_by) === Number(user.id)) {
+        const waiting = captures.filter((c) => !c || !c.reviewed_at);
+        if (waiting.length > 0 && Number(report?.created_by) === Number(user.id)) {
           let thumb = null;
           try {
             if (captures[0]?.photo_url) thumb = await apiBlobUrl(captures[0].photo_url);

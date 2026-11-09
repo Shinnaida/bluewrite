@@ -1,12 +1,13 @@
 /* Phone-files folder on the Write Report sheet's desk bar.
-   Solid flap folder: tab on top, pages peeking out, click to open. */
+   Solid flap folder: tab on top, pages peeking out, click to open. The
+   folder stands alone at the bar's left edge; its tray opens rightward. */
 
 .rb-folder {
   position: relative;
   display: inline-block;
 }
 
-/* Seated in the sheet's desk bar beside the zoom pill. */
+/* Seated in the sheet's desk bar, carrying it alone. */
 .ir-sheet-bar .rb-folder {
   align-self: center;
 }
@@ -119,7 +120,17 @@
   position: absolute;
   z-index: 30;
   bottom: calc(100% + 10px);
-  right: 0;
+  /* Rightward from the folder's own left edge (owner request): the folder
+     now stands at the screen's left edge, so the old right-anchored tray
+     hung off the viewport with its rows cut off. `right` is unset so the
+     tray's width never pulls it back left. */
+  left: 0;
+  right: auto;
+  /* Nudged left 43% of its own width (owner request: 40%, 10% more, 7% back)
+     — the list sits back toward the folder instead of running out to the
+     right. A self-scaling shift, so it holds on any viewport where the
+     tray fits. */
+  transform: translateX(-43%);
   display: flex;
   flex-direction: column;
   gap: 6px;

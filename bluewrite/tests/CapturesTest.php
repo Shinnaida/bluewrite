@@ -160,6 +160,58 @@ final class CapturesTest extends BaseApiTestCase
         $this->assertSame(200, $shared['status']);
     }
 
+    public function testReviewDropsTheFileFromPhoneFiles(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $report = $this->createReport($cookie, $csrf);
+        $stored = $this->uploadCapture($report['id'], $cookie, $csrf, 'Reviewed words for the folder test, long enough to match heads.');
+        $captureId = (int) $stored['body']['capture']['id'];
+        $this->assertNull($stored['body']['capture']['reviewed_at'] ?? null, 'a new capture must wait, not read as reviewed');
+
+        // The register counts the file as waiting.
+        $list = $this->request('GET', '/reports?per_page=10', null, $cookie, null);
+        $this->assertSame(200, $list['status']);
+        $row = null;
+        foreach ($list['body']['reports'] ?? [] as $r) {
+            if ((int) ($r['id'] ?? 0) === (int) $report['id']) {
+                $row = $r;
+            }
+        }
+        $this->assertNotNull($row, 'the draft is missing from the register');
+        $this->assertSame(1, (int) ($row['capture_count'] ?? -1), 'the register must count the waiting file');
+
+        // The draft takes the words in: reviewed.
+        $review = $this->request('POST', "/reports/{$report['id']}/captures/{$captureId}/review", null, $cookie, $csrf);
+        $this->assertSame(200, $review['status'], 'review failed: ' . json_encode($review['body']));
+        $this->assertNotEmpty($review['body']['capture']['reviewed_at'] ?? null);
+
+        // Idempotent: reviewing twice answers the same row.
+        $again = $this->request('POST', "/reports/{$report['id']}/captures/{$captureId}/review", null, $cookie, $csrf);
+        $this->assertSame(200, $again['status']);
+        $this->assertNotEmpty($again['body']['capture']['reviewed_at'] ?? null);
+
+        // The reads carry the flag, and the register stops counting it — the
+        // file leaves Phone files instead of lingering beside the draft.
+        $caps = $this->request('GET', "/reports/{$report['id']}/captures", null, $cookie, null);
+        $this->assertSame(200, $caps['status']);
+        $this->assertNotEmpty($caps['body']['captures'][0]['reviewed_at'] ?? null);
+        $list2 = $this->request('GET', '/reports?per_page=10', null, $cookie, null);
+        foreach ($list2['body']['reports'] ?? [] as $r) {
+            if ((int) ($r['id'] ?? 0) === (int) $report['id']) {
+                $this->assertSame(0, (int) ($r['capture_count'] ?? -1), 'a reviewed file must not count as waiting');
+            }
+        }
+
+        // Another officer's draft is not theirs to review.
+        [$cookie2, $csrf2] = $this->login('t.officer2');
+        $denied = $this->request('POST', "/reports/{$report['id']}/captures/{$captureId}/review", null, $cookie2, $csrf2);
+        $this->assertSame(403, $denied['status']);
+
+        // An unknown file 404s instead of answering 200.
+        $missing = $this->request('POST', "/reports/{$report['id']}/captures/999999/review", null, $cookie, $csrf);
+        $this->assertSame(404, $missing['status']);
+    }
+
     public function testReportReadsCarryTheInventory(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');

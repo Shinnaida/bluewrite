@@ -24,7 +24,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // portal is: it is not content of the card it was asked for, it is a SCREEN of
 // its own, and nothing about the app may be part of that picture.
 import { createPortal } from 'react-dom';
-import { api } from '../../lib/api.js';
+import { api, apiStream } from '../../lib/api.js';
 import NarrativeReveal from './NarrativeReveal.jsx';
 // TASK 9 — the bondpaper itself. The AI's words type into THE LETTER — the same
 // component the print portal draws, so the page reviewed and the page that
@@ -38,6 +38,9 @@ import SheetLetterDock from '../reports/SheetLetterDock.jsx';
 // rather than as the panel having stalled. It is a plain SVG badge; see
 // AiVoiceOrb.jsx for why it is drawn rather than simulated.
 import AiVoiceOrb from './AiVoiceOrb.jsx';
+// The blinking robot beside the block's head — the assistant's face in the
+// heading row, so the "AI Writing assistant" name has a mark to belong to.
+import assistGif from '../../assets/chatbot_cropped_top_bottom (1).gif';
 // The glowing gradient behind that orb (the pasted gradient-orb shader, ported
 // to plain three — see AiOrbBackdrop.jsx). It is mounted in the same centred
 // column as the orb and sized from the same number, so the aura cannot drift
@@ -87,7 +90,6 @@ import {
   guidedIsTerminal,
   guidedStepLabel,
 } from '../../lib/guidedFlow.js';
-
 // Phase 5 economy kinds → the officer's label. The server sends a `kind` as
 // well as a sentence so the label stays short here and the sentence stays
 // available to anything that only renders text.
@@ -103,7 +105,7 @@ const REDUNDANCY_LABEL = {
 // them instead (see InfoHint). Same words, one line of the panel instead of
 // three — the panel is chrome beside the report, not a second page of it.
 const AI_TOOLBAR_HINT =
-  'Generate writes a formal draft from the report you have filled in — or, when the report is written in another language, translates that narrative into formal English. The draft arrives in a box you can edit before accepting it. Tighten runs the economy rules over the narrative you wrote: repeated propositions merged, padding and closing formulas removed. Nothing is written into the report until you review and accept it.';
+  'Generate writes a formal draft from the report you have filled in — or, when the report is written in another language, translates that narrative into formal English. The draft arrives in a box you can edit before accepting it. Nothing is written into the report until you review and accept it.';
 const AI_GUIDED_HINT =
   'Step 1 translates your narrative into formal English; you check it against the glosses and apply it. Step 2 then offers a tightened version of that English text as a proposal — nothing is written into the report until you click.';
 
@@ -200,8 +202,11 @@ const RUN_RADIUS = 999;
 function AssistHead() {
   return (
     <div className="ai-assist-head">
-      <span className="ai-assist-badge" aria-hidden="true">AI</span>
-      <span className="ai-assist-title">Writing assistant</span>
+      <img src={assistGif} className="ai-assist-gif" alt="" aria-hidden="true" />
+      <span className="ai-assist-pill">
+        <span className="ai-assist-badge" aria-hidden="true">AI</span>
+        <span className="ai-assist-title">Writing assistant</span>
+      </span>
       <InfoHint text={AI_TOOLBAR_HINT} />
     </div>
   );
@@ -531,6 +536,7 @@ export default function AiNarrativePanel({
 }) {
   const [mode, setMode] = useState('idle'); // idle|ready|loading|done|error|manual
   const [draft, setDraft] = useState(null); // { narrative, suggestions, possibleGaps, addedContentWarnings, gloss, sourceGloss, ambiguities, pinnedTerms }
+
   // Phase 6 Stage 5 (Track C) — the guided flow's current step, or null when
   // no guided flow is running. Every move goes through moveGuided().
   const [guided, setGuided] = useState(GUIDED_IDLE);
@@ -626,6 +632,15 @@ export default function AiNarrativePanel({
   // fit-to-screen height so only the DOCUMENT scrolls, which means the values
   // below its fold can no longer type themselves into view by themselves.
   const sheetViewportRef = useRef(null);
+  // Owned end-sweep: cancels the drift if the officer takes over, and
+  // debounces the double-fire (natural finish + click-to-skip both call
+  // onRevealComplete for the same generation).
+  const sweepCancelRef = useRef(null);
+  const sweepDoneRef = useRef(null);
+  // Section-streaming (POST /ai/arrange/stream): while sections are landing
+  // the paper draws whole per section (the arrival IS the animation), so the
+  // owned end-sweep must not fire mid-stream — only on the final whole render.
+  const streamActiveRef = useRef(false);
   // WHETHER THE PAGE IS UP ON A SCREEN OF ITS OWN (the Preview control above
   // the card's paper). The same leaf, portaled to document.body, with the app
   // behind the scrim and nothing on the screen but the report: no card, no
@@ -660,8 +675,24 @@ export default function AiNarrativePanel({
     const el = sheetViewportRef.current;
     if (!el) return;
     const travel = el.scrollHeight - el.clientHeight;
-    if (travel <= 0) return; // the whole page already fits
-    el.scrollTop = Math.min(1, Math.max(0, fraction)) * travel * 0.75;
+    if (travel > 0) {
+      el.scrollTop = Math.min(1, Math.max(0, fraction)) * travel * 0.75;
+      return;
+    }
+    // The sheet's mount is not a scroll box — the preview flows with the
+    // page (see the mount rule) — so there is no frame travel and the page
+    // itself does the following: the live caret is kept in view tick by
+    // tick, down to the last line. `nearest` never yanks: once the caret is
+    // visible the call is a no-op. At the end (caret gone) we deliberately
+    // stop at the last caret — about one viewport above the foot — so the
+    // owned end-sweep below has a real top-to-bottom pass left to play
+    // instead of starting already at the bottom.
+    const caret = el.querySelector?.('.pr-caret');
+    if (caret) {
+      caret.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    // No foot snap here: the end-sweep owns the final landing.
   };
   const draftRef = useRef(null);
   draftRef.current = draft;
@@ -897,27 +928,6 @@ export default function AiNarrativePanel({
   const translationOff = String(translationSourceLanguage) !== 'en'
     && !translationEnabled(translationSourceLanguage);
 
-  // WHETHER TIGHTEN IS OFFERED AT ALL, which is not the same question as whether
-  // a press would be accepted. It used to be drawn in every state and greyed out
-  // in two of them — a control that announces itself and then refuses. An officer
-  // reads "Tighten my draft", works out that it is waiting on something, and gets
-  // nothing for the reading; the row also carried a dead button's width in states
-  // where the only thing to do was Generate.
-  //
-  // So it is offered exactly when a press WOULD do something, and that is the
-  // same rule the `disabled` attribute had: there is a narrative to run the
-  // economy rules over, and that narrative is English. `languageBlocked` is set
-  // for every non-English report (see aiBlockedReason in lib/reportLanguages.js —
-  // it fires on any language that is not English), because the rules rewrite
-  // prose and running them over Bisaya would rewrite it in the wrong language.
-  //
-  // What is NOT lost by hiding it: the ⓘ in this block's head explains BOTH
-  // actions (see AI_TOOLBAR_HINT), so Tighten is still documented where it is not
-  // on screen, and the guided row below covers the native-narrative path where
-  // translating is the officer's first step. What IS lost, by request: the
-  // discoverability of a button that cannot be pressed yet.
-  const tightenUsable = !languageBlocked && String(narrative || '').trim() !== '';
-
   // Phase 6 Stage 5 (Track C) — every guided transition goes through the pure
   // machine, and an event the machine REFUSES is dropped rather than applied by
   // hand. The ref mirrors the state so a handler can act on the machine's
@@ -998,9 +1008,9 @@ export default function AiNarrativePanel({
     if (sheet) {
       setRevealStage('done');
       setRevealOn(false);
-      // Provisional results have no paper to type into, so the review gate
-      // must not wait for typing; guided results keep the letter and gate.
-      setSheetTyped(sheetProvisional);
+      // Fresh Generate result types into the paper; restored drafts never
+      // reach here and keep sheetTyped true (draw whole).
+      setSheetTyped(false);
       setBoxesOpen(false); // the new page is read before it is corrected
     } else {
       setRevealStage('facts');
@@ -1364,6 +1374,11 @@ export default function AiNarrativePanel({
       setDraft(withSheetCompletion(buildEnhancedDraft({ enhancedText: enhanced, sourceText })));
       setResidual([]);
       presentDraftResult();
+      // Like Arrange below: reopen the paper gate explicitly so the whole
+      // sheet replays the typing for an enhance too, in every flow state —
+      // the arrival effect has already written the page onto the paper, and
+      // the landing still releases the review gate when the last value lands.
+      if (sheet) setSheetTyped(false);
     } catch (err) {
       setThinkPhase('waiting');
       if (err && (err.status === 503 || err.manual_mode)) {
@@ -1443,16 +1458,124 @@ export default function AiNarrativePanel({
       // miss falls back to the deterministic formatter on the raw account.
       setMessage('Arranging the report...');
       setArrangePhase('arranging');
+      // Live streaming with the answer held back: the server forwards
+      // Gemini's own deltas as grown sections (see arrangeStream) while the
+      // model is still writing, but NOTHING is painted until the answer is
+      // whole — the paper keeps the officer's own words, and the typewriter
+      // below plays the finished draft once, top to bottom. Painting each
+      // section as it landed meant the paper popped whole mid-wait and then
+      // had to replay itself; held back, there is exactly one performance.
+      // Anything without ReadableStream, or any refused press, falls back to
+      // the single-answer endpoint underneath.
+      let streamed = false;
       try {
-        const arranged = await api('/ai/arrange', { method: 'POST', body: { account: accountText } });
-        const text = String(arranged?.report ?? '').trim();
-        // The model arranges; it never invents. A name, plate, code or
-        // vehicle marker from nowhere is guessing, so the answer is dropped
-        // and the local formatter below arranges the officer's own words.
-        if (text !== '' && arrangeOutputIsFaithful(text, accountText)) accountText = text;
+        const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const giveUp = ctrl ? window.setTimeout(() => { try { ctrl.abort(); } catch {} }, 120000) : 0;
+        let res = null;
+        try {
+          res = await apiStream('/ai/arrange/stream', { method: 'POST', body: { account: accountText }, ...(ctrl ? { signal: ctrl.signal } : {}) });
+        } finally {
+          if (giveUp) window.clearTimeout(giveUp);
+        }
+        if (!res?.body?.getReader) throw new Error('no-stream');
+        streamActiveRef.current = true;
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        let serverResetText = null;
+        const got = [];
+        const readBlock = (block) => {
+          const lines = String(block).split('\n');
+          let name = '';
+          let data = '';
+          for (const ln of lines) {
+            if (ln.startsWith('event:')) name = ln.slice(6).trim();
+            else if (ln.startsWith('data:')) data += (data ? '\n' : '') + ln.slice(5).trim();
+          }
+          if (name === 'section' && data) {
+            try {
+              const evt = JSON.parse(data);
+              const idx = Number(evt.index);
+              if (Number.isFinite(idx) && typeof evt.text === 'string') got[idx] = evt.text;
+            } catch {}
+          }
+          // Gate failed server-side: the painted sections are guessing, so the
+          // raw account replaces them whole (client formats it, as usual).
+          if (name === 'reset' && data) {
+            try {
+              const evt = JSON.parse(data);
+              if (typeof evt.text === 'string') serverResetText = evt.text;
+            } catch {}
+          }
+          // Mid-stream miss: replay the classic single-answer path below.
+          if (name === 'error') throw new Error('stream-error');
+          return name;
+        };
+        const snapshot = () => {
+          const ordered = [];
+          for (let i = 0; i < got.length; i += 1) {
+            if (got[i] === undefined) break;
+            ordered.push(got[i]);
+          }
+          return ordered;
+        };
+        // Sections are counted, never painted: the account text grows for
+        // the tail below to draft from, and the message counts what has
+        // arrived so the wait still reads as progress. No timers, no staged
+        // reveals — a buffered pop and a live stream end in the same place.
+        let landed = 0;
+        const noteArrival = () => {
+          const ordered = snapshot();
+          landed = ordered.length;
+          accountText = ordered.join('\n\n');
+          if (sheet) setMessage(`Arranging the report… (${landed} ${landed === 1 ? 'section' : 'sections'} received)`);
+        };
+        let finished = false;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (value) {
+            buf += dec.decode(value, { stream: true });
+            let cut = -1;
+            while ((cut = buf.indexOf('\n\n')) >= 0) {
+              const block = buf.slice(0, cut);
+              buf = buf.slice(cut + 2);
+              const name = readBlock(block);
+              if (name === 'done') { finished = true; break; }
+              if (name === 'section') noteArrival();
+            }
+            if (finished) break;
+          }
+          if (done) break;
+        }
+        try { await reader.cancel(); } catch {}
+        streamActiveRef.current = false;
+        if (serverResetText != null) {
+          got.length = 0;
+          accountText = serverResetText;
+        } else {
+          accountText = snapshot().join('\n\n');
+        }
+        if (landed > 0 || finished) streamed = true;
+        else throw new Error('empty-stream');
       } catch {
-        // Local formatter below carries the press on its own.
+        streamActiveRef.current = false;
+        // Falls through to the single-answer endpoint below.
       }
+      if (!streamed) {
+        try {
+          const arranged = await api('/ai/arrange', { method: 'POST', body: { account: accountText } });
+          const text = String(arranged?.report ?? '').trim();
+          // The model arranges; it never invents. A name, plate, code or
+          // vehicle marker from nowhere is guessing, so the answer is dropped
+          // and the local formatter below arranges the officer's own words.
+          if (text !== '' && arrangeOutputIsFaithful(text, accountText)) accountText = text;
+        } catch {
+          // Local formatter below carries the press on its own.
+        }
+      }
+      // The held-back answer lands here, whole, for the first and only time:
+      // the tail below drafts it and the paper types it in top to bottom —
+      // streamed and single-answer presses end in the same typing pass.
       setLastSource({ kind: 'notes', text: accountText, language: 'en' });
       setDraft(withSheetCompletion(buildArrangeDraft({ accountText, notableFindings: runFindings, actionTaken: runActionTaken })));
       setResidual([]);
@@ -1461,6 +1584,8 @@ export default function AiNarrativePanel({
       // Provisional arrivals draw whole by default (sheetTyped starts true),
       // so an arranged draft would just pop onto the paper with no typing:
       // reopen the gate and the sheet types it in like every other draft.
+      // Streamed papers land here for the first time — nothing painted
+      // mid-wait — so this same gate is their one and only typing pass.
       setArrangePhase(sheet ? 'typing' : 'idle');
       presentDraftResult();
       if (sheet) setSheetTyped(false);
@@ -1762,6 +1887,75 @@ export default function AiNarrativePanel({
     onRevealComplete: () => {
       setSheetTyped(true);
       setArrangePhase('idle');
+      if (streamActiveRef.current) return;
+      // Owned end-sweep: Write Report top-to-bottom in one pass. Slim mount
+      // has no scrollable viewport (overflow visible) so the window owns the
+      // travel; card/deck viewports own their own travel. Target is
+      // re-measured every frame so the Keep bar mounting mid-sweep cannot
+      // stale it. Reduced motion jumps straight to the foot.
+      try {
+        const myGen = genCounter;
+        if (sweepDoneRef.current === myGen) return;
+        sweepDoneRef.current = myGen;
+        if (sweepCancelRef.current) { try { sweepCancelRef.current(); } catch {} }
+        const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+        const viewport = sheetViewportRef.current;
+        const mount = letterMount || sheetCardRef.current;
+        const page = mount?.closest?.('.ir-card--sheet-page') || document.querySelector?.('.ir-card--sheet-page') || mount;
+        const travelNow = () => (viewport ? viewport.scrollHeight - viewport.clientHeight : 0);
+        // Card/deck: the frame scrolls, not the window.
+        if (travelNow() > 8) {
+          if (reduce) { try { viewport.scrollTo({ top: travelNow(), behavior: 'auto' }); } catch {} return; }
+          try { viewport.scrollTo({ top: 0, behavior: 'auto' }); } catch {}
+          const DURATION = 2800;
+          const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t * t + 2, 3) / 2);
+          const t0 = performance.now();
+          let raf = 0;
+          const cancel = () => { try { window.cancelAnimationFrame(raf); } catch {} window.removeEventListener('wheel', cancel); window.removeEventListener('touchmove', cancel); };
+          sweepCancelRef.current = cancel;
+          window.addEventListener('wheel', cancel, { passive: true });
+          window.addEventListener('touchmove', cancel, { passive: true });
+          const step = (now) => {
+            const p = Math.min(1, (now - t0) / DURATION);
+            try { viewport.scrollTop = travelNow() * easeInOut(p); } catch {}
+            if (p < 1) raf = window.requestAnimationFrame(step);
+            else cancel();
+          };
+          raf = window.requestAnimationFrame(step);
+          return;
+        }
+        if (!page) return;
+        const footOf = () => page.querySelector?.('.pr-noted, .pr-foot, .ir-sheet-foot') || page;
+        const targetOf = () => {
+          const r = footOf()?.getBoundingClientRect?.();
+          const absBottom = (window.scrollY || 0) + (r?.bottom ?? 0) + 24;
+          return Math.max(0, absBottom - (window.innerHeight || 800));
+        };
+        if (reduce) { try { targetOf() && window.scrollTo({ top: targetOf(), behavior: 'auto' }); } catch {} return; }
+        try { page.scrollIntoView({ behavior: 'auto', block: 'start' }); } catch {}
+        window.setTimeout(() => {
+          try {
+            const topY = (window.scrollY || 0) + (page.getBoundingClientRect?.().top ?? 0) - 12;
+            const DURATION = 2800;
+            const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+            const t0 = performance.now();
+            let raf = 0;
+            const cancel = () => { try { window.cancelAnimationFrame(raf); } catch {} window.removeEventListener('wheel', cancel); window.removeEventListener('touchmove', cancel); };
+            sweepCancelRef.current = cancel;
+            window.addEventListener('wheel', cancel, { passive: true });
+            window.addEventListener('touchmove', cancel, { passive: true });
+            const step = (now) => {
+              const targetY = Math.max(topY, targetOf());
+              if (!(targetY > topY + 4)) { cancel(); return; }
+              const p = Math.min(1, (now - t0) / DURATION);
+              try { window.scrollTo({ top: topY + (targetY - topY) * easeInOut(p) }); } catch {}
+              if (p < 1) raf = window.requestAnimationFrame(step);
+              else cancel();
+            };
+            raf = window.requestAnimationFrame(step);
+          } catch {}
+        }, 500);
+      } catch {}
     },
     // The paper's working state: the pill + shimmer the sheet draws while an
     // Arrange press runs (false when idle, so every other run is untouched).
@@ -2112,17 +2306,9 @@ export default function AiNarrativePanel({
               textarea in the panel below), which is where any rough wording
               belongs. A field that had to be filled before the assistant would
               do anything read as homework, not as help. */}
-          {/* ONE row for the two things an officer can ask for: Generate
-              (which writes from the report) and Tighten (which works on the
-              narrative THEY wrote). It is a row rather than two buttons under two
-              paragraphs because the long explanation of both is on the ⓘ marker
-              in this block's head.
-
-              Tighten is in the row only when a press would do something — no
-              narrative, or a narrative that is not English, and the row is
-              Generate alone (see `tightenUsable`). It used to sit here greyed
-              out in those states, which is a button that announces itself and
-              then refuses. */}
+          {/* ONE row for the thing an officer can ask for: Generate, which
+              writes the draft from the report. The long explanation is on the
+              ⓘ marker in this block's head. */}
           {/* The assistant's face, directly above the two things it can be asked
               to do, centred in the card. Decoration with a job: it is the only
               part of this panel that says the assistant is awake and listening,
@@ -2154,12 +2340,12 @@ export default function AiNarrativePanel({
               <label className={"ai-generate-mode" + (generateMode === 'arrange' ? " is-selected" : "")}>
                 <input type="radio" name="generate-mode" value="arrange" checked={generateMode === 'arrange'} onChange={() => setGenerateMode('arrange')} />
                 <span className="ai-generate-mode__title">Arrange only — keep my wording</span>
-                <span className="ai-generate-mode__hint">Organizes your account into the police report format. No rewording.</span>
+                <span className="ai-generate-mode__hint">Organizes your account into the police report format — Gemini reads each break as a boundary or a wrapped continuation, and keeps each bold label on the same line as its data. No rewording.</span>
               </label>
               <label className={"ai-generate-mode" + (generateMode === 'enhance' ? " is-selected" : "")}>
                 <input type="radio" name="generate-mode" value="enhance" checked={generateMode === 'enhance'} onChange={() => setGenerateMode('enhance')} />
                 <span className="ai-generate-mode__title">Enhance wording — AI improves clarity</span>
-                <span className="ai-generate-mode__hint">The same arranged report — Gemini fixes grammar, spelling, punctuation and wording only. Review before accepting.</span>
+                <span className="ai-generate-mode__hint">The same arranged report — Gemini fixes grammar, spelling, punctuation and spacing, keeping each bold label with its data, using formal police terms. Review before accepting.</span>
               </label>
             </div>
           )}
@@ -2225,20 +2411,6 @@ export default function AiNarrativePanel({
                 {nativeNarrative && effectiveSource === 'narrative' ? 'Translate my narrative' : onReadAccount ? 'Generate Report' : 'Generate AI draft'}
               </span>
             </SpecularButton>
-            {/* Offered only when it can run — see `tightenUsable` above. There is
-                no `disabled` attribute on purpose: a button that is never
-                rendered unavailable has nothing to disable, and one that IS here
-                is always pressable. */}
-            {tightenUsable && (
-              <button
-                type="button"
-                className="ai-tighten"
-                onClick={() => tighten()}
-                title="Runs the economy rules over your own narrative: repeated propositions merged, padding and closing formulas removed. Nothing is written into the report until you click."
-              >
-                Tighten my draft
-              </button>
-            )}
           </div>
           {fillLine}
           {/* Phase 6 Stage 5 (Track C) — the guided flow's ONE entry point. It
@@ -2849,15 +3021,12 @@ export default function AiNarrativePanel({
                           {/* Edit the draft removed by owner request: corrections happen
                               on the sheet itself, not in boxes under the letter. */}
                           {/* Each result offers to repeat ITSELF: a generated draft
-                              regenerates from the report, a tightened draft is
-                              tightened again, an arranged draft is arranged again.
-                              Offering "Regenerate" on a tighten or arrange
+                              regenerates from the report, an arranged draft is
+                              arranged again. Offering "Regenerate" on an arrange
                               result would swap the officer's own prose for an
                               AI-written one under a button they did not mean to
                               press. */}
-                          {tightenDraft ? (
-                            <button type="button" onClick={() => tighten()}>Tighten again</button>
-                          ) : draft?.arranged ? (
+                          {draft?.arranged ? (
                             <button
                               type="button"
                               onClick={() => arrangeReport()}

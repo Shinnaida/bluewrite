@@ -47,10 +47,10 @@ import {
   pieWedges,
   statusBreakdownText,
 } from '../lib/statusPie.js';
-// The station's own photograph for the command header: the same file the gate
-// stands in front of, masked into the header's right edge. Imported rather than
-// referenced, so the bundle carries it and the LAN needs no internet to draw it.
-import stationPhoto from '../assets/Modern Philippine Police Station at Dusk.png';
+// The station's own photograph for the command header, masked into the
+// header's right edge. Imported rather than referenced, so the bundle carries
+// it and the LAN needs no internet to draw it.
+import stationPhoto from '../assets/bluewrite_police_station_header_cropped_1154x122.png';
 import Lanyard from './Lanyard.jsx';
 // The same right-click menu the register's rows use, so a day of the chart offers
 // its actions the way the rest of the app does rather than by a second idiom.
@@ -2021,7 +2021,11 @@ export default function Dashboard({
         </div>
         <div className="cmd-hero__text">
           <h2 className="cmd-hello">{dayGreeting()}, <span>{firstName(user)}</span></h2>
-          <p className="cmd-sub">Here&apos;s what&apos;s happening at {stationName ?? 'City of Naga Police Station'} today.</p>
+          <p className="cmd-sub" role="status" aria-label={`Today is ${MANILA_DATE.format(now)}, ${MANILA_DAY.format(now)}, ${MANILA_TIME.format(now)}`}>
+            <span className="cmd-sub__date">{MANILA_DATE.format(now)}</span>
+            <span className="cmd-sub__day">{MANILA_DAY.format(now)}</span>
+            <span className="cmd-sub__time" aria-live="off">{MANILA_TIME.format(now)}</span>
+          </p>
           {/* WHO IS BEING GREETED, and on which watch: the role the session
               holds and the shift the wall clock reads. Neither is a record —
               the role names the account, the shift names the hour. */}
@@ -2029,11 +2033,6 @@ export default function Dashboard({
             <span className="cmd-pill">{user?.role ?? 'Admin'} · {user?.badge_number ?? ''}</span>
             <span className="cmd-pill">Shift: {shift}</span>
           </p>
-        </div>
-        <div className="cmd-clock" role="status" aria-label={`Today is ${MANILA_DATE.format(now)}, ${MANILA_DAY.format(now)}, ${MANILA_TIME.format(now)}`}>
-          <span className="cmd-clock__date">{MANILA_DATE.format(now)}</span>
-          <span className="cmd-clock__day">{MANILA_DAY.format(now)}</span>
-          <span className="cmd-clock__time" aria-live="off">{MANILA_TIME.format(now)}</span>
         </div>
       </header>
 
@@ -2213,14 +2212,17 @@ export default function Dashboard({
             <MetricCard loading tone="gold" label="Active Accounts" value="—" />
           ) : (
             <div ref={cardRef} className="cmd-card cmd-card--gold cmd-active-lanyard-card is-bare">
-              <span className="cmd-id-view" onClick={(e) => e.preventDefault()}>
-                <button
-                  type="button"
-                  className="cmd-id-view__btn is-active"
-                  aria-pressed={idView === 'list'}
-                  title={idView === 'card' ? 'Switch to list view' : 'Switch to card view'}
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIdView((v) => (v === 'card' ? 'list' : 'card')); }}
-                >{idView === 'card' ? 'List' : 'Card'}</button>
+              <span className="cmd-id-head" onClick={(e) => e.preventDefault()}>
+                <span className="cmd-id-head__title">Users</span>
+                <span className="cmd-id-view">
+                  <button
+                    type="button"
+                    className="cmd-id-view__btn is-active"
+                    aria-pressed={idView === 'list'}
+                    title={idView === 'card' ? 'Switch to list view' : 'Switch to card view'}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIdView((v) => (v === 'card' ? 'list' : 'card')); }}
+                  >{idView === 'card' ? 'List' : 'Card'}</button>
+                </span>
               </span>
               {idView === 'list' ? (
                 <span className="cmd-id-list" onClick={(e) => e.preventDefault()}>
@@ -2277,7 +2279,7 @@ export default function Dashboard({
                         finish="glossy"
                         size={0.75}
                         strapLength={0.35}
-                        breeze={0.25}
+                        breeze={0}
                         intro={false}
                       />
                     </span>

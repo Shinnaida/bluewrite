@@ -74,10 +74,11 @@ test('the key says what the stacking means, in its own words', () => {
 });
 
 test('the trio carries no explanation controls of its own', () => {
-  // The reference draws Incident Types, Top Locations and System Status with a
-  // mark, a name and a sub-line — no `?` circle. A Panel `info` on any of them
-  // would be a control the design does not have.
-  for (const title of ['Incident Types', 'Top Locations', 'System Status']) {
+  // The reference draws Top Locations and System Status with a mark, a name
+  // and a sub-line — no `?` circle (Incident Types lives in the Total hero
+  // plate, not the trio). A Panel `info` on any of them would be a control
+  // the design does not have.
+  for (const title of ['Top Locations', 'System Status']) {
     const at = component.indexOf(`title="${title}"`);
     assert.ok(at > -1, `the ${title} panel is missing`);
     const head = component.slice(Math.max(0, at - 200), at + 300);

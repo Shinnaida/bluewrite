@@ -278,6 +278,54 @@ export async function apiBlobUrl(url) {
 }
 
 /**
+ * `api` for a Server-Sent Events endpoint: same headers (tab + CSRF) and the
+ * same failure shape, but the body stays open — the caller owns the reader.
+ * Used by Arrange section-streaming (`POST /ai/arrange/stream`): the officer
+ * watches sections land instead of waiting for one pop. Throws before the
+ * first byte exactly like `api` when the press itself was refused (4xx/5xx
+ * JSON), so the caller falls back to the non-streaming endpoint.
+ */
+export async function apiStream(path, { method = 'GET', body, signal } = {}) {
+  const headers = { Accept: 'text/event-stream', [TAB_HEADER]: currentTabId() };
+  if (body) headers['Content-Type'] = 'application/json';
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken;
+  }
+  let res;
+  try {
+    // A stream outlives any single-answer budget: no timeout of its own —
+    // the caller aborts it, and a refused press still answers fast.
+    res = await fetch(`${API}${path}`, {
+      method,
+      credentials: 'same-origin',
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      ...(signal ? { signal } : {}),
+    });
+  } catch (err) {
+    throw offlineError(err);
+  }
+  if (!res.ok) {
+    // Same failure read as apiBlobUrl: JSON error when the server has one.
+    let message = `Request failed (${res.status})`;
+    let data = null;
+    try {
+      data = await res.json();
+      if (data?.error) message = data.error;
+    } catch {
+      // non-JSON failure — keep the generic message
+    }
+    if (res.status === 401) onSessionMismatch?.();
+    const err = new Error(message);
+    err.status = res.status;
+    err.manual_mode = data?.manual_mode === true;
+    err.retryIn = typeof data?.retry_in === 'number' ? data.retry_in : null;
+    throw err;
+  }
+  return res;
+}
+
+/**
  * One response, read the one way: decode it, keep the CSRF token it may carry,
  * and turn a failure into the classified Error every screen already handles.
  *

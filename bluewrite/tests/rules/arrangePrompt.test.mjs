@@ -42,6 +42,21 @@ test('arrange prompt: no invented names, plates or roles', () => {
   assert.match(prompt, /never assign a role the source does not state/i);
 });
 
+test('arrange prompt: every break is read as a boundary or continuation data', () => {
+  assert.match(prompt, /Read every break before you keep it/i);
+  assert.match(prompt, /continuation data/);
+  assert.match(prompt, /Join every wrapped continuation/i);
+  assert.match(prompt, /genuine boundary/i);
+});
+
+test('arrange prompt: each field label stays on its data\u2019s line', () => {
+  assert.match(prompt, /A field label and its data belong on ONE line/);
+  assert.match(prompt, /exactly one space\s+after the colon/);
+  assert.match(prompt, /that break is\s+continuation data: join it with one space/);
+  assert.match(prompt, /Never strand a label above its\s+own data/);
+  assert.match(prompt, /owns the lines beneath it/);
+});
+
 test('arrange prompt: a break-less source still segments on its labels', () => {
   assert.match(prompt, /no line breaks at all/i);
   assert.match(prompt, /a missing\s+break never merges two sections/i);

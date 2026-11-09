@@ -145,6 +145,18 @@ export function resolveContact(header) {
   return out;
 }
 
+/**
+ * The name printed on the sheet's "Noted by:" line — the station's saved
+ * sign-off when one is on file, else the built-in fallback the sheets drew
+ * before the setting existed. Accepts the station header (or anything
+ * resolveContact reads); blank is never returned, so the line always names
+ * someone. The sheet's CSS uppercases it for print.
+ */
+export function resolveNotedBy(header) {
+  const name = String(resolveContact(header)?.noted_by ?? '').trim();
+  return name !== '' ? name : BUILT_IN_NOTED_BY;
+}
+
 /** Which contact lines differ from what is saved — the PATCH sends only these. */
 export function changedContactFields(current, saved) {
   const body = {};

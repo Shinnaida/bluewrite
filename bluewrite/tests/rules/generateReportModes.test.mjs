@@ -91,9 +91,13 @@ test('a filled-then-unsaved read names the save, not missing basics', () => {
   assert.ok(PANEL.includes('const saveBlockedMessage = (read, tail)'), 'save message helper missing');
   assert.ok(PANEL.includes('return done;'), 'the reader keeps its receipt to itself instead of handing it back');
   assert.ok(PANEL.includes("saveBlockedMessage(generateRead, 'the AI can work on it')"), 'generate ignores what its own read filled');
-  assert.ok(PANEL.includes("saveBlockedMessage(arrangeRead, 'it can be arranged')"), 'arrange ignores what its own read filled');
+  // Arrange never depends on the save — it catches the refused id and proceeds
+  // to the draft, so it has no blocked-save line of its own.
+  assert.ok(PANEL.includes('Arranging never depends on the save'), 'arrange save policy missing');
   assert.ok(PANEL.includes('The draft could not be saved with those details'), 'refused-write line missing');
-  assert.ok(!PANEL.includes("setMessage(\n        'This report is not saved yet"), 'a hard-coded three-fields line bypasses the helper');
+  // Tighten has no read receipt, so its own three-fields line stays — generate
+  // and arrange must go through the helper (asserted above).
+  assert.ok(PANEL.includes("saveBlockedMessage(generateRead, 'the AI can work on it')"), 'generate helper wiring lost');
 });
 test('the receipt lists each filled field once', () => {
   // Same screenshot: "Property Owners" appeared twice — the two reads name
@@ -297,7 +301,7 @@ test('sheet bar carries no blob frame and skips the orb face', () => {
   const FORM_CSS = read('../../src/incident-report.css');
   assert.ok(!FORM_CSS.includes('.ir-sheet-ai .gradient-blob-card__glass'), 'dead glass override is still in the stylesheet');
   assert.ok(FORM_CSS.includes('.ir-sheet-deskbar'), 'desk row css missing');
-  assert.ok(FORM_CSS.includes('.ir-sheet-ai--bar'), 'bar css missing');
+  assert.ok(FORM_CSS.includes('.ir-sheet-deskbar > .ir-sheet-ai'), 'bar css missing');
 });
 
 test('sheet provisional arrival writes on landing; Discard restores, Keep confirms', () => {
@@ -320,14 +324,16 @@ test('sheet provisional arrival writes on landing; Discard restores, Keep confir
   assert.ok(PANEL.includes('Keep on the paper'), 'Keep label missing');
   // One home only: the slim bar portals onto the mount (or renders nothing
   // until it is up) — no second copy in the bar. Deck formats keep the card.
-  assert.ok(PANEL.includes('{sheeted && (slim'), 'in-card paper not gated');
-  assert.ok(PANEL.includes('letterMount ? createPortal(<SheetLetterDock {...letterProps} />, letterMount) : null'), 'slim bar still draws a second copy');
+  assert.ok(PANEL.includes('{sheeted && slim'), 'in-card paper not gated');
+  assert.ok(PANEL.includes('letterMount ? createPortal(<SheetLetterDock {...letterProps}'), 'slim bar still draws a second copy');
   // Lifecycle resets: Close or a new run from a restored draft reopens the
   // lifecycle so the next arrival applies instead of stranding pending.
-  assert.ok(PANEL.includes("if (provisionalState === 'pending') setProvisionalState('idle')"), 'close does not reopen pending');
+  assert.ok(PANEL.includes("if (provisionalState === 'pending')"), 'close does not reopen pending');
+  assert.ok(PANEL.includes("setProvisionalState('idle')"), 'close does not reset the lifecycle');
   // Owner request: closing must not change the paper — an applied draft is
   // restored on close, so only Keep confirms it.
-  assert.ok(PANEL.includes("if (provisionalState === 'applied') onRestoreProvisional?.()"), 'close keeps an applied draft on the paper');
+  assert.ok(PANEL.includes("provisionalState === 'applied'"), 'close keeps an applied draft on the paper');
+  assert.ok(PANEL.includes('onRestoreProvisional?.()'), 'close never restores the paper');
   assert.ok(PANEL.includes('const restoredRun = beginFreshRun(false)'), 'generate does not reopen through the shared helper');
   // Runs read restored values first — never the draft sitting on the paper.
   assert.ok(PANEL.includes('restoredRun.narrative ?? narrative'), 'generate does not prefer restored words');
@@ -1099,6 +1105,42 @@ test('enhance is a copy-edit of the ALREADY-ARRANGED report, never a rearrangeme
   assert.match(prompt, /made contact with/);
   assert.match(prompt, /never a term of greater legal/);
   assert.match(prompt, /Warrant of Arrest/);
+  // The register is applied actively, not optionally: casual words the list
+  // covers are corrected, and an untouched answer has not done the pass.
+  assert.match(prompt, /leaving casual wording in place is the failure mode/);
+  assert.match(prompt, /An answer that returns casual words untouched has not done/);
+
+  // Spacing is analysed in Enhance too: the arranged page may still carry a
+  // wrapped line, so the model reads every break as continuation data or a
+  // real boundary and joins continuations — without moving any part.
+  assert.match(prompt, /CONTINUATION DATA OR A REAL BOUNDARY/);
+  assert.match(prompt, /Read\s*\nevery break before you keep it/i);
+  assert.match(prompt, /joined to its own line with one space/);
+  assert.match(prompt, /their sequence and their labels do not move/);
+
+  // Label-plus-data spacing is layout, so Enhance settles it too: the model
+  // reads the text for each label's data and keeps `LABEL: data` on one line
+  // with one space after the colon — joining a label split from its data,
+  // without touching the label's words or case.
+  assert.match(prompt, /A field label and its data share ONE line/);
+  assert.match(prompt, /exactly one\s+space after the colon/);
+  assert.match(prompt, /Never strand a label above its\s+own data/);
+  assert.match(prompt, /owns the lines beneath it/);
+
+  // Proofreading scope (owner request): the pass is an explicit checklist —
+  // agreement, tenses, articles, prepositions, fragments, run-ons, typos,
+  // standardised dates/times/plates/IDs — with the meaning, names, place
+  // names, headings, labels, breaks and structure preserved and no fact
+  // added, removed or invented.
+  assert.match(prompt, /Proofread and correct the report/);
+  assert.match(prompt, /subject-verb agreement, verb tenses, articles, prepositions/);
+  assert.match(prompt, /split\s+run-on\s+sentences/);
+  assert.match(prompt, /leave every sentence properly punctuated/);
+  assert.match(prompt, /each\s+repeated value is written the same way/);
+  assert.match(prompt, /no emotional wording, no personal opinions/);
+  assert.match(prompt, /Strip slang, emotional wording and personal opinions/);
+  assert.match(prompt, /the same headings, the same labels/);
+  assert.match(prompt, /including Filipino and Cebuano place\s+names/);
 
   // The panel arranges FIRST and hands the model that text.
   const PANEL = readFileSync(new URL('../../src/components/ai/AiNarrativePanel.jsx', import.meta.url), 'utf8');

@@ -143,6 +143,10 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // color, seal arrangement). The settings screen PATCHes
         // letterhead_style and every sheet renders it back.
         $this->runSqlFile(__DIR__ . '/../migrations/028_letterhead_style.sql');
+        // 029 is the capture review state. The review route writes
+        // reviewed_at/reviewed_by and the register counts only unreviewed
+        // captures, so the scratch DB must carry both columns.
+        $this->runSqlFile(__DIR__ . '/../migrations/029_capture_reviewed.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         // Every account that OWES a second factor has an email address, because
