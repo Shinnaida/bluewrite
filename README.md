@@ -106,6 +106,17 @@ BlueWrite.bat` does the same thing from a console window.
 - Other PCs on the same Wi-Fi need no install: they open
   `http://<server-ip>:8099/` in a browser — see
   [`bluewrite/docs/LAN_SETUP.md`](bluewrite/docs/LAN_SETUP.md).
+  The server IP auto-syncs on every start: the watchdog detects the current
+  LAN IPv4 and rewrites `bluewrite/config/config.php` `base_url`, so a move
+  from `192.168.0.x` to `192.168.1.x` heals itself. `serve.cmd` and
+  `BlueWrite.exe` both print the address clients type
+  (e.g. `http://192.168.1.215:8099/`).
+- Uninstall / stop: double-click `Uninstall BlueWrite.bat`, or run
+  `BlueWrite.exe --uninstall`. It removes the watchdog scheduled task,
+  stops 8099 + 5180, and removes the `BlueWrite LAN 8099` firewall rule.
+  MySQL (3306), `config.php`, uploads, and the database are kept — delete
+  the folder by hand for a full wipe. Or run
+  `bluewrite\scripts\uninstall.cmd` directly.
 - To rebuild the launcher after editing its source:
   `bluewrite\scripts\launcher\build.cmd` (uses the .NET Framework
   `csc.exe` already in Windows — nothing to install).
