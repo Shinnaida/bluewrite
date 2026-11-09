@@ -21,9 +21,18 @@ if (preg_match('#^/api(/|$)#', $path)) {
 }
 
 // Real files (assets, index.html) are served by the built-in server itself.
-$file = __DIR__ . '/public' . $path;
-if ($path !== '/' && is_file($file)) {
-    return false;
+// rawurldecode: parse_url leaves %20 (spaces in hashed asset names, e.g. the
+// login photo band) encoded, and is_file needs the real name — without this,
+// spaced assets fall through to the SPA shell and render as plain gradient.
+// The realpath guard keeps decoded /..%2f sequences inside public/.
+$decoded = rawurldecode($path);
+$file = __DIR__ . '/public' . $decoded;
+if ($decoded !== '/' && is_file($file)) {
+    $real = realpath($file);
+    $root = realpath(__DIR__ . '/public');
+    if ($real !== false && $root !== false && strncmp($real, $root, strlen($root)) === 0) {
+        return false;
+    }
 }
 
 // SPA fallback.
