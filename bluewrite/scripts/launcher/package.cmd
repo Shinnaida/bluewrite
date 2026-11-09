@@ -31,6 +31,7 @@ del /q "%STAGE%\package\bluewrite\*.png" "%STAGE%\package\bluewrite\*.jpg" "%STA
 copy "%ROOT%\BlueWrite.exe" "%STAGE%\package\" >nul
 copy "%ROOT%\BlueWrite-Setup.exe" "%STAGE%\package\" >nul
 copy "%ROOT%\Start BlueWrite.bat" "%STAGE%\package\" >nul
+copy "%ROOT%\Uninstall BlueWrite.bat" "%STAGE%\package\" >nul
 copy "%SRC%\README.md" "%STAGE%\package\README-PC.txt" >nul
 
 echo [bluewrite] zipping ...
