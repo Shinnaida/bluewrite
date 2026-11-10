@@ -71,6 +71,13 @@ export default function PhoneArrivalWatcher({ user, openReportId = null, onOpenR
         .filter((r) => (Number(r.id) || 0) > seenRef.current)
         .sort((a, b) => Number(b.id) - Number(a.id));
       for (const r of fresh) {
+        // Only a fresh, untouched phone filing banners: any web save bumps
+        // updated_at off created_at, and a drafted / finalized arrival must
+        // never pop over another draft. Rows from before the timestamp
+        // columns read on (no dates) keep the old behaviour.
+        if (r.created_at && r.updated_at && String(r.updated_at) !== String(r.created_at)) {
+          continue;
+        }
         const id = Number(r.id);
         seenRef.current = Math.max(seenRef.current, id);
         writeSeen(user.id, seenRef.current);

@@ -202,6 +202,56 @@ final class ReportsController
     }
 
     /**
+     * File the phone captures an edit just consumed (migration 029).
+     *
+     * The Phone files folder drops a capture once its words are in a draft:
+     * the client reviews explicitly on Insert / Generate, and this is the
+     * belt to those braces for a plain edit + save — an edited narrative
+     * that already holds a capture's words files it, and finalizing files
+     * every still-waiting capture on the BW-numbered draft. Reviewed, never
+     * deleted; best-effort, so a save never fails over it.
+     */
+    private function consumeCapturesOnEdit(PDO $pdo, int $reportId, int $userId, array $body, array $report): void
+    {
+        try {
+            if (!$this->hasTable($pdo, 'report_captures')) return;
+            if (!$this->hasColumn($pdo, 'report_captures', 'reviewed_at')) return;
+            $isFinalize = (($body['status'] ?? null) === 'finalized' && ($report['status'] ?? '') !== 'finalized');
+            $hasNarrative = array_key_exists('narrative', $body) && is_string($body['narrative']);
+            if (!$isFinalize && !$hasNarrative) return;
+            $stmt = $pdo->prepare(
+                'SELECT id, ocr_text FROM report_captures WHERE report_id = :rid AND reviewed_at IS NULL'
+            );
+            $stmt->execute([':rid' => $reportId]);
+            $rows = $stmt->fetchAll();
+            if ($rows === [] || $rows === false) return;
+            if ($isFinalize) {
+                $upd = $pdo->prepare(
+                    'UPDATE report_captures SET reviewed_at = NOW(), reviewed_by = :uid
+                     WHERE report_id = :rid AND reviewed_at IS NULL'
+                );
+                $upd->execute([':uid' => $userId, ':rid' => $reportId]);
+                return;
+            }
+            $plain = (string) preg_replace('/\s+/', ' ', (string) strip_tags($body['narrative'] ?? ''));
+            if (mb_strlen(trim($plain)) < 20) return;
+            $upd = $pdo->prepare(
+                'UPDATE report_captures SET reviewed_at = NOW(), reviewed_by = :uid
+                 WHERE id = :cid AND report_id = :rid AND reviewed_at IS NULL'
+            );
+            foreach ($rows as $row) {
+                $head = (string) preg_replace('/\s+/', ' ', trim((string) ($row['ocr_text'] ?? '')));
+                $head = mb_substr($head, 0, 80);
+                if (mb_strlen($head) < 20) continue;
+                if (mb_strpos($plain, $head) === false) continue;
+                $upd->execute([':uid' => $userId, ':cid' => (int) $row['id'], ':rid' => $reportId]);
+            }
+        } catch (\Throwable $e) {
+            // Best-effort: the save already landed, the file simply waits.
+        }
+    }
+
+    /**
      * Fold free-text incident types to their closest canonical type, keeping
      * the officer's exact words.
      *
@@ -513,6 +563,7 @@ final class ReportsController
                     r.incident_time_approximate, r.location, r.status,
                     r.narrative_language, r.narrative_source_language,
                     r.created_by, u.full_name AS created_by_name, r.deleted_at,
+                    r.created_at, r.updated_at,
                     r.narrative, r.narrative_source_text,
                     r.reporter_name, r.reporter_contact, r.reporter_address,
                     r.action_taken, r.ioc_name, r.type_specific,
@@ -1565,6 +1616,10 @@ final class ReportsController
             }
             $this->snapshot($pdo, $reportId, (int) $user['id'], $note);
             Audit::log((int) $user['id'], 'report.update', 'report', (string) $reportId, implode('; ', array_keys($body)));
+            // An edited / generated / BW-numbered draft leaves no file behind
+            // in Phone files: captures its new narrative already holds (or
+            // all of them on finalize) are filed, never deleted.
+            $this->consumeCapturesOnEdit($pdo, (int) $reportId, (int) $user['id'], $body, $report);
         }
 
         Response::json(200, ['ok' => true, 'warnings' => $officialFields['warnings']]);

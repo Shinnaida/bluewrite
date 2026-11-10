@@ -31,18 +31,13 @@ test('print draws the shared sheet, never its own copy', () => {
   assert.doesNotMatch(BODY, /pr-narrative|pr-findings|pr-actions/, 'print carries its own prose markup');
 });
 
-test('the finished report types itself in once — never under auto-print', () => {
-  // Task 11 — the final formal letter replays the sheet's own typing sequence
-  // over the COMMITTED values, once per report (print preview, finalize
-  // review, the register's sheet page). The auto-print dialog is excluded by
-  // construction: it prints ~150ms after load, and a page that prints
-  // mid-sequence would print half-typed.
-  assert.match(PRINT, /revealFinal=\{!autoPrint && !finalTyped\}/, 'print stopped gating the final replay on auto-print');
-  assert.match(PRINT, /onRevealComplete=\{\(\) => setFinalTyped\(true\)\}/, 'the final replay never hands the read path back');
-  assert.match(PRINT, /const \[finalTyped, setFinalTyped\] = useState\(false\);/, 'the one-shot final flag is gone');
-  // ...and the flag re-arms when another report takes the frame, so each
-  // report plays its own arrival rather than drawing whole behind the first.
-  assert.match(PRINT, /setFinalTyped\(false\);/, 'the final replay never re-arms for the next report');
+test('viewing a draft or the finalize review draws whole — no typing replay', () => {
+  // Owner request: opening a draft and the finalize review must show the
+  // exact sheet at once, never replaying the typing sequence. A page that
+  // types itself in reads as a load fault on a record the officer only
+  // opened to read, and the review must show what will be filed immediately.
+  assert.match(PRINT, /revealFinal=\{false\}/, 'print still replays the final typing sequence');
+  assert.doesNotMatch(PRINT, /finalTyped/, 'the one-shot final flag is still here');
 });
 
 test('the read letter honors every ribbon alignment, justify included', () => {

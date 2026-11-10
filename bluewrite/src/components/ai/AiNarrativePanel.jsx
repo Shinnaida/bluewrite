@@ -59,6 +59,12 @@ import { arrangeOutputIsFaithful, buildArrangeDraft, buildEnhancedDraft } from '
 // advisories. Pure, tested (see tests/rules/theftCompletion.test.mjs).
 import { auditTheftCompletion, factsToText } from '../../lib/theftCompletion.js';
 import { buildTypeFacts } from '../../lib/sheetFacts.js';
+// Blotter closing-line audit: Recorded by / Requested by are never written
+// by the AI, so a paper going out without them warns in the review dialog
+// (severity 'error' renders red) instead of reading "No suggestions or gaps
+// detected" over an incomplete certification. Pure, tested (see
+// tests/rules/closingLines.test.mjs).
+import { withClosingLineGaps } from '../../lib/closingLines.js';
 // Offline proofreader for the AI draft (Harper WASM + deterministic rules):
 // identifiers, names and places are never flagged — see harperGrammar.js.
 import { checkDraftGrammarEnhanced } from '../../lib/harperGrammar.js';
@@ -1169,11 +1175,19 @@ export default function AiNarrativePanel({
           .filter((l) => String(l).trim() !== '')
           .join('\n');
         const statusText = String(out.actionTaken || '');
-        setDraft({
-          ...out,
-          findingsText,
-          statusText,
-        });
+        // A generated paper goes out with the same closing-line audit as an
+        // arranged one: no Recorded by / Requested by warns in red instead
+        // of the dialog reading "No suggestions or gaps detected".
+        setDraft(
+          withClosingLineGaps(
+            {
+              ...out,
+              findingsText,
+              statusText,
+            },
+            reportHtmlToPlain(String(out.narrative ?? '')),
+          ),
+        );
         // Track C — the translation landed: the flow is now in the REVIEW step,
         // where nothing is applied until the officer presses the guided apply
         // button. Marked before the draft paints so no frame shows the plain
@@ -1250,6 +1264,7 @@ export default function AiNarrativePanel({
       setCompletionFills([]);
       return built;
     }
+    let out = built;
     try {
       const entries = buildTypeFacts(sheet.report?.incident_type, { report: sheet.report ?? {}, ts: sheet.ts ?? {} });
       const { fills, gaps } = auditTheftCompletion({
@@ -1260,12 +1275,20 @@ export default function AiNarrativePanel({
         ts: sheet.ts ?? {},
       });
       setCompletionFills(fills);
-      if (gaps.length > 0) return { ...built, possibleGaps: [...(built.possibleGaps ?? []), ...gaps] };
-      return built;
+      if (gaps.length > 0) out = { ...built, possibleGaps: [...(built.possibleGaps ?? []), ...gaps] };
     } catch {
       setCompletionFills([]);
-      return built;
     }
+    // The closing lines are audited against the paper going out, whatever
+    // the theft checklist said: a draft with no Recorded by / Requested by
+    // must warn here (red) rather than read "No suggestions or gaps
+    // detected". Advisory only — never blocks the draft.
+    try {
+      out = withClosingLineGaps(out, reportHtmlToPlain(String(out.narrative ?? '')));
+    } catch {
+      // A failed audit leaves the draft as the checklist left it.
+    }
+    return out;
   };
   const applyOneFill = (fill) => {
     if (!fill) return;
@@ -3127,7 +3150,7 @@ export default function AiNarrativePanel({
                             <h4>Possible gaps (advisory)</h4>
                             <ul>
                               {draft.possibleGaps.map((g, i) => (
-                                <li key={i} className={g.severity === 'warning' ? 'gap-warning' : 'gap-info'}>
+                                <li key={i} className={g.severity === 'error' ? 'gap-error' : g.severity === 'warning' ? 'gap-warning' : 'gap-info'}>
                                   {g.description}
                                 </li>
                               ))}

@@ -69,18 +69,10 @@ export default function ReportPrint({
   // Phase 6 Stage 4 (D2) — the translation's review record, for the appendix.
   const [verifications, setVerifications] = useState([]);
   const [verificationStatus, setVerificationStatus] = useState(null);
-  // Task 11 — the final formal letter types itself in ONCE per report (the
-  // sheet's own one-shot contract: true until its onRevealComplete fires).
-  // Never while auto-printing: the dialog opens ~150ms after load, and a
-  // page that prints mid-sequence would print half-typed. The page variant
-  // and the finalize review never print on their own, so both replay.
-  const [finalTyped, setFinalTyped] = useState(false);
-  const playedKey = reportId ?? initialReport?.id ?? 'mem';
-  useEffect(() => {
-    setFinalTyped(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- playedKey is the
-    // report's identity; the fetched record arriving under it must not replay.
-  }, [playedKey]);
+  // Owner request: viewing a draft and the finalize review draw whole — no
+  // typing animation. A page that types itself in reads as a load fault on a
+  // record the officer only opened to read, and the finalize review must show
+  // the exact sheet that will be filed the moment it opens.
 
   // The print body class belongs to the OVERLAY: print CSS hides `.shell`
   // wholesale while it is on, so a page variant wearing it would hide the very
@@ -225,10 +217,9 @@ export default function ReportPrint({
             // A freed letter prints its own text (never editable here, so
             // the body renders the override read-only); empty composes.
             letterHtml={report.letter_html || ''}
-            // The finished report types itself in once — then stays whole so
-            // the rich read path (and any later print) reads the full letter.
-            revealFinal={!autoPrint && !finalTyped}
-            onRevealComplete={() => setFinalTyped(true)}
+            // The finished report draws whole on every view — viewing a draft
+            // or the finalize review never replays the typing sequence.
+            revealFinal={false}
           />
 
       {/* Screen-only trail line — the paper stays exactly on template. */}

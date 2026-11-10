@@ -2691,6 +2691,11 @@ export function ReportEditor({
   // consumed by it: opening a phone file, generating the report over its
   // text and putting the BW-numbered draft on the web is exactly this —
   // the files leave Phone files instead of lingering beside the new draft.
+  // A Generate accept paraphrases, so an exact head match misses: once the
+  // kept narrative stands, every still-waiting file on THIS draft is filed,
+  // not waiting — reviewed on the server, never deleted. Arrivals (other
+  // drafts) still need the head match, so one draft's Generate never files
+  // another draft's pages.
   const reviewConsumedCaptures = (narrativeHtml) => {
     const plain = String(narrativeHtml || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
     const consider = (c, rid) => {
@@ -2698,7 +2703,16 @@ export function ReportEditor({
       const head = String(c.ocr_text || '').trim().replace(/\s+/g, ' ').slice(0, 80);
       if (head.length >= 20 && plain.includes(head)) reviewCapture(rid, c.id);
     };
-    (Array.isArray(captures) ? captures : []).forEach((c) => consider(c, editingId));
+    // The generated narrative IS the report over this draft's pages: file
+    // all of them even when the wording moved (paraphrase), so an edited /
+    // generated / BW-numbered draft leaves no file behind in Phone files.
+    if (plain.trim().length >= 20 && editingId) {
+      (Array.isArray(captures) ? captures : []).forEach((c) => {
+        if (c && !c.reviewed_at) reviewCapture(editingId, c.id);
+      });
+    } else {
+      (Array.isArray(captures) ? captures : []).forEach((c) => consider(c, editingId));
+    }
     (Array.isArray(arrivals) ? arrivals : []).forEach((a) =>
       (Array.isArray(a.captures) ? a.captures : []).forEach((c) => consider(c, a.reportId)),
     );
@@ -3072,12 +3086,23 @@ export function ReportEditor({
       }
       if (!alive) return;
       const rows = Array.isArray(list?.reports) ? list.reports : [];
+      // Phone arrivals are FRESH phone filings only: a draft the phone just
+      // filed (created_at === updated_at, never touched on the web) carrying
+      // waiting captures. Once the officer drafts, generates or finalizes
+      // that arrival (any save bumps updated_at, filing moves it off draft),
+      // it stops riding in other drafts' Phone files — the folder keeps only
+      // files not yet been touched.
+      const isFreshFiling = (r) => {
+        if (!r.created_at || !r.updated_at) return true;
+        return String(r.updated_at) === String(r.created_at);
+      };
       const waiting = rows
         .filter((r) =>
           Number(r.id) !== Number(reportId) &&
           Number(r.created_by) === Number(user.id) &&
           Number(r.capture_count) > 0 &&
-          r.status !== 'finalized'
+          r.status === 'draft' &&
+          isFreshFiling(r)
         )
         .slice(0, 3);
       const out = [];
