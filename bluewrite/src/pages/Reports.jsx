@@ -128,6 +128,10 @@ import { buildClassifyFill, buildTypeDetailsFill, classifyFillIsEmpty } from '..
 import { normalizeLegacyTypeSpecific, hasLegacyShape } from '../lib/normalizeLegacy.js';
 import { richTextToPlain, sanitizeRichHtml, sanitizeLetterHtml } from '../lib/richText.js';
 import { stripLeadingBlotterRestatement } from '../lib/narrativeText.js';
+// Save-time sync for stamped closing lines (owner request): names typed over
+// the blanks on the paper canvas are copied back into the record narrative,
+// so Save Draft keeps what the officer typed on the paper.
+import { syncClosingLinesFromLetter } from '../lib/closingLines.js';
 // The station's letterhead, for the sheet format's page. Same module the printed
 // sheet reads its header through, so the page you write on and the page that
 // prints carry the same lines.
@@ -766,6 +770,44 @@ function validate(r) {
   if (!r.location.trim()) errs.location = 'Enter the place of incident.';
   if (!r.narrative.trim()) errs.narrative = 'Enter the narrative before finalizing.';
   return errs;
+}
+
+// EMPTY-REPORT REFUSAL (owner request): with completeness bypassed, a report
+// with nothing inputted yet would otherwise save, print or finalize as a
+// blank record without a word. "Nothing written" is not an incomplete report
+// — it is no report — so the explicit presses (Save Draft, Finalized) refuse
+// it with an error naming what to do. Silent writes (the exit flush, the AI
+// id) never pass through here, and a partial draft still saves and finalizes
+// exactly as before.
+function draftIsEmpty(d) {
+  if (!d) return true;
+  const plain = (v) => richTextToPlain(String(v ?? '')).replace(/<[^>]*>/g, ' ').trim();
+  for (const key of [
+    'incident_type',
+    'incident_datetime',
+    'location',
+    'complainant',
+    'respondent',
+    'ioc_name',
+    'reporter_name',
+    'reporter_contact',
+    'reporter_address',
+  ]) {
+    if (String(d[key] ?? '').trim() !== '') return false;
+  }
+  for (const key of ['narrative', 'action_taken', 'letter_html']) {
+    if (plain(d[key]) !== '') return false;
+  }
+  const ts = d.type_specific;
+  if (ts && typeof ts === 'object') {
+    const cells = (v) => {
+      if (Array.isArray(v)) return v.some(cells);
+      if (v && typeof v === 'object') return Object.values(v).some(cells);
+      return String(v ?? '').trim() !== '';
+    };
+    if (Object.values(ts).some(cells)) return false;
+  }
+  return true;
 }
 
 // Type-specific field renderer: one labeled control per field of the
@@ -3218,7 +3260,13 @@ export function ReportEditor({
     if (inFlightRef.current) return inFlightRef.current;
     const d = draftRef.current;
     if (!d || !d.incident_type) return Promise.resolve(null);
-    const body = cleanSaveBody({ ...d, status: 'draft', narrative_source: narrativeSourceRef.current });
+    // Closing-line names typed on the paper canvas live in letter_html;
+    // copy them back into the record narrative so the write keeps them.
+    const syncedNarrative = syncClosingLinesFromLetter(d.narrative, d.letter_html);
+    if (syncedNarrative !== String(d.narrative ?? '')) {
+      setDraft((prev) => (prev ? { ...prev, narrative: syncedNarrative } : prev));
+    }
+    const body = cleanSaveBody({ ...d, narrative: syncedNarrative, status: 'draft', narrative_source: narrativeSourceRef.current });
     const request = idRef.current
       ? api(`/reports/${idRef.current}`, { method: 'PATCH', body, keepalive }).then(() => idRef.current)
       : api('/reports', { method: 'POST', body, keepalive }).then((created) => created.report.id);
@@ -3601,13 +3649,22 @@ export function ReportEditor({
   function provisionalApplyAiDraft(parts, sourceMeta) {
     if (narrativeUndo === null) {
       const d = draftRef.current ?? {};
+      // Kept/saved ink steps aside for the reveal (see ReportSheetBody
+      // `midHost`): the canvas prefers letter_html over the typing seed, so
+      // landing a draft over kept ink would type the new words invisibly
+      // behind the previous saved text. Stash the ink for Discard, then
+      // clear it — the draft's own words arrive through the fields below,
+      // and the reveal types them in from a clean seed.
+      const keptInk = String(d.letter_html ?? '');
       setNarrativeUndo({
         narrative: String(d.narrative ?? ''),
         language: String(d.narrative_language ?? ''),
         sourceText: String(d.narrative_source_text ?? ''),
         sourceLanguage: String(d.narrative_source_language ?? ''),
         source: narrativeSourceRef.current,
+        letterHtml: keptInk,
       });
+      if (keptInk !== '') set('letter_html', '');
     }
     applyAiDraft(parts, sourceMeta);
     // Owner request: the generated report arrives editable and typable — free
@@ -3633,9 +3690,12 @@ export function ReportEditor({
       // The review canvas writes keystrokes into letter_html (see freeReview),
       // so bringing back the snapshotted words must drop the canvas text too —
       // otherwise the provisional letter survives its own Discard (or the new
-      // run that replaces it). Guarded by the snapshot like the rest: a kept
-      // letter's snapshot is already dropped, so kept ink is untouched here.
-      set('letter_html', '');
+      // run that replaces it). The landing stashed whatever ink the paper
+      // held (kept, saved, or canvas-typed), so it is restored, not blanked:
+      // Discard brings back the paper as it was when this draft landed.
+      // Guarded by the snapshot like the rest: a kept letter's snapshot is
+      // already dropped, so kept ink is untouched here.
+      set('letter_html', String(narrativeUndo.letterHtml ?? ''));
       setNarrativeUndo(null);
     }
     if (aiUndo.findings !== null) restored.findings = aiUndo.findings;
@@ -3958,6 +4018,12 @@ export function ReportEditor({
   // stopped it or the server refused — so a caller that needs the save to have
   // happened (Print Slip reads the STORED copy) can wait for it.
   async function saveDraft() {
+    // Nothing inputted yet is refused outright (see draftIsEmpty): saving a
+    // blank would file an empty record for no reason.
+    if (draftIsEmpty(draft)) {
+      setError('There is nothing to save yet — write the incident first.');
+      return false;
+    }
     // Completeness bypass (see BYPASS_COMPLETENESS_GATES): a draft saves with
     // blanks — the three basics are reported, never required.
     if (!BYPASS_COMPLETENESS_GATES) {
@@ -3965,7 +4031,15 @@ export function ReportEditor({
       setErrors(errs);
       if (errs.incident_type || errs.incident_datetime || errs.location) return false;
     }
-    try {        const body = { ...draft, status: 'draft', narrative_source: narrativeSourceRef.current };
+    try {
+        // Same closing-line sync as the background write: names typed over
+        // the blanks on the paper canvas are copied back into the record
+        // narrative before the save, so Save Draft keeps them.
+        const syncedNarrative = syncClosingLinesFromLetter(draft.narrative, draft.letter_html);
+        if (syncedNarrative !== String(draft.narrative ?? '')) {
+          setDraft((prev) => (prev ? { ...prev, narrative: syncedNarrative } : prev));
+        }
+        const body = { ...draft, narrative: syncedNarrative, status: 'draft', narrative_source: narrativeSourceRef.current };
         if (editingId) {
           await api(`/reports/${editingId}`, { method: 'PATCH', body });
         } else {
@@ -3976,6 +4050,13 @@ export function ReportEditor({
         }
       dirtyRef.current = false;
       setLastSavedAt(new Date());
+      // An explicit, saved write: nothing provisional survives it, so the
+      // saved page IS the new draft baseline — a later Arrange/Enhance
+      // works from these saved words, and Discard can never resurrect
+      // pre-draft words over a saved record (owner request: edits on the
+      // overall report, once saved, are the new source). Same rule as the
+      // guided apply's own saved write below.
+      setNarrativeUndo(null);
       notify('Draft saved.');
       onMutated?.();
       return true;
@@ -3984,6 +4065,43 @@ export function ReportEditor({
       return false;
     }
   }
+
+  // Print Slip — the case bar button AND the Ctrl+P chord below, one action.
+  // The slip prints the STORED copy (it is fetched from the server), so the
+  // officer's latest typing has to reach the record BEFORE the sheet is read
+  // — otherwise a slip printed right after filling Notable Findings says
+  // "- None recorded." while the field holds a sentence. Saving here is the
+  // Save Draft click the print used to presuppose; the sheet then shows
+  // exactly what the record holds.
+  async function printSlip() {
+    const saved = await saveDraft();
+    if (saved) setPrinting(true);
+  }
+  // The Ctrl+P hand-off. `printSlip` is a plain function, redefined every
+  // render, so the listener goes through a ref and never re-registers on
+  // each keystroke (the same pattern as the Ctrl+S hand-off above).
+  const printRef = useRef(printSlip);
+  printRef.current = printSlip;
+  // Ctrl+P PRINTS THE SLIP (owner request). Without this the browser prints
+  // the app screen; with it the chord runs printSlip — the same save-then-
+  // print the button runs. It fires even while typing (the officer prints
+  // from the narrative field), and only when a saved report exists to print
+  // (the button's own guard). While the print portal — or the finalize
+  // review sheet — is already open the press is left alone, so the dialog
+  // prints the record on screen instead of re-saving under it.
+  useEffect(() => {
+    function onPrintKey(e) {
+      if (e.altKey) return;
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (String(e.key || '').toLowerCase() !== 'p') return;
+      if (printing || finalizePreview) return;
+      if (!draftRef.current?.id) return;
+      e.preventDefault();
+      printRef.current();
+    }
+    document.addEventListener('keydown', onPrintKey);
+    return () => document.removeEventListener('keydown', onPrintKey);
+  }, [printing, finalizePreview]);
 
   /**
    * The AI's report id, guaranteed — the id the AI panel addresses its requests
@@ -4214,6 +4332,16 @@ export function ReportEditor({
   }
 
   async function finalize() {
+    // Nothing inputted yet is refused outright (see draftIsEmpty): a blank
+    // report must never reach the finalize review, let alone the record.
+    if (draftIsEmpty(draft)) {
+      setError('There is nothing to finalize yet — write the incident first.');
+      setErrorPulse((n) => n + 1);
+      window.requestAnimationFrame(() => {
+        errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      return;
+    }
     if (!checkFullRules()) return;
     // Finalize flow: REVIEW FIRST. The print sheet opens with a confirmation
     // bar at its bottom; the PATCH (which locks the report) only fires when
@@ -4603,6 +4731,12 @@ export function ReportEditor({
         Array.isArray(lines) ? lines.join('\n') : String(lines ?? ''),
       )}
       onApplyActionTaken={(text) => applyActionTakenText(text)}
+      // SATISFIED-WITH-THE-RESULT (owner request, 2026-11-11): the toolbar
+      // choice beside Upload. The mount is the narrative toolbar under the
+      // banner; the save is Save Draft, so the satisfied Save files the
+      // arranged/enhanced page as the new draft baseline.
+      toolbarMount={sheet ? narrativeToolbarMount : undefined}
+      onSaveDraft={sheet ? saveDraft : undefined}
     />
   ) : null;
 
@@ -4674,8 +4808,9 @@ export function ReportEditor({
           Slip all need a saved report (a fresh draft has no number to read,
           archive or print), so the three of them arrive at the first save, and
           Archive also needs the edit permission. Submit needs the role that may
-          commit a report. Save Draft and Close are always drawn: saving is how
-          a fresh draft gains its number, and Close is the way out. The guards
+          commit a report. Save Draft is always drawn: saving is how a fresh
+          draft gains its number. (Close was removed by request — the desk's
+          back control below is the way out.) The guards
           are the old disabled conditions, kept verbatim as render conditions —
           same rules, one behaviour instead of two. */}
       {draft.id && (
@@ -4690,24 +4825,8 @@ export function ReportEditor({
           Archive
         </button>
       )}
-      <button type="button" onClick={onClosed}>
-        <LabelIcon name="close" />
-        Close
-      </button>
       {draft.id && (
-        <button
-          type="button"
-          onClick={async () => {
-            // The slip prints the STORED copy (it is fetched from the server),
-            // so the officer's latest typing has to reach the record BEFORE
-            // the sheet is read — otherwise a slip printed right after filling
-            // Notable Findings says "- None recorded." while the field holds a
-            // sentence. Saving here is the Save Draft click the print used to
-            // presuppose; the sheet then shows exactly what the record holds.
-            const saved = await saveDraft();
-            if (saved) setPrinting(true);
-          }}
-        >
+        <button type="button" onClick={printSlip}>
           <LabelIcon name="printer" />
           Print Slip
         </button>

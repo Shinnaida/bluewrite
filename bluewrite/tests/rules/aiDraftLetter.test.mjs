@@ -220,18 +220,18 @@ test('the slim bar portals the letter onto the paper, under the narrative', () =
   // and renders nothing elsewhere — never a missing draft, and never a second
   // copy in the bar. Deck formats keep the page in the card.
   assert.match(SRC, /\{sheeted && slim/, 'the letter is no longer gated on the mount');
-  assert.match(SRC, /letterMount \? createPortal\(<SheetLetterDock \{\.\.\.letterProps\} freeReview=\{slim && letterEdit\} \/>, letterMount\) : null/, 'the slim bar still draws a second copy');
+  assert.match(SRC, /letterMount \? createPortal\(<SheetLetterDock \{\.\.\.letterProps\} freeReview=\{slim && paperEdit\} \/>, letterMount\) : null/, 'the slim bar still draws a second copy');
   // Every sheeted draft draws the letter — plain arrivals as a static police-
   // format proposal (their sheetTyped is already true, so nothing replays),
   // guided arrivals with the typing reveal. Deck formats are unchanged: their
   // sheetProvisional is always false, so the same gate covers them.
   assert.match(SRC, /revealPending: !sheetTyped,/, 'plain arrivals no longer arrive whole');
-  assert.match(SRC, /createPortal\(<SheetLetterDock \{\.\.\.letterProps\} freeReview=\{slim && letterEdit\} \/>, letterMount\)/, 'the letter is no longer portaled');
+  assert.match(SRC, /createPortal\(<SheetLetterDock \{\.\.\.letterProps\} freeReview=\{slim && paperEdit\} \/>, letterMount\)/, 'the letter is no longer portaled');
   // Both homes render the one shared props object — stated once, so the
   // portal and the card cannot drift apart on the next edit.
   assert.match(SRC, /const letterProps = \{/, 'the shared props object is gone');
   assert.equal((SRC.match(/<SheetLetterDock \{\.\.\.letterProps\} \/>/g) ?? []).length, 1, 'the deck card no longer shares the one props object');
-  assert.equal((SRC.match(/<SheetLetterDock \{\.\.\.letterProps\} freeReview=\{slim && letterEdit\} \/>/g) ?? []).length, 1, 'the mount branch lost the shared props object or its Edit free flag');
+  assert.equal((SRC.match(/<SheetLetterDock \{\.\.\.letterProps\} freeReview=\{slim && paperEdit\} \/>/g) ?? []).length, 1, 'the mount branch lost the shared props object or its Edit free flag');
   assert.doesNotMatch(SRC, /function sheetLetterPage/, 'the dock logic is back in the panel');
   // No Preview control in the slim bar (owner request, 2026-10-26): the paper
   // IS the preview there, so the fullscreen chip is deck-formats only.
@@ -739,11 +739,13 @@ test('the sheet frees its letter into one canvas that keeps its own text', () =>
   // The dock carries the mount-only review flag into the body; the panel sets
   // it on the sheet portal alone (slim bar + Edit), never the deck card.
   assert.match(DOCK, /freeReview=\{freeReview\}/, 'the dock drops the review flag');
-  assert.match(SRC, /freeReview=\{slim && letterEdit\}/, 'the canvas frees outside the sheet Edit review');
+  assert.match(SRC, /freeReview=\{slim && paperEdit\}/, 'the canvas frees outside the sheet Edit review');
   assert.match(LEAF, /<div ref=\{seedRef\} hidden>\{midPart\}<\/div>/, 'the canvas no longer seeds from the composed body');
-  // The seed re-captures while the reveal types and on every generation, but
-  // never over officer ink: once the canvas holds keystrokes the seed freezes.
-  assert.match(LEAF, /\}, \[freeEdit, letterHtml, cursor, revealKey\]\);/, 'the seed goes stale mid-typing or across runs');
+  // The seed re-captures while the reveal types, on every generation and on
+  // every draft write with no officer ink yet (a gap fix stamped after the
+  // reveal must reach the visible canvas too), but never over officer ink:
+  // once the canvas holds keystrokes the seed freezes.
+  assert.match(LEAF, /\}, \[freeEdit, letterHtml, cursor, revealKey, narrativeRaw\]\);/, 'the seed goes stale mid-typing, across runs or behind a gap fix');
   assert.match(LEAF, /<RichTextArea/, 'the free canvas is gone');
   assert.match(LEAF, /toolbar="none"/, 'the canvas carries chrome of its own');
   assert.match(LEAF, /letterHtml \|\| seed/, 'a cleared letter does not re-seed from the composed body');

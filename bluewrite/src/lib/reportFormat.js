@@ -683,15 +683,43 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
   // again, or a restored autosave appended to the live page — and it printed as
   // FACTS, REMARKS and RECORDED BY twice over. Only byte-identical bodies are
   // collapsed: two different remarks are two remarks, and nothing is merged.
+  const bodies = new Map();
+  const bodyOf = (section) => {
+    let body = bodies.get(section);
+    if (body === undefined) {
+      body = section.lines.join('\n').replace(/\s+/g, ' ').trim().toLowerCase();
+      bodies.set(section, body);
+    }
+    return body;
+  };
   const seenParts = new Set();
-  const uniqueSections = sections.filter((section) => {
+  const deduped = sections.filter((section) => {
     if (section.title) return true;
-    const body = section.lines.join('\n').replace(/\s+/g, ' ').trim().toLowerCase();
+    const body = bodyOf(section);
     if (body === '') return true;
     const key = `${section.rank}\u0000${body}`;
     if (seenParts.has(key)) return false;
     seenParts.add(key);
     return true;
+  });
+  // A header restated word-for-word at the open of a longer paragraph is one
+  // part, not two (owner request, 2026-11-11): pasted prose often repeats the
+  // short Owner / Place & Date lines above it, and the page printed both.
+  // The shorter section is dropped only when its whole normalized text opens
+  // another same-rank section at a word boundary — every dropped word still
+  // reads in the longer paragraph, so nothing is lost — and only when it is
+  // substantial, so a short shared opener never collapses a section.
+  const MIN_RESTATED = 30;
+  const uniqueSections = deduped.filter((section, idx) => {
+    if (section.title) return true;
+    const body = bodyOf(section);
+    if (body === '' || body.length < MIN_RESTATED) return true;
+    return !deduped.some((other, jdx) => {
+      if (jdx === idx || other.title || other.rank !== section.rank) return false;
+      const otherBody = bodyOf(other);
+      if (otherBody.length <= body.length || !otherBody.startsWith(body)) return false;
+      return /[\s.,;:!?"'()\-\u2013\u2014]/.test(otherBody[body.length] ?? ' ');
+    });
   });
 
   const parts = [];
@@ -767,6 +795,53 @@ function sectionRank(hit) {
   const label = normalizeLabel(hit.label);
   for (const [re, rank] of SECTION_RANKS) if (re.test(label)) return rank;
   return 85; // an unknown label keeps its words, after the known report parts
+}
+
+/**
+ * Drop a paragraph restated word-for-word at the open of a longer paragraph
+ * in the same section (owner request, 2026-11-11). Pasted prose often repeats
+ * the short Owner / Place & Date lines above it, and the page printed both —
+ * first the bare header, then the same header opening the narrative. Only a
+ * paragraph whose whole normalized text opens a longer paragraph at a word
+ * boundary is dropped, so every dropped word still reads in the longer one;
+ * short openers never trigger it.
+ *
+ * @param {string[]} lines blank-collapsed section lines
+ * @returns {string[]} the lines with restated paragraphs removed
+ */
+function collapseRestatedParagraphs(lines) {
+  const MIN_RESTATED = 30;
+  const paras = [];
+  let cur = [];
+  for (const ln of lines) {
+    if (ln.trim() === '') {
+      if (cur.length > 0) {
+        paras.push(cur);
+        cur = [];
+      }
+      continue;
+    }
+    cur.push(ln);
+  }
+  if (cur.length > 0) paras.push(cur);
+  if (paras.length < 2) return lines;
+  const norm = (p) => p.join(' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  const bodies = paras.map(norm);
+  const drop = paras.map((p, i) => {
+    if (bodies[i].length < MIN_RESTATED) return false;
+    return bodies.some((other, j) => {
+      if (j === i || other.length <= bodies[i].length || !other.startsWith(bodies[i])) return false;
+      return /[\s.,;:!?"'()\-\u2013\u2014]/.test(other[bodies[i].length] ?? ' ');
+    });
+  });
+  if (!drop.some(Boolean)) return lines;
+  const out = [];
+  paras.forEach((p, i) => {
+    if (drop[i]) return;
+    if (out.length > 0) out.push('');
+    out.push(...p);
+  });
+  return out;
 }
 
 /**
@@ -878,7 +953,7 @@ function splitReportSections(raw, title) {
       if (ln.trim() === '' && collapsed.length > 0 && collapsed[collapsed.length - 1].trim() === '') continue;
       collapsed.push(ln);
     }
-    section.lines = collapsed;
+    section.lines = collapseRestatedParagraphs(collapsed);
   }
   // A closing part the source front-loads still closes the report. When a
   // REMARKS / RECORDED BY / issuance section carries a trailing block of

@@ -398,16 +398,17 @@ export default function Shell({
       // Behind a dialog a shortcut must never fire: `h` while the logout
       // confirmation is up would move the workspace under the officer's answer.
       if (modalOpen()) return;
-      if (isTypingTarget(e.target)) return;
-
       if (isSaveChord(e)) {
-        // Only when a report is open — saveRef holds nothing otherwise — but
-        // always preventDefault, so the browser's own "save this page" never
-        // appears over the top of an unsaved incident report.
+        // Before the typing guard on purpose: the officer presses this
+        // MID-SENTENCE, with the cursor in the narrative or on the paper —
+        // refusing it there is what let the browser's own "save this page"
+        // appear over an unsaved incident report. Only when a report is open
+        // (saveRef holds nothing otherwise), but preventDefault always.
         e.preventDefault();
         saveRef.current?.();
         return;
       }
+      if (isTypingTarget(e.target)) return;
 
       if (e.key === '/') {
         e.preventDefault();

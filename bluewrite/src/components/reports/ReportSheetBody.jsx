@@ -691,14 +691,19 @@ export default function ReportSheetBody({
     // Never clobber officer ink: once the canvas holds keystrokes the seed
     // is frozen until the next run clears it (see restoreProvisionalSnapshot).
     if (letterHtml) return;
-    // Re-capture while the reveal types and on every new generation: a seed
-    // taken mid-typing (or from the previous run) would freeze a partial or
-    // stale letter under the officer's first keystroke. `cursor` moves with
-    // the typewriter, `revealKey` with each generation; both are inert
-    // otherwise, so a settled canvas never re-seeds.
+    // Re-capture while the reveal types, on every new generation, and
+    // whenever the composed narrative changes with no officer ink yet: a
+    // seed taken mid-typing (or from the previous run) would freeze a
+    // partial or stale letter under the officer's first keystroke — and a
+    // gap fix stamped onto the narrative after the reveal must reach the
+    // visible canvas too (the free canvas, not the hidden copy, is what the
+    // officer reads while `freeReview` frees the review). `cursor` moves
+    // with the typewriter, `revealKey` with each generation, `narrativeRaw`
+    // with every draft write; all three are inert otherwise, so officer ink
+    // (guarded above) never re-seeds.
     if (seedRef.current && seedRef.current.innerHTML) setSeed(seedRef.current.innerHTML);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [freeEdit, letterHtml, cursor, revealKey]);
+  }, [freeEdit, letterHtml, cursor, revealKey, narrativeRaw]);
   const slots = [];
   let slotAcc = 0;
   // The premium caret: the one slot the cursor sits inside renders a live

@@ -106,6 +106,25 @@ test('Markdown marks from the model are ignored when comparing, not shown', () =
   assert.equal(r.text, SOURCE);
 });
 
+test('a second enhance that folds the field lines into the prose is rejected whole (2026-11-11)', () => {
+  const src = [
+    'Owner: Jonalyn Panugalinog Pantilgan',
+    'Place & Date Lost: Around October 10, 2026, Church in City of Naga, Cebu',
+    '',
+    'One (1) Jonalyn Panugalinog Pantilgan, of legal age, single, personally appeared at this Office and reported that she lost her wallet.',
+  ].join('\n');
+  const folded = [
+    'Owner: Jonalyn Panugalinog Pantilgan',
+    'Place & Date Lost: Around October 10, 2026, Church in City of Naga, Cebu',
+    '',
+    'Owner: Kurt Panugalinog Pantilgan Place & Date Lost: Around October 10, 2026, Church in City of Naga, Cebu One (1) Kurt Panugalinog Pantilgan, of legal age, single, personally appeared at this Office and reported that she lost her wallet.',
+  ].join('\n');
+  const r = guardEnhancedWording(folded, src);
+  assert.equal(r.changedLines, 0);
+  assert.equal(r.text, src);
+  assert.ok(!r.text.includes('Owner: Kurt'), 'the folded prose with its swapped name never reaches the paper');
+});
+
 test('"aforementioned" and stray Title Case the officer never wrote keep the source line', () => {
   const src = 'Facts:\nThe complainant and the respondent had a heated argument at the place of incident on October 22, 2026.';
   const proForm = guardEnhancedWording(

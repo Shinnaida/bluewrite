@@ -729,8 +729,12 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             }
         }
         return 'Proofread the supplied police incident report for grammar, spelling, spacing, punctuation, '
-            . 'capitalization and consistency, correcting casual wording to formal, objective, third-person, '
-            . 'past-tense police terminology and removing slang, emotional wording and personal opinions. '
+            . 'capitalization and consistency: consistent past tense for narrated actions, subject-verb '
+            . 'agreement, articles, prepositions, no fragments, no run-ons, no contractions, third person. '
+            . 'Correct casual wording to formal, objective, third-person, past-tense police terminology '
+            . '(proceeded to, made contact with, observed, stated, apprehended, conveyed, thereafter, '
+            . 'upon arrival, complainant\'s sworn statement) and remove slang, emotional wording and '
+            . 'personal opinions. '
             . 'Standardize dates, times, plate numbers and ID numbers without changing any value. '
             . 'Join wrapped continuation lines with one space; keep breaks only for genuine boundaries '
             . '(a period after an abbreviation such as Brgy. or DOB. is not a finished sentence). '

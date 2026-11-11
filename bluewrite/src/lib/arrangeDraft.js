@@ -9,7 +9,7 @@
 // shouted account reads formally while its words, spelling, grammar,
 // punctuation and identifiers stay exactly as the officer wrote them. Enhance
 // Wording keeps its own answer's casing.
-import { extractFieldLabels, formatIncidentReportHtml, reflowWrappedLines } from './reportFormat.js';
+import { extractFieldLabels, formatIncidentReportHtml, reflowWrappedLines, reportHtmlToPlain } from './reportFormat.js';
 
 const BS = String.fromCharCode(92);
 const LF = String.fromCharCode(10);
@@ -87,6 +87,47 @@ export function arrangeOutputIsFaithful(output, account) {
     if (!flat.includes(code)) return false;
   }
   return true;
+}
+
+// The free-canvas paper as an arrange/enhance account (owner request):
+// officer edits typed straight onto the sheet live in the letter's own ink
+// (`letter_html`), not in the narrative field, so arranging from the field
+// alone would silently drop them after a save. The ink is the letter's
+// MIDDLE only — facts, narrative, findings, action, closings — but it still
+// carries the middle's own chrome (office-code/date row, POLICE REPORT,
+// salutation, certify boilerplate, quoted title), which is template, not
+// account. Leading chrome-looking lines are dropped; everything from the
+// first content line on is kept whole, so fact labels, prose and the
+// Recorded/Requested closings all reach the press. Returns '' when the ink
+// holds no account (empty, or chrome alone) so the caller falls back to the
+// narrative field exactly as before.
+export function letterHtmlToAccountText(html) {
+  // Block closings beyond the formatter's own (headings, divs, rows): without
+  // them a heading glues onto the next line and no longer reads as chrome.
+  // Numeric quote/dash entities are decoded too — canvas ink may carry the
+  // entity while typed text carries the character, and both must strip.
+  const blocks = String(html ?? '')
+    .replace(/<\/(div|h1|h2|h3|h4|h5|h6|li|tr|table|header|footer|section)[^>]*>/gi, '\n')
+    .replace(/&ldquo;/gi, '“')
+    .replace(/&rdquo;/gi, '”')
+    .replace(/&mdash;/gi, '—')
+    .replace(/&ndash;/gi, '–');
+  const plain = reportHtmlToPlain(blocks);
+  if (plain.trim() === '') return '';
+  const lines = plain.split('\n');
+  const isChrome = (line) => {
+    const t = line.trim();
+    if (t === '') return true;
+    if (/^p[\s.]*o[\s.]*l[\s.]*i[\s.]*c[\s.]*e[\s.]*r[\s.]*e[\s.]*p[\s.]*o[\s.]*r[\s.]*t$/i.test(t)) return true;
+    if (/^to whom it may concern:?$/i.test(t)) return true;
+    if (/^this is to certify that\b/i.test(t)) return true;
+    if (/^["\u201C][^"\u201C\u201D]{1,80}["\u201D]$/.test(t)) return true;
+    if (/\b(19|20)\d{2}/.test(t) && /date\s*$/i.test(t)) return true;
+    return false;
+  };
+  let i = 0;
+  while (i < lines.length && isChrome(lines[i])) i += 1;
+  return lines.slice(i).join('\n').trim();
 }
 
 // The arrange proposal: the cleaned account, laid out with its OWN existing

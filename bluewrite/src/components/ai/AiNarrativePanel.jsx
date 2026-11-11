@@ -53,7 +53,7 @@ import SpecularButton from '../shared/SpecularButton.jsx';
 // private function here because the account form uses the same marker for the sentences
 // under its fields — see InfoHint.jsx for the whole of its contract.
 import InfoHint from '../shared/InfoHint.jsx';
-import { arrangeOutputIsFaithful, buildArrangeDraft, buildEnhancedDraft } from '../../lib/arrangeDraft.js';
+import { arrangeOutputIsFaithful, buildArrangeDraft, buildEnhancedDraft, letterHtmlToAccountText } from '../../lib/arrangeDraft.js';
 // Sheet theft completion (owner request): the long-ago theft reference as a
 // deterministic checklist — fills from the officer's own words, gaps as
 // advisories. Pure, tested (see tests/rules/theftCompletion.test.mjs).
@@ -64,7 +64,16 @@ import { buildTypeFacts } from '../../lib/sheetFacts.js';
 // (severity 'error' renders red) instead of reading "No suggestions or gaps
 // detected" over an incomplete certification. Pure, tested (see
 // tests/rules/closingLines.test.mjs).
-import { withClosingLineGaps } from '../../lib/closingLines.js';
+import {
+  RECORDED_BY_GAP,
+  REQUESTED_BY_GAP,
+  auditClosingLines,
+  withClosingLineGaps,
+  extractClosingValues,
+  stampClosingLine,
+  fillClosingLine,
+  CLOSING_BLANK,
+} from '../../lib/closingLines.js';
 // Offline proofreader for the AI draft (Harper WASM + deterministic rules):
 // identifiers, names and places are never flagged — see harperGrammar.js.
 import { checkDraftGrammarEnhanced } from '../../lib/harperGrammar.js';
@@ -74,6 +83,7 @@ import {
   stripAddedFieldRows,
   unsupportedFieldLabels,
 } from '../../lib/reportFormat.js';
+import { guardEnhancedWording } from '../../lib/enhanceGuard.js';
 import { useRotatingStatus, holdVerifyPhase, VERIFY_PHRASE, THINKING_PHRASES } from '../../lib/useRotatingStatus.js';
 // Phase 6 Stage 4/5 — the language vocabulary all comes from the registry
 // (never a list held here), and the one wording for a language whose AI
@@ -401,6 +411,17 @@ function purgeStoredDrafts() {
   }
 }
 
+// Present an advisory as a card: "Problem. Instruction (for example, …)."
+// splits into a title, the instruction and the example chip. Anything else
+// keeps its whole text as the instruction.
+function splitGapText(description) {
+  const text = String(description ?? '').trim();
+  const m = /^(.*?\.)\s*(.*?)\s*\(for example,\s*(.*?)\)\.?\s*$/s.exec(text);
+  if (!m) return { title: null, detail: text, example: null };
+  const detail = m[2].trim();
+  return { title: m[1].trim(), detail: detail === '' ? text : detail, example: m[3].trim() || null };
+}
+
 export default function AiNarrativePanel({
   reportId,
   // The report id the panel's requests are addressed to, resolved on demand:
@@ -539,6 +560,14 @@ export default function AiNarrativePanel({
   // → the letter keeps its per-field editors, exactly as before.
   letterHtml = null,
   onEditLetterHtml = null,
+  // SATISFIED-WITH-THE-RESULT (owner request, 2026-11-11): the toolbar home
+  // beside Upload (`#ir-narrative-toolbar` in Reports.jsx) and the save
+  // behind Save Draft. When both are handed over the panel portals the
+  // "Satisfied with the result? Save / Discard" choice into the toolbar,
+  // so the officer answers it where the Upload they just used sits.
+  // Absent → the deskbar Keep/Discard below stays the only choice.
+  toolbarMount = null,
+  onSaveDraft = null,
 }) {
   const [mode, setMode] = useState('idle'); // idle|ready|loading|done|error|manual
   const [draft, setDraft] = useState(null); // { narrative, suggestions, possibleGaps, addedContentWarnings, gloss, sourceGloss, ambiguities, pinnedTerms }
@@ -630,6 +659,27 @@ export default function AiNarrativePanel({
   // status pill + shimmer from it, so the officer watches the press work
   // instead of a frozen page.
   const [arrangePhase, setArrangePhase] = useState('idle');
+  // SATISFIED-WITH-THE-RESULT save in flight: the toolbar Save disables
+  // itself while the editor's save lands, so a double press cannot file
+  // the same draft twice.
+  const [savingSatisfied, setSavingSatisfied] = useState(false);
+  // SATISFIED-WITH-THE-RESULT saved receipt (owner request, 2026-11-12):
+  // true after the toolbar Save lands. The bar swaps to a "Saved" receipt
+  // instead of vanishing instantly, then fades out after 5s. While true
+  // the arrival effect below must NOT re-apply the kept draft (which would
+  // flip the lifecycle back to 'applied' and bring the question back).
+  const [satisfiedSaved, setSatisfiedSaved] = useState(false);
+  const [satisfiedLeaving, setSatisfiedLeaving] = useState(false);
+  // Gap-tap receipt (owner request): confirms which prebuilt line just went
+  // onto the paper, so a tap always answers visibly. Cleared after 6s.
+  const [gapNote, setGapNote] = useState(null);
+  // Closing-line name blanks (owner request): after a Recorded/Requested
+  // card stamps its prebuilt line, the card grows a name input whose value
+  // writes straight into the RECORD narrative (and the paper-canvas ink
+  // when it exists) — so the name survives save, reload and the next
+  // Arrange instead of living only in canvas keystrokes. Keyed by gap.
+  const [gapNames, setGapNames] = useState({});
+  const [gapStamped, setGapStamped] = useState({});
   // The card the typing happens in. Scrolled to when a new draft starts arriving
   // (this card's own Regenerate included), so the officer is never looking at the
   // wrong end of the page while the letter types.
@@ -647,6 +697,13 @@ export default function AiNarrativePanel({
   // the paper draws whole per section (the arrival IS the animation), so the
   // owned end-sweep must not fire mid-stream — only on the final whole render.
   const streamActiveRef = useRef(false);
+  // THE PAGE FROZEN AT THE PRESS (owner request, 2026-11-12): every run rewinds
+  // the REPORT first (see beginFreshRun) so the model reads the officer's own
+  // words instead of its own draft. That rewind is the report's business, not
+  // the paper's: while the run is in flight the sheet keeps drawing exactly the
+  // page that was there when the officer pressed — the same proposal, the same
+  // canvas ink, the same edit state — and only the new draft changes it.
+  const paperAtPressRef = useRef(null);
   // WHETHER THE PAGE IS UP ON A SCREEN OF ITS OWN (the Preview control above
   // the card's paper). The same leaf, portaled to document.body, with the app
   // behind the scrim and nothing on the screen but the report: no card, no
@@ -782,9 +839,12 @@ export default function AiNarrativePanel({
   // 'pending' and Keep writes them first.
   useEffect(() => {
     if (!sheetProvisional || mode !== 'done' || !draft || provisionalState !== 'idle') return;
+    // A just-saved draft stays saved: re-applying here would resurrect the
+    // Satisfied question the officer just answered (see satisfiedSave).
+    if (satisfiedSaved) return;
     setProvisionalState('applied');
     onProvisionalApply?.(acceptParts(), acceptMeta());
-  }, [draft, mode, sheetProvisional, provisionalState]);
+  }, [draft, mode, sheetProvisional, provisionalState, satisfiedSaved]);
 
   // TASK 9 — every draft types where Generate is pressed. In the deck formats
   // that is this card, brought into view when a new proposal starts (this
@@ -1011,6 +1071,10 @@ export default function AiNarrativePanel({
   // arrival effect (Keep only confirms); the guided flow keeps the bondpaper
   // and its typing gate, other hosts keep the inline reveal.
   const presentDraftResult = () => {
+    // A new draft re-arms the toolbar question: any previous Saved receipt
+    // is gone so the fresh result asks again.
+    setSatisfiedSaved(false);
+    setSatisfiedLeaving(false);
     if (sheet) {
       setRevealStage('done');
       setRevealOn(false);
@@ -1303,6 +1367,12 @@ export default function AiNarrativePanel({
   const enhanceReport = async ({ fromArranged = false } = {}) => {
     setLastPress({ kind: 'enhance' });
     let accountText = richTextToPlain(String(narrative || ''));
+    // The paper IS the account when the officer edited it there (owner
+    // request): saved canvas ink outranks the narrative field, so an edit on
+    // the overall report, once saved, is what Enhance works from. Empty or
+    // chrome-only ink falls back to the field exactly as before.
+    const enhancePaper = letterHtmlToAccountText(letterHtml);
+    if (enhancePaper !== '') accountText = enhancePaper;
     if (accountText.trim() === '') {
       if (onBeforeGenerate && !onBeforeGenerate()) {
         return;
@@ -1320,7 +1390,15 @@ export default function AiNarrativePanel({
       // repeated, because Arrange already did both. Everything below therefore
       // runs on the arranged page itself.
       const restoredRun = fromArranged ? {} : beginFreshRun(false);
-      if (restoredRun.narrative !== undefined) accountText = richTextToPlain(String(restoredRun.narrative));
+      // PAPER WINS (2026-11-11): corrections typed on the sheet live in the
+      // ink already read above, but the rewind just ran restores the pre-draft
+      // snapshot and hands it back — letting it override would throw the
+      // corrections away and build the enhancement from the ORIGINAL words,
+      // which is the "my edits went back" the officer sees. The snapshot
+      // only stands when the paper held nothing of its own.
+      if (restoredRun.narrative !== undefined && enhancePaper === '') {
+        accountText = richTextToPlain(String(restoredRun.narrative));
+      }
       // THE SAME READ ARRANGE ONLY MAKES (owner request, 2026-11-02):
       // type/date/place and NOTHING ELSE. The read filled the type's own fields
       // here, which is where the sheet grew a `Vehicle 1:` row and a
@@ -1389,12 +1467,23 @@ export default function AiNarrativePanel({
       if (labelAudit.invented.length > 0 || labelAudit.missing.length > 0) {
         throw new Error('The enhanced wording did not keep the report\'s own field labels, so it was discarded. Your report is unchanged.');
       }
+      // THE WORDING GATE (screenshot, 2026-11-11): pressing Enhance again
+      // folded the field lines into the paragraph and swapped a name — the
+      // answer kept the labels but reshaped the report around them. The gate
+      // replays the answer line by line against the arranged source: a folded
+      // or dropped line rejects the whole answer, and a single line that
+      // swaps a number, code, name, hedge or negation keeps the officer's own
+      // words for that line. Only wording the gate accepts reaches the paper.
+      const guarded = guardEnhancedWording(enhanced, sourceText);
+      if (guarded.rejected) {
+        throw new Error(`The enhanced wording was discarded because ${guarded.reason}. Your report is unchanged.`);
+      }
       // The enhanced page REPLACES the arranged one in the same panel: the
       // arrival effect writes it onto the paper, because the draft is back to
       // 'idle' while the officer's pre-arrange words stay snapshotted for
       // Discard.
       if (fromArranged) setProvisionalState('idle');
-      setDraft(withSheetCompletion(buildEnhancedDraft({ enhancedText: enhanced, sourceText })));
+      setDraft(withSheetCompletion(buildEnhancedDraft({ enhancedText: guarded.text, sourceText })));
       setResidual([]);
       presentDraftResult();
       // Like Arrange below: reopen the paper gate explicitly so the whole
@@ -1430,6 +1519,12 @@ export default function AiNarrativePanel({
     setLastPress({ kind: 'arrange' });
     setArrangePhase('reading');
     let accountText = richTextToPlain(String(narrative || ''));
+    // The paper IS the account when the officer edited it there (owner
+    // request): saved canvas ink outranks the narrative field, so an edit on
+    // the overall report, once saved, is what Arrange works from. Empty or
+    // chrome-only ink falls back to the field exactly as before.
+    const arrangePaper = letterHtmlToAccountText(letterHtml);
+    if (arrangePaper !== '') accountText = arrangePaper;
     if (accountText.trim() === '') {
       if (onBeforeGenerate && !onBeforeGenerate()) {
         setArrangePhase('idle');
@@ -1860,6 +1955,24 @@ export default function AiNarrativePanel({
   const draftStatusText = draft && typeof draft.statusText === 'string'
     ? draft.statusText
     : draftedStatusLines.join('\n');
+  // Closing-line gaps re-derived from the LIVE paper (owner request): a tap
+  // that failed to print, or words typed or deleted after generation, must
+  // never strand the officer with no card and no line. Stored advisories
+  // first, then any closing line the current narrative still lacks — so a
+  // resolved line stays gone (the audit passes once its blank prints) while
+  // a missing one always offers its card.
+  const gapList = (() => {
+    const stored = Array.isArray(draft?.possibleGaps) ? draft.possibleGaps : [];
+    try {
+      const have = new Set(stored.map((g) => g?.description));
+      const live = auditClosingLines(reportHtmlToPlain(String(draft?.narrative ?? ''))).filter(
+        (g) => !have.has(g?.description),
+      );
+      return [...stored, ...live];
+    } catch {
+      return stored;
+    }
+  })();
   // THE PROPOSAL THE PAGE DRAWS, read from the live draft (see `sheeted`). The
   // shape is ReportSheetBody's own: `scope: 'generate'` overlays all three parts
   // of a draft, `scope: 'tighten'` overlays the narrative alone and leaves the
@@ -1869,6 +1982,7 @@ export default function AiNarrativePanel({
   // boxes under it in step: an edit made in a box is on the page by the next
   // render, and a restored draft draws its page from the same three fields the
   // boxes hold.
+  // (see below: `paperPending` is what the paper draws during a run)
   const sheetPending = draft
     ? {
         narrative: draft.narrative,
@@ -1884,6 +1998,15 @@ export default function AiNarrativePanel({
         scope: tightenDraft ? 'tighten' : 'generate',
       }
     : null;
+  // WHAT THE PAPER DRAWS WHILE A RUN IS IN FLIGHT (owner request, 2026-11-12):
+  // the frame frozen at the press, not the rewound report underneath it. A run
+  // that is not in flight (or one pressed with no page up at all) draws the
+  // live draft exactly as before. The officer sees one change per run: the new
+  // page, when the generation finishes.
+  const runPaper = mode === 'loading' ? paperAtPressRef.current : null;
+  const paperPending = runPaper ? runPaper.pending : sheetPending;
+  const paperInk = runPaper ? runPaper.letterHtml : letterHtml;
+  const paperEdit = runPaper ? runPaper.letterEdit : letterEdit;
   // A letter edit writes BOTH copies of the words: the panel's own draft (so
   // the page above and the boxes under it stay one draft) and the report
   // itself through the editor's own setters (dirty flag, autosave, history).
@@ -1895,6 +2018,245 @@ export default function AiNarrativePanel({
     setDraft((d) => (d ? { ...d, findingsText: text } : d));
     onEditSheet?.({ findingsText: text });
   };
+  // POSSIBLE GAPS — one tap onto the paper (owner request, 2026-11-12):
+  // every advisory is a working button. A tap scrolls the sheet into view,
+  // focuses the paper's own editable line for that gap, and flashes it —
+  // so the fix lands where the officer reads it. The two known closing
+  // lines go further: when the paper carries no such line, the tap writes
+  // its template onto the paper first (draft AND report, like any letter
+  // edit), then focuses it — the officer only types the name.
+  const flashPaperLine = (el) => {
+    if (!el) return;
+    const host = el.closest?.('.pr-fact, .pr-narrative, .pr-section, .pr-item-edit, .pr-person-edit') || el;
+    try {
+      host.classList?.add('gap-flash');
+    } catch {}
+    window.setTimeout(() => {
+      try {
+        host.classList?.remove('gap-flash');
+      } catch {}
+    }, 1700);
+  };
+  const focusPaperTarget = (selectors) => {
+    const mount = letterMount || sheetCardRef.current || null;
+    const scope = mount || document;
+    try {
+      (mount || document.querySelector?.('.ir-sheet-letter-mount'))?.scrollIntoView?.({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    } catch {}
+    const list = Array.isArray(selectors) ? selectors : [selectors];
+    for (const sel of list) {
+      let el = null;
+      try {
+        el = scope.querySelector?.(sel);
+      } catch {
+        el = null;
+      }
+      if (el) {
+        try {
+          el.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        } catch {}
+        try {
+          el.focus({ preventScroll: true });
+        } catch {
+          try {
+            el.focus();
+          } catch {}
+        }
+        flashPaperLine(el);
+        return true;
+      }
+    }
+    return false;
+  };
+  // Scrolls straight to a freshly stamped line ("Recorded by", "request
+  // of") and flashes it, so the officer watches the prebuilt phrase land
+  // instead of hunting the paper for it. Falls back to the editor focus.
+  const focusPaperLine = (keyword) => {
+    const mount = letterMount || sheetCardRef.current || null;
+    const scope = mount || document;
+    const wanted = String(keyword ?? '').toLowerCase();
+    let target = null;
+    try {
+      const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+      let node = null;
+      while ((node = walker.nextNode())) {
+        if (node.nodeValue && node.nodeValue.toLowerCase().includes(wanted)) {
+          const line = node.parentElement?.closest?.('p, div.pr-fact, li') || node.parentElement;
+          if (line && (scope === document || scope.contains(line))) {
+            target = line;
+            break;
+          }
+        }
+      }
+    } catch {
+      target = null;
+    }
+    if (target) {
+      try {
+        target.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      } catch {}
+      flashPaperLine(target);
+    }
+    window.setTimeout(focusPaperNarrative, 150);
+  };
+  const focusPaperNarrative = () => {
+    const mount = letterMount || sheetCardRef.current || null;
+    const scope = mount || document;
+    try {
+      (mount || document.querySelector?.('.ir-sheet-letter-mount'))?.scrollIntoView?.({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    } catch {}
+    const pick = (sel) => {
+      try {
+        return scope.querySelector?.(sel);
+      } catch {
+        return null;
+      }
+    };
+    const el =
+      pick('.pr-narrative-edit [contenteditable="true"]') ||
+      pick('.pr-narrative-edit .rt-edit') ||
+      pick('[contenteditable="true"]');
+    if (!el) return false;
+    try {
+      el.focus({ preventScroll: true });
+    } catch {
+      try {
+        el.focus();
+      } catch {}
+    }
+    flashPaperLine(el);
+    return true;
+  };
+  const applyGapOnPaper = (gap) => {
+    const desc = String(gap?.description ?? '');
+    const current = String(draft?.narrative ?? '');
+    const plain = reportHtmlToPlain(current);
+    // Prebuilt closing lines with a BLANK name (owner request): an empty
+    // value is hidden by the sheet's blank-line rule, which is why the old
+    // empty template appeared to do nothing. Underscores count as ink, so
+    // the line prints and the officer types the name over the blank. The
+    // resolved card is dismissed so the tap reads as done.
+    const dismissGap = () => {
+      setDraft((d) => (d ? { ...d, possibleGaps: (d.possibleGaps ?? []).filter((x) => x?.description !== desc) } : d));
+    };
+    // The visible paper can be the free-edit canvas (officer ink), not the
+    // composed body: stamping the record alone would not print. When the
+    // canvas already holds ink, the same closing paragraph is appended to
+    // it too (it covers the letter body only, so the end of the ink is
+    // exactly where a closing line belongs — ahead of the composed
+    // footer, never after it).
+    // The visible paper can be the free-edit canvas (officer ink), not the
+    // composed body: stamping the record alone would not print. The same
+    // closing line is therefore written to BOTH the record narrative and
+    // the canvas ink when it exists (the ink covers the letter body only,
+    // so its end is exactly where a closing line belongs — ahead of the
+    // composed footer, never after it). A name already typed on the paper
+    // canvas flows back into the record too, so nothing typed is lost.
+    const writeClosingLine = (kind, name) => {
+      const ink = String(letterHtml ?? '');
+      if (ink.trim() !== '' && typeof onEditLetterHtml === 'function') {
+        const inkNext = fillClosingLine(ink, kind, name);
+        if (inkNext !== ink) onEditLetterHtml(inkNext);
+      }
+      const cur = String(draftRef.current?.narrative ?? current);
+      const next = fillClosingLine(cur, kind, name);
+      if (next !== cur) handleLetterNarrative(next);
+      return next;
+    };
+    if (desc === RECORDED_BY_GAP || desc === REQUESTED_BY_GAP) {
+      const kind = desc === RECORDED_BY_GAP ? 'recorded' : 'requested';
+      const inkVals = extractClosingValues(String(letterHtml ?? ''));
+      const seedName = kind === 'recorded' ? inkVals.recordedBy ?? '' : inkVals.requestedBy ?? '';
+      const stamped = stampClosingLine(current, kind);
+      let next = stamped.html;
+      if (stamped.added) {
+        handleLetterNarrative(next);
+        if (String(letterHtml ?? '').trim() !== '' && typeof onEditLetterHtml === 'function') {
+          const inkNext = fillClosingLine(String(letterHtml ?? ''), kind, CLOSING_BLANK);
+          if (inkNext !== String(letterHtml ?? '')) onEditLetterHtml(inkNext);
+        }
+        if (seedName) next = writeClosingLine(kind, seedName);
+        setGapNote(
+          stamped.added
+            ? (kind === 'recorded'
+              ? 'Added “Recorded by: ____” to the paper — type the name below or on the paper.'
+              : 'Added the issuance line to the paper — type the name below or on the paper.')
+            : (seedName
+              ? 'Kept the name already on the paper — it now lives in the record too.'
+              : (kind === 'recorded'
+                ? 'The paper already carries a “Recorded by” line — name it below or on the paper.'
+                : 'The paper already carries the issuance line — name it below or on the paper.')),
+        );
+      } else if (seedName) {
+        next = writeClosingLine(kind, seedName);
+        setGapNote('Kept the name already on the paper — it now lives in the record too.');
+      } else {
+        setGapNote(
+          kind === 'recorded'
+            ? 'The paper already carries a “Recorded by” line — name it below or on the paper.'
+            : 'The paper already carries the issuance line — name it below or on the paper.',
+        );
+      }
+      const vals = extractClosingValues(next);
+      const existing = kind === 'recorded' ? vals.recordedBy ?? '' : vals.requestedBy ?? '';
+      setGapNames((prev) => ({ ...prev, [kind]: prev[kind] ?? existing }));
+      setGapStamped((prev) => ({ ...prev, [kind]: true }));
+      dismissGap();
+      window.setTimeout(() => focusPaperLine(kind === 'recorded' ? 'Recorded by' : 'request of'), 200);
+      return;
+    }
+    const low = desc.toLowerCase();
+    const run = (selectors) => window.setTimeout(() => focusPaperTarget(selectors), 80);
+    if (/suspect/.test(low)) {
+      run(['[aria-label="Suspect name"]', '[aria-label="Suspect age"]', '[aria-label="Suspect description"]', '.pr-person-edit--suspect [contenteditable="true"]', '.pr-narrative-edit [contenteditable="true"]']);
+      return;
+    }
+    if (/victim|complainant/.test(low)) {
+      run(['.pr-fact--people [contenteditable="true"]', '.pr-narrative-edit [contenteditable="true"]']);
+      return;
+    }
+    if (/stolen|item|value|worth|amount/.test(low)) {
+      run(['.pr-item-edit .pr-word[contenteditable="true"]', '.pr-items [contenteditable="true"]', '.pr-narrative-edit [contenteditable="true"]']);
+      return;
+    }
+    if (/witness/.test(low)) {
+      run(['.pr-narrative-edit [contenteditable="true"]']);
+      return;
+    }
+    if (/disposition|action taken|remarks|recovery|cctv/.test(low)) {
+      run(['.pr-findings-edit [contenteditable="true"]', '.pr-narrative-edit [contenteditable="true"]']);
+      return;
+    }
+    if (/place|location|barangay|purok/.test(low)) {
+      run(['[aria-label="Place of incident"]', '.pr-narrative-edit [contenteditable="true"]']);
+      return;
+    }
+    if (/date|time|when/.test(low)) {
+      run(['[aria-label^="Date"]', '[aria-label^="Time"]', '.pr-narrative-edit [contenteditable="true"]']);
+      return;
+    }
+    focusPaperNarrative();
+  };
+  // Name input under a stamped closing-line card: writes the typed name
+  // straight into the RECORD narrative (and the canvas ink when it exists),
+  // so it survives save, reload and the next Arrange. Empty restores ____.
+  const updateGapName = (kind, name) => {
+    setGapNames((prev) => ({ ...prev, [kind]: name }));
+    const ink = String(letterHtml ?? '');
+    if (ink.trim() !== '' && typeof onEditLetterHtml === 'function') {
+      const inkNext = fillClosingLine(ink, kind, name);
+      if (inkNext !== ink) onEditLetterHtml(inkNext);
+    }
+    const cur = String(draftRef.current?.narrative ?? draft?.narrative ?? '');
+    const next = fillClosingLine(cur, kind, name);
+    if (next !== cur) handleLetterNarrative(next);
+  };
   const handleLetterAction = (text) => {
     setDraft((d) => (d ? { ...d, statusText: text } : d));
     onEditSheet?.({ statusText: text });
@@ -1904,7 +2266,7 @@ export default function AiNarrativePanel({
   // restating seven props twice and drifting apart on the next edit.
   const letterProps = {
     sheet,
-    pending: sheetPending,
+    pending: paperPending,
     revealPending: !sheetTyped,
     revealKey: genCounter,
     onRevealComplete: () => {
@@ -1990,7 +2352,9 @@ export default function AiNarrativePanel({
     onEditAction: handleLetterAction,
     onEditFact,
     onEditChrome,
-    letterHtml,
+    // While a run is in flight the canvas keeps the ink it had at the press,
+    // not the ink the rewind put back behind the paper.
+    letterHtml: paperInk,
     onEditLetterHtml,
   };
   // THE DRAFT IS WRITTEN IN FRONT OF THE OFFICER, ONE PART AT A TIME. All three
@@ -2048,8 +2412,10 @@ export default function AiNarrativePanel({
   // tighten rewrites prose, not the record, so its letter stays read-only.
   // Assigned here (not with the props above) because `revealing` lives below
   // them — one object shared by the portal and card branches alike.
-  letterProps.editable = letterEdit && (!!onEditSheet && sheetCanEdit && sheeted && !tightenDraft
-    && sheetTyped && !revealing && mode === 'done');
+  // A run in flight keeps the page editable exactly as it was at the press: the
+  // freeze is the frame, not a lock.
+  letterProps.editable = paperEdit && (!!onEditSheet && sheetCanEdit && sheeted && !tightenDraft
+    && sheetTyped && !revealing && (mode === 'done' || !!runPaper));
   // Each block fades up as its own turn arrives; the sequence itself is the
   // stage machine above, so there are no animation delays to keep in step.
   const arriveClass = (base) => (revealOn ? `${base} ai-draft-arrive` : base);
@@ -2143,11 +2509,115 @@ export default function AiNarrativePanel({
     // reviewed draft exists, not only while the review is open), so the
     // officer keeps reading the sheet they closed. Discard is the way back
     // to their own words; Keep confirms the paper.
-    setSheetTyped(true);
+    // The SHEET is never snapped whole here (owner request, 2026-11-12): a
+    // Close pressed while the letter is still typing would otherwise jump the
+    // page to its last line, changing what the officer is reading. The wording
+    // is the generation's to finish — the mount stays up and the reveal keeps
+    // typing. The deck card keeps its own old behaviour (it is hidden with the
+    // card anyway).
+    if (!slim) setSheetTyped(true);
     setArrangePhase('idle');
     setCompletionFills([]);
     setPanelOpen(false);
   };
+
+  // SATISFIED-WITH-THE-RESULT (owner request, 2026-11-11): the toolbar
+  // choice beside Upload. Save persists the arranged/enhanced page and
+  // confirms it, so the saved page IS the new draft — a later Discard can
+  // only return to this saved page, never to the pre-draft words. Discard
+  // restores the snapshotted original report and clears the draft, so the
+  // officer is back on the words they started from.
+  // Visible while the draft awaits its answer, plus 5s as a Saved receipt
+  // after the toolbar Save lands (see satisfiedSave).
+  const satisfiedVisible =
+    !!sheet && !!toolbarMount && mode === 'done' && !!draft &&
+    (draft.arranged === true || draft.enhanced === true) &&
+    sheetProvisional && (provisionalState !== 'idle' || satisfiedSaved);
+  const satisfiedSave = async () => {
+    if (savingSatisfied) return;
+    setSavingSatisfied(true);
+    try {
+      if (provisionalState === 'pending') {
+        onProvisionalApply?.(acceptParts(), acceptMeta());
+      }
+      let savedOk = true;
+      if (typeof onSaveDraft === 'function') {
+        savedOk = await onSaveDraft();
+      }
+      // A refused save keeps the provisional draft: the snapshot stays so
+      // Discard can still return to the original, and this choice stays up
+      // so the officer can retry after fixing the banner.
+      if (savedOk === false) return;
+      // Confirm even when the editor saved: dropping the snapshot is what
+      // promotes the saved page to the new draft baseline, so a later
+      // Discard returns to this saved page and never to the pre-draft words.
+      onKeepProvisional?.();
+      setProvisionalState('idle');
+      // STAY ON THE SAVED PAGE (owner request, 2026-11-12): the draft,
+      // the mode and the open review are all kept, so the paper the
+      // officer just saved is the paper still on screen. Only the
+      // provisional lifecycle ends. The bar swaps to its Saved receipt
+      // (below) instead of vanishing instantly; the arrival effect stays
+      // quiet while satisfiedSaved is true so the question never returns.
+      setSatisfiedSaved(true);
+      setSatisfiedLeaving(false);
+      setPanelOpen(true);
+    } finally {
+      setSavingSatisfied(false);
+    }
+  };
+  const satisfiedDiscard = () => {
+    onRestoreProvisional?.();
+    setProvisionalState('idle');
+    setSatisfiedSaved(false);
+    setSatisfiedLeaving(false);
+    setCompletionFills([]);
+    setDraft(null);
+    setMode('ready');
+    closePanel();
+  };
+  // Gap-tap receipt clears itself after 6s, like the toolbar Saved receipt.
+  useEffect(() => {
+    if (!gapNote) return undefined;
+    const t = window.setTimeout(() => setGapNote(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [gapNote]);
+  // Saved receipt fades out 5s after the toolbar Save lands: the bar reads
+  // "Saved as new draft" first, starts fading at 4s, and unmounts at 5s.
+  useEffect(() => {
+    if (!satisfiedSaved) return undefined;
+    const fade = window.setTimeout(() => setSatisfiedLeaving(true), 4000);
+    const hide = window.setTimeout(() => {
+      setSatisfiedSaved(false);
+      setSatisfiedLeaving(false);
+    }, 5000);
+    return () => {
+      window.clearTimeout(fade);
+      window.clearTimeout(hide);
+    };
+  }, [satisfiedSaved]);
+  const satisfiedBar = satisfiedVisible
+    ? createPortal(
+      (
+        satisfiedSaved ? (
+          <span className={`rt-satisfied rt-satisfied--saved${satisfiedLeaving ? ' rt-satisfied--fade' : ''}`} role="status" aria-label="Draft saved">
+            <span className="rt-satisfied-q">Saved as new draft</span>
+          </span>
+        ) : (
+          <span className="rt-satisfied" role="group" aria-label="Satisfied with the result">
+            <span className="rt-satisfied-q">Satisfied with the result?</span>
+            <button type="button" className="rt-satisfied-save" onClick={satisfiedSave} disabled={savingSatisfied} title="Save this arranged page as the new draft. After saving, Discard returns to this saved page.">
+              {savingSatisfied ? 'Saving…' : 'Save'}
+            </button>
+            <button type="button" className="rt-satisfied-discard" onClick={satisfiedDiscard} disabled={savingSatisfied} title="Discard this draft and return to the original report.">
+              Discard
+            </button>
+          </span>
+        )
+      ),
+      toolbarMount,
+    )
+    : null;
 
   // ACCEPT — the one action that moves a draft into the report, and it moves the
   // WHOLE draft: the facts of the case, and the two formalised blocks the
@@ -2177,6 +2647,18 @@ export default function AiNarrativePanel({
   // paper holds the draft, so the run would otherwise read the model its own
   // text. Skipped for guided steps, which run on applied English.
   const beginFreshRun = (skip) => {
+    // FREEZE THE PAGE BEFORE ANYTHING IS REWOUND (owner request, 2026-11-12):
+    // the rewind below is for the REPORT (so the model reads the officer's own
+    // words), and the paper must not show it. What it draws for the length of
+    // the run is what it draws now — the proposal, the canvas ink, the edit
+    // state — and the arrival is the one thing that changes it.
+    paperAtPressRef.current = { pending: sheetPending, letterHtml, letterEdit };
+    // A new run re-arms the toolbar question: a previous Saved receipt
+    // must not survive into (or suppress) the next draft.
+    if (satisfiedSaved) {
+      setSatisfiedSaved(false);
+      setSatisfiedLeaving(false);
+    }
     if (skip || provisionalState === 'idle') return {};
     const out = provisionalState === 'applied' ? (onRestoreProvisional?.() ?? {}) : {};
     setProvisionalState('idle');
@@ -2268,6 +2750,7 @@ export default function AiNarrativePanel({
 
   return (
     <div className="ai-panel">
+      {satisfiedBar}
       {/* The approved-terminology lookup that used to open this panel — in every
           mode, because a dictionary for the officer must not depend on the
           model being reachable — is no longer here. The officer's dictionary is
@@ -3058,8 +3541,8 @@ export default function AiNarrativePanel({
                           ) : draft?.enhanced ? (
                             <button
                               type="button"
-                              onClick={() => enhanceReport()}
-                              title="Enhances your current account text again — grammar and clarity only, with every fact and label preserved."
+                              onClick={() => enhanceReport({ fromArranged: true })}
+                              title="Enhances this page again — its own wording, grammar and clarity only, with every fact and label preserved."
                             >Enhance again</button>
                           ) : (
                             <button type="button" onClick={() => setShowFeedback((v) => !v)}>Regenerate…</button>
@@ -3130,7 +3613,7 @@ export default function AiNarrativePanel({
                         )}
                       </div>
                     )}
-                    {!revealing && (draft.suggestions.length > 0 || draft.possibleGaps.length > 0 || (draft.addedContentWarnings?.length ?? 0) > 0 || (draft.redundancy?.length ?? 0) > 0 || (draft.narrativeRepetition?.length ?? 0) > 0) && (
+                    {!revealing && (draft.suggestions.length > 0 || gapList.length > 0 || (draft.addedContentWarnings?.length ?? 0) > 0 || (draft.redundancy?.length ?? 0) > 0 || (draft.narrativeRepetition?.length ?? 0) > 0) && (
                       <div className="ai-advice ai-advice-fade">
                         {draft.suggestions.length > 0 && (
                           <>
@@ -3145,17 +3628,63 @@ export default function AiNarrativePanel({
                             </ul>
                           </>
                         )}
-                        {draft.possibleGaps.length > 0 && (
-                          <>
-                            <h4>Possible gaps (advisory)</h4>
-                            <ul>
-                              {draft.possibleGaps.map((g, i) => (
-                                <li key={i} className={g.severity === 'error' ? 'gap-error' : g.severity === 'warning' ? 'gap-warning' : 'gap-info'}>
-                                  {g.description}
-                                </li>
-                              ))}
+                        {gapList.length > 0 && (
+                          <section className="gap-panel" aria-label="Possible gaps">
+                            <div className="gap-panel__head">
+                              <div className="gap-panel__titles">
+                                <h4>Possible gaps <span className="gap-panel__tag">advisory</span></h4>
+                                <p className="gap-panel__hint">Tap a card to stamp its line onto the paper — blanks (____) are yours to fill.</p>
+                              </div>
+                              <span className="gap-panel__count" title={`${gapList.length} to review`} aria-label={`${gapList.length} gaps to review`}>{gapList.length}</span>
+                            </div>
+                            {gapNote && (<p className="gap-note-ok" role="status"><span aria-hidden="true">✓</span> {gapNote}</p>)}
+                            <ul className="gap-list">
+                              {gapList.map((g, i) => {
+                                const tone = g.severity === 'error' ? 'error' : g.severity === 'warning' ? 'warning' : 'info';
+                                const sev = tone === 'error' ? 'Missing line' : tone === 'warning' ? 'Worth a look' : 'Note';
+                                const closingKind = g.description === RECORDED_BY_GAP ? 'recorded' : g.description === REQUESTED_BY_GAP ? 'requested' : null;
+                                const parts = splitGapText(g.description);
+                                const stamped = closingKind && gapStamped[closingKind];
+                                return (
+                                  <li key={i}>
+                                    <button
+                                      type="button"
+                                      className={`gap-link gap-link--${tone}${stamped ? ' is-stamped' : ''}`}
+                                      onClick={() => applyGapOnPaper(g)}
+                                      title="Put this on the paper for fast editing"
+                                    >
+                                      <span className="gap-link__body">
+                                        <span className="gap-link__top">
+                                          <strong className="gap-link__title">{parts.title ?? sev}</strong>
+                                          <span className={`gap-link__sev gap-link__sev--${tone}`}>{sev}</span>
+                                        </span>
+                                        <span className="gap-link__text">{parts.detail}</span>
+                                        {parts.example && (
+                                          <span className="gap-link__example"><span className="gap-link__example-tag" aria-hidden="true">e.g.</span> {parts.example}</span>
+                                        )}
+                                        <span className="gap-link__foot">
+                                          <span className="gap-link__cta" aria-hidden="true">{stamped ? 'On the paper ✓' : 'Fix on paper →'}</span>
+                                        </span>
+                                      </span>
+                                    </button>
+                                    {closingKind && gapStamped[closingKind] && (
+                                      <label className="gap-name-row">
+                                        <span className="gap-name-label">{closingKind === 'recorded' ? 'Officer name' : 'Requestor name'}</span>
+                                        <input
+                                          type="text"
+                                          className="gap-name-input"
+                                          value={gapNames[closingKind] ?? ''}
+                                          placeholder={closingKind === 'recorded' ? 'e.g. PO1 Juan Dela Cruz' : 'e.g. Jonalyn Pantilgan'}
+                                          aria-label={closingKind === 'recorded' ? 'Officer name for Recorded by' : 'Requestor name for the issuance line'}
+                                          onChange={(e) => updateGapName(closingKind, e.target.value)}
+                                        />
+                                      </label>
+                                    )}
+                                  </li>
+                                );
+                              })}
                             </ul>
-                          </>
+                          </section>
                         )}
                         {/* Details the draft deliberately left out because
                             the officer's record does not state them. Shown
@@ -3218,7 +3747,7 @@ export default function AiNarrativePanel({
                         )}
                       </div>
                     )}
-                    {!revealing && draft.suggestions.length === 0 && draft.possibleGaps.length === 0 && (draft.addedContentWarnings?.length ?? 0) === 0 && (draft.redundancy?.length ?? 0) === 0 && (draft.narrativeRepetition?.length ?? 0) === 0 && !draft.narrativeRepaired && (
+                    {!revealing && draft.suggestions.length === 0 && gapList.length === 0 && (draft.addedContentWarnings?.length ?? 0) === 0 && (draft.redundancy?.length ?? 0) === 0 && (draft.narrativeRepetition?.length ?? 0) === 0 && !draft.narrativeRepaired && (
                       <p className="field-hint">No suggestions or gaps detected for this draft.</p>
                     )}
 
@@ -3233,8 +3762,14 @@ export default function AiNarrativePanel({
           assistant hides its controls (the section above) but leaves this
           sheet on the paper, which is the state the officer closed it from;
           Discard removes it (the draft is cleared) and brings back their own
-          words. Deck formats never reach this branch (see `slim`). */}
-      {sheeted && slim && mode === 'done' && (letterMount ? createPortal(<SheetLetterDock {...letterProps} freeReview={slim && letterEdit} />, letterMount) : null)}
+          words. Deck formats never reach this branch (see `slim`).
+
+          A RUN IN FLIGHT KEEPS IT UP (owner request, 2026-11-12): the run has
+          rewound the report behind the page (see beginFreshRun), and dropping
+          the mount here would show that rewind for the whole generation. The
+          frozen props above draw the page the officer pressed from until the
+          new draft lands — one change per run, at the end. */}
+      {sheeted && slim && (mode === 'done' || !!runPaper) && (letterMount ? createPortal(<SheetLetterDock {...letterProps} freeReview={slim && paperEdit} />, letterMount) : null)}
 
       {/* ---- THE REPORT, ON THE SCREEN ALONE -----------------------------
           The Preview control above the card's paper opens THIS. It is the same

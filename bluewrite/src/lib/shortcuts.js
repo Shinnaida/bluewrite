@@ -51,6 +51,12 @@ export const SHORTCUT_GROUPS = [
         hint: 'Saves without validating the report as complete',
         withMod: true,
       },
+      {
+        keys: ['P'],
+        label: 'Print slip',
+        hint: 'Saves, then prints the stored copy',
+        withMod: true,
+      },
       { keys: ['/'], label: 'Search reports', hint: 'Jumps to the register’s search box' },
     ],
   },

@@ -29,7 +29,10 @@ punctuation and police register. If a change would not survive being called
 WHAT YOU MAY IMPROVE
 Proofread and correct the report. This is wording work only — the meaning,
 the facts and the format never change:
-- Grammar: subject-verb agreement, verb tenses, articles, prepositions.
+- Grammar: consistent past tense for everything already done or observed,
+  subject-verb agreement, articles, prepositions, and clean sentence
+  boundaries — no fragments, no run-ons, no contractions, third person
+  throughout.
 - Sentence health: attach sentence fragments to their sentence, split
   run-on sentences, and leave every sentence properly punctuated and ended.
 - Spelling, capitalization and typos — except names, place names and
@@ -75,7 +78,15 @@ this pass.
   caught / grabbed → apprehended; called → coordinated with / summoned;
   wrote down → recorded / documented; fight / argument → altercation /
   disturbance; hurt / injured → sustained injuries; suspect ran → the
-  suspect fled the scene; all clear → the situation was rendered peaceful.
+  suspect fled the scene; all clear → the situation was rendered peaceful;
+  complainant's story → complainant's sworn statement.
+- Name the officer as the report already does — the responding team, the
+  undersigned, this Office — never I / we / you; expand every contraction
+  (don't → did not, can't → could not).
+- Prefer the register's own connectors and pro-forms where they fit:
+  thereafter, upon arrival, turned over for proper disposition, for
+  follow-up investigation; refer back with said + noun (said vehicle,
+  said suspect — never said + event) instead of repeating the full phrase.
 - Substitute ONLY the equivalent term — never a term of greater legal
   weight than described ("talked to" is not "interrogated"; "brought to
   station" is not "placed under arrest"), never a legal classification,

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { arrangeOutputIsFaithful, cleanAccountText, buildArrangeDraft, buildEnhancedDraft } from '../../src/lib/arrangeDraft.js';
+import { arrangeOutputIsFaithful, cleanAccountText, buildArrangeDraft, buildEnhancedDraft, letterHtmlToAccountText } from '../../src/lib/arrangeDraft.js';
 import { formatIncidentReportHtml, reportHtmlToPlain, extractFieldLabels, unsupportedFieldLabels, detectIncidentTitle, stripAddedFieldRows } from '../../src/lib/reportFormat.js';
 import { emphasizeIssuanceRequestorHtml } from '../../src/lib/narrativeText.js';
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
@@ -341,6 +341,34 @@ test('sheet provisional arrival writes on landing; Discard restores, Keep confir
   assert.ok(REPORTS.includes('restored.findings'), 'restore does not hand back findings');
   // Hand-edits close the narrative revert, like the fields below.
   assert.ok(REPORTS.includes("Hand-edits close the narrative revert, like the fields below"), 'edits do not close the narrative revert');
+});
+
+test('a run in flight leaves the paper exactly as it was pressed', () => {
+  // Owner request, 2026-11-12: the sheet's content must not change while the
+  // AI is generating — only when the generation finishes. Every run rewinds
+  // the REPORT first (so the model reads the officer's own words); the paper
+  // keeps drawing the frame it had at the press until the new draft lands.
+  assert.ok(
+    PANEL.includes('paperAtPressRef.current = { pending: sheetPending, letterHtml, letterEdit };'),
+    'the press no longer freezes the page',
+  );
+  assert.ok(
+    PANEL.includes("const runPaper = mode === 'loading' ? paperAtPressRef.current : null;"),
+    'the run is no longer read while generating',
+  );
+  assert.ok(PANEL.includes('const paperPending = runPaper ? runPaper.pending : sheetPending;'), 'the proposal is not frozen');
+  assert.ok(PANEL.includes('const paperInk = runPaper ? runPaper.letterHtml : letterHtml;'), 'the canvas ink is not frozen');
+  assert.ok(PANEL.includes('const paperEdit = runPaper ? runPaper.letterEdit : letterEdit;'), 'the edit state is not frozen');
+  assert.ok(PANEL.includes('pending: paperPending,'), 'the sheet is not handed the frozen proposal');
+  assert.ok(PANEL.includes('letterHtml: paperInk,'), 'the sheet is not handed the frozen ink');
+  // The mount stays up through the run, and stays editable, so the page cannot
+  // drop back to the rewound report for the length of the generation.
+  assert.ok(PANEL.includes('{sheeted && slim && (mode === \'done\' || !!runPaper)'), 'the paper mount drops while generating');
+  assert.ok(PANEL.includes("(mode === 'done' || !!runPaper)"), 'the paper locks while generating');
+  assert.ok(PANEL.includes('freeReview={slim && paperEdit}'), 'the canvas frees outside the frozen frame');
+  // Close never snaps the sheet whole: a Close pressed mid-typing would jump
+  // the page to its last line instead of letting the generation finish.
+  assert.ok(PANEL.includes('if (!slim) setSheetTyped(true);'), 'Close still snaps the sheet whole');
 });
 
 test('the shared formatter bolds existing labels only and adds none', () => {
@@ -879,6 +907,32 @@ test('a reworded issuance line still dresses its requestor', () => {
   assert.ok(dressed.includes('<b><u>KNOHEA</u></b>'), 'editor dresser missed the reworded line');
 });
 
+test('a header restated at the open of the prose prints once, not twice', () => {
+  // The pasted prose repeats the short Owner / Place & Date lines above it;
+  // the page printed both. The restated header is one part, not two: the
+  // bare header drops, the full paragraph keeps every word.
+  const src = [
+    'Owner: Jonalyn Panugalinog Pantilgan',
+    'Place & Date Lost: Around October 10, 2026, church in City of Naga, Cebu',
+    '',
+    'Owner: Jonalyn Panugalinog Pantilgan Place & Date Lost: Around October 10, 2026, Church in City of Naga, Cebu One (1) Jonalyn Panugalinog Pantilgan personally appeared and reported a lost wallet.',
+  ].join(LF);
+  for (const html of [formatIncidentReportHtml(src, { sentenceCase: true }), formatIncidentReportHtml(src)]) {
+    const plain = reportHtmlToPlain(html).toLowerCase();
+    assert.equal(
+      plain.split('place & date lost').length - 1,
+      1,
+      'the header printed twice: ' + plain,
+    );
+    assert.ok(plain.includes('personally appeared'), 'the prose was lost: ' + plain);
+  }
+  // Distinct paragraphs are never merged: two different remarks stay two.
+  const two = ['Facts: the wallet was lost.', '', 'Remarks: none.'].join(LF);
+  const twoPlain = reportHtmlToPlain(formatIncidentReportHtml(two, { sentenceCase: true })).toLowerCase();
+  assert.ok(twoPlain.includes('the wallet was lost'), 'facts lost: ' + twoPlain);
+  assert.ok(twoPlain.includes('none'), 'remarks lost: ' + twoPlain);
+});
+
 test('a placeholder requestor builds no issuance', () => {
   const src = ['REQUESTED BY: name of who requested', '', 'FACTS. SOMETHING HAPPENED.'].join(LF);
   assert.ok(
@@ -1109,6 +1163,16 @@ test('enhance is a copy-edit of the ALREADY-ARRANGED report, never a rearrangeme
   // covers are corrected, and an untouched answer has not done the pass.
   assert.match(prompt, /leaving casual wording in place is the failure mode/);
   assert.match(prompt, /An answer that returns casual words untouched has not done/);
+  // Grammar + professional terminology (owner request): the pass holds past
+  // tense, agreement and sentence health to a checklist — not a passing
+  // mention — and the register keeps growing from the glossary: the sworn
+  // statement, the officer's own actor terms over I/we, contractions
+  // expanded, connectors and said + noun instead of repeated phrases.
+  assert.match(prompt, /consistent past tense/);
+  assert.match(prompt, /no contractions/);
+  assert.match(prompt, /sworn statement/);
+  assert.match(prompt, /the responding team, the\s*\n?undersigned, this Office/);
+  assert.match(prompt, /thereafter, upon arrival/);
 
   // Spacing is analysed in Enhance too: the arranged page may still carry a
   // wrapped line, so the model reads every break as continuation data or a
@@ -1133,7 +1197,7 @@ test('enhance is a copy-edit of the ALREADY-ARRANGED report, never a rearrangeme
   // names, headings, labels, breaks and structure preserved and no fact
   // added, removed or invented.
   assert.match(prompt, /Proofread and correct the report/);
-  assert.match(prompt, /subject-verb agreement, verb tenses, articles, prepositions/);
+  assert.match(prompt, /consistent past tense[\s\S]{0,120}?subject-verb\s+agreement, articles, prepositions/);
   assert.match(prompt, /split\s+run-on\s+sentences/);
   assert.match(prompt, /leave every sentence properly punctuated/);
   assert.match(prompt, /each\s+repeated value is written the same way/);
@@ -1163,5 +1227,55 @@ test('enhance is a copy-edit of the ALREADY-ARRANGED report, never a rearrangeme
     PANEL,
     /if \(!fromArranged && onReadAccount\) \{\s*\n\s*await runAccountRead\(accountText, \{ arrangeOnly: true \}\);/,
     'enhance runs the full account read again',
+  );
+});
+
+test('saved paper ink is the arrange/enhance account (owner request)', () => {
+  // An edit on the overall report, once saved, is the new source: both
+  // presses prefer the letter canvas ink over the narrative field, falling
+  // back to the field when the ink holds no account.
+  assert.match(
+    PANEL,
+    /const arrangePaper = letterHtmlToAccountText\(letterHtml\);\s*\n\s*if \(arrangePaper !== ''\) accountText = arrangePaper;/,
+    'arrange still reads the narrative field over saved paper ink',
+  );
+  assert.match(
+    PANEL,
+    /const enhancePaper = letterHtmlToAccountText\(letterHtml\);\s*\n\s*if \(enhancePaper !== ''\) accountText = enhancePaper;/,
+    'enhance still reads the narrative field over saved paper ink',
+  );
+  // A saved write promotes the page to the new baseline: the provisional
+  // snapshot is dropped on Save Draft, so a later press can never rewind
+  // over the saved words (same rule as the guided apply's saved write).
+  const saveAt = REPORTS.indexOf('async function saveDraft()');
+  assert.notEqual(saveAt, -1, 'saveDraft is gone');
+  const saveBody = REPORTS.slice(saveAt, REPORTS.indexOf('async function printSlip()'));
+  assert.match(saveBody, /setNarrativeUndo\(null\);/, 'Save Draft leaves the pre-draft snapshot behind');
+});
+
+test('letterHtmlToAccountText keeps the account and drops the middle chrome', () => {
+  const ink = [
+    '<p>NCPS &ndash; INVEST23 October 2026Date</p>',
+    '<h1>POLICE REPORT</h1>',
+    '<p>To whom it may concern:</p>',
+    '<p>This is to certify that, according to the police blotter entry # 12, dated October 23, 2026, appeared among other things the following data to wit;</p>',
+    '<p>&ldquo;THEFT&rdquo;</p>',
+    '<p><b>Place:</b> Zone 3, Barangay San Felipe</p>',
+    '<p>A man took the bicycle at around 10pm.</p>',
+    '<p><b>Recorded by:</b> PO1 Ana Lim</p>',
+  ].join('');
+  const account = letterHtmlToAccountText(ink);
+  assert.ok(!account.includes('POLICE REPORT'), 'title chrome leaked into the account');
+  assert.ok(!account.includes('To whom it may concern'), 'salutation leaked into the account');
+  assert.ok(!account.includes('to certify'), 'certify boilerplate leaked into the account');
+  assert.ok(!account.includes('INVEST'), 'office-code/date row leaked into the account');
+  assert.ok(account.includes('Zone 3, Barangay San Felipe'), 'fact line was dropped');
+  assert.ok(account.includes('A man took the bicycle'), 'prose was dropped');
+  assert.ok(account.includes('PO1 Ana Lim'), 'closing line was dropped');
+  assert.equal(letterHtmlToAccountText(''), '', 'empty ink must fall back to the field');
+  assert.equal(
+    letterHtmlToAccountText('<p>POLICE REPORT</p><p>To whom it may concern:</p>'),
+    '',
+    'chrome-only ink must fall back to the field',
   );
 });

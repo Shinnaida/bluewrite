@@ -4989,6 +4989,264 @@ body.profile-panel-open {
 .gap-warning { color: var(--amber, #f59e0b); }
 .gap-error { color: var(--red-text, #B3261E); font-weight: 600; }
 .gap-info { color: var(--steel, #8fa3c8); }
+/* Possible gaps — one tap onto the paper (owner request, 2026-11-12): each
+   advisory is a tappable card with a severity icon and a "Fix on paper"
+   call-to-action, so the fast-edit affordance reads at a glance.
+   Presented as a desk card (owner request, 2026-11-12): a headed panel with
+   a count, a title/example split per card, and a stamped receipt state. */
+.gap-panel {
+  margin-top: 0.9rem;
+  border: 1px solid var(--line, #d8dce4);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, var(--panel-raised, #f4f6fa), var(--panel, #fff) 34%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+}
+.gap-panel__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.7rem 0.8rem 0.55rem;
+  border-bottom: 1px dashed var(--line, #d8dce4);
+}
+.gap-panel__titles { flex: 1; min-width: 0; }
+.gap-panel__titles h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.78rem;
+  font-family: var(--font-hud, monospace);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink, #1f2937);
+}
+.gap-panel__tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan-dim, #6b7488);
+  background: var(--panel-raised, #f4f6fa);
+  border: 1px solid var(--line, #d8dce4);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+}
+.gap-panel__hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--cyan-dim, #6b7488);
+}
+.gap-panel__count {
+  flex: none;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  padding: 0 0.35rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(180deg, #3b82f6, var(--cyan, #1f5fd0));
+  box-shadow: 0 1px 3px rgba(31, 95, 208, 0.4);
+}
+.gap-note-ok {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.6rem 0.8rem 0;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #15803d;
+  background: rgba(21, 128, 61, 0.08);
+  border: 1px solid rgba(21, 128, 61, 0.25);
+  border-radius: 10px;
+}
+.gap-note-ok span { font-weight: 800; }
+.gap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.7rem 0.8rem 0.8rem;
+  display: grid;
+  gap: 0.55rem;
+}
+.gap-list li { margin: 0; }
+.gap-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.7rem 0.75rem;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink, #1f2937);
+  background: var(--panel, #fff);
+  border: 1px solid var(--line-bright, #e5e7eb);
+  border-left-width: 4px;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.gap-link--error { border-left-color: var(--red-text, #b3261e); }
+.gap-link--warning { border-left-color: var(--amber, #b26a00); }
+.gap-link--info { border-left-color: var(--steel, #8fa3c8); }
+.gap-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+  background: var(--panel-raised, #f4f6fa);
+}
+.gap-link:active { transform: translateY(0); }
+.gap-link:focus-visible {
+  outline: 2px solid var(--cyan, #1f5fd0);
+  outline-offset: 2px;
+}
+.gap-link.is-stamped { border-left-color: #15803d; }
+.gap-link__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+.gap-link__top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.gap-link__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.gap-link--error .gap-link__title { color: var(--red-text, #b3261e); }
+.gap-link--warning .gap-link__title { color: var(--amber, #b26a00); }
+.gap-link__sev {
+  flex: none;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  white-space: nowrap;
+}
+.gap-link__sev--error {
+  color: var(--red-text, #b3261e);
+  background: var(--red-bg, rgba(179, 38, 30, 0.07));
+  box-shadow: inset 0 0 0 1px rgba(179, 38, 30, 0.25);
+}
+.gap-link__sev--warning {
+  color: var(--amber, #b26a00);
+  background: var(--amber-bg, rgba(178, 106, 0, 0.1));
+  box-shadow: inset 0 0 0 1px rgba(178, 106, 0, 0.3);
+}
+.gap-link__sev--info {
+  color: var(--cyan, #1f5fd0);
+  background: rgba(31, 95, 208, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(31, 95, 208, 0.25);
+}
+.gap-link__text {
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+.gap-link__example {
+  display: block;
+  font-family: var(--font-hud, ui-monospace, monospace);
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--cyan-dim, #6b7488);
+  background: var(--panel-raised, #f4f6fa);
+  border: 1px dashed var(--line-bright, #e5e7eb);
+  border-radius: 8px;
+  padding: 0.35rem 0.55rem;
+  overflow-wrap: anywhere;
+}
+.gap-link__example-tag {
+  font-weight: 800;
+  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cyan, #1f5fd0);
+}
+.gap-link__foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.1rem;
+}
+.gap-link__cta {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--cyan, #1f5fd0);
+  background: rgba(31, 95, 208, 0.1);
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+}
+.gap-link:hover .gap-link__cta { background: rgba(31, 95, 208, 0.18); }
+.gap-link.is-stamped .gap-link__cta {
+  color: #15803d;
+  background: rgba(21, 128, 61, 0.1);
+}
+/* Name input under a stamped closing-line card: the officer types the
+   name here (or on the paper) and it writes into the record narrative. */
+.gap-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.55rem 0.15rem 0.1rem;
+  padding: 0.55rem 0.6rem;
+  background: var(--panel-raised, #f4f6fa);
+  border: 1px dashed var(--line-bright, #e5e7eb);
+  border-radius: 10px;
+}
+.gap-name-label {
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--steel, #8fa3c8);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.gap-name-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.84rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line-bright, #e5e7eb);
+  border-radius: 8px;
+  background: var(--panel, #fff);
+  color: inherit;
+}
+.gap-name-input:focus {
+  outline: 2px solid var(--blue, #2563eb);
+  outline-offset: 1px;
+  border-color: var(--blue, #2563eb);
+}
+/* Target flash when a gap lands on the paper: brief blue outline pulse on
+   the focused paper line, so the officer sees exactly where to type. */
+.gap-flash {
+  outline: 2px solid var(--blue, #2563eb);
+  outline-offset: 3px;
+  border-radius: 6px;
+  animation: gap-flash-pulse 1.6s ease-out;
+}
+@keyframes gap-flash-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45); }
+  100% { box-shadow: 0 0 0 12px rgba(37, 99, 235, 0); }
+}
 @media (max-width: 640px) {
   /* On phones the docked panel would crush the form; fall back to the
      overlay behaviour (panel covers, form keeps full width). */
@@ -6815,9 +7073,68 @@ button.dash-kpi--link:focus-visible {
    portals its strip in) it draws nothing. */
 .ir-narrative-toolbar {
   margin: 0.35rem 0 0.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
 }
 .ir-narrative-toolbar:empty {
   display: none;
+}
+/* Satisfied-with-the-result choice beside Upload (owner request,
+   2026-11-11): the arrange/enhance confirmation lives in the same strip
+   as Upload, so the officer answers it where the draft was asked for. */
+.rt-satisfied {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: 0.6rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 999px;
+  background: var(--panel-raised);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.rt-satisfied-q {
+  font-weight: 600;
+}
+.rt-satisfied-save {
+  border: none;
+  border-radius: 999px;
+  padding: 0.3rem 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: #fff;
+  background: var(--blue, #2563eb);
+}
+.rt-satisfied-save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.rt-satisfied-discard {
+  border: 1px solid var(--line-bright);
+  border-radius: 999px;
+  padding: 0.3rem 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: inherit;
+}
+.rt-satisfied-discard:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+/* Saved receipt (owner request, 2026-11-12): confirms the toolbar Save,
+   then fades out at 5s (see satisfiedLeaving). */
+.rt-satisfied--saved {
+  border-color: var(--line-bright);
+  background: var(--panel-raised);
+  color: var(--green, #15803d);
+  transition: opacity 0.8s ease;
+}
+.rt-satisfied--fade {
+  opacity: 0;
 }
 /* Blotter capture review: the recognized text, editable before it lands in
    the narrative. A plain box in the dialog's own measure — this is a
