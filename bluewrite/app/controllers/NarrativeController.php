@@ -905,6 +905,9 @@ final class NarrativeController
         if ($status === 401) {
             return 'The AI service rejected this station\'s key. An administrator needs to install a valid key — your report is not affected.';
         }
+        if ($status === 402) {
+            return 'The station\'s AI billing credit is depleted. An administrator needs to top up billing at AI Studio — your report is not affected.';
+        }
         if ($status !== null && $status >= 400 && $status < 500) {
             return 'The AI service rejected this station\'s request. Tell an administrator — your report is not affected.';
         }

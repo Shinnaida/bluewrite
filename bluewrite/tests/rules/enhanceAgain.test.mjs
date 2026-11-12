@@ -67,6 +67,18 @@ test('Enhance again freezes the current edited page during the run (no original 
   assert.match(body, /if \(fromArranged\) \{[\s\S]*?paperAtPressRef\.current = \{ pending: sheetPending, letterHtml, letterEdit \}/, 'in-place enhance never refreshes the paper freeze — loading shows the stale original');
 });
 
+test('Enhance keeps its typing animation but replays prose over whole chrome+facts', () => {
+  const src = code(PANEL);
+  const at = src.indexOf('const enhanceReport');
+  assert.notEqual(at, -1, 'enhanceReport is gone');
+  const body = src.slice(at, src.indexOf('// SHEET FORMAT - Arrange-only', at));
+  // The animation stays (full replay gate reopens for every enhance)…
+  assert.match(body, /if \(sheet\) setSheetTyped\(false\);/, 'enhance lost its typing animation');
+  // …but a wording-only polish types the prose while chrome+facts draw whole,
+  // so the replay never opens on the template top that reads as the original.
+  assert.match(src, /bodyOnly: draft\?\.enhanced === true,/, 'enhance no longer types prose-only');
+});
+
 test('Enhance again enhances this page in place, not a fresh run', () => {
   const src = code(PANEL);
   const at = src.indexOf('>Enhance again<');

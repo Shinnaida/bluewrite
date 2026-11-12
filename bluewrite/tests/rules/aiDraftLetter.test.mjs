@@ -175,7 +175,7 @@ test('the final formal letter types itself in once, behind the same gates', () =
   // stays pending-only so a final replay can never overlay proposal values.
   // The auto-print dialog never replays — it prints ~150ms after load, and a
   // page that prints mid-sequence would print half-typed (see printParity).
-  assert.match(LEAF, /const typeFacts = pendingOn \|\| finalOn;/, 'the facts no longer type on the final replay');
+  assert.match(LEAF, /const typeFacts = \(pendingOn \|\| finalOn\) && !bodyOnly;/, 'the facts no longer type on the final replay');
   assert.match(LEAF, /const typeBody = pendingOn \|\| finalOn;/, 'the narrative no longer types on the final replay');
   assert.match(LEAF, /const typeFindings = pendingOn \|\| finalOn;/, 'the findings no longer type on the final replay');
   assert.match(LEAF, /const typeStatus = pendingOn \|\| finalOn;/, 'the status no longer types on the final replay');
@@ -218,20 +218,31 @@ test('the slim bar portals the letter onto the paper, under the narrative', () =
   assert.match(DOCK, /<SheetToolBox enabled=\{!!editable\} \/>/, 'the dock lost the editable gate');
   // ONE HOME ONLY (owner request): the slim bar portals onto the paper mount
   // and renders nothing elsewhere — never a missing draft, and never a second
-  // copy in the bar. Deck formats keep the page in the card.
-  assert.match(SRC, /\{sheeted && slim/, 'the letter is no longer gated on the mount');
-  assert.match(SRC, /letterMount \? createPortal\(<SheetLetterDock \{\.\.\.letterProps\} freeReview=\{slim && paperEdit\} \/>, letterMount\) : null/, 'the slim bar still draws a second copy');
+  // copy in the bar. Deck formats keep the page in the card. The gate also
+  // covers a saved draft on landing (owner request: Edit opens on the same
+  // sheet My Reports shows); a run in flight still reads only the frozen
+  // at-press frame (see generateReportModes).
+  assert.match(SRC, /\{slim && letterMount && sheet/, 'the letter is no longer gated on the mount');
+  assert.match(SRC, /!paperEdit && sheet\.report && sheet\.report\.id/, 'saved drafts no longer land on the sheet');
   // Every sheeted draft draws the letter — plain arrivals as a static police-
   // format proposal (their sheetTyped is already true, so nothing replays),
   // guided arrivals with the typing reveal. Deck formats are unchanged: their
   // sheetProvisional is always false, so the same gate covers them.
   assert.match(SRC, /revealPending: !sheetTyped,/, 'plain arrivals no longer arrive whole');
-  assert.match(SRC, /createPortal\(<SheetLetterDock \{\.\.\.letterProps\} freeReview=\{slim && paperEdit\} \/>, letterMount\)/, 'the letter is no longer portaled');
+  assert.match(SRC, /createPortal\(<SheetLetterDock \{\.\.\.letterProps\} freeReview=\{slim && \(paperEdit \|\| viewFree\)\} \/>, letterMount\)/, 'the letter is no longer portaled');
   // Both homes render the one shared props object — stated once, so the
   // portal and the card cannot drift apart on the next edit.
   assert.match(SRC, /const letterProps = \{/, 'the shared props object is gone');
+  // WRITE ON THE CLEAN PAPER (owner request): a landed saved draft with no
+  // run in flight and no proposal awaiting Keep/Discard is editable right on
+  // the paper — the officer swaps or retypes blocks where they read them, and
+  // the canvas keeps it into letter_html (dirty, autosave, save). Slim mount
+  // only, so deck cards keep the read-only page they always had.
+  assert.match(PANEL, /const viewFree = !!\(slim && !paperEdit && !runPaper/, 'the clean paper is not writable on its own');
+  assert.match(PANEL, /provisionalState === 'idle' && sheet && sheet\.report && sheet\.report\.id != null/, 'a proposal or a run can be typed over on the clean paper');
+  assert.match(SRC, /letterProps\.editable = \(paperEdit \|\| viewFree\) &&/, 'a saved draft on View stays read-only');
   assert.equal((SRC.match(/<SheetLetterDock \{\.\.\.letterProps\} \/>/g) ?? []).length, 1, 'the deck card no longer shares the one props object');
-  assert.equal((SRC.match(/<SheetLetterDock \{\.\.\.letterProps\} freeReview=\{slim && paperEdit\} \/>/g) ?? []).length, 1, 'the mount branch lost the shared props object or its Edit free flag');
+  assert.equal((SRC.match(/<SheetLetterDock \{\.\.\.letterProps\} freeReview=\{slim && \(paperEdit \|\| viewFree\)\} \/>/g) ?? []).length, 1, 'the mount branch lost the shared props object or its Edit free flag');
   assert.doesNotMatch(SRC, /function sheetLetterPage/, 'the dock logic is back in the panel');
   // No Preview control in the slim bar (owner request, 2026-10-26): the paper
   // IS the preview there, so the fullscreen chip is deck-formats only.
@@ -690,6 +701,12 @@ test('the static lines type too — letterhead, labels, headings, signatures', (
   // Read-only stays read-only: the editor renders only under `editable`,
   // and the fallback ink is the template default, never an empty box.
   assert.match(LEAF, /chromeEdit \? \(/, 'chrome edits leak into the read path');
+  // The clean paper is one typing surface end to end: the free canvas does
+  // not silence the static lines — letterhead, labels, boilerplate and
+  // signature type in place beside it through their own overrides.
+  assert.match(LEAF, /\(\(editInner \|\| freeEdit\) && onEditChrome\)/, 'the chrome locks while the free canvas is up');
+  assert.match(LEAF, /st\('noted name',/, 'the signature has no saved override');
+  assert.match(LEAF, /CL\('noted name', notedName\)/, 'the signature does not type in place');
   // The blotter number stays derived — typing it would falsify the record's
   // own reference — while the signing name resolves per-report, then the
   // station default.
@@ -720,10 +737,10 @@ test('the sheet frees its letter into one canvas that keeps its own text', () =>
   // Discard (and the fresh run that replaces a review) drops the canvas text
   // with the snapshot — otherwise the provisional letter survives its own
   // Discard. A kept letter's snapshot is already dropped, so kept ink stays.
-  assert.match(REPORTS, /bringing back the snapshotted words must drop the[\s\S]*?set\('letter_html', ''\);/, 'a discarded review leaves its canvas on the paper');
+  assert.match(REPORTS, /bringing back the snapshotted words must drop the[\s\S]*?set\('letter_html', String\(narrativeUndo\.letterHtml \?\? ''\)\);/, 'a discarded review leaves its canvas on the paper');
 
   // The panel forwards both halves; the dock spreads them into the body.
-  assert.match(SRC, /letterHtml,\n    onEditLetterHtml,/, 'the letter props never reach the dock');
+  assert.match(SRC, /letterHtml\s*=\s*null,\s+onEditLetterHtml\s*=\s*null,/, 'the letter props never reach the dock');
   assert.match(DOCK, /letterHtml=\{letterHtml\}/, 'the dock drops the kept text');
   assert.match(DOCK, /onEditLetterHtml=\{onEditLetterHtml\}/, 'the dock drops the canvas write path');
 
@@ -739,7 +756,7 @@ test('the sheet frees its letter into one canvas that keeps its own text', () =>
   // The dock carries the mount-only review flag into the body; the panel sets
   // it on the sheet portal alone (slim bar + Edit), never the deck card.
   assert.match(DOCK, /freeReview=\{freeReview\}/, 'the dock drops the review flag');
-  assert.match(SRC, /freeReview=\{slim && paperEdit\}/, 'the canvas frees outside the sheet Edit review');
+  assert.match(SRC, /freeReview=\{slim && \(paperEdit \|\| viewFree\)\}/, 'the canvas frees outside the sheet Edit review');
   assert.match(LEAF, /<div ref=\{seedRef\} hidden>\{midPart\}<\/div>/, 'the canvas no longer seeds from the composed body');
   // The seed re-captures while the reveal types, on every generation and on
   // every draft write with no officer ink yet (a gap fix stamped after the

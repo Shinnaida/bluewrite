@@ -223,6 +223,10 @@ export default function ReportSheetBody({
   letterHtml = null,
   onEditLetterHtml = null,
   freeReview = false,
+  // Wording-only replay (Enhance): chrome + facts draw whole while the prose
+  // types, so the animation opens on the current page — never on the template
+  // top that reads as the original report. New layouts leave it false.
+  bodyOnly = false,
   // The Arrange working state ('reading' | 'arranging' | 'typing', false
   // when idle): the sheet draws a status pill + shimmer from it while the
   // press runs, so the officer watches the work instead of a frozen page.
@@ -257,9 +261,10 @@ export default function ReportSheetBody({
   // review — or a review the host explicitly frees with `freeReview`), the
   // editable letter renders a single Word-like canvas seeded from the
   // composed body instead of per-field editors — typing anywhere is allowed
-  // because nothing has to map back into a field. The letterhead, the
-  // signature block and the appendix stay composed system ink; only the
-  // body frees.
+  // because nothing has to map back into a field. The letterhead lines and
+  // the signature type in place beside it through their own overrides (see
+  // `chromeEdit`); only the appendix stays composed system ink — it is
+  // evidence, not wording.
   const freeEdit = !!(editable && onEditLetterHtml && (!pending || freeReview));
   // Inside the free canvas (and its hidden seed copy) nothing binds to a
   // field, so the inner tree always renders read-only. While the sheet mount
@@ -269,7 +274,12 @@ export default function ReportSheetBody({
   // a run of field boxes. The deck card never sets `freeReview`, so its
   // per-field editors are untouched.
   const editInner = freeEdit ? false : (editable && !freeReview);
-  const chromeEdit = !!(editInner && onEditChrome);
+  // The free canvas does not silence the chrome: the body types as one
+  // canvas while every static line (letterhead, labels, boilerplate,
+  // signature) types in place through its own override — the clean paper
+  // is one typing surface end to end, saved exactly as it reads.
+  // Read-only hosts keep plain ink either way (no write path, no editor).
+  const chromeEdit = !!((editInner || freeEdit) && onEditChrome);
   const st = (key, fallback) => sheetTextOf(ts, key, fallback);
   for (const hk of ['agency', 'commission', 'regional_office', 'provincial_office', 'station_name', 'station_location', 'office_code']) {
     head[hk] = st(`head ${hk}`, head[hk]);
@@ -288,10 +298,12 @@ export default function ReportSheetBody({
         ariaLabel={typeof fb === 'string' ? fb : k}
       />
     ) : (fb);
-  // The signing official — the station's saved sign-off (Station Settings),
-  // falling back to the built-in name when none is on file. Same footer on
-  // drafts and finalized reports alike. Never a blank line.
-  const notedName = report.noted_by_name || resolveNotedBy(letterHeadSrc);
+  // The signing official — the report's own noting official, then the
+  // station's saved sign-off (Station Settings), then the built-in name.
+  // A per-report override rides with it like every other static line, so
+  // the signature types in place on the paper and saves as it reads.
+  // Same footer on drafts and finalized reports alike. Never a blank line.
+  const notedName = st('noted name', report.noted_by_name || resolveNotedBy(letterHeadSrc));
   // Task 9 — a draft under review brings the model's own Suspect sentence for
   // each respondent row it described; the facts block draws it in place of the
   // record's composed line. A tighten carries none: it rewrites the officer's
@@ -547,7 +559,7 @@ export default function ReportSheetBody({
   // selection above stays pending-only, so a final replay can never overlay
   // a proposal's values onto the record.
   const finalOn = revealFinal && !pendingOn;
-  const typeFacts = pendingOn || finalOn;
+  const typeFacts = (pendingOn || finalOn) && !bodyOnly;
   const typeBody = pendingOn || finalOn;
   const typeFindings = pendingOn || finalOn;
   const typeStatus = pendingOn || finalOn;
@@ -1332,7 +1344,7 @@ export default function ReportSheetBody({
             code but not rendered on any incident's sheet. */}
         <div className="pr-noted">
           <span className="pr-noted-label">{animate ? typeChrome(CL('noted label', "Noted by:")) : CL('noted label', "Noted by:")}</span>
-          <span className="pr-noted-name">{typeChrome(notedName)}</span>
+          <span className="pr-noted-name">{animate ? typeChrome(CL('noted name', notedName)) : CL('noted name', notedName)}</span>
         </div>
       </div>
 

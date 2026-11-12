@@ -599,6 +599,11 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
         if ($status === 429) {
             throw new AiProviderException('AI provider rate limit reached.', retryable: true, httpStatus: 429);
         }
+        if ($status === 402) {
+            // Prepayment/billing credit depleted — retrying will not help;
+            // an administrator must top up billing (HTTP 402 RESOURCE_EXHAUSTED).
+            throw new AiProviderException('AI billing credit depleted (HTTP 402).', retryable: false, httpStatus: 402);
+        }
         if ($status >= 500) {
             throw new AiProviderException("AI provider error (HTTP {$status}).", retryable: true, httpStatus: $status);
         }
@@ -1502,6 +1507,11 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
         }
         if ($status === 429) {
             throw new AiProviderException('AI provider rate limit reached.', retryable: true, httpStatus: 429);
+        }
+        if ($status === 402) {
+            // Prepayment/billing credit depleted — retrying will not help;
+            // an administrator must top up billing (HTTP 402 RESOURCE_EXHAUSTED).
+            throw new AiProviderException('AI billing credit depleted (HTTP 402).', retryable: false, httpStatus: 402);
         }
         if ($status >= 500) {
             throw new AiProviderException("AI provider error (HTTP {$status}).", retryable: true, httpStatus: $status);

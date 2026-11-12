@@ -155,6 +155,7 @@ test('the save boundary keeps only the allowlisted subset', () => {
   // structure and sheet hooks survive, everything else does not.
   assert.match(save, /sanitizeLetterHtml\(next\.letter_html\)/, 'the freed letter is not cleaned at the boundary');
   const writer = bodyOf(SRC, 'const writeDraft = useCallback(');
-  assert.match(writer, /cleanSaveBody\(\{ \.\.\.d, status: 'draft'/, 'autosave bypasses the boundary');
+  assert.match(writer, /cleanSaveBody\(\{ \.\.\.d,/, 'autosave bypasses the boundary');
   assert.match(SRC, /cleanSaveBody\(\{ \.\.\.next, status: 'draft', narrative_source: 'ai-assisted' \}\)/, 'the guided save bypasses the boundary');
+  assert.match(SRC, /cleanSaveBody\(\{ \.\.\.draft, narrative: syncedNarrative, status: 'draft'/, 'Save Draft bypasses the boundary');
 });

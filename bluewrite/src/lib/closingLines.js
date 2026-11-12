@@ -88,6 +88,27 @@ const RECORDED_LINE = (name) => `<p><b>Recorded by:</b> ${name}</p>`;
 const ISSUANCE_LINE = (name) =>
   `<p>This certification is issued upon the request of ${name} for whatever legal purposes it may serve.</p>`;
 
+// STANDARD ORDER (owner request): Recorded by always sits ABOVE the
+// issuance (Requested-by) line — Remarks, Recorded by, issuance, the same
+// order the Arrange prompt and the blotter formatter both write. Stamping
+// appends at the end, so a Recorded-by stamped AFTER the issuance already
+// exists would land below it; this inserts ahead of the issuance paragraph
+// instead, so the standard holds whatever order the gap cards are tapped
+// in. The issuance itself always appends at the end, which is already
+// below any Recorded-by line, so it needs no such treatment.
+const ISSUANCE_PARA =
+  /<p[^>]*>(?:(?!<\/p>)[\s\S])*?(?:issued\s+upon\s+the\s+request\s+of|requested\s+by\s*:)(?:(?!<\/p>)[\s\S])*?<\/p\s*>/i;
+const ISSUANCE_LINE_TEXT = /^(?=.*(?:issued\s+upon\s+the\s+request\s+of|requested\s+by\s*:)).+$/im;
+
+function insertRecordedLine(src, lineHtml) {
+  const para = ISSUANCE_PARA.exec(src);
+  if (para) return src.slice(0, para.index) + lineHtml + src.slice(para.index);
+  // No paragraph-wrapped issuance (plain text): ahead of the issuance line.
+  const line = ISSUANCE_LINE_TEXT.exec(src);
+  if (line) return src.slice(0, line.index) + lineHtml + src.slice(line.index);
+  return `${src}${lineHtml}`;
+}
+
 /**
  * Stamp the prebuilt template (blank name) when the line is missing.
  * @returns {{ html:string, added:boolean }}
@@ -96,7 +117,7 @@ export function stampClosingLine(html, kind) {
   const src = String(html ?? '');
   if (kind === 'recorded') {
     if (hasRecordedBy(src)) return { html: src, added: false };
-    return { html: `${src}${RECORDED_LINE(CLOSING_BLANK)}`, added: true };
+    return { html: insertRecordedLine(src, RECORDED_LINE(CLOSING_BLANK)), added: true };
   }
   if (hasRequestedBy(src)) return { html: src, added: false };
   return { html: `${src}${ISSUANCE_LINE(CLOSING_BLANK)}`, added: true };
@@ -118,7 +139,7 @@ export function fillClosingLine(html, kind, name) {
   // Replacement functions (not strings) so a typed `$` in a name cannot
   // read as a replacement pattern.
   if (kind === 'recorded') {
-    if (!hasRecordedBy(src)) return `${src}${RECORDED_LINE(value)}`;
+    if (!hasRecordedBy(src)) return insertRecordedLine(src, RECORDED_LINE(value));
     const next = src.replace(
       /(<b>\s*Recorded by:\s*<\/b>\s*)([^<]*)(<\/p>)/i,
       (_m, p1, _p2, p3) => `${p1}${value}${p3}`,

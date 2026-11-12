@@ -200,6 +200,8 @@ test('field blocks breathe at four boundaries, nowhere else', () => {
   // page's rhythm. Enhance Wording keeps its source's own breaks instead
   // (see preserveLayout). One per boundary even
   // when two rules meet there, and never a leading or trailing blank.
+  // EXCEPTION — the closing pair (owner request): Recorded by and the
+  // Requested-by issuance sit next to each other, no blank line between.
   const out = render(TRAFFIC);
   assert.ok(
     out.includes('OF October 20, 2026</p><p><br></p><p>'),
@@ -208,8 +210,12 @@ test('field blocks breathe at four boundaries, nowhere else', () => {
   assert.ok(out.includes('<p><br></p><p><b>FACTS:'), 'no breathing room before Facts');
   assert.ok(out.includes('<p><br></p><p><b>REMARKS:'), 'no breathing room before Remarks');
   assert.ok(
-    out.includes('HONEY</p><p><br></p><p>This certification'),
-    'no breathing room after Recorded-by',
+    out.includes('HONEY</p><p>This certification'),
+    'Recorded by and the issuance are not next to each other',
+  );
+  assert.ok(
+    !out.includes('HONEY</p><p><br></p><p>This certification'),
+    'a blank line still sits between Recorded by and the issuance',
   );
   for (const { name, source } of CASES) {
     const body = render(source);

@@ -9201,6 +9201,22 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
   color: var(--ir-blue-ink);
 }
 
+/* Hidden by owner request: the sheet-size steppers (− 100% +) stay mounted —
+   the mount still reads `--sheet-zoom` at its default — but the desk no
+   longer shows them. Nothing else in the bar is touched. */
+.ir-sheet-zoom {
+  display: none;
+}
+
+/* Hidden by owner request, same treatment: the View paper / Edit report
+   switch stays mounted (saved drafts still open on the clean paper; the
+   internal AI/phone states are untouched) but is no longer shown. Scoped to
+   `aria-pressed` so the fields-reveal toggle, which shares the class, is
+   unaffected. */
+.ir-sheet-toggle[aria-pressed] {
+  display: none;
+}
+
 /* Disabled and locked fields: on paper a locked report is a print-out, and
    greying every line would read as scribble. The lock is already stated by the
    status row above the sheet. */

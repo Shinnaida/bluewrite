@@ -51,6 +51,27 @@ test('stamping appends a blank prebuilt line only when missing', () => {
   assert.ok(iss.html.includes('request of ____ for whatever legal'));
 });
 
+test('Recorded by always lands above the issuance line, whatever the tap order', () => {
+  const base = '<p>Facts: x.</p>';
+  // Issuance first, Recorded by second: the recorder still sits above.
+  const withIssuance = stampClosingLine(base, 'requested').html;
+  const stamped = stampClosingLine(withIssuance, 'recorded');
+  assert.equal(stamped.added, true);
+  assert.ok(
+    stamped.html.indexOf('Recorded by:</b> ____') < stamped.html.indexOf('request of ____'),
+    'recorded stamps above the issuance',
+  );
+  // Same for the named fill path (gap name typed before stamping).
+  const filled = fillClosingLine(withIssuance, 'recorded', 'PO1 Juan Dela Cruz');
+  assert.ok(
+    filled.indexOf('Recorded by:</b> PO1 Juan Dela Cruz') < filled.indexOf('request of ____'),
+    'recorded fills above the issuance',
+  );
+  // No issuance present: still appends at the end, as before.
+  const plain = stampClosingLine(base, 'recorded').html;
+  assert.ok(plain.endsWith('Recorded by:</b> ____</p>'));
+});
+
 test('filling writes the name into the record line; blank keeps ____', () => {
   const stamped = stampClosingLine('<p>Facts: x.</p>', 'recorded').html;
   const filled = fillClosingLine(stamped, 'recorded', 'PO1 Juan Dela Cruz');

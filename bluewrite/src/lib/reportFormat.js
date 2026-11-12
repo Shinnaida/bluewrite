@@ -767,14 +767,23 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
   // source's own breaks instead (see `preserveLayout`): the arranged page's
   // spacing is the spacing the officer approved. One separator per boundary
   // even when two rules meet there, and never a leading or trailing blank.
+  // EXCEPTION — the closing pair (owner request): Recorded by and the
+  // Requested-by issuance sit NEXT TO EACH OTHER, no blank line between
+  // them, so the after-Recorded-by separator is skipped when the recorded
+  // part is followed by the issuance. Every other boundary keeps its own.
   if (preserveLayout) return parts.map((part) => part.html).join('');
   const SEP = '<p><br></p>';
+  const isRecordedPart = (html) => /recorded\s+by/i.test(String(html ?? ''));
+  const isIssuancePart = (html) =>
+    /issued\s+upon\s+the\s+request\s+of|requested\s+by/i.test(String(html ?? ''));
   const out = [];
   parts.forEach((part, i) => {
     out.push(part.html);
     if (i + 1 >= parts.length) return;
     const next = parts[i + 1];
-    if (part.rank === 30 || next.rank === 60 || next.rank === 70 || part.rank === 80) out.push(SEP);
+    const closingPair =
+      part.rank === 80 && next.rank === 90 && isRecordedPart(part.html) && isIssuancePart(next.html);
+    if ((part.rank === 30 || next.rank === 60 || next.rank === 70 || part.rank === 80) && !closingPair) out.push(SEP);
   });
   return out.join('');
 }

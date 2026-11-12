@@ -1538,10 +1538,11 @@ export default function AiNarrativePanel({
       setDraft(withSheetCompletion(buildEnhancedDraft({ enhancedText: guarded.text, sourceText })));
       setResidual([]);
       presentDraftResult();
-      // Like Arrange below: reopen the paper gate explicitly so the whole
-      // sheet replays the typing for an enhance too, in every flow state —
-      // the arrival effect has already written the page onto the paper, and
-      // the landing still releases the review gate when the last value lands.
+      // In-place Enhance keeps the typing animation, but the replay starts
+      // from the prose: chrome + facts draw whole (see `bodyOnly`), so the
+      // animation opens on the arranged page — never on what reads as the
+      // original report — and types the new wording. Arrange (a new layout)
+      // keeps its full top-to-bottom replay below.
       if (sheet) setSheetTyped(false);
     } catch (err) {
       setThinkPhase('waiting');
@@ -2333,6 +2334,10 @@ export default function AiNarrativePanel({
     pending: paperPending,
     revealPending: !sheetTyped,
     revealKey: genCounter,
+    // Wording-only polish (Enhance) types the prose over whole chrome+facts,
+    // so the replay never opens on the template top that reads as the
+    // original report. New layouts (Arrange/Generate) replay the full sheet.
+    bodyOnly: draft?.enhanced === true,
     onRevealComplete: () => {
       setSheetTyped(true);
       setArrangePhase('idle');

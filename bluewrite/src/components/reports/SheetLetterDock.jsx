@@ -37,6 +37,9 @@ export default function SheetLetterDock({
   // per-field editors (see ReportSheetBody `freeReview`). Set only on the
   // portal branch; the deck card never frees its review.
   freeReview = false,
+  // Wording-only replay (Enhance): chrome + facts draw whole, prose types.
+  // New layouts leave it false and replay the full sheet.
+  bodyOnly = false,
 }) {
   return (
     <div className="sheet-ribbon-dock">
@@ -72,6 +75,7 @@ export default function SheetLetterDock({
             onRevealComplete={onRevealComplete}
             // Task 10 — the frame follows the words (see AiNarrativePanel).
             onProgress={onProgress}
+            bodyOnly={bodyOnly}
             // The Arrange working state the sheet draws as pill + shimmer.
             arranging={arranging}
           />
