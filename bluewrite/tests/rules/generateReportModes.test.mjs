@@ -324,8 +324,11 @@ test('sheet provisional arrival writes on landing; Discard restores, Keep confir
   assert.ok(PANEL.includes('Keep on the paper'), 'Keep label missing');
   // One home only: the slim bar portals onto the mount (or renders nothing
   // until it is up) — no second copy in the bar. Deck formats keep the card.
-  assert.ok(PANEL.includes('{sheeted && slim'), 'in-card paper not gated');
-  assert.ok(PANEL.includes('letterMount ? createPortal(<SheetLetterDock {...letterProps}'), 'slim bar still draws a second copy');
+  // The mount condition also covers a saved draft on landing (owner request:
+  // Edit opens on the same official sheet My Reports shows), while a run in
+  // flight still reads only the frozen at-press frame (see below).
+  assert.ok(PANEL.includes('{slim && letterMount && sheet'), 'in-card paper not gated');
+  assert.ok(PANEL.includes('createPortal(<SheetLetterDock {...letterProps}'), 'slim bar still draws a second copy');
   // Lifecycle resets: Close or a new run from a restored draft reopens the
   // lifecycle so the next arrival applies instead of stranding pending.
   assert.ok(PANEL.includes("if (provisionalState === 'pending')"), 'close does not reopen pending');
@@ -363,9 +366,9 @@ test('a run in flight leaves the paper exactly as it was pressed', () => {
   assert.ok(PANEL.includes('letterHtml: paperInk,'), 'the sheet is not handed the frozen ink');
   // The mount stays up through the run, and stays editable, so the page cannot
   // drop back to the rewound report for the length of the generation.
-  assert.ok(PANEL.includes('{sheeted && slim && (mode === \'done\' || !!runPaper)'), 'the paper mount drops while generating');
+  assert.ok(PANEL.includes("(sheeted && (mode === 'done' || !!runPaper))"), 'the paper mount drops while generating');
   assert.ok(PANEL.includes("(mode === 'done' || !!runPaper)"), 'the paper locks while generating');
-  assert.ok(PANEL.includes('freeReview={slim && paperEdit}'), 'the canvas frees outside the frozen frame');
+  assert.ok(PANEL.includes('freeReview={slim && (paperEdit || viewFree)}'), 'the canvas frees outside the frozen frame');
   // Close never snaps the sheet whole: a Close pressed mid-typing would jump
   // the page to its last line instead of letting the generation finish.
   assert.ok(PANEL.includes('if (!slim) setSheetTyped(true);'), 'Close still snaps the sheet whole');
@@ -1244,13 +1247,15 @@ test('saved paper ink is the arrange/enhance account (owner request)', () => {
     /const enhancePaper = letterHtmlToAccountText\(letterHtml\);\s*\n\s*if \(enhancePaper !== ''\) accountText = enhancePaper;/,
     'enhance still reads the narrative field over saved paper ink',
   );
-  // A saved write promotes the page to the new baseline: the provisional
-  // snapshot is dropped on Save Draft, so a later press can never rewind
-  // over the saved words (same rule as the guided apply's saved write).
+  // Discard-to-original survives save (owner request, 2026-11-13): Save Draft
+  // persists the arranged/enhanced page but keeps the pre-AI original
+  // snapshot, so Discard still brings back the original report. Only Keep
+  // drops it.
   const saveAt = REPORTS.indexOf('async function saveDraft()');
   assert.notEqual(saveAt, -1, 'saveDraft is gone');
   const saveBody = REPORTS.slice(saveAt, REPORTS.indexOf('async function printSlip()'));
-  assert.match(saveBody, /setNarrativeUndo\(null\);/, 'Save Draft leaves the pre-draft snapshot behind');
+  assert.match(saveBody, /setAiDraftPersisted\(true\)/, 'Save Draft does not mark the AI draft persisted');
+  assert.doesNotMatch(saveBody, /setNarrativeUndo\(null\)/, 'Save Draft drops the pre-AI original');
 });
 
 test('letterHtmlToAccountText keeps the account and drops the middle chrome', () => {

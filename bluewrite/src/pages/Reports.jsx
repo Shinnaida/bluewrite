@@ -2666,6 +2666,11 @@ export function ReportEditor({
   const [finalizePreview, setFinalizePreview] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [loading, setLoading] = useState(reportId !== null);
+  // Real-time autosave state (500-800ms debounce): 'idle' | 'saving' |
+  // 'saved' | 'error'. The sheet is the single source of truth — every
+  // keystroke marks dirty and the debounced effect below persists it.
+  const [saveState, setSaveState] = useState('idle');
+  const [saveError, setSaveError] = useState(null);
   const dirtyRef = useRef(false);
   const draftRef = useRef(null);
   draftRef.current = draft;
@@ -2818,6 +2823,12 @@ export function ReportEditor({
   // language facts and provenance, first-snapshot-wins like the fields above.
   // (The narrative never had one — Accept used to be explicit.)
   const [narrativeUndo, setNarrativeUndo] = useState(null);
+  // Discard-to-original survives an explicit save (owner request, 2026-11-13):
+  // Save persists the arranged/enhanced page but never promotes it to the new
+  // baseline, so Discard still brings back the pre-AI original report. True
+  // once an explicit save lands while a provisional snapshot exists; false on
+  // a fresh arrival, on Keep (confirmed) and on Discard (restored).
+  const [aiDraftPersisted, setAiDraftPersisted] = useState(false);
 
   // Which sections of the stepper the officer has been IN. The rules are the
   // completeness signal for every section except section 1, which is
@@ -3059,6 +3070,12 @@ export function ReportEditor({
         setCaptures(loaded);
         const first = firstWaitingCapture(loaded, r.narrative, []);
         if (first) {
+          // Phone-source drafts land on the RAW form, not the composed paper
+          // (owner request): unreviewed phone captures mean the record is
+          // still its source text — the review dialog above already shows
+          // the raw OCR, and the desk behind it must read the same way
+          // instead of dressing untouched phone data in the formal letter.
+          setLetterEdit(true);
           setTimeout(() => {
             if (alive) openCaptureReview(first);
           }, 0);
@@ -3297,11 +3314,38 @@ export function ReportEditor({
     setDraft((prev) => (prev ? { ...prev, id, created_by: user.id } : prev));
   }, [user.id]);
 
-  // AUTOSAVE IS OFF (owner request, 2026-11-02). The 30-second background write
-  // is removed: a report is written when the officer presses Save Draft, and by
-  // the exit flush below. Nothing is saved behind their back, so an unfinished
-  // or half-arranged page is never persisted over the page they are working on.
-  // `adoptSavedId` is still used by Save Draft and the exit flush.
+  // REAL-TIME AUTOSAVE (650ms debounce): every keystroke marks dirty (see
+  // set/setTypeSpecific) and this effect persists it. Skipped while an
+  // un-saved AI draft awaits Keep/Discard (narrativeUndo) so an un-kept
+  // proposal is never persisted over the officer's own words — but NOT
+  // skipped after the officer explicitly saved that draft (aiDraftPersisted),
+  // so edits on the saved arranged/enhanced page keep autosaving while
+  // Discard can still bring back the original. Skipped with no incident
+  // type (the API cannot store such a row yet). Conflicting saves cannot
+  // double-write: writeDraft joins an in-flight request.
+  useEffect(() => {
+    if (!canEdit || !draft || !dirtyRef.current) return undefined;
+    if (narrativeUndo !== null && !aiDraftPersisted) return undefined;
+    if (!draft.incident_type) return undefined;
+    setSaveState((s) => (s === 'saving' ? s : s));
+    const t = window.setTimeout(() => {
+      setSaveState('saving');
+      setSaveError(null);
+      writeDraft()
+        .then((id) => {
+          if (id === null) return;
+          adoptSavedId(id);
+          dirtyRef.current = false;
+          setSaveState('saved');
+          onMutated?.();
+        })
+        .catch((err) => {
+          setSaveState('error');
+          setSaveError(err?.message || 'Save failed.');
+        });
+    }, 650);
+    return () => window.clearTimeout(t);
+  }, [draft, canEdit, narrativeUndo, aiDraftPersisted, writeDraft, adoptSavedId, onMutated]);
 
   // ---- Saving on the way out ----------------------------------------------
   // Nothing is saved behind the officer's back until one of these fires, and the
@@ -3343,6 +3387,43 @@ export function ReportEditor({
         // The page itself is untouched, and Save Draft still reports the error.
       });
   }, [writeDraft, adoptSavedId, onMutated]);
+
+  // Close guard: only when the last save FAILED does leaving warn — healthy
+  // exits never prompt. A failed autosave leaves dirtyRef true, so a
+  // refresh/close without this would silently drop the latest keystrokes.
+  useEffect(() => {
+    if (saveState !== 'error') return undefined;
+    function onBeforeUnload(e) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [saveState]);
+
+  // Close with save: flush pending edits before leaving the editor. On
+  // failure stay put, report the error, and offer the retry in the save
+  // line — never close over unsaved work silently.
+  async function closeWithSave() {
+    if (dirtyRef.current) {
+      setSaveState('saving');
+      try {
+        const id = await writeDraft();
+        if (id !== null) {
+          adoptSavedId(id);
+          dirtyRef.current = false;
+          setSaveState('saved');
+          setLastSavedAt(new Date());
+        }
+      } catch (err) {
+        setSaveState('error');
+        setSaveError(err?.message || 'Save failed.');
+        setError(`Could not save before closing — ${err?.message || 'save failed'}. Fix the connection and use Retry save.`);
+        return;
+      }
+    }
+    onClosed();
+  }
 
   useEffect(() => {
     function onPageHide() {
@@ -3388,6 +3469,10 @@ export function ReportEditor({
 
   function set(field, value) {
     dirtyRef.current = true;
+    // Keep the latest-values ref synchronous so a debounced autosave or an
+    // AI press immediately after typing reads this keystroke, not the
+    // previous render's draft.
+    if (draftRef.current) draftRef.current = { ...draftRef.current, [field]: value };
     setDraft((d) => ({ ...d, [field]: value }));
     setErrors((e) => (e[field] ? { ...e, [field]: undefined } : e));
   }
@@ -3485,6 +3570,13 @@ export function ReportEditor({
 
   function setTypeSpecific(key, value) {
     dirtyRef.current = true;
+    // Synchronous ref mirror (see set): the debounced autosave and an AI
+    // press in the same tick must see this value.
+    try {
+      const cur = draftRef.current ?? {};
+      const ts = { ...(cur.type_specific ?? {}), [key]: value };
+      draftRef.current = { ...cur, type_specific: syncMirrors(cur.type_specific, ts, cur.incident_type) };
+    } catch {}
     setDraft((d) => {
       const ts = { ...d.type_specific, [key]: value };
       const fields = TYPE_FIELDS[d.incident_type] ?? [];
@@ -3664,6 +3756,9 @@ export function ReportEditor({
         source: narrativeSourceRef.current,
         letterHtml: keptInk,
       });
+      // A fresh arrival is not yet saved: autosave stays paused until the
+      // officer explicitly saves, while Discard holds this original.
+      setAiDraftPersisted(false);
       if (keptInk !== '') set('letter_html', '');
     }
     applyAiDraft(parts, sourceMeta);
@@ -3679,6 +3774,9 @@ export function ReportEditor({
   // provisionally applied it is a no-op. Returns the restored values present,
   // so the run reads them synchronously.
   function restoreProvisionalSnapshot() {
+    // Never touch a finalized report: Discard restores the officer's own
+    // draft words only, and a locked record is not rewound by any path.
+    if (String(draftRef.current?.status ?? draft?.status ?? '') === 'finalized') return {};
     const restored = {};
     if (narrativeUndo !== null) {
       restored.narrative = narrativeUndo.narrative;
@@ -3697,6 +3795,7 @@ export function ReportEditor({
       // already dropped, so kept ink is untouched here.
       set('letter_html', String(narrativeUndo.letterHtml ?? ''));
       setNarrativeUndo(null);
+      setAiDraftPersisted(false);
     }
     if (aiUndo.findings !== null) restored.findings = aiUndo.findings;
     if (aiUndo.action_taken !== null) restored.actionTaken = aiUndo.action_taken;
@@ -3712,9 +3811,11 @@ export function ReportEditor({
   // the field undos survive exactly as after an old-style Accept. The kept
   // words consume the phone files they were generated over: reviewed on the
   // server, so the files leave Phone files instead of lingering beside the
-  // BW-numbered draft.
+  // BW-numbered draft. Only Keep drops the original — Save never does, so
+  // Discard after a save still brings back the pre-AI report.
   function keepProvisionalApply() {
     setNarrativeUndo(null);
+    setAiDraftPersisted(false);
     reviewConsumedCaptures(draftRef.current?.narrative);
   }
 
@@ -4008,9 +4109,9 @@ export function ReportEditor({
     // exactly one state. The dirty flag is cleared last, after them: those
     // setters raise it, and the record is already saved.
     applyAiDraft(parts, sourceMeta);
-    // An explicit, saved write: nothing provisional survives it, so a later
-    // Discard can never resurrect pre-translation words over a saved record.
-    setNarrativeUndo(null);
+    // The guided save persists but keeps the pre-AI original, so Discard
+    // still brings it back (same rule as Save Draft above).
+    setAiDraftPersisted(true);
     dirtyRef.current = false;
   }
 
@@ -4031,15 +4132,20 @@ export function ReportEditor({
       setErrors(errs);
       if (errs.incident_type || errs.incident_datetime || errs.location) return false;
     }
+    setSaveState('saving');
+    setSaveError(null);
     try {
         // Same closing-line sync as the background write: names typed over
         // the blanks on the paper canvas are copied back into the record
         // narrative before the save, so Save Draft keeps them.
+        // The debounced autosave may be mid-flight: join it first so two
+        // writes cannot race into two reports.
+        if (inFlightRef.current) { try { await inFlightRef.current; } catch {} }
         const syncedNarrative = syncClosingLinesFromLetter(draft.narrative, draft.letter_html);
         if (syncedNarrative !== String(draft.narrative ?? '')) {
           setDraft((prev) => (prev ? { ...prev, narrative: syncedNarrative } : prev));
         }
-        const body = { ...draft, narrative: syncedNarrative, status: 'draft', narrative_source: narrativeSourceRef.current };
+        const body = cleanSaveBody({ ...draft, narrative: syncedNarrative, status: 'draft', narrative_source: narrativeSourceRef.current });
         if (editingId) {
           await api(`/reports/${editingId}`, { method: 'PATCH', body });
         } else {
@@ -4050,17 +4156,23 @@ export function ReportEditor({
         }
       dirtyRef.current = false;
       setLastSavedAt(new Date());
-      // An explicit, saved write: nothing provisional survives it, so the
-      // saved page IS the new draft baseline — a later Arrange/Enhance
-      // works from these saved words, and Discard can never resurrect
-      // pre-draft words over a saved record (owner request: edits on the
-      // overall report, once saved, are the new source). Same rule as the
-      // guided apply's own saved write below.
-      setNarrativeUndo(null);
+      setSaveState('saved');
+      // An explicit save persists the page BUT keeps the pre-AI original
+      // snapshot, so Discard still brings back the original report even after
+      // Arrange → Enhance → edits → Save (owner request, 2026-11-13). A later
+      // Arrange/Enhance still works from these saved words; only Keep drops
+      // the original. Marking persisted re-arms the autosave for edits on
+      // the saved AI page (see the autosave gate). Unconditional: a
+      // 'pending' save applies the draft first, and its snapshot lands a
+      // render later, so a conditional here would miss it and leave autosave
+      // paused on the saved page.
+      setAiDraftPersisted(true);
       notify('Draft saved.');
       onMutated?.();
       return true;
     } catch (err) {
+      setSaveState('error');
+      setSaveError(err.message);
       setError(err.message);
       return false;
     }
@@ -4744,7 +4856,7 @@ export function ReportEditor({
     return (
       <>
         <div className="alert error" role="alert">{error}</div>
-        <button onClick={onClosed}>Back</button>
+        <button onClick={() => { closeWithSave(); }}>Back</button>
       </>
     );
   }
@@ -4917,14 +5029,27 @@ export function ReportEditor({
               </span>
             </div>
 
-            {/* When the draft last reached the server — the station's clock, and
-                only after a write that actually succeeded (see lastSavedAt). A
-                read-out, not a live region: the save toast already announces
-                itself, and a second announce every 30 seconds would be noise. */}
-            {lastSavedAt && (
+            {/* Real-time save status: Saving… while the debounced write is
+                in flight, Saved with the station clock after it lands, Save
+                failed with a retry when it does not. The sheet is the single
+                source of truth — the status always reflects the latest edit. */}
+            {saveState === 'saving' && (
+              <p className="ir-save-note" role="status">
+                Saving…
+              </p>
+            )}
+            {saveState !== 'saving' && lastSavedAt && saveState !== 'error' && (
               <p className="ir-save-note">
                 <LabelIcon name="check" />
-                Auto-saved to station disk ({stationClock(lastSavedAt)} PHT)
+                {saveState === 'saved' ? 'Saved' : 'Auto-saved to station disk'} ({stationClock(lastSavedAt)} PHT)
+              </p>
+            )}
+            {saveState === 'error' && (
+              <p className="ir-save-note ir-save-note--error" role="alert">
+                Save failed{saveError ? ` — ${saveError}` : ''}.{' '}
+                <button type="button" onClick={() => saveDraft()}>
+                  Retry save
+                </button>
               </p>
             )}
           </div>
@@ -5987,6 +6112,20 @@ export function ReportEditor({
             </div>
           )}
           <div className="ir-sheet-bar">
+            {/* PAPER MODE switch (owner request): View is the clean official
+                paper — the same sheet My Reports opens — and Edit restores
+                the form, on this same page. Saved drafts open on View. */}
+            {canEdit && draft?.id != null && (
+              <button
+                type="button"
+                className="ir-sheet-toggle"
+                aria-pressed={letterEdit}
+                onClick={() => setLetterEdit((v) => !v)}
+                title={letterEdit ? 'Back to the clean official paper.' : 'Show the form to edit this report.'}
+              >
+                {letterEdit ? 'View paper' : 'Edit report'}
+              </button>
+            )}
             {SHOW_REVIEW_FIELDS_TOGGLE && (
             <button
               type="button"

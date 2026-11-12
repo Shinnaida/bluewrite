@@ -704,6 +704,12 @@ export default function AiNarrativePanel({
   // page that was there when the officer pressed — the same proposal, the same
   // canvas ink, the same edit state — and only the new draft changes it.
   const paperAtPressRef = useRef(null);
+  // The account text the press ran on (paper ink preferred, field fallback).
+  // Compared on arrival: keystrokes landed mid-run mean the officer edited
+  // while the model worked, so auto-applying would silently overwrite newer
+  // edits — in that case the draft still lands for review but is NOT written
+  // into the form until the officer presses Keep.
+  const pressAccountRef = useRef('');
   // WHETHER THE PAGE IS UP ON A SCREEN OF ITS OWN (the Preview control above
   // the card's paper). The same leaf, portaled to document.body, with the app
   // behind the scrim and nothing on the screen but the report: no card, no
@@ -842,6 +848,21 @@ export default function AiNarrativePanel({
     // A just-saved draft stays saved: re-applying here would resurrect the
     // Satisfied question the officer just answered (see satisfiedSave).
     if (satisfiedSaved) return;
+    // Never silently overwrite newer edits: if the sheet changed since the
+    // press (keystrokes landed mid-run), the draft still lands for review
+    // but is NOT written into the form until the officer presses Keep.
+    try {
+      const pressAccount = String(pressAccountRef.current ?? '');
+      if (pressAccount.trim() !== '') {
+        const livePaper = letterHtmlToAccountText(letterHtml);
+        const liveAccount = (livePaper !== '' ? livePaper : richTextToPlain(String(narrative || ''))).trim();
+        if (liveAccount !== '' && liveAccount !== pressAccount.trim()) {
+          setMessage('You edited the sheet while the AI was working — those edits were kept. Review this draft and press Keep only if you still want it.');
+          setPanelOpen(true);
+          return;
+        }
+      }
+    } catch {}
     setProvisionalState('applied');
     onProvisionalApply?.(acceptParts(), acceptMeta());
   }, [draft, mode, sheetProvisional, provisionalState, satisfiedSaved]);
@@ -1104,6 +1125,14 @@ export default function AiNarrativePanel({
     // place is what keeps the read and the draft from working on different
     // text.
     let accountText = richTextToPlain(String(narrative || ''));
+    // Single source of truth: on a sheet, the editable paper ink outranks
+    // the narrative field, so Generate never runs on a stale draft or the
+    // original upload when newer edited content exists.
+    if (sheet) {
+      const sheetPaper = letterHtmlToAccountText(letterHtml);
+      if (sheetPaper !== '') accountText = sheetPaper;
+    }
+    pressAccountRef.current = accountText;
     // Nothing written anywhere is the one precondition the AI call itself has —
     // NOT the field verification the sheet deliberately skips (see
     // ReportEditor's onBeforeGenerate). A request with no text in it would come
@@ -1373,6 +1402,8 @@ export default function AiNarrativePanel({
     // chrome-only ink falls back to the field exactly as before.
     const enhancePaper = letterHtmlToAccountText(letterHtml);
     if (enhancePaper !== '') accountText = enhancePaper;
+    // Single source of truth: Enhance always runs on the latest sheet ink.
+    pressAccountRef.current = accountText;
     if (accountText.trim() === '') {
       if (onBeforeGenerate && !onBeforeGenerate()) {
         return;
@@ -1525,6 +1556,8 @@ export default function AiNarrativePanel({
     // chrome-only ink falls back to the field exactly as before.
     const arrangePaper = letterHtmlToAccountText(letterHtml);
     if (arrangePaper !== '') accountText = arrangePaper;
+    // Single source of truth: the press always runs on the latest sheet ink.
+    pressAccountRef.current = accountText;
     if (accountText.trim() === '') {
       if (onBeforeGenerate && !onBeforeGenerate()) {
         setArrangePhase('idle');
@@ -1535,10 +1568,9 @@ export default function AiNarrativePanel({
       setPanelOpen(true);
       setArrangePhase('idle');
       return;
-    }
-    // Arrange is a third run entry (see beginFreshRun): without the rewind it
-    // would read and arrange the draft already on the paper instead of the
-    // account it was written from.
+    }      // Arrange is a third run entry (see beginFreshRun): without the rewind it
+      // would read and arrange the draft already on the paper instead of the
+      // account it was written from.
     //
     // Guarded like generate()'s own awaits: the draft save behind
     // resolveReportId can throw (expired session, network, server refusal),
@@ -2007,6 +2039,14 @@ export default function AiNarrativePanel({
   const paperPending = runPaper ? runPaper.pending : sheetPending;
   const paperInk = runPaper ? runPaper.letterHtml : letterHtml;
   const paperEdit = runPaper ? runPaper.letterEdit : letterEdit;
+  // WRITE ON THE CLEAN PAPER (owner request): a landed saved draft with no
+  // run in flight and no proposal awaiting Keep/Discard is editable right on
+  // the paper — the officer swaps or retypes blocks where they read them, no
+  // mode switch. The canvas writes letter_html (dirty, autosave, save), so a
+  // rearrangement is kept like any other edit. Slim mount only: deck cards
+  // keep the read-only page they always had.
+  const viewFree = !!(slim && !paperEdit && !runPaper && mode !== 'loading'
+    && provisionalState === 'idle' && sheet && sheet.report && sheet.report.id != null);
   // A letter edit writes BOTH copies of the words: the panel's own draft (so
   // the page above and the boxes under it stay one draft) and the report
   // itself through the editor's own setters (dirty flag, autosave, history).
@@ -2414,8 +2454,8 @@ export default function AiNarrativePanel({
   // them — one object shared by the portal and card branches alike.
   // A run in flight keeps the page editable exactly as it was at the press: the
   // freeze is the frame, not a lock.
-  letterProps.editable = paperEdit && (!!onEditSheet && sheetCanEdit && sheeted && !tightenDraft
-    && sheetTyped && !revealing && (mode === 'done' || !!runPaper));
+  letterProps.editable = (paperEdit || viewFree) && (!!onEditSheet && sheetCanEdit && sheeted && !tightenDraft
+    && sheetTyped && !revealing);
   // Each block fades up as its own turn arrives; the sequence itself is the
   // stage machine above, so there are no animation delays to keep in step.
   const arriveClass = (base) => (revealOn ? `${base} ai-draft-arrive` : base);
@@ -2497,6 +2537,22 @@ export default function AiNarrativePanel({
     setArrangePhase('idle');
   };
 
+  // Discard guard: confirm first, and never discard a finalized report.
+  // Returns true when the caller may proceed with the discard.
+  const confirmDiscardDraft = () => {
+    if (String(sheet?.report?.status ?? '') === 'finalized') {
+      setMessage('This report is finalized and locked — a finalized report is never discarded.');
+      setPanelOpen(true);
+      return false;
+    }
+    try {
+      if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+        return window.confirm('Discard this AI draft and return to the original report? Your saved AI edits will be removed.');
+      }
+    } catch {}
+    return true;
+  };
+
   const closePanel = () => {
     setRevealOn(false); // unmounts NarrativeReveal — cancels its timer
     setRevealStage('done'); // reopened, the draft draws whole (see `revealing`)
@@ -2521,12 +2577,13 @@ export default function AiNarrativePanel({
     setPanelOpen(false);
   };
 
-  // SATISFIED-WITH-THE-RESULT (owner request, 2026-11-11): the toolbar
-  // choice beside Upload. Save persists the arranged/enhanced page and
-  // confirms it, so the saved page IS the new draft — a later Discard can
-  // only return to this saved page, never to the pre-draft words. Discard
-  // restores the snapshotted original report and clears the draft, so the
-  // officer is back on the words they started from.
+  // SATISFIED-WITH-THE-RESULT (owner request, 2026-11-11; discard-to-original
+  // 2026-11-13): the toolbar choice beside Upload. Save persists the
+  // arranged/enhanced page BUT keeps the pre-AI original snapshot, so a later
+  // Discard still brings back the original report even after Arrange →
+  // Enhance → edits → Save. Discard restores the snapshotted original report
+  // and clears the draft, so the officer is back on the words they started
+  // from. Only Keep confirms the draft and drops the original.
   // Visible while the draft awaits its answer, plus 5s as a Saved receipt
   // after the toolbar Save lands (see satisfiedSave).
   const satisfiedVisible =
@@ -2548,10 +2605,11 @@ export default function AiNarrativePanel({
       // Discard can still return to the original, and this choice stays up
       // so the officer can retry after fixing the banner.
       if (savedOk === false) return;
-      // Confirm even when the editor saved: dropping the snapshot is what
-      // promotes the saved page to the new draft baseline, so a later
-      // Discard returns to this saved page and never to the pre-draft words.
-      onKeepProvisional?.();
+      // Save does NOT confirm the draft: the pre-AI original snapshot stays
+      // (see Reports.jsx saveDraft), so a later Discard still brings back
+      // the original report. Only the lifecycle idles so a later Enhance
+      // reads these saved words; the arrival effect stays quiet via
+      // satisfiedSaved so the question never returns.
       setProvisionalState('idle');
       // STAY ON THE SAVED PAGE (owner request, 2026-11-12): the draft,
       // the mode and the open review are all kept, so the paper the
@@ -2567,6 +2625,7 @@ export default function AiNarrativePanel({
     }
   };
   const satisfiedDiscard = () => {
+    if (!confirmDiscardDraft()) return;
     onRestoreProvisional?.();
     setProvisionalState('idle');
     setSatisfiedSaved(false);
@@ -2602,11 +2661,14 @@ export default function AiNarrativePanel({
         satisfiedSaved ? (
           <span className={`rt-satisfied rt-satisfied--saved${satisfiedLeaving ? ' rt-satisfied--fade' : ''}`} role="status" aria-label="Draft saved">
             <span className="rt-satisfied-q">Saved as new draft</span>
+            <button type="button" className="rt-satisfied-discard" onClick={satisfiedDiscard} disabled={savingSatisfied} title="Discard this saved draft and return to the original report.">
+              Discard
+            </button>
           </span>
         ) : (
           <span className="rt-satisfied" role="group" aria-label="Satisfied with the result">
             <span className="rt-satisfied-q">Satisfied with the result?</span>
-            <button type="button" className="rt-satisfied-save" onClick={satisfiedSave} disabled={savingSatisfied} title="Save this arranged page as the new draft. After saving, Discard returns to this saved page.">
+            <button type="button" className="rt-satisfied-save" onClick={satisfiedSave} disabled={savingSatisfied} title="Save this arranged page. Discard still returns to the original report.">
               {savingSatisfied ? 'Saving…' : 'Save'}
             </button>
             <button type="button" className="rt-satisfied-discard" onClick={satisfiedDiscard} disabled={savingSatisfied} title="Discard this draft and return to the original report.">
@@ -3547,7 +3609,7 @@ export default function AiNarrativePanel({
                           ) : (
                             <button type="button" onClick={() => setShowFeedback((v) => !v)}>Regenerate…</button>
                           )}
-                          {sheetProvisional && (<button type="button" onClick={() => { onRestoreProvisional?.(); setProvisionalState('idle'); setDraft(null); setMode('ready'); setCompletionFills([]); closePanel(); }} title="Removes the draft from the paper and brings back your words.">Discard draft</button>)}
+                          {sheetProvisional && (<button type="button" onClick={() => { if (!confirmDiscardDraft()) return; onRestoreProvisional?.(); setProvisionalState('idle'); setDraft(null); setMode('ready'); setCompletionFills([]); closePanel(); }} title="Removes the draft from the paper and brings back your words.">Discard draft</button>)}
                           <button type="button" onClick={closePanel}>Close</button>
                         </>
                       )}
@@ -3769,7 +3831,7 @@ export default function AiNarrativePanel({
           the mount here would show that rewind for the whole generation. The
           frozen props above draw the page the officer pressed from until the
           new draft lands — one change per run, at the end. */}
-      {sheeted && slim && (mode === 'done' || !!runPaper) && (letterMount ? createPortal(<SheetLetterDock {...letterProps} freeReview={slim && paperEdit} />, letterMount) : null)}
+      {slim && letterMount && sheet && ((sheeted && (mode === 'done' || !!runPaper)) || (!paperEdit && sheet.report && sheet.report.id != null)) && createPortal(<SheetLetterDock {...letterProps} freeReview={slim && (paperEdit || viewFree)} />, letterMount)}
 
       {/* ---- THE REPORT, ON THE SCREEN ALONE -----------------------------
           The Preview control above the card's paper opens THIS. It is the same
