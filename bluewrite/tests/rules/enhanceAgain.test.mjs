@@ -46,6 +46,27 @@ test('the rewind never overrides ink the officer typed on the paper (2026-11-11)
   );
 });
 
+test('re-runs re-point the mid-run guard at the rewound account (paper must change)', () => {
+  const src = code(PANEL);
+  // beginFreshRun rewinds the paper to the original; the guard compares the
+  // live paper at arrival — still pointing at the pre-press proposal it reads
+  // our own rewind as a mid-run edit and the new draft never lands (view stays).
+  for (const fn of ['const generate =', 'const arrangeReport', 'const enhanceReport']) {
+    const at = src.indexOf(fn);
+    assert.notEqual(at, -1, `${fn} is gone`);
+    const body = src.slice(at, src.indexOf('presentDraftResult()', at));
+    assert.match(body, /pressAccountRef\.current = accountText;/, `${fn} never re-points the guard after the rewind`);
+  }
+});
+
+test('Enhance again freezes the current edited page during the run (no original flash)', () => {
+  const src = code(PANEL);
+  const at = src.indexOf('const enhanceReport');
+  assert.notEqual(at, -1, 'enhanceReport is gone');
+  const body = src.slice(at, src.indexOf('// SHEET FORMAT - Arrange-only', at));
+  assert.match(body, /if \(fromArranged\) \{[\s\S]*?paperAtPressRef\.current = \{ pending: sheetPending, letterHtml, letterEdit \}/, 'in-place enhance never refreshes the paper freeze — loading shows the stale original');
+});
+
 test('Enhance again enhances this page in place, not a fresh run', () => {
   const src = code(PANEL);
   const at = src.indexOf('>Enhance again<');

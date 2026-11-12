@@ -1163,6 +1163,11 @@ export default function AiNarrativePanel({
     // render (see beginFreshRun).
     const restoredRun = beginFreshRun(false);
     if (restoredRun.narrative !== undefined) accountText = richTextToPlain(String(restoredRun.narrative));
+    // The rewind above IS the paper now: point the mid-run guard at the
+    // rewound account, not the pre-press proposal — otherwise the guard
+    // reads our own rewind as "you edited mid-run" and the new draft never
+    // reaches the paper (the view just stays).
+    pressAccountRef.current = accountText;
     // Words, never ink (see runAccountRead): the model drafts from text.
     const runNarrative = richTextToPlain(String(restoredRun.narrative ?? narrative ?? ''));
     const runFindings = String(restoredRun.findings ?? notableFindings ?? '');
@@ -1421,6 +1426,18 @@ export default function AiNarrativePanel({
       // repeated, because Arrange already did both. Everything below therefore
       // runs on the arranged page itself.
       const restoredRun = fromArranged ? {} : beginFreshRun(false);
+      if (fromArranged) {
+        // In-place enhance: no rewind (the arranged page IS the source), but
+        // the paper must still freeze on the CURRENT edited page for the run
+        // — otherwise the stale freeze from the Arrange press shows the
+        // original report during loading, then jumps to the edited version
+        // after typing (awkward in presentation).
+        paperAtPressRef.current = { pending: sheetPending, letterHtml, letterEdit };
+        if (satisfiedSaved) {
+          setSatisfiedSaved(false);
+          setSatisfiedLeaving(false);
+        }
+      }
       // PAPER WINS (2026-11-11): corrections typed on the sheet live in the
       // ink already read above, but the rewind just ran restores the pre-draft
       // snapshot and hands it back — letting it override would throw the
@@ -1430,6 +1447,10 @@ export default function AiNarrativePanel({
       if (restoredRun.narrative !== undefined && enhancePaper === '') {
         accountText = richTextToPlain(String(restoredRun.narrative));
       }
+      // Same rewind rule as Generate: the guard must compare against the
+      // account the run actually uses, or a re-run after Arrange/Enhance
+      // blocks its own arrival and the paper never changes.
+      if (!fromArranged) pressAccountRef.current = accountText;
       // THE SAME READ ARRANGE ONLY MAKES (owner request, 2026-11-02):
       // type/date/place and NOTHING ELSE. The read filled the type's own fields
       // here, which is where the sheet grew a `Vehicle 1:` row and a
@@ -1585,6 +1606,9 @@ export default function AiNarrativePanel({
     try {
       const restoredRun = beginFreshRun(false);
       if (restoredRun.narrative !== undefined) accountText = richTextToPlain(String(restoredRun.narrative));
+      // Rewound paper is the run's account: re-point the guard so it does
+      // not mistake our own rewind for a mid-run edit (paper would stay).
+      pressAccountRef.current = accountText;
       const runFindings = String(restoredRun.findings ?? notableFindings ?? '');
       const runActionTaken = String(restoredRun.actionTaken ?? actionTaken ?? '');
       if (onReadAccount) {
