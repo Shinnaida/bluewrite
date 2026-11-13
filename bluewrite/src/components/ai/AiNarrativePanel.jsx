@@ -1128,10 +1128,8 @@ export default function AiNarrativePanel({
     // Single source of truth: on a sheet, the editable paper ink outranks
     // the narrative field, so Generate never runs on a stale draft or the
     // original upload when newer edited content exists.
-    if (sheet) {
-      const sheetPaper = letterHtmlToAccountText(letterHtml);
-      if (sheetPaper !== '') accountText = sheetPaper;
-    }
+    const paperAccount = sheet ? letterHtmlToAccountText(letterHtml) : '';
+    if (paperAccount !== '') accountText = paperAccount;
     pressAccountRef.current = accountText;
     // Nothing written anywhere is the one precondition the AI call itself has —
     // NOT the field verification the sheet deliberately skips (see
@@ -1162,14 +1160,26 @@ export default function AiNarrativePanel({
     // setters only queue and the props still hold the draft until the next
     // render (see beginFreshRun).
     const restoredRun = beginFreshRun(false);
-    if (restoredRun.narrative !== undefined) accountText = richTextToPlain(String(restoredRun.narrative));
+    // PAPER WINS — the same rule Enhance already keeps: the rewind hands back
+    // the words the report held before the last draft landed (the last saved
+    // version), while the officer's current corrections live in the ink read
+    // above. Letting the snapshot override would draft from those older words
+    // and the sheet would then TYPE the saved text, never the edits. So the
+    // snapshot stands only when the paper held nothing of its own.
+    if (restoredRun.narrative !== undefined && paperAccount === '') {
+      accountText = richTextToPlain(String(restoredRun.narrative));
+    }
     // The rewind above IS the paper now: point the mid-run guard at the
     // rewound account, not the pre-press proposal — otherwise the guard
     // reads our own rewind as "you edited mid-run" and the new draft never
     // reaches the paper (the view just stays).
     pressAccountRef.current = accountText;
-    // Words, never ink (see runAccountRead): the model drafts from text.
-    const runNarrative = richTextToPlain(String(restoredRun.narrative ?? narrative ?? ''));
+    // Words, never ink (see runAccountRead): the model drafts from text. The
+    // Translate-narrative path translates the account this press runs on, so
+    // officer ink outranks the rewound snapshot there too.
+    const runNarrative = paperAccount !== ''
+      ? paperAccount
+      : richTextToPlain(String(restoredRun.narrative ?? narrative ?? ''));
     const runFindings = String(restoredRun.findings ?? notableFindings ?? '');
     const runActionTaken = String(restoredRun.actionTaken ?? actionTaken ?? '');
 
@@ -1606,7 +1616,15 @@ export default function AiNarrativePanel({
     // the editor banner (see ensureAiReportId).
     try {
       const restoredRun = beginFreshRun(false);
-      if (restoredRun.narrative !== undefined) accountText = richTextToPlain(String(restoredRun.narrative));
+      // The rewind restores the REPORT; it must not overrule the page. When
+      // the officer typed on the sheet since the last arrival, the ink read
+      // above is their account — arranging (and then typing) the snapshot
+      // instead would put the older, saved words on the paper. The rewind
+      // still does its job for a page nobody has retyped (that is why it is
+      // here: never arrange the previous AI layout back into itself).
+      if (restoredRun.narrative !== undefined && arrangePaper === '') {
+        accountText = richTextToPlain(String(restoredRun.narrative));
+      }
       // Rewound paper is the run's account: re-point the guard so it does
       // not mistake our own rewind for a mid-run edit (paper would stay).
       pressAccountRef.current = accountText;
@@ -1795,8 +1813,16 @@ export default function AiNarrativePanel({
       return;
     }
     const restoredRun = beginFreshRun(guidedStep);
+    // PAPER WINS (same rule as Generate and Enhance): the rewind hands back
+    // the words the report held before the last draft landed, but ink the
+    // officer typed on the sheet since then is the newer account — and it is
+    // the page they are reading. Tightening the snapshot would type the older,
+    // saved wording back onto the paper. A guided step passes its own text.
+    const tightenPaper = letterHtmlToAccountText(letterHtml);
     // Words, never ink (see runAccountRead): the economy pass reads text.
-    const text = richTextToPlain(String((overrideText ?? restoredRun.narrative ?? narrative) || '')).trim();
+    const text = richTextToPlain(String(
+      (overrideText ?? (tightenPaper !== '' ? tightenPaper : restoredRun.narrative) ?? narrative) || '',
+    )).trim();
     const runFindings = String(restoredRun.findings ?? notableFindings ?? '');
     const runActionTaken = String(restoredRun.actionTaken ?? actionTaken ?? '');
     if (!text) {

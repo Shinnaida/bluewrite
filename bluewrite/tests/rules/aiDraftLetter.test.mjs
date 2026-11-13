@@ -698,9 +698,14 @@ test('the static lines type too — letterhead, labels, headings, signatures', (
   // so the account reads on its own on every incident's sheet.
   assert.doesNotMatch(LEAF, /FACTS OF THE CASE/, 'the narrative heading is back on the sheet');
   assert.match(LEAF, /CL\('noted label',/, 'the noted-by label does not type');
-  // Read-only stays read-only: the editor renders only under `editable`,
-  // and the fallback ink is the template default, never an empty box.
+  // Read-only stays read-only: the editor renders only under `editable`.
+  // The read path still prints the officer's typed line, though — the stored
+  // override outranks the template default everywhere a line is read, so the
+  // typing reveal (which runs with `editable` off) types the edited wording
+  // instead of the default and never swaps it in at the end. No override and
+  // the template default reads, never an empty box.
   assert.match(LEAF, /chromeEdit \? \(/, 'chrome edits leak into the read path');
+  assert.match(LEAF, /\) : \(st\(k, fb\)\);/, 'the read path ignores the stored override');
   // The clean paper is one typing surface end to end: the free canvas does
   // not silence the static lines — letterhead, labels, boilerplate and
   // signature type in place beside it through their own overrides.

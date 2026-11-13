@@ -46,6 +46,52 @@ test('the rewind never overrides ink the officer typed on the paper (2026-11-11)
   );
 });
 
+test('every run reads the paper, never the rewound snapshot it replaced', () => {
+  // 2026-11-13: Generate, Arrange and Tighten read the officer's ink, then let
+  // beginFreshRun's rewind hand back the words the report held before the last
+  // draft landed — the last saved version. The run drafted from those older
+  // words and the sheet TYPED them, so corrections typed on the paper only
+  // showed up again afterwards. Enhance already kept this guard; the other
+  // three now keep it too: the snapshot stands only when the paper is empty.
+  const src = code(PANEL);
+  const guard = (fn, flag) => {
+    const at = src.indexOf(fn);
+    assert.notEqual(at, -1, `${fn} is gone`);
+    const body = src.slice(at, src.indexOf('presentDraftResult()', at));
+    assert.ok(
+      body.includes(`if (restoredRun.narrative !== undefined && ${flag} === '')`),
+      `${fn} lets the rewind override ink typed on the paper`,
+    );
+    assert.ok(
+      body.includes(`const ${flag} =`),
+      `${fn} no longer reads the paper ink it guards on`,
+    );
+  };
+  guard('const generate =', 'paperAccount');
+  guard('const arrangeReport', 'arrangePaper');
+  guard('const enhanceReport', 'enhancePaper');
+  // Tighten carries no presentDraftResult, so it is checked on its own line.
+  const at = src.indexOf('const tighten =');
+  assert.notEqual(at, -1, 'tighten is gone');
+  const tightenBody = src.slice(at, src.indexOf('await resolveReportId()', at));
+  assert.match(
+    tightenBody,
+    /tightenPaper !== '' \? tightenPaper : restoredRun\.narrative/,
+    'tighten still runs over the rewound words instead of the paper',
+  );
+});
+
+test('the translation path translates the account the press runs on', () => {
+  const src = code(PANEL);
+  const at = src.indexOf('const generate =');
+  const body = src.slice(at, src.indexOf('presentDraftResult()', at));
+  assert.match(
+    body,
+    /const runNarrative = paperAccount !== ''/,
+    'a translated press still sends the rewound narrative instead of the edited page',
+  );
+});
+
 test('re-runs re-point the mid-run guard at the rewound account (paper must change)', () => {
   const src = code(PANEL);
   // beginFreshRun rewinds the paper to the original; the guard compares the

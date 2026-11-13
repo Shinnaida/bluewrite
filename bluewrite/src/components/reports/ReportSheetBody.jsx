@@ -288,6 +288,11 @@ export default function ReportSheetBody({
   // returns keep their own identity across renders. An inline <Chrome/>
   // would be a new element type on every keystroke's re-render, remounting
   // the focused WordField and dropping the caret mid-word.
+  // The READ path is override-aware too: a typed line IS the line, so view,
+  // print and the typing reveal all read the stored override the editor wrote
+  // (never the template default). The reveal runs with `editable` off, so
+  // without this it typed the defaults and swapped the officer's own wording
+  // in at the end — the edits must be what types, from the first character.
   const CL = (k, fb) =>
     chromeEdit ? (
       <SheetText
@@ -297,7 +302,7 @@ export default function ReportSheetBody({
         onEditChrome={onEditChrome}
         ariaLabel={typeof fb === 'string' ? fb : k}
       />
-    ) : (fb);
+    ) : (st(k, fb));
   // The signing official — the report's own noting official, then the
   // station's saved sign-off (Station Settings), then the built-in name.
   // A per-report override rides with it like every other static line, so
