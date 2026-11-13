@@ -146,7 +146,9 @@ test('recent activity lists records as compact cards: orange file, type pill, bo
   const html = renderActivity();
 
   // One row per record, newest first, and each one names the record it opens.
-  assert.equal((html.match(/dash-activity__row/g) ?? []).length, 4);
+  // The negative class counts the row's own class only: each row also wears a
+  // `--record`/`--system` kind modifier, which a bare substring would double.
+  assert.equal((html.match(/dash-activity__row(?![\w-])/g) ?? []).length, 4);
   assert.match(html, /title="Open report BW-0331"/);
   assert.ok(html.indexOf('Barangay San Isidro') < html.indexOf('Rizal Avenue'), 'the rows are not newest first');
 

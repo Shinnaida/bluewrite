@@ -2430,13 +2430,19 @@ body.profile-panel-open {
   flex-direction: column;
   background: var(--panel);
   border-left: 1px solid var(--line-bright);
+  border-top-left-radius: 20px;
+  border-bottom-left-radius: 20px;
+  overflow: hidden;
   box-shadow: var(--shadow-panel);
   color: var(--paper);
-  animation: profile-panel-in 0.22s ease-out;
+  animation: profile-panel-in 0.32s cubic-bezier(0.32, 0.72, 0, 1);
 }
 @keyframes profile-panel-in {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  from { transform: translateX(48px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .profile-side-panel { animation: none; }
 }
 
 /* THE MASTHEAD, and it is the one change that makes this panel belong to the
@@ -2463,18 +2469,23 @@ body.profile-panel-open {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.85rem 1rem;
-  background: var(--ir-navy);
-  border-bottom: 3px solid var(--ir-bar-rule);
+  padding: 0.7rem 0.7rem 0.7rem 1.25rem;
+  background:
+    radial-gradient(120% 140% at 85% -20%, rgba(240, 180, 41, 0.22) 0%, rgba(240, 180, 41, 0) 45%),
+    radial-gradient(100% 120% at 100% 110%, rgba(63, 131, 248, 0.35) 0%, rgba(63, 131, 248, 0) 50%),
+    linear-gradient(135deg, #0b2545 0%, #133e87 62%, #1a4fa0 100%);
+  border-bottom: none;
+  box-shadow: inset 0 -3px 0 var(--ir-gold), 0 8px 24px rgba(11, 37, 69, 0.35);
   color: #fff;
 }
 .profile-panel-head h2 {
   margin: 0;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   color: #fff;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
 }
 /* No plate and no ring: an icon button on a panel header should read as the way
    out, not as a control competing with the content. Square corners because the
@@ -2488,17 +2499,25 @@ body.profile-panel-open {
   flex: none;
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   padding: 0;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: #fff;
+  transition: background 160ms ease, transform 200ms ease;
 }
 .profile-panel-close:hover {
-  background: var(--ir-navy-hi);
+  background: rgba(255, 255, 255, 0.18);
   color: #fff;
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .profile-panel-close { transition: none; }
+  .profile-panel-close:hover { transform: none; }
 }
 .profile-panel-close:focus-visible {
   outline: none;
@@ -2510,7 +2529,8 @@ body.profile-panel-open {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 1rem;
+  padding: 1.25rem 1.25rem 1.75rem;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-soft) 100%);
   display: flex;
   flex-direction: column;
   /* NO gap. The sections space THEMSELVES, with a rule between neighbours — see
@@ -2556,18 +2576,20 @@ body.profile-panel-open {
 .profile-block-toggle {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   width: 100%;
-  padding: 0;
+  min-height: 44px;
+  padding: 0.35rem 0.5rem;
+  margin: 0 -0.5rem;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: 8px;
   background: none;
   color: inherit;
   text-align: left;
 }
 .profile-block-toggle:hover {
-  background: none;
-  border-color: transparent;
+  background: var(--panel-raised);
+  border-color: var(--line);
   color: inherit;
 }
 .profile-block-toggle:focus-visible {
@@ -2597,10 +2619,28 @@ body.profile-panel-open {
   color: var(--paper);
 }
 
+.profile-block-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  color: var(--ir-blue-ink);
+  background: linear-gradient(180deg, var(--ir-blue-tint) 0%, transparent 100%), var(--panel-raised);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-xs);
+}
 .profile-block-summary {
   flex: 0 1 auto;
   min-width: 0;
+  max-width: 46%;
+  padding: 0.18rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-raised);
   font-size: 0.7rem;
+  font-weight: 600;
   color: var(--steel);
   /* ONE line, ellipsised. A summary that wrapped would make the folded panel
      taller than the thing it replaced, which is the opposite of the point. */
@@ -2612,12 +2652,66 @@ body.profile-panel-open {
 .profile-block-chevron {
   flex: none;
   color: var(--steel);
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  padding: 3px;
   /* Points down when shut and turns over when open, so the fold reads as a state
      rather than as something the title happens to do. */
   transition: transform 200ms cubic-bezier(0.34, 1.32, 0.64, 1);
 }
 .profile-block-toggle[aria-expanded='true'] .profile-block-chevron {
   transform: rotate(180deg);
+}
+.profile-avatar-wrap { position: relative; flex: none; }
+.profile-verified {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--ir-gold);
+  background: var(--ir-navy);
+  border: 2px solid var(--panel);
+  box-shadow: var(--shadow-xs);
+}
+.profile-progress { display: flex; flex-direction: column; gap: 0.35rem; }
+.profile-progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--panel-sunken);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.profile-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--ir-blue) 0%, var(--ir-blue-ink-hi) 55%, var(--ir-gold) 100%);
+  transition: width 600ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.profile-progress-label { margin: 0; font-size: 0.74rem; font-weight: 600; color: var(--steel); font-variant-numeric: tabular-nums; }
+.profile-facts--tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.profile-facts--tiles .profile-fact {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.profile-block { animation: profile-block-rise 420ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+.profile-block--activity { animation-delay: 70ms; }
+.profile-block--preferences { animation-delay: 140ms; }
+.profile-block--security { animation-delay: 210ms; }
+@keyframes profile-block-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .profile-block { animation: none; }
+  .profile-progress-fill { transition: none; }
 }
 
 /* The fold, in three elements, and the split is the classic bug rather than
@@ -2667,18 +2761,31 @@ body.profile-panel-open {
 }
 
 .profile-identity {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.85rem;
-  background: var(--panel-raised);
+  gap: 0.85rem;
+  padding: 1rem;
+  background: linear-gradient(180deg, var(--panel-raised) 0%, var(--panel) 100%);
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.profile-identity::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--ir-blue) 0%, var(--ir-gold) 100%);
+  opacity: 0.9;
 }
 .profile-panel-avatar {
   flex: none;
-  width: 46px;
-  height: 46px;
+  width: 60px;
+  height: 60px;
+  border: 2px solid var(--panel);
+  box-shadow: 0 0 0 2px var(--ir-blue-ink), 0 8px 18px rgba(11, 37, 69, 0.28);
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -2800,8 +2907,9 @@ body.profile-panel-open {
    so the name in a profile and the name over a report read as one system. */
 .profile-identity-name {
   margin: 0;
-  font-size: 0.98rem;
-  font-weight: 700;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   color: var(--ir-ink-navy);
   overflow-wrap: anywhere;
 }
@@ -2871,10 +2979,11 @@ body.profile-panel-open {
 }
 .profile-fact dd {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 600;
   text-align: right;
   color: var(--paper);
+  font-variant-numeric: tabular-nums;
 }
 
 /* auto-fit rather than a fixed three columns: the panel narrows to 100vw-3rem
@@ -2890,13 +2999,30 @@ body.profile-panel-open {
   list-style: none;
 }
 .profile-count {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  padding: 0.6rem 0.65rem;
-  background: var(--panel-raised);
+  gap: 0.2rem;
+  padding: 0.85rem 0.8rem 0.8rem;
+  background: linear-gradient(180deg, var(--panel-raised) 0%, var(--panel) 100%);
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.profile-count::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--ir-blue) 0%, var(--ir-blue-ink-hi) 55%, var(--ir-gold) 100%);
+  opacity: 0.85;
+}
+.profile-count:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+@media (prefers-reduced-motion: reduce) {
+  .profile-count { transition: none; }
+  .profile-count:hover { transform: none; }
 }
 /* THE THREE NUMBERS, in the same station navy as the name above them and for
    the same reason: they are the figures this officer's own record totals, and
@@ -2904,9 +3030,11 @@ body.profile-panel-open {
    dark restatement). The pending state below still has to win, so it keeps its
    own rule further down. */
 .profile-count-num {
-  font-size: 1.35rem;
-  font-weight: 700;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   line-height: 1.1;
+  font-variant-numeric: tabular-nums;
   color: var(--ir-ink-navy);
 }
 /* A dash is not a number. While the counts are still being read, and after they
@@ -8583,13 +8711,17 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    The row is the button — the whole row opens the report, the way a register
    row does — and nothing inside it is a second control, so there is one target
    per line and no nested buttons. */
-.dash-activity__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.dash-activity__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+/* Rows settle in one after another, newest first — 55ms apart, subtle enough
+   to read as one panel arriving rather than five things moving. */
+.dash-activity__list:not(.is-skeleton) > li { animation: dash-activity-in 240ms ease both; animation-delay: calc(var(--i, 0) * 55ms); }
+@keyframes dash-activity-in { from { opacity: 0; translate: 0 6px; } }
 .dash-activity__row {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 11px 14px 11px 12px;
   border: 1px solid transparent;
   border-radius: 12px;
   background:
@@ -8599,12 +8731,16 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: translate 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 .dash-activity__row:hover {
   background:
     linear-gradient(var(--panel-sunken), var(--panel-sunken)) padding-box,
     linear-gradient(135deg, #1d4ed8 0%, #60a5fa 50%, #1d4ed8 100%) border-box;
+  translate: 0 -1px;
+  box-shadow: 0 6px 16px rgba(2, 8, 23, 0.28);
 }
+.dash-activity__row:active { translate: 0; box-shadow: none; }
 .dash-activity__row:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
 
 /* The type's mark, tinted by the SAME hue family the register's own type pill
@@ -8702,8 +8838,11 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   padding: 3px 10px;
   border-radius: 999px;
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
+  /* A hairline of its own colour, so the chip reads as a chip on a white
+     row as well as a dark one — no flat pastel pill. */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 32%, transparent);
 }
 .dash-status--draft { background: var(--amber-bg); color: var(--amber); }
 .dash-status--submitted { background: var(--cyan-bg); color: var(--cyan); }
@@ -8727,6 +8866,8 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 }
 .dash-viewall:hover { background: var(--cyan-bg); }
 .dash-viewall:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.dash-viewall span[aria-hidden] { display: inline-block; transition: translate 160ms ease; }
+.dash-viewall:hover span[aria-hidden] { translate: 3px 0; }
 
 .dash-grid-main {
   position: relative;
@@ -9075,7 +9216,10 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 @keyframes cmd-sys-pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); } 70% { box-shadow: 0 0 0 7px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
 .dash--cmd .cmd-sys__metric { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 1px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
 .dash--cmd .cmd-sys__metric-cap { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: #94a3b8; }
-.dash--cmd .cmd-sys__metric-val { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; color: var(--ir-navy, #0b2545); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Wraps rather than ellipsising: the AI tile names the answering model, and
+   an ellipsis could hide it on narrow screens. Other tiles' values are
+   short, so this changes nothing for them. */
+.dash--cmd .cmd-sys__metric-val { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; color: var(--ir-navy, #0b2545); font-variant-numeric: tabular-nums; line-height: 1.2; overflow-wrap: anywhere; }
 /* The grid's own pulse: when its readings were taken, and the hand that
    retakes them. A real function, not furniture — the grid re-asks the server
    every minute and on demand. */
@@ -9101,15 +9245,22 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--cmd .cmd-donut { display: flex; align-items: center; gap: 18px; }
 .dash--cmd .cmd-donut__svg { flex: none; width: 148px; height: 148px; }
 .dash--cmd .cmd-donut__track { fill: none; stroke: var(--line); stroke-width: 16; }
-.dash--cmd .cmd-donut__slice { fill: none; stroke-width: 16; }
+.dash--cmd .cmd-donut__slice { fill: none; stroke-width: 16; cursor: pointer; outline: none; transition: opacity 160ms ease, stroke-width 160ms ease, filter 160ms ease; }
+.dash--cmd .cmd-donut__slice:hover, .dash--cmd .cmd-donut__slice:focus-visible, .dash--cmd .cmd-donut__slice.is-active { stroke-width: 20; filter: drop-shadow(0 2px 5px rgba(11, 37, 69, 0.45)); }
+.dash--cmd .cmd-donut__slice.is-dimmed { opacity: 0.3; }
 .dash--cmd .cmd-donut__total { fill: var(--paper); font-size: 22px; font-weight: 800; }
 .dash--cmd .cmd-donut__caption { fill: var(--cmd-muted); font-size: 11px; }
 .dash--cmd .cmd-donut__legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; font-size: 13px; min-width: 0; flex: 1; }
-.dash--cmd .cmd-donut__legend li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
+.dash--cmd .cmd-donut__legend li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 4px 8px; margin: 0 -8px; border-radius: 8px; cursor: pointer; transition: background 140ms ease, transform 140ms ease; }
+.dash--cmd .cmd-donut__legend li:hover, .dash--cmd .cmd-donut__legend li.is-active { background: rgba(11, 37, 69, 0.07); transform: translateX(2px); }
 .dash--cmd .cmd-donut__dot { width: 10px; height: 10px; border-radius: 50%; }
 .dash--cmd .cmd-donut__name { color: var(--cmd-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash--cmd .cmd-donut__count { color: var(--paper); font-weight: 700; font-variant-numeric: tabular-nums; }
 .dash--cmd .cmd-donut__pct { color: var(--cmd-muted); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  .dash--cmd .cmd-donut__slice, .dash--cmd .cmd-donut__legend li { transition: none; }
+  .dash--cmd .cmd-donut__legend li:hover, .dash--cmd .cmd-donut__legend li.is-active { transform: none; }
+}
 /* Top Locations: the Map/List switch, the Naga City map, and its pins. The
    map owns a stacking context so Leaflet's panes never escape over the shell. */
 .dash--cmd .cmd-loc-toggle { display: inline-flex; gap: 2px; background: #eef2f7; border: 1px solid #e2e8f0; border-radius: 999px; padding: 2px; }
@@ -9503,17 +9654,27 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   color: #1d4ed8;
   box-shadow: none;
 }
+/* Quiet rows for the calm page: hairline grey borders, no blue halo — the
+   hover is a cooler tint plus one pixel of lift, the same language the cards
+   use. Record rows keep the register's amber file; system rows wear
+   SystemMark's colleague/page glyphs on violet/blue washes. */
 .dash--cmd .dash-activity__row {
-  border-color: rgba(47, 107, 237, 0.35);
-  border-radius: 10px;
+  border-color: #e6ebf2;
+  border-radius: 12px;
   background: #ffffff;
-  box-shadow: 0 0 10px rgba(47, 107, 237, 0.08);
+  box-shadow: none;
 }
 .dash--cmd .dash-activity__row:hover {
-  border-color: rgba(47, 107, 237, 0.6);
-  background: #ffffff;
-  box-shadow: 0 0 14px rgba(47, 107, 237, 0.18);
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  box-shadow: 0 4px 12px rgba(15, 31, 61, 0.08);
 }
+.dash--cmd .dash-activity__row--system .dash-activity__mark { width: 40px; height: 40px; border-radius: 12px; }
+.dash--cmd .dash-activity__row--system .dash-activity__mark .dash-activity__glyph { width: 20px; height: 20px; }
+.dash--cmd .dash-activity__file { width: 40px; height: 40px; }
+.dash--cmd .dash-activity__type { box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 25%, transparent); }
+.dash--cmd .dash-activity__title { letter-spacing: -0.005em; }
+.dash--cmd .dash-activity__id { font-variant-numeric: tabular-nums; }
 .dash--cmd .cmd-statuspill {
   background: #ffffff;
   border: 1px solid rgba(47, 107, 237, 0.4);
@@ -9625,6 +9786,10 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   letter-spacing: 0.01em;
   color: var(--paper);
   white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-activity__list:not(.is-skeleton) > li { animation: none; }
+  .dash-activity__row, .dash-viewall span[aria-hidden] { transition: none; }
 }
 .dash--cmd .dash-empty--action { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .dash--cmd .dash-empty__btn {

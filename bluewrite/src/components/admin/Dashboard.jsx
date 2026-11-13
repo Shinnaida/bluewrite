@@ -421,8 +421,8 @@ export function RecentActivity({ reports, loading, onOpen, onViewAll }) {
         <EmptyNote>No reports were recorded in this range. Widen the dates, or clear the incident type.</EmptyNote>
       ) : (
         <ul className="dash-activity__list">
-          {rows.map((r) => (
-            <li key={r.id}>
+          {rows.map((r, idx) => (
+            <li key={r.id} style={{ '--i': idx }}>
               <button
                 type="button"
                 className="dash-activity__row"

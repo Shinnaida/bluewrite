@@ -734,6 +734,7 @@ export function RecentActivity({ reports, events = [], loading, onOpen, onViewAl
     meta: `${r.location ? `${r.location} · ` : ''}${activityWhen(r.incident_datetime)}`,
     chip: ACTIVITY_STATUS[r.status] ?? r.status,
     chipClass: `dash-status dash-status--${r.status}`,
+    kind: 'record',
     markClass: 'dash-activity__file',
     mark: <ActivityFileLogo className="dash-activity__filemark" />,
     openId: r.id,
@@ -750,8 +751,12 @@ export function RecentActivity({ reports, events = [], loading, onOpen, onViewAl
         meta: `${read.detail} · ${activityWhen(e.createdAt)}`,
         chip: 'System',
         chipClass: 'dash-status dash-status--system',
-        markClass: 'dash-activity__file',
-        mark: <ActivityFileLogo className="dash-activity__filemark" />,
+        // System rows wear SystemMark's own two marks — the colleague for
+        // account events, the page for report events — so a glance tells a
+        // station happening from a record, which keeps the file logo.
+        kind: 'system',
+        markClass: `dash-activity__mark dash-activity__mark--${read.icon === 'user' ? 'violet' : 'blue'}`,
+        mark: <SystemMark name={read.icon} />,
         openId: read.reportId ?? null,
         openTitle: read.reportId ? `Open report BW-${String(read.reportId).padStart(4, '0')}` : null,
       };
@@ -802,12 +807,12 @@ export function RecentActivity({ reports, events = [], loading, onOpen, onViewAl
         )
       ) : (
         <ul className="dash-activity__list">
-          {rows.map((row) => (
-            <li key={row.key}>
+          {rows.map((row, idx) => (
+            <li key={row.key} style={{ '--i': idx }}>
               {row.openId ? (
                 <button
                   type="button"
-                  className="dash-activity__row"
+                  className={`dash-activity__row dash-activity__row--${row.kind}`}
                   onClick={() => onOpen?.(row.openId)}
                   title={row.openTitle}
                 >
@@ -831,7 +836,7 @@ export function RecentActivity({ reports, events = [], loading, onOpen, onViewAl
                   </span>
                 </button>
               ) : (
-                <div className="dash-activity__row">
+                <div className={`dash-activity__row dash-activity__row--${row.kind}`}>
                   <span className={row.markClass} aria-hidden="true">
                     {row.mark}
                   </span>
@@ -902,10 +907,15 @@ export function RangeSelect({ preset, onPick }) {
 export function TypeDonut({ slices, legend = true }) {
   const rows = (Array.isArray(slices) ? slices : []).filter((s) => s.count > 0);
   const total = rows.reduce((n, s) => n + s.count, 0);
+  // The hovered slice: hovering a ring segment OR its legend row spotlights
+  // that type — the ring dims the rest, swells the hovered arc, and the
+  // centre readout swaps from the range total to the hovered type's count.
+  const [hover, setHover] = useState(null);
   if (rows.length === 0 || total <= 0) return <EmptyNote>Nothing in range to break down.</EmptyNote>;
   const R = 54;
   const C = 2 * Math.PI * R;
   let acc = 0;
+  const active = rows.find((s) => s.label === hover) ?? null;
   return (
     <div className="cmd-donut">
       <svg className="cmd-donut__svg" viewBox="0 0 140 140" role="img" aria-label={`Incident types: ${rows.map((s) => `${s.label} ${s.count}`).join(', ')}`}>
@@ -915,10 +925,12 @@ export function TypeDonut({ slices, legend = true }) {
           const dash = `${Math.max(0, frac * C - 2)} ${C}`;
           const rot = (acc / total) * 360;
           acc += s.count;
+          const isActive = active !== null && active.label === s.label;
+          const isDimmed = active !== null && !isActive;
           return (
             <circle
               key={s.label}
-              className="cmd-donut__slice"
+              className={`cmd-donut__slice${isActive ? ' is-active' : ''}${isDimmed ? ' is-dimmed' : ''}`}
               cx="70"
               cy="70"
               r={R}
@@ -927,16 +939,30 @@ export function TypeDonut({ slices, legend = true }) {
               style={{ stroke: s.color }}
               strokeDasharray={dash}
               transform={`rotate(${rot - 90} 70 70)`}
-            />
+              tabIndex={0}
+              role="img"
+              aria-label={`${s.label}: ${fmt.format(s.count)} reports, ${Math.round((s.count / total) * 100)} percent`}
+              onMouseEnter={() => setHover(s.label)}
+              onMouseLeave={() => setHover(null)}
+              onFocus={() => setHover(s.label)}
+              onBlur={() => setHover(null)}
+            >
+              <title>{`${s.label} — ${fmt.format(s.count)} reports (${Math.round((s.count / total) * 100)}%)`}</title>
+            </circle>
           );
         })}
-        <text className="cmd-donut__total" x="70" y="66" textAnchor="middle">{total}</text>
-        <text className="cmd-donut__caption" x="70" y="84" textAnchor="middle">reports</text>
+        <text className="cmd-donut__total" x="70" y="66" textAnchor="middle">{active ? fmt.format(active.count) : total}</text>
+        <text className="cmd-donut__caption" x="70" y="84" textAnchor="middle">{active ? `${Math.round((active.count / total) * 100)}% of reports` : 'reports'}</text>
       </svg>
       {legend && (
         <ul className="cmd-donut__legend">
           {rows.map((s) => (
-            <li key={s.label}>
+            <li
+              key={s.label}
+              className={hover === s.label ? 'is-active' : ''}
+              onMouseEnter={() => setHover(s.label)}
+              onMouseLeave={() => setHover(null)}
+            >
               <span className="cmd-donut__dot" style={{ background: s.color }} aria-hidden="true" />
               <span className="cmd-donut__name">{s.label}</span>
               <span className="cmd-donut__count">{fmt.format(s.count)}</span>
