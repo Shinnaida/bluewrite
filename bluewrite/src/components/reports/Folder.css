@@ -130,7 +130,7 @@
      — the list sits back toward the folder instead of running out to the
      right. A self-scaling shift, so it holds on any viewport where the
      tray fits. */
-  transform: translateX(-43%);
+  transform: translateX(0%);
   display: flex;
   flex-direction: column;
   gap: 6px;
