@@ -20,6 +20,14 @@ import RowMenu from '../shared/RowMenu.jsx';
 // fields plus a paragraph each. One definition, shared with the AI panel — see
 // InfoHint.jsx for the whole of its contract.
 import InfoHint from '../shared/InfoHint.jsx';
+// The sheet's grid in miniature: the directory's right hand mirrors the account
+// page's drawing — same squares, same ramp — built from the same shape, so one
+// reading in two places rather than two readings saying the same thing.
+// How the count reads: "12 reports", "1 report" — a bare number needs a noun
+// beside it, and the singular is worth getting right in a column of plurals.
+// The grid reuses the sheet's own week/square classes and its `levelOf`, so a
+// square here shades exactly the way a square there does.
+import { toColumns, levelOf } from '../../lib/activitySheet.js';
 // WHO IS AT A DESK RIGHT NOW, opened from this screen's toolbar. It reads the
 // directory itself (see the component) and is mounted only while the toggle is on, so
 // a closed panel costs no polling — and it lives here rather than on the Dashboard
@@ -35,6 +43,14 @@ import ConnectionHub from '../shared/ConnectionHub.jsx';
  * cannot create.
  */
 const ROLES = ['Admin', 'Officer'];
+/**
+ * HIDDEN FROM THE DIRECTORY (owner request, 2026-11-14): usernames that never
+ * render on this screen — in neither view, under no filter, and out of the
+ * counts. A deactivated account still shows (red, and still countable); these
+ * do not show at all. Matched by username, which the server holds unique.
+ * Delete the name here and the account is back.
+ */
+const HIDDEN_USERNAMES = ['e.ramos'];
 /** The orders the directory offers, in menu order. Name first: a station
  *  directory reads alphabetically. Badge number is the station's own identifier
  *  order; recently signed in answers who was last at a desk. */
@@ -141,6 +157,169 @@ function twoFactorCell(user) {
   };
 }
 
+/**
+ * ONLINE IS RECENCY, NOT STATUS. An `active` account last seen three weeks ago
+ * is not online — the green dot burned us exactly this way (an active face
+ * wearing one on a month-old stamp). The dot needs a live-ish sighting: the
+ * server calls 120s without a heartbeat offline (PresenceController), and the
+ * directory reads a snapshot rather than the beat, so its bar is looser — seen
+ * within the last five minutes. Anything older gets the age pill instead, no
+ * matter what the status says.
+ */
+export const ONLINE_RECENT_MS = 5 * 60 * 1000;
+
+export function isOnlineNow(user, nowMs = Date.now()) {
+  if (!user || user.status !== 'active') return false;
+  const s = latestSeen(user);
+  if (!s) return false;
+  // Clamped: a server clock running ahead of this PC reads as "just now",
+  // not as a negative age.
+  return Math.max(0, nowMs - s.ms) <= ONLINE_RECENT_MS;
+}
+
+/**
+ * The offline badge on a face the dot rule turns down: how long the account
+ * has been away, as a short pill — `5m`, `3h`, `2d` — capped at `7d+`.
+ * Anything older reads the same; the badge tooltip and the screen-reader line
+ * state the exact stamp for anyone who needs it. An account never seen at all
+ * wears nothing — there is no duration to state.
+ *
+ * `nowMs` is a parameter so the rule is testable without the clock; callers
+ * leave it alone. Timestamps arrive as `YYYY-MM-DD HH:MM:SS` or ISO, and the
+ * later of last-seen / last-sign-in wins.
+ */
+/** The latest moment the server saw this account, from either stamp it sends. */
+function latestSeen(user) {
+  const raws = [user?.last_seen_at, user?.last_login_at].filter(
+    (v) => v !== null && v !== undefined && String(v).trim() !== '',
+  );
+  let best = null;
+  for (const raw of raws) {
+    const ms = new Date(String(raw).replace(' ', 'T')).getTime();
+    if (Number.isFinite(ms) && (!best || ms > best.ms)) best = { ms, raw: String(raw).replace('T', ' ') };
+  }
+  return best;
+}
+
+/** The exact last-seen stamp in table dress (`2026-09-22 18:19:16`), or ''. */
+export function seenStampText(user) {
+  const s = latestSeen(user);
+  return s ? s.raw : '';
+}
+
+export function offlineBadgeText(user, nowMs = Date.now()) {
+  if (!user) return '';
+  const s = latestSeen(user);
+  if (!s) return '';
+  const mins = Math.floor(Math.max(0, nowMs - s.ms) / 60000);
+  if (mins < 1) return '1m';
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return days < 7 ? `${days}d` : '7d+';
+}
+
+/**
+ * HOW MANY REPORTS THE ACCOUNT HAS FILED, as the cell reads it. The server sends
+ * the count beside each row (live reports only — deleted ones are the register's
+ * business, not the directory's), and this is its whole wording: a bare number
+ * needs its noun, and the singular is worth getting right in a column of
+ * plurals. NULL (an unreadable reports table) reads as "Not recorded" rather
+ * than as a zero — a zero is a claim the officer never filed anything.
+ */
+export function reportCountText(n) {
+  if (n === null || n === undefined) return null;
+  const c = Math.max(0, Number(n) || 0);
+  return c === 1 ? '1 report' : `${c} reports`;
+}
+
+/**
+ * THE WINDOW THE GRID COVERS, in days. Trailing ninety-one — thirteen weeks —
+ * and the SAME window the count covers, so the two can never disagree. Built
+ * from the day count rather than from a date the server sends; only the
+ * picture's label reads the dates.
+ */
+export const REPORT_DAYS = 91;
+
+export function reportWindow(days = REPORT_DAYS) {
+  const to = new Date();
+  const from = new Date(to.getTime() - (days - 1) * 86400000);
+  const d = (t) => t.toISOString().slice(0, 10);
+  return { from: d(from), to: d(to) };
+}
+
+/** The zero-filled day series the miniature draws, from the server's sparse
+ *  per-day map: days with no filing are empty squares, not holes. */
+export function reportSeries(u, window = reportWindow()) {
+  const map = u && typeof u.report_days === 'object' && u.report_days !== null ? u.report_days : {};
+  const fromMs = Date.parse(`${window.from}T00:00:00Z`);
+  const toMs = Date.parse(`${window.to}T00:00:00Z`);
+  const total = Number.isFinite(fromMs) && Number.isFinite(toMs)
+    ? Math.max(0, Math.round((toMs - fromMs) / 86400000) + 1)
+    : 0;
+  const out = [];
+  for (let i = 0; i < total; i++) {
+    const date = new Date(fromMs + i * 86400000).toISOString().slice(0, 10);
+    out.push({ date, count: Math.max(0, Number(map[date]) || 0) });
+  }
+  return out;
+}
+
+/** What one square says when a pointer rests on it: the date first (the
+ *  server's `YYYY-MM-DD` reordered, never localised), then how many reports
+ *  were filed that day — the same date-first shape the big square speaks. */
+export function reportDayTitle(date, n) {
+  const when = String(date).split('-').reverse().join('/');
+  const c = Math.max(0, Number(n) || 0);
+  return `${when} — ${c === 0 ? 'no reports filed' : `${c} report${c === 1 ? '' : 's'} filed`}`;
+}
+
+/** The picture's label: the span, the total, and the busiest day — what the
+ *  grid is FOR, since a screen reader walked square by square would be handed
+ *  a spreadsheet instead of a picture. */
+export function reportMiniLabel(u, window = reportWindow()) {
+  const map = u && typeof u.report_days === 'object' && u.report_days !== null ? u.report_days : {};
+  const counts = Object.values(map).map((n) => Number(n) || 0);
+  const busiest = Math.max(0, ...counts);
+  const total = Math.max(0, Number(u?.report_count) || 0);
+  const range = `from ${window.from} to ${window.to}`;
+  if (total === 0) return `Reports filed ${range}: no reports filed.`;
+  const days = counts.filter((n) => n > 0).length;
+  const spread = days === 1 ? 'on a single day' : `across ${days} days`;
+  return `Reports filed ${range}: ${reportCountText(total)} ${spread}, busiest day ${busiest}.`;
+}
+
+/**
+ * THE MINIATURE: thirteen weeks of GREEN squares — GitHub's own ladder, the one
+ * colour the account sheet refuses (green there means a state). No weekday or
+ * month labels: even at this size there is no room for them, and the picture's
+ * label carries the meaning while each square keeps its own `title`. The
+ * `sheet--reports` modifier is what scopes the ramp's variables; the `.sheet`
+ * card itself stays off, because this lives inside a table cell, not on one.
+ */
+function ReportMini({ user }) {
+  const window = reportWindow();
+  const map = user && typeof user.report_days === 'object' && user.report_days !== null ? user.report_days : {};
+  const busiest = Math.max(0, ...Object.values(map).map((n) => Number(n) || 0));
+  const label = reportMiniLabel(user, window);
+  return (
+    <span className="users-mini sheet--reports" role="img" aria-label={label} title={label}>
+      {toColumns(reportSeries(user, window)).map((column, ci) => (
+        <span className="sheet-week" key={column[0]?.date ?? ci}>
+          {column.map((day) => (
+            <span
+              key={day.date}
+              className={`sheet-cell sheet-cell--l${levelOf(day.count, busiest)}`}
+              title={reportDayTitle(day.date, day.count)}
+            />
+          ))}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /** What a row says under the pointer, and how its actions are found at all. */
 function rowHint(user) {
   return user.status === 'active'
@@ -171,10 +350,12 @@ function rowHint(user) {
  * edits, Menu / Shift+F10 opens the menu at the row, and Escape closes it. The
  * focus ring itself is the global `tbody tr:focus-visible` rule.
  *
- * ONE LINE PER CELL. Every cell here is nowrap by design (see .users-table): a
- * wrapped name or a wrapped timestamp is exactly what made the column of
- * buttons look like a layout accident. The email is the one value allowed to
- * give way, and it gives way with an ellipsis and its full text on `title`.
+ * ONE LINE PER CELL, EXCEPT THE HERO. Every cell here is nowrap by design
+ * (see .users-table): a wrapped timestamp is exactly what made the rows look
+ * like a layout accident. The hero profile cell stacks three short lines
+ * (name, position, badge/username) instead, each with its own ellipsis. The
+ * email is the other value allowed to give way, and it gives way with an
+ * ellipsis and its full text on `title`.
  *
  * AN EMPTY CELL SAYS SO IN WORDS. "Not recorded" rather than a dash: a dash is
  * a glyph that reads as a value in a column of values, and for the address that
@@ -187,14 +368,78 @@ function rowHint(user) {
  * deliberate press from there — the pen on the photograph — and the row menu still
  * carries the direct way in for anyone who already knows what they came to change.
  */
-export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, onMenu = () => {}, sortKey = null }) {
+export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, onMenu = () => {}, sortKey = null, compact = false }) {
+  // HIDDEN ACCOUNTS NEVER REACH A ROW: the table itself refuses them, so every
+  // way in — the container's sorted list, a test's fixture rows, a deep render —
+  // agrees on who is listed. The container's funnel carries the same refusal
+  // for the counts and pages around the table.
+  const rows = (users ?? []).filter((u) => !HIDDEN_USERNAMES.includes(u.username));
+  // THE FOLDED TABLE (owner request, 2026-11-14): when Compact is on, the tall
+  // heroes step aside for the dense register — one short row per account with
+  // the columns the tall view folds away (badge, username, email, role, status
+  // chip, last sign-in). Same rows, same actions, same order — only the shape
+  // changes, so the tall view below keeps its heroes at full height.
+  if (compact) {
+    return (
+      <div className="table-wrap">
+        <table className="users-table is-compact">
+          <caption className="sr-only">Station accounts, one line each: name, badge number, username, email, role, status and last sign-in. Press Enter on a row to open that account, or Menu / Shift+F10 for its actions.</caption>
+          <thead>
+            <tr>
+              <th scope="col" aria-sort={sortKey === 'name' ? 'ascending' : undefined} className={sortKey === 'name' ? 'is-sorted' : undefined}>Full name</th>
+              <th scope="col">Badge no.</th>
+              <th scope="col">Username</th>
+              <th scope="col">Email</th>
+              <th scope="col">Role</th>
+              <th scope="col">Status</th>
+              <th scope="col">Last sign-in</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((u) => (
+              <tr
+                key={u.id}
+                tabIndex={0}
+                aria-haspopup="menu"
+                title={rowHint(u)}
+                onDoubleClick={() => onOpen(u)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  onMenu(u, { x: e.clientX, y: e.clientY }, e.currentTarget, false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    onOpen(u);
+                    return;
+                  }
+                  if (e.key !== 'ContextMenu' && !(e.shiftKey && e.key === 'F10')) return;
+                  e.preventDefault();
+                  const box = e.currentTarget.getBoundingClientRect();
+                  onMenu(u, { x: box.left + 12, y: box.bottom }, e.currentTarget, true);
+                }}
+              >
+                <td data-label="Full name"><span className="users-name"><Avatar user={u} size={32} /><span>{u.full_name}</span></span></td>
+                <td data-label="Badge no.">{u.badge_number}</td>
+                <td data-label="Username">{u.username}</td>
+                <td data-label="Email">{u.email ? <span className="users-email" title={u.email}>{u.email}</span> : <span className="users-none">Not recorded</span>}</td>
+                <td data-label="Role"><span className={`users-role-tag${u.role === 'Admin' ? ' users-role-tag--admin' : u.role === 'Officer' ? ' users-role-tag--officer' : ''}`}>{u.role}</span></td>
+                <td data-label="Status"><span className={`badge ${u.status}`}>{u.status}</span></td>
+                <td data-label="Last sign-in">{u.last_login_at ? String(u.last_login_at).replace('T', ' ') : 'Never signed in'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
   return (
     <div className="table-wrap">
       <table className="users-table">
         {/* The heading row is read out of the markup, so it needs a name of its
             own — and the sentence tells a screen reader the same thing a row's
             tooltip tells an eye. */}
-        <caption className="sr-only">          Station accounts: name, badge number, username, email, role, status, second factor and last sign-in. Press Enter on a row to open that account, or Menu / Shift+F10 for its actions.
+        <caption className="sr-only">          Station accounts: name and position, email, second factor, and reports filed. Press Enter on a row to open that account, or Menu / Shift+F10 for its actions.
         </caption>
         <thead>
           <tr>
@@ -202,26 +447,46 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
                 the column that order is read down wears the blue (see styles.css) —
                 Recent reads newest-first, so it alone sorts descending. */}
             <th scope="col" aria-sort={sortKey === 'name' ? 'ascending' : undefined} className={sortKey === 'name' ? 'is-sorted' : undefined}>Full name</th>
-            <th scope="col" aria-sort={sortKey === 'badge' ? 'ascending' : undefined} className={sortKey === 'badge' ? 'num is-sorted' : 'num'}>Badge no.</th>
-            <th scope="col">Username</th>
-            <th scope="col">Email</th>
-            <th scope="col">Role</th>
-            {/* Centred with its cells (see th.status in styles.css): a chip hard
-                against the left edge read as if it belonged to the column before it. */}
-            <th scope="col" className="status">Status</th>
+            {/* Badge number, username, role AND email ride in the hero profile cell
+                now (name, position, badge/username, email), so none of them is a
+                column — the address belongs to the person, and a middle column of
+                addresses only pushed the grid away from the face it belongs to. */}
+            {/* The Status column is gone: active accounts wear the green dot on
+                the face and every row states its status for screen readers —
+                keeping the chip would print the same fact twice. The Last
+                sign-in column went the same way: the offline badge carries the
+                age and its tooltip the exact stamp. Sorting by recent still
+                works from the Sort menu; there is just no column to mark. */}
             <th scope="col">Two-factor</th>
             <th scope="col" aria-sort={sortKey === 'recent' ? 'descending' : undefined} className={sortKey === 'recent' ? 'num is-sorted' : 'num'}>Last sign-in</th>
+            {/* REPORTS ON THE RIGHT: how many reports each account has filed, over
+                a miniature of the days they were filed on — the count and the
+                grid the server sends beside each row, not a second page to open.
+                The account page still carries what those reports ARE; the
+                directory answers only how many, and when. */}
+            <th scope="col" className="reports">Reports</th>
           </tr>
         </thead>
         <tbody>
-          {users.map((u) => {
+          {rows.map((u) => {
             const cell = twoFactorCell(u);
+            // Recently-seen active faces carry the green dot; every other seen
+            // face carries its offline age. Never-seen accounts carry neither.
+            const online = isOnlineNow(u);
+            const offline = online ? '' : offlineBadgeText(u);
+            const seen = seenStampText(u);
+            // AN INACTIVE ACCOUNT WEARS RED (owner request, 2026-11-14): the row
+            // carries `is-inactive` for the red ring on the face (see styles.css)
+            // and a red tag under the name — the green dot and the age pill
+            // already speak for active and away, but nothing said "deactivated".
+            const inactive = u.status !== 'active';
 
             return (
               <tr
                 key={u.id}
                 tabIndex={0}
                 aria-haspopup="menu"
+                className={inactive ? 'is-inactive' : undefined}
                 title={rowHint(u)}
                 onDoubleClick={() => onOpen(u)}
                 onContextMenu={(e) => {
@@ -242,36 +507,65 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
                   onMenu(u, { x: box.left + 12, y: box.bottom }, e.currentTarget, true);
                 }}
               >
+                {/* THE HERO PROFILE CELL: the account's own photograph at 120px —
+                    the row stands three tall against the old single-height one,
+                    and the square face matches the new row's height — with the
+                    name as the hero and the position (role) under it, so the
+                    directory reads as people before it reads as values. */}
                 <td>
-                  <span className="users-name">
-                    <Avatar user={u} size={28} />
-                    {u.full_name}
+                  <span className="users-hero">
+                    <span className="users-hero-face">
+                      <Avatar user={u} size={120} />
+                      {/* ACTIVE WEARS A GREEN DOT, inactive wears its offline age
+                          — both on the face's bottom-right, both decoration: the
+                          sr-only line below still states the status in words. */}
+                      {online ? (
+                        <span className="users-hero-dot" aria-hidden="true" />
+                      ) : offline ? (
+                        <span className="users-hero-offline" aria-hidden="true" title={seen ? `Last seen ${seen}` : undefined}>{offline}</span>
+                      ) : null}
+                    </span>
+                    <span className="users-hero-text">
+                      <span className="users-hero-name">{u.full_name}</span>
+                      {inactive && (<span className="users-inactive-tag">Inactive</span>)}
+                      {/* THE ROLE WEARS ITS COLOUR (owner request, 2026-11-14): Admin
+                          reads in register blue, Officer in lanyard gold — the same
+                          mapping as the dashboard's strap legend. Any other role
+                          keeps the quiet steel. */}
+                      <span className={`users-hero-sub users-role-tag${u.role === 'Admin' ? ' users-role-tag--admin' : u.role === 'Officer' ? ' users-role-tag--officer' : ''}`}>{u.role}</span>
+                      <span className="users-hero-meta">Badge {u.badge_number} · @{u.username}</span>
+                      {/* THE ADDRESS LIVES WITH THE PERSON: the email column is gone
+                          (owner request), and the hero's fourth line carries it —
+                          with its full text on `title`, and "Not recorded" where
+                          there is nothing, the same words the column used. */}
+                      {u.email
+                        ? <span className="users-email" title={u.email}>{u.email}</span>
+                        : <span className="users-none">Not recorded</span>}
+                      {/* The dot and badge above are decoration, so the status
+                          still has words for the readers who cannot see them —
+                          with the exact stamp the column used to carry. */}
+                      <span className="sr-only">Status: {u.status}{seen ? `, last seen ${seen}` : ''}</span>
+                    </span>
                   </span>
-                </td>
-                <td className="num stamp">{u.badge_number}</td>
-                <td className="num">{u.username}</td>
-                <td>
-                  {u.email
-                    ? <span className="users-email" title={u.email}>{u.email}</span>
-                    : <span className="users-none">Not recorded</span>}
-                </td>
-                <td>
-                  <span className={`users-role users-role--${u.role.toLowerCase()}`}>{u.role}</span>
-                </td>
-                <td className="status">
-                  <span className={`badge ${u.status}`}>{u.status}</span>
                 </td>
                 <td>
                   <span className={`user-mfa ${cell.cls}`} title={cell.title}>
                     {cell.text}
                   </span>
                 </td>
-                {/* The stamp the server sent, verbatim — never a client-side
-                    "2h ago": a station PC's clock is whatever somebody set it
-                    to, which is the same reason the rail is handed ages rather
-                    than timestamps (see lib/presence.js). */}
-                <td className="num stamp">
-                  {u.last_login_at ? u.last_login_at.replace('T', ' ') : 'Never'}
+                {/* The count over its miniature: the count already reads in words,
+                    so the grid is a labelled picture (`role="img"`) rather than
+                    91 more cells — and a row the server could not count says so
+                    rather than printing a zero it cannot back. */}
+                <td className="reports" data-label="Reports">
+                  {u.report_count == null
+                    ? <span className="users-none">Not recorded</span>
+                    : (
+                      <span className="users-reports-block">
+                        <span className="users-reports">{reportCountText(u.report_count)}</span>
+                        <ReportMini user={u} />
+                      </span>
+                    )}
                 </td>
               </tr>
             );
@@ -303,6 +597,9 @@ export default function Users({ notify }) {
   const [role, setRole] = useState('');
   const [status, setStatus] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // COMPACT ROWS (owner request, 2026-11-14): the hero rows stand three tall;
+  // folded, they drop to one short line for reading down a long directory.
+  const [compact, setCompact] = useState(false);
   const [sort, setSort] = useState('name');
   const [sortMenuAt, setSortMenuAt] = useState(null);
   // The directory is read a page at a time. Held here, not in the table, because the
@@ -852,7 +1149,11 @@ export default function Users({ notify }) {
   // arrives in one response — there is no page to fetch, so there is no round
   // trip worth making for a keystroke.
   const needle = search.trim().toLowerCase();
+  // HIDDEN ACCOUNTS NEVER REACH THE FUNNEL: `shown` is the one list every row,
+  // count and page below reads, so one refusal here hides an account from the
+  // whole screen.
   const shown = (users ?? []).filter((u) => {
+    if (HIDDEN_USERNAMES.includes(u.username)) return false;
     if (role !== '' && u.role !== role) return false;
     if (status !== '' && u.status !== status) return false;
     if (needle === '') return true;
@@ -1033,6 +1334,19 @@ export default function Users({ notify }) {
                 <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M4 6.5h11" /><path d="M4 12h7.5" /><path d="M4 17.5h4.5" /><path d="M17.5 9.5v8" /><path d="m14.6 14.9 2.9 2.9 2.9-2.9" /></svg>
                 <span className="register-tool__label">Sort</span>
               </button>
+              {/* COMPACT. Folds the three-tall hero rows to one short line —
+                  smaller face, name and role only, count without its miniature.
+                  The key wears the accent while the list is folded. */}
+              <button
+                type="button"
+                className="register-tool"
+                aria-label={compact ? 'Comfortable view — rows are tall' : 'Compact view — rows are one line'}
+                aria-pressed={compact}
+                data-on={compact ? 'true' : undefined}
+                onClick={() => setCompact((v) => !v)}
+              >
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M4 6.5h16" /><path d="M4 12h16" /><path d="M4 17.5h10" /></svg>
+              </button>
             </div>
             {/* THE FILTER ROW. Role and status live here, in labelled cells the way
                 the register's own filters do — the rail above stays a rail. Folded
@@ -1054,7 +1368,6 @@ export default function Users({ notify }) {
                     <option value="inactive">Inactive</option>
                   </select>
                 </label>
-                {filtered && (<button type="button" className="reports-filter__clear" onClick={clearFilters}>Clear filters</button>)}
               </div>
             </div>
 
@@ -1516,7 +1829,7 @@ export default function Users({ notify }) {
             </div>
           ) : (
             <>
-              <UsersTable users={pageRows} sortKey={sort} onOpen={openProfile} onEdit={startEdit} onMenu={openRowMenu} />
+              <UsersTable users={pageRows} sortKey={sort} compact={compact} onOpen={openProfile} onEdit={startEdit} onMenu={openRowMenu} />
               <div className="users-footer">
                 <span className="users-footer__count">
                   Showing {pageFrom}–{pageTo} of {shown.length} accounts

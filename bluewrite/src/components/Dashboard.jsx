@@ -1563,9 +1563,6 @@ export default function Dashboard({
   notify,
   onConnError,
   onOpenReports,
-  // The station's own name, for the sub-line under the title. Undefined until
-  // Shell's letterhead read lands, and the line simply omits it until then.
-  stationName = null,
   // Open ONE record, by id — the route Shell owns (the bell uses the same one).
   // The activity rows are the only thing on this page that names a single report.
   onOpenReport,
@@ -2035,15 +2032,16 @@ export default function Dashboard({
       )}
 
       {/* ---- Command header -------------------------------------------------
-          The greeting, the station the page answers for, and the moment it was
-          read: the reference's own head. The photograph is the station's own
-          file (the same picture the gate stands in front of), masked into the
-          panel's right edge rather than pasted beside the words. */}
+          The greeting and the moment it was read: the reference's own head.
+          The photograph is the station's own file (the same picture the gate
+          stands in front of), masked into the panel's right edge rather than
+          pasted beside the words. (The station caption that sat under New
+          Report is gone on request, 2026-11-14 — the identity band above the
+          page already names the house.) */}
       <header className="cmd-hero">
         <div className="cmd-hero__photo" aria-hidden="true">
           <img src={stationPhoto} alt="" />
           <span className="cmd-hero__wash" />
-          <span className="cmd-hero__station">{(stationName ?? 'City of Naga Police Station').toUpperCase()}</span>
         </div>
         <div className="cmd-hero__text">
           <h2 className="cmd-hello">{dayGreeting()}, <span>{firstName(user)}</span></h2>
@@ -2060,6 +2058,15 @@ export default function Dashboard({
             <span className="cmd-pill">Shift: {shift}</span>
           </p>
         </div>
+        {/* NEW REPORT RIDES THE HERO (owner request, 2026-11-14): the quick
+            action sits lower-right of the banner, above the station caption —
+            the toolbar row below the hero sat empty beside it. */}
+        <div className="dash-quick cmd-hero__actions" role="group" aria-label="Quick actions">
+          <button type="button" className="dash-quick__btn" onClick={() => onNewReport?.()}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            New Report
+          </button>
+        </div>
       </header>
 
       {/* ---- Dashboard toolbar: the quick action -------------------------------
@@ -2068,15 +2075,6 @@ export default function Dashboard({
           Admin reaches for — new report. It stays top-left, with the metric
           cards stacked below it. */}
       <div className="dash-toprow">
-      <div className="dash-toolbar">
-        <div className="dash-quick" role="group" aria-label="Quick actions">
-          <button type="button" className="dash-quick__btn is-primary" onClick={() => onNewReport?.()}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-            New Report
-          </button>
-        </div>
-      </div>
-
       {error && (
         <div className="dash-alert" role="alert">
           {error}
@@ -2240,6 +2238,15 @@ export default function Dashboard({
             <div ref={cardRef} className="cmd-card cmd-card--gold cmd-active-lanyard-card is-bare">
               <span className="cmd-id-head" onClick={(e) => e.preventDefault()}>
                 <span className="cmd-id-head__title">Users</span>
+                {/* STRAP LEGEND (owner request, 2026-11-14): a blue strap hangs
+                    an Admin badge, a yellow strap an Officer one — the lanyards
+                    say it in colour, and this line says it in words, beside the
+                    List control where the eye already is. */}
+                <span className="cmd-id-head__right">
+                <span className="cmd-id-legend" aria-label="Strap colours: blue for Admin, yellow for Officer">
+                  <span className="cmd-id-legend__item"><i className="cmd-id-legend__swatch cmd-id-legend__swatch--admin" aria-hidden="true" />Admin</span>
+                  <span className="cmd-id-legend__item"><i className="cmd-id-legend__swatch cmd-id-legend__swatch--officer" aria-hidden="true" />Officer</span>
+                </span>
                 <span className="cmd-id-view">
                   <button
                     type="button"
@@ -2248,6 +2255,7 @@ export default function Dashboard({
                     title={idView === 'card' ? 'Switch to list view' : 'Switch to card view'}
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIdView((v) => (v === 'card' ? 'list' : 'card')); }}
                   >{idView === 'card' ? 'List' : 'Card'}</button>
+                </span>
                 </span>
               </span>
               {idView === 'list' ? (
@@ -2263,10 +2271,15 @@ export default function Dashboard({
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenUsers?.(person.id); } }}
                     >
                       <span className="cmd-id-row__face" aria-hidden="true">
+                        {/* NO INITIALS OVER A PHOTOGRAPH (owner request, 2026-11-14):
+                            the letters sit UNDER the photo — the fallback while its
+                            bytes are in flight (see ServerPhoto), not a caption
+                            printed across somebody's face. DOM order is the paint
+                            order, so the photo comes last and covers them. */}
+                        <span className="cmd-id-row__initials">{personInitials(person.full_name)}</span>
                         {person.photo_url ? (
                           <ServerPhoto src={person.photo_url} alt="" loading="lazy" />
                         ) : null}
-                        <span className="cmd-id-row__initials">{personInitials(person.full_name)}</span>
                       </span>
                       <span className="cmd-id-row__main">
                         <span className="cmd-id-row__name" title={person.full_name}>{person.full_name ?? '—'}</span>

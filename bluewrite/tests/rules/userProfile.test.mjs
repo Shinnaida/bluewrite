@@ -352,7 +352,7 @@ test('a row opens the ACCOUNT, the pen opens the form, and Escape goes back one 
   // THE STEP: the row hands over the account (`openProfile`), and the form is reached
   // from the page's own pen (`onEdit`) — so the two are separate acts rather than the
   // same click landing somewhere else.
-  assert.match(src, /<UsersTable users=\{sorted\} sortKey=\{sort\} onOpen=\{openProfile\} onEdit=\{startEdit\} onMenu=\{openRowMenu\} \/>/);
+  assert.match(src, /<UsersTable users=\{sorted\} sortKey=\{sort\} compact=\{compact\} onOpen=\{openProfile\} onEdit=\{startEdit\} onMenu=\{openRowMenu\} \/>/);
   assert.match(src, /onEdit=\{\(\) => startEdit\(profileUser\)\}/);
   assert.match(src, /onBack=\{closeProfile\}/);
   assert.match(src, /onRetry=\{reloadProfile\}/);

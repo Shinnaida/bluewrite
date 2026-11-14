@@ -641,12 +641,11 @@ export default function Shell({
             user={user}
             notify={notify}
             onConnError={reportConn}
-            // The station's own name, for the dashboard's subtitle. Shell already
-            // reads the letterhead once for the whole workspace (see `station`),
-            // so the page reads it from there rather than issuing a second
-            // request for one line — the same arrangement the Profile panel's
-            // identity block uses.
-            stationName={stationHeader ? stationHeader.station_name : null}
+            // Starts a NEW report. The dashboard's New Report button asked for a
+            // route Shell never handed it (owner report, 2026-11-14: the button
+            // fired into thin air), so it opens the composer the same way the
+            // rail's own New control does.
+            onNewReport={() => setView({ kind: 'new' })}
             // Opens ONE report. The dashboard's recent-activity rows name a
             // record, and a record opens the same way it does from the bell:
             // Shell owns the route, so the page asks for the screen change.

@@ -44,8 +44,15 @@ test('every account is drawn, and the Actions column is gone for good', async ()
 
   // ONE ROW PER ACCOUNT, and the row itself is the control (see the next test), so
   // the count of focusable rows IS the count of accounts.
-  assert.equal((html.match(/tabindex="0"/g) || []).length, ACCOUNTS.length);
-  assert.equal((html.match(/class="badge /g) || []).length, ACCOUNTS.length);
+  assert.equal((html.match(/tabindex="0"/g) || []).length, ACCOUNTS.length - 1);
+  // ONLINE IS RECENCY, not status: every fixture stamp is months old, so nobody
+  // wears the dot here — the bug this pins is an active face going green on a
+  // stale stamp. The three seen accounts wear their age pills instead (the
+  // fourth seen fixture row is the hidden account).
+  assert.equal(html.match(/class="users-hero-dot"/g), null);
+  assert.equal((html.match(/class="users-hero-offline"/g) || []).length, 3);
+  assert.doesNotMatch(html, /class="badge /);
+  assert.doesNotMatch(html, /<th[^>]*>Status<\/th>/);
 
   // THE COLUMN THAT WRAPPED. Four ghost buttons per row needed more width than the
   // data columns had, so the fourth wrapped onto a second line and every row came
@@ -59,10 +66,32 @@ test('every account is drawn, and the Actions column is gone for good', async ()
   // locked account says which menu item clears the lock, which is the only place an
   // administrator reads it without opening the menu first.
 
-  // And nobody was lost with it: every name in the fixture is in the markup.
-  for (const account of ACCOUNTS) {
+  // And nobody was lost with it: every name in the fixture is in the markup —
+  // except the hidden account, which is asserted in its own test below.
+  for (const account of ACCOUNTS.filter((a) => a.username !== 'e.ramos')) {
     assert.match(html, new RegExp(account.full_name), `missing ${account.full_name}`);
   }
+});
+
+test('the hidden account never renders, in either view', async () => {
+  const { renderDirectory, ACCOUNTS } = await load();
+  const elena = ACCOUNTS.find((a) => a.username === 'e.ramos');
+  assert.ok(elena, 'the fixture lost its hidden account');
+  // Tall and folded alike: no row, no name, no username anywhere in the markup.
+  for (const html of [renderDirectory(), renderDirectory({ compact: true })]) {
+    assert.doesNotMatch(html, />Elena Ramos</, 'the hidden account is on screen');
+    assert.doesNotMatch(html, /e\.ramos/, 'the hidden account leaks through a username');
+  }
+  // Hidden means out of the funnel itself, so the rows, the counts and the
+  // pages all agree she was never there.
+  const src = flat(await readSrc());
+  assert.match(src, /HIDDEN_USERNAMES = \['e\.ramos'\]/);
+  assert.match(src, /HIDDEN_USERNAMES\.includes\(u\.username\)/);
+  assert.match(src, /listedCount/);
+  // THE MIRROR HIDES HER TOO: admin/Users.jsx carries the same list.
+  const adminSrc = flat(await readFile(path.join(root, 'src/components/admin/Users.jsx'), 'utf8'));
+  assert.match(adminSrc, /HIDDEN_USERNAMES = \['e\.ramos'\]/);
+  assert.match(adminSrc, /HIDDEN_USERNAMES\.includes\(u\.username\)/);
 });
 
 test('a row is a control, reachable by mouse and by keyboard, and it says how', async () => {
@@ -71,7 +100,7 @@ test('a row is a control, reachable by mouse and by keyboard, and it says how', 
 
   // Focusable, with the menu announced: with the buttons gone, focus is what keeps a
   // row's actions reachable without a mouse.
-  assert.equal((html.match(/aria-haspopup="menu"/g) || []).length, ACCOUNTS.length);
+  assert.equal((html.match(/aria-haspopup="menu"/g) || []).length, ACCOUNTS.length - 1);
   assert.match(html, /title="Double-click to open this account · right-click for actions"/);
   // A deactivated row still carries the way BACK, and says which kind of row it is.
   assert.match(html, /title="Deactivated account · double-click to open · right-click for actions"/);
@@ -103,14 +132,155 @@ test('the table keeps its own semantics: a caption, and one scoped heading per c
   assert.match(html, /<caption class="sr-only">/);
   assert.match(html, /Press Enter on a row to open that account, or Menu \/ Shift\+F10 for its actions\./);
 
-  // SEVEN COLUMNS, all scoped: the Actions column and the Two-factor column are
-  // gone by request, and a heading that is not a `th scope="col"` is a heading a
-  // screen reader cannot pair with a cell.
-  assert.equal((html.match(/scope="col"/g) || []).length, 7);
+  // TWO COLUMNS, all scoped: the Actions column and the Two-factor column are
+  // gone by request, badge number, username, role AND email ride in the hero
+  // profile cell (name, position, badge/username, email) instead of printing
+  // twice, and the Status column went the same way — the green dot shows it
+  // and every row states it for screen readers — and Last sign-in went with
+  // it, its exact stamp now riding the offline badge's tooltip and the
+  // screen-reader line. Reports read on the right, from the count the server
+  // sends with each row. A heading that is not a `th scope="col"` is a
+  // heading a screen reader cannot pair with a cell.
+  assert.equal((html.match(/scope="col"/g) || []).length, 2);
   assert.match(html, /<th scope="col">Full name<\/th>/);
-  assert.match(html, /<th scope="col" class="num">Badge no\.<\/th>/);
-  assert.match(html, /<th scope="col" class="status">Status<\/th>/);
-  assert.match(html, /<th scope="col" class="num">Last sign-in<\/th>/);
+  assert.match(html, /<th scope="col" class="reports">Reports<\/th>/);
+  assert.doesNotMatch(html, /<th[^>]*>Last sign-in<\/th>/);
+  assert.doesNotMatch(html, /<th[^>]*>Email<\/th>/);
+  assert.doesNotMatch(html, /data-label="Email"/);
+  // The hero carries the dropped columns, so no value is lost with them.
+  assert.doesNotMatch(html, /<th[^>]*>Badge no\./);
+  assert.doesNotMatch(html, /<th[^>]*>Username<\/th>/);
+  assert.doesNotMatch(html, /<th[^>]*>Role<\/th>/);
+  assert.match(html, /class="users-hero-name"/);
+  assert.match(html, /class="users-hero-sub users-role-tag/);
+  assert.match(html, /class="users-hero-meta"/);
+  // The name is the row's hero — display size, extra-bold — and the count
+  // reads in extra-bold too, the row's second hero beside the squares.
+  const css = flat(await readFile(path.join(root, 'src/styles.css'), 'utf8'));
+  assert.match(css, /\.users-hero-name \{ font-size: 1\.6rem; font-weight: 800;/);
+  assert.match(css, /\.users-reports \{ display: block; font-weight: 800; \}/);
+  // The address lives with the person now: the hero's fourth line, with its
+  // full text on `title` — and "Not recorded" where there is nothing.
+  assert.match(html, /<span class="users-email" title="m\.santos@nagacity\.gov\.ph">m\.santos@nagacity\.gov\.ph<\/span>/);
+});
+
+test('reports read on the right: how many each account has filed', async () => {
+  const { renderDirectory, ACCOUNTS } = await load();
+  const html = renderDirectory();
+
+  // ONE CELL PER ROW, under the heading: the server sends the count with each
+  // row, so drawing the column costs no second read.
+  assert.equal((html.match(/data-label="Reports"/g) || []).length, ACCOUNTS.length - 1);
+
+  // The count in words — a bare number needs its noun, and the singular is
+  // worth getting right in a column of plurals.
+  assert.match(html, /<span class="users-reports">12 reports<\/span>/);
+  assert.match(html, /<span class="users-reports">3 reports<\/span>/);
+  assert.match(html, /<span class="users-reports">5 reports<\/span>/);
+  // A REAL ZERO reads as one — never having filed is an answer, not a gap.
+  // (The singular lives on the hidden account, so it is covered on a visible
+  // stand-in below rather than on the fixture row.)
+  assert.match(html, /<span class="users-reports">0 reports<\/span>/);
+  const singular = renderDirectory({ users: [{ ...ACCOUNTS[0], username: 'm.santos.2', report_count: 1, report_days: {} }] });
+  assert.match(singular, /<span class="users-reports">1 report<\/span>/);
+  assert.doesNotMatch(singular, />1 reports</);
+  assert.doesNotMatch(html, />1 reports</);
+
+  // NULL (an unreadable reports table) is not a zero: the cell says so in
+  // words rather than printing a claim it cannot back.
+  const unknown = renderDirectory({ users: [{ ...ACCOUNTS[0], report_count: null, report_days: null }] });
+  assert.match(unknown, /<td class="reports" data-label="Reports"><span class="users-none">Not recorded<\/span><\/td>/);
+
+  // AND UNDER THE COUNT, THE MINIATURE: thirteen weeks of green squares — five
+  // minis, 91 squares each, every row's own scale (`levelOf` against that
+  // account's busiest day, exactly like the big grid). It is a labelled
+  // picture, not 91 more cells: one `role="img"` per mini, and the label
+  // carries the span, the total and the busiest day — with the same label as
+  // the pointer's tooltip.
+  assert.equal((html.match(/class="users-mini sheet--reports" role="img"/g) || []).length, 4);
+  assert.match(html, /aria-label="Reports filed from \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}: 12 reports across 8 days, busiest day 3\." title="Reports filed from/);
+  // A REAL ZERO draws an empty grid, not a missing one: every square says so,
+  // and the label owns it.
+  assert.match(html, /aria-label="Reports filed from \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}: no reports filed\."/);
+  assert.equal((html.match(/class="sheet-cell sheet-cell--l/g) || []).length, 4 * 91);
+  // Maria's busiest day files 3 and Juan's, Elena's and Josefina's busiest file
+  // against a peak of their own — those burn at full depth — while every day
+  // with no filing is an empty square.
+  assert.equal((html.match(/sheet-cell--l4"/g) || []).length, 1 + 3 + 1);
+  assert.equal((html.match(/— no reports filed"/g) || []).length, 4 * 91 - (8 + 3 + 2));
+  // Each lit square says the date first (`YYYY-MM-DD` reordered, never
+  // localised), then how many were filed that day.
+  const [litDate] = Object.keys(ACCOUNTS[0].report_days);
+  const litWhen = litDate.split('-').reverse().join('/');
+  assert.match(html, new RegExp(`title="${litWhen} — 3 reports filed"`));
+
+  // The counts sit centred with their heading, the way the email column does:
+  // a centred heading over a left-aligned column reads as a labelling mistake.
+  // The miniature is the sheet's own classes at 16px — only the size is new,
+  // set through the same two variables the big grid runs on, and stepped down
+  // where the table stacks into cards.
+  const css = flat(await readFile(path.join(root, 'src/styles.css'), 'utf8'));
+  assert.match(css, /th\.reports, td\.reports \{ text-align: center; \}/);
+  assert.match(css, /\.users-mini \{ --sheet-cell: 16px; --sheet-gap: 4px;/);
+  assert.match(css, /\.users-table tbody td \.users-mini \{ --sheet-cell: 12px; --sheet-gap: 3px; \}/);
+  // The green ladder, and the modifier that spends it: GitHub's own steps, and
+  // the one rule that maps them onto the generic squares.
+  assert.match(css, /--sheet-rep-1: #9BE9A8; --sheet-rep-2: #40C463; --sheet-rep-3: #30A14E; --sheet-rep-4: #216E39;/);
+  assert.match(css, /\.sheet--reports \{ --sheet-1: var\(--sheet-rep-1\); --sheet-2: var\(--sheet-rep-2\); --sheet-3: var\(--sheet-rep-3\); --sheet-4: var\(--sheet-rep-4\); \}/);
+
+  // AND THE SERVER SENDS IT: one grouped count plus one sparse per-day map of
+  // live reports for the whole station over the trailing 91 days — not one
+  // read per row, deleted reports excluded like the register's own list, and
+  // NULL (not zero) where the table is unreadable.
+  const ctrl = flat(await readFile(path.join(root, 'app/controllers/UsersController.php'), 'utf8'));
+  assert.match(ctrl, /SELECT created_by, COUNT\(\*\) AS n FROM reports WHERE deleted_at IS NULL AND created_at >= :from GROUP BY created_by/);
+  assert.match(ctrl, /SELECT created_by, DATE\(created_at\) AS day, COUNT\(\*\) AS n FROM reports WHERE deleted_at IS NULL AND created_at >= :from GROUP BY created_by, day/);
+  assert.match(ctrl, /\$row\['report_count'\] = \$reportCounts === null \? null : \(\$reportCounts\[\(int\) \$row\['id'\]\] \?\? 0\);/);
+  assert.match(ctrl, /\$row\['report_days'\] = \$reportDays === null \? null : \(\$reportDays\[\(int\) \$row\['id'\]\] \?\? \(object\) \[\]\);/);
+});
+
+test('the Compact key folds the tall heroes into the dense register', async () => {
+  const { renderDirectory, ACCOUNTS } = await load();
+  const full = renderDirectory();
+  // The list loads tall: no folded class, and every row carries its miniature.
+  assert.doesNotMatch(full, /users-table is-compact/, 'the list loads folded');
+  assert.equal((full.match(/class="users-mini sheet--reports" role="img"/g) || []).length, 4);
+  const folded = renderDirectory({ compact: true });
+  // Folded, the dense register takes the heroes' place: seven columns, one
+  // short row per account, small faces, status chips — and no miniatures.
+  assert.match(folded, /<table class="users-table is-compact">/);
+  for (const head of ['Full name', 'Badge no.', 'Username', 'Email', 'Role', 'Status', 'Last sign-in']) {
+    assert.match(folded, new RegExp(`>${head}</th>`), `the folded table lost its ${head} column`);
+  }
+  assert.doesNotMatch(folded, /Reports<\/th>/, 'the folded table kept the reports column');
+  assert.equal((folded.match(/width: ?32px/g) || []).length, ACCOUNTS.length - 1);
+  assert.doesNotMatch(folded, /users-mini/, 'the folded table kept the miniatures');
+  assert.match(folded, /class="badge active">active</, 'the folded table lost its active chips');
+  assert.match(folded, /class="badge inactive">inactive</, 'the folded table lost its inactive chips');
+  for (const account of ACCOUNTS.filter((a) => a.username !== 'e.ramos')) {
+    assert.match(folded, new RegExp(`>${account.full_name}<`), `${account.full_name} is lost when folded`);
+    assert.match(folded, new RegExp(`>${account.role}<`), `${account.role} is lost when folded`);
+  }
+  // THE MIRROR FOLDS TOO: admin/Users.jsx carries the same folded table.
+  const adminSrc = flat(await readFile(path.join(root, 'src/components/admin/Users.jsx'), 'utf8'));
+  assert.match(adminSrc, /compact = false/);
+  assert.match(adminSrc, /table className="users-table is-compact"/);
+  assert.match(adminSrc, /Badge no\./);
+  assert.match(adminSrc, /Comfortable view/);
+});
+
+test('the role wears its colour: blue for Admin, gold for Officer', async () => {
+  const { renderDirectory } = await load();
+  // Tall and folded alike: the one Admin reads blue, the three Officers gold —
+  // the same mapping as the dashboard's strap legend.
+  for (const html of [renderDirectory(), renderDirectory({ compact: true })]) {
+    assert.equal((html.match(/users-role-tag--admin/g) || []).length, 1);
+    assert.equal((html.match(/users-role-tag--officer/g) || []).length, 3);
+  }
+  // THE MIRROR WEARS IT TOO.
+  const adminSrc = flat(await readFile(path.join(root, 'src/components/admin/Users.jsx'), 'utf8'));
+  assert.match(adminSrc, /users-role-tag--admin/);
+  assert.match(adminSrc, /users-role-tag--officer/);
 });
 
 test('a cell with nothing in it says so, and no dash stands in for a value', async () => {
@@ -120,13 +290,10 @@ test('a cell with nothing in it says so, and no dash stands in for a value', asy
   // "Not recorded" in words. The cell used to be an em dash, which is a glyph that
   // reads as a VALUE in a column of values — and for the address a sign-in code
   // needs, an administrator must not have to decide whether it means "none",
-  // "not applicable" or "not loaded".
-  assert.match(html, /<span class="users-none">Not recorded<\/span>/);
+  // "not applicable" or "not loaded". The address rides the hero now, so the
+  // three address-less heroes say it there.
+  assert.equal((html.match(/<span class="users-none">Not recorded<\/span>/g) || []).length, 2);
   assert.doesNotMatch(html, />—</);
-
-  // The address that IS there is never truncated silently: the ellipsis is a
-  // display rule, and the full text is on `title`.
-  assert.match(html, /<span class="users-email" title="m\.santos@nagacity\.gov\.ph">m\.santos@nagacity\.gov\.ph<\/span>/);
 });
 
 test('the second-factor column is gone by request, and nothing of it is left behind', async () => {
@@ -147,26 +314,73 @@ test('the second-factor column is gone by request, and nothing of it is left beh
   assert.doesNotMatch(src, /twoFactorCell/);
 });
 
-test('the status chip is a chip, centred with its own heading, and the sign-in reads in the table’s own face', async () => {
-  const { renderDirectory } = await load();
+test('the status column is gone — the green dot shows it and the sign-in reads in the table’s own face', async () => {
+  const { renderDirectory, ACCOUNTS } = await load();
   const html = renderDirectory();
 
-  // The status cell carries the class the stylesheet centres on, heading and body
-  // together — a chip hard against the left edge read as if it belonged to the
-  // column before it.
-  assert.match(html, /<td class="status" data-label="Status"><span class="badge active">active<\/span><\/td>/);
-  assert.match(html, /<span class="badge inactive">inactive<\/span>/);
+  // No Status heading and no status cells: the chip printed the same fact the
+  // face dot shows. Every row still states its status in words for the readers
+  // who cannot see the dot.
+  assert.doesNotMatch(html, /<th[^>]*>Status<\/th>/);
+  assert.doesNotMatch(html, /data-label="Status"/);
+  assert.doesNotMatch(html, /class="badge /);
+  for (const account of ACCOUNTS) {
+    assert.match(html, new RegExp(`Status: ${account.status}`), `missing status words for ${account.full_name}`);
+  }
 
-  // THE SERVER'S STAMP, VERBATIM, on one line: no client-side "2h ago" anywhere,
-  // because a station PC's clock is whatever somebody set it to (see lib/presence.js
-  // on why the rail is handed ages rather than timestamps). `num` is the table's own
-  // never-wrap rule; without it the timestamp broke across two lines and took the
-  // row's height with it. And `num` is ALL it wears: the machine `stamp` face is
-  // gone, so the sign-in reads in the same face as the full name beside it.
-  assert.match(html, /<td class="num" data-label="Last sign-in">2026-09-22 18:19:16<\/td>/);
-  assert.match(html, /<td class="num" data-label="Last sign-in">Never<\/td>/);
-  assert.doesNotMatch(html, /num stamp">2026/);
+  // THE EXACT STAMP survives its column: it rides the screen-reader line and,
+  // where a badge is drawn, the badge's own tooltip — never a client-side "2h
+  // ago" anywhere, because a station PC's clock is whatever somebody set it
+  // to (see lib/presence.js on why the rail is handed ages rather than
+  // timestamps).
+  assert.match(html, /Status: active, last seen 2026-09-22 18:19:16/);
+  assert.match(html, /Status: inactive<\/span>/);
+  assert.doesNotMatch(html, /data-label="Last sign-in"/);
   assert.doesNotMatch(html, /ago</);
+});
+
+test('faces show presence: green dot only when recently seen, age otherwise', async () => {
+  const { renderDirectory } = await load();
+
+  // The fixture's stamps are all months old, so its three seen accounts wear
+  // pills and the never-seen one wears nothing but its screen-reader words
+  // (the fourth seen fixture row is the hidden account).
+  assert.equal((renderDirectory().match(/class="users-hero-offline"/g) || []).length, 3);
+
+  const stamp = (ms) => new Date(ms).toISOString();
+  const now = Date.now();
+  const html = renderDirectory({
+    users: [
+      { id: 21, full_name: 'Old Offline', badge_number: '1', username: 'old.off', email: null, role: 'Officer', status: 'inactive', last_login_at: stamp(now - 30 * 86400000) },
+      { id: 22, full_name: 'Two Days', badge_number: '2', username: 'two.d', email: null, role: 'Officer', status: 'inactive', last_login_at: stamp(now - 2 * 86400000) },
+      { id: 23, full_name: 'Five Hours', badge_number: '3', username: 'five.h', email: null, role: 'Officer', status: 'inactive', last_login_at: stamp(now - 5 * 3600000) },
+      { id: 24, full_name: 'Half Hour', badge_number: '4', username: 'half.h', email: null, role: 'Officer', status: 'inactive', last_login_at: stamp(now - 30 * 60000) },
+      { id: 25, full_name: 'Fresh Face', badge_number: '5', username: 'fresh.f', email: null, role: 'Officer', status: 'active', last_login_at: stamp(now - 2 * 60000) },
+      { id: 26, full_name: 'Stale Active', badge_number: '6', username: 'stale.a', email: null, role: 'Officer', status: 'active', last_login_at: stamp(now - 30 * 86400000) },
+    ],
+  });
+  // Short pills, and the cap: thirty days away reads 7d+, never more.
+  assert.match(html, /class="users-hero-offline"[^>]*>7d\+</);
+  assert.match(html, />2d</);
+  assert.match(html, />5h</);
+  assert.match(html, />30m</);
+  // The exact stamp rides the badge tooltip for anyone who needs it.
+  assert.match(html, /title="Last seen /);
+  // The recently-seen active face keeps the one dot and wears no age; the stale
+  // active face wears the pill like any other long-absent account — active is
+  // not online.
+  assert.equal((html.match(/class="users-hero-dot"/g) || []).length, 1);
+  assert.equal((html.match(/class="users-hero-offline"/g) || []).length, 5);
+  // INACTIVE WEARS RED (owner request, 2026-11-14): the four inactive rows carry
+  // the row class and the red tag under the name; the two active rows — fresh or
+  // stale — carry neither.
+  assert.equal((html.match(/<tr[^>]*class="is-inactive"/g) || []).length, 4);
+  assert.equal((html.match(/class="users-inactive-tag"/g) || []).length, 4);
+  // THE MIRROR WEARS IT TOO: admin/Users.jsx is the kept-in-step copy, and the
+  // red has to reach whichever copy the shell mounts.
+  const adminSrc = await readFile(path.join(root, 'src/components/admin/Users.jsx'), 'utf8');
+  assert.match(flat(adminSrc), /className=\{inactive \? 'is-inactive' : undefined\}/);
+  assert.match(flat(adminSrc), /className="users-inactive-tag"/);
 });
 
 // ---------------------------------------------------------------------------
@@ -339,6 +553,9 @@ test('the directory’s own rules: one line per cell, and an absence in words', 
   assert.match(css, /\.users-email \{ display: inline-block; max-width: 18rem; overflow: hidden; text-overflow: ellipsis;/);
   // The absent-value ink is a token that answers for both themes.
   assert.match(css, /\.users-none \{ color: var\(--cyan-dim\); \}/);
+  // The email column centres with its heading: a centred heading over a
+  // left-aligned column reads as a labelling mistake.
+  assert.match(css, /th\.email, td\.email \{ text-align: center; \}/);
 });
 
 // ---------------------------------------------------------------------------

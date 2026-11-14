@@ -26,6 +26,47 @@ import { loadFixture } from './renderHarness.mjs';
 
 const load = () => loadFixture('tests/fixtures/adminDashboard.jsx');
 
+// Every hex the command page may still paint, and why it is allowed to stay a
+// literal. Surfaces and ink read theme tokens (the dark theme only overrides
+// tokens), so anything NOT on this list is a light-mode leftover the dark
+// theme cannot reach — which was the bug (owner request, 2026-11-14).
+const DARK_EXEMPT_HEX = new Map([
+  // White ink and rings drawn ON a colour: map pins, face initials, icon
+  // tiles, the go arrow, the filled empty-state button, seg tags.
+  ['#fff', 'white carried by a coloured fill'],
+  // Token fallbacks (`var(--ir-navy, #0b2545)`): dead unless the token is
+  // ever missing, and the token is always present.
+  ['#0b2545', 'token fallback only'],
+  // The gold the reference owns: rules, rings, pins, keys, dashes (and the
+  // token fallback spelling).
+  ['#f0b429', 'the reference gold'],
+  // Navy ink on the gold New Report pill: a fixed pair with the gold above,
+  // deliberate in both themes like the badge chrome — not a leftover.
+  ['#1d2a44', 'gold pill ink'],
+  // The Officer lanyard strap, and the legend swatch that must match it: the
+  // strap is a canvas prop in Dashboard.jsx, so the swatch is a fixed pair
+  // with it rather than a theme surface.
+  ['#eab308', 'officer lanyard strap'],
+  // Status language: green while fresh, amber while quiet, grey past the hour.
+  ['#22c55e', 'presence and status green'],
+  ['#86efac', 'status green ramp'],
+  ['#f59e0b', 'away amber'],
+  ['#fcd34d', 'warning ramp'],
+  ['#94a3b8', 'offline grey'],
+  // Blue data and brand: faces, bars, dots, fills, segments, the register
+  // plate's own accent, the filled primary action (which carries white).
+  ['#1d4ed8', 'register blue'],
+  ['#2563eb', 'data blue'],
+  ['#60a5fa', 'data blue ramp'],
+  // The violet, teal and amber service tiles — icon plates, white glyphs.
+  ['#6d28d9', 'service tile'],
+  ['#c4b5fd', 'service tile'],
+  ['#0e7490', 'service tile'],
+  ['#67e8f9', 'service tile'],
+  ['#b45309', 'service tile'],
+  ['#fbbf24', 'service tile'],
+]);
+
 test('the page mounts, and paints its head, its range card and its skeletons', async () => {
   const { renderDashboard } = await load();
   const html = renderDashboard();
@@ -48,6 +89,35 @@ test('the page mounts, and paints its head, its range card and its skeletons', a
   for (const label of ['>From<', '>To<', '>Incident type<']) {
     assert.ok(!html.includes(label), `the ${label} filter is back on the dashboard`);
   }
+
+  // NEW REPORT RIDES THE HERO (owner request, 2026-11-14): the quick action
+  // sits lower-right of the banner, and the toolbar row below the hero is gone.
+  assert.ok(html.includes('New Report'), 'New Report is missing from the hero');
+  assert.match(html, /cmd-hero[\s\S]*New Report[\s\S]*<\/header>/, 'New Report is not inside the hero');
+  assert.doesNotMatch(html, /dash-toolbar/, 'the empty toolbar row is back below the hero');
+  // THE STATION CAPTION IS GONE (owner request, 2026-11-14): it sat under New
+  // Report, and the identity band above the page already names the house.
+  assert.doesNotMatch(html, /cmd-hero__station/, 'the hero station caption is back');
+
+  // THE STRAP LEGEND (owner request, 2026-11-14): card view hangs lanyards —
+  // blue straps for Admin, yellow for Officer — and the legend says so in
+  // words beside the swatches. First paint is skeletons (data still loading),
+  // so the legend is pinned in source rather than in markup.
+  const dash = readFileSync(new URL('../../src/components/Dashboard.jsx', import.meta.url), 'utf8');
+  assert.match(dash, /cmd-id-legend__swatch--admin/, 'the legend has no Admin swatch');
+  assert.match(dash, /cmd-id-legend__swatch--officer/, 'the legend has no Officer swatch');
+  const faceAt = dash.indexOf('cmd-id-row__face');
+  const initialsAt = dash.indexOf('cmd-id-row__initials', faceAt);
+  const photoAt = dash.indexOf('<ServerPhoto', faceAt);
+  assert.ok(faceAt !== -1 && initialsAt !== -1 && photoAt !== -1 && initialsAt < photoAt, 'initials are painted over the photograph');
+  assert.match(dash, /blue strap[\s\S]*Admin[\s\S]*yellow strap[\s\S]*Officer/, 'the legend does not say blue-Admin, yellow-Officer');
+
+  // NEW REPORT OPENS THE COMPOSER (owner report, 2026-11-14): the button fired
+  // into thin air because Shell never handed the page its route. Both ends are
+  // pinned — the page asks, and Shell answers with the composer's own route.
+  assert.match(dash, /onClick=\{\(\) => onNewReport\?\.\(\)\}/, 'New Report no longer asks its route');
+  const shell = readFileSync(new URL('../../src/components/Shell.jsx', import.meta.url), 'utf8');
+  assert.match(shell, /onNewReport=\{\(\) => setView\(\{ kind: 'new' \}\)\}/, 'Shell hands New Report no route');
 
   // The first load draws SKELETONS rather than empty cards: the Active Accounts
   // lanyard plate (the one MetricCard left — the hero Total plate draws its own
@@ -348,4 +418,31 @@ test('the trio answers three questions: kind, place, pulse — above the brief',
   assert.ok(!html.includes('All systems operational'), 'the removed summary line is back on the grid');
   assert.doesNotMatch(html, /cmd-sys__head/, 'the removed grid head is back');
   assert.doesNotMatch(html, /cmd-sys__badge/, 'the removed grid badge is back');
+});
+
+test('the command page follows dark mode: no light surface or ink literals', () => {
+  // THE PAGE IGNORED DARK MODE (owner request, 2026-11-14): every panel, card
+  // and row was painted #fff with navy ink, which the token-only dark theme
+  // could not reach. Surfaces and ink now read tokens; this test re-reads the
+  // command styles and fails on any hex outside the exempt list above, so a
+  // pasted light literal can never go quiet again.
+  //
+  // SCOPE. `.dash--cmd` rules (the live page) plus the unscoped base rules the
+  // page renders (activity rows, status chips, the empty state, the view-all).
+  // The dead generations are excluded: `dash--admin`/`dash-head`/`dash-clock`
+  // render only from the orphaned admin/Dashboard.jsx, which no shell imports.
+  // Comments are stripped first so a hex mentioned in prose cannot trip it.
+  const css = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const stray = [];
+  for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const live = selector.includes('.dash--cmd')
+      || /\.(dash-activity|dash-status|dash-empty|dash-viewall|dash-range)\b/.test(selector);
+    if (!live || /dash--admin|dash-head|dash-clock/.test(selector)) continue;
+    for (const [hex] of body.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) {
+      const key = hex.toLowerCase();
+      if (!DARK_EXEMPT_HEX.has(key)) stray.push(`${selector.trim()} paints ${key}`);
+    }
+  }
+  assert.deepEqual(stray, [], `light literals the dark theme cannot reach:\n${stray.join('\n')}`);
 });

@@ -28,6 +28,11 @@ import { UsersTable } from '../../src/components/Users.jsx';
  * keys its rows on `id`, and the fixture is also the check that nothing else in the
  * row depends on its position.
  */
+/** A date N days before today, as the server sends days (`YYYY-MM-DD`). */
+const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+
+/** The sparse per-day map the server sends: only days with a filing. */
+const tally = (pairs) => Object.fromEntries(pairs.map(([n, m]) => [daysAgo(n), m]));
 export const ACCOUNTS = [
   // ADMIN, ENROLLED. The ordinary case: an address on file, so a code can be sent.
   {
@@ -39,6 +44,13 @@ export const ACCOUNTS = [
     role: 'Admin',
     status: 'active',
     last_login_at: '2026-09-22T18:19:16',
+    // How many live reports this account has filed in the trailing 91 days, and
+    // the sparse per-day map the miniature zero-fills — as GET /users sends
+    // them beside each row. The window is trailing, so worked days are built
+    // from today rather than fixed: fixed dates would fall outside the window
+    // and every miniature would draw empty. The map sums to the count.
+    report_count: 12,
+    report_days: tally([[2, 3], [5, 2], [9, 1], [14, 2], [21, 1], [28, 1], [35, 1], [42, 1]]),
   },
   // OFFICER, LOCKED — too many incorrect codes, which is what `otp_locked_until`
   // means. The one state on this screen that has a FIX in the row's own menu.
@@ -52,6 +64,8 @@ export const ACCOUNTS = [
     status: 'active',
     last_login_at: '2026-09-21T21:04:44',
     otp_locked_until: '2026-09-22 19:05:00',
+    report_count: 3,
+    report_days: tally([[1, 1], [11, 1], [33, 1]]),
   },
   // OFFICER WITH NO ADDRESS. This account cannot complete a sign-in at all, so the
   // Email column says "Not recorded" — the absence an administrator comes at
@@ -65,6 +79,9 @@ export const ACCOUNTS = [
     role: 'Officer',
     status: 'active',
     last_login_at: '2026-09-22T18:17:08',
+    // Filed nothing: a real zero, not a missing count.
+    report_count: 0,
+    report_days: {},
   },
   // OFFICER without an address on file — a fault somebody has to fix, because
   // every role signs in with an emailed code.
@@ -77,6 +94,9 @@ export const ACCOUNTS = [
     role: 'Officer',
     status: 'active',
     last_login_at: '2026-09-22T18:13:50',
+    // Filed one: the singular the column gets right in a column of plurals.
+    report_count: 1,
+    report_days: tally([[4, 1]]),
   },
   // DEACTIVATED, never signed in, and the longest name in the set. A deactivated
   // row is still drawn — the register keeps its archived records visible for the
@@ -90,6 +110,8 @@ export const ACCOUNTS = [
     role: 'Officer',
     status: 'inactive',
     last_login_at: null,
+    report_count: 5,
+    report_days: tally([[3, 2], [70, 3]]),
   },
 ];
 
@@ -101,10 +123,11 @@ export const ACCOUNTS = [
  * `title` that says so) and that the wiring behind it is in the source, which
  * `tests/rules/usersDirectory.test.mjs` reads.
  */
-export function renderDirectory({ users = ACCOUNTS } = {}) {
+export function renderDirectory({ users = ACCOUNTS, compact = false } = {}) {
   return renderToStaticMarkup(
     React.createElement(UsersTable, {
       users,
+      compact,
       onEdit: () => {},
       onMenu: () => {},
     })

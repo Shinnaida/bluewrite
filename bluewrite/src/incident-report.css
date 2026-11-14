@@ -4442,18 +4442,21 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
   padding: 0.85rem 1rem 0.7rem;
   border-bottom: 1px solid var(--ir-border);
 }
+/* A PILL, LIKE THE SHEET'S WAY BACK (owner request, 2026-11-14): white pill,
+   hairline border, dark ink — the register tokens carry it, so it holds in dark
+   mode too. Shared by the page and component copies of the register. */
 .report-trail__back {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.65rem;
-  font-size: 0.76rem;
-  font-family: var(--font-hud);
-  letter-spacing: 0.04em;
-  color: var(--ir-text);
-  background: var(--ir-btn);
+  gap: 0.4rem;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ir-head-ink);
+  background: var(--ir-card);
   border: 1px solid var(--ir-border);
-  border-radius: 5px;
+  border-radius: 999px;
+  white-space: nowrap;
   cursor: pointer;
 }
 .report-trail__back:hover {
@@ -7158,20 +7161,53 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
   top: calc(100% + 0.5rem);
   right: 0;
   z-index: 60;
-  min-width: 16rem;
-  padding: 0.35rem;
-  background: var(--ir-card);
+  min-width: 19rem;
+  max-width: min(20.5rem, calc(100vw - 2rem));
+  padding: 0.5rem;
+  background: linear-gradient(180deg, var(--ir-card) 0%, var(--ir-soft) 130%);
   border: 1px solid var(--ir-border);
-  border-radius: 4px;
-  box-shadow: var(--shadow-md);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
   color: var(--ir-text);
+  overflow: hidden;
 }
+.ir-profile-menu::before {
+  content: "";
+  display: block;
+  height: 3px;
+  margin: -0.5rem -0.5rem 0.25rem;
+  background: linear-gradient(90deg, var(--ir-blue) 0%, var(--ir-gold) 100%);
+}
+
+.ir-profile-menu { animation: ir-menu-in 180ms cubic-bezier(0.32, 0.72, 0, 1); transform-origin: top right; }
+.ir-chrome--rail .ir-profile-menu { transform-origin: bottom left; }
+@keyframes ir-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ir-profile-menu { animation: none; }
+}
+
+.ir-profile-eyebrow {
+  margin: 0.25rem 0.6rem 0.35rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+}
+
+.ir-profile-trigger { min-height: 44px; }
+.ir-profile-trigger:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.ir-profile-trigger.is-open { background: rgba(255, 255, 255, 0.12); }
 
 .ir-profile-head {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.6rem 0.6rem 0.7rem;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding: 0.7rem;
 }
 /* The identity row is the way into the Profile panel, so it is a BUTTON — and a
    button is the one element this app styles at element level (styles.css
@@ -7182,7 +7218,7 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
   width: 100%;
   background: none;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: 8px;
   color: inherit;
   text-align: left;
 }
@@ -7190,34 +7226,91 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
   background: var(--ir-page);
   border-color: var(--ir-border);
 }
+.ir-profile-head--link:focus-visible,
+.ir-profile-item:focus-visible {
+  outline: none;
+  border-color: var(--ir-blue);
+  box-shadow: 0 0 0 3px var(--ir-focus-ring);
+}
 /* Pushed to the row's right edge like the menu's other row affordances, and in
    the row's own ink. Deliberately NOT the red hover the rows below the fold
    take: this opens a surface, it does not end anything. */
 .ir-profile-head-caret {
   flex: none;
-  margin-left: auto;
-  color: var(--ir-muted);
+  color: inherit;
+  opacity: 0.8;
+  transition: transform 180ms ease;
 }
 .ir-profile-head--link:hover .ir-profile-head-caret {
   color: var(--ir-text);
+  transform: translateX(2px);
+}
+.ir-profile-avatar-wrap { position: relative; flex: none; }
+.ir-profile-dot {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 2px solid var(--ir-card);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 .ir-profile-menu .ir-profile-avatar {
-  width: 32px;
-  height: 32px;
+  box-shadow: 0 0 0 2px var(--ir-card), 0 0 0 3px var(--ir-tile-line);
+}
+.ir-profile-menu .ir-profile-avatar {
+  width: 40px;
+  height: 40px;
+  font-size: 0.85rem;
 }
 .ir-profile-id {
   display: flex;
   flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+.ir-profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   min-width: 0;
 }
 .ir-profile-name {
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.005em;
   color: var(--ir-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ir-profile-role {
+  flex: none;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ir-blue-ink);
+  background: var(--ir-blue-tint);
+  border: 1px solid var(--ir-tile-line);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
 }
 .ir-profile-meta {
-  font-size: 0.74rem;
+  font-size: 0.78rem;
   color: var(--ir-muted);
+}
+.ir-profile-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ir-blue-ink);
 }
 
 .ir-profile-sep {
@@ -7229,20 +7322,54 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
 .ir-profile-item {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.65rem;
   width: 100%;
-  padding: 0.5rem 0.6rem;
+  min-height: 44px;
+  padding: 0.55rem 0.65rem;
   background: var(--ir-card);
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: 8px;
   color: var(--ir-text);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 500;
   text-align: left;
 }
 .ir-profile-item:hover {
   background: var(--ir-page);
   border-color: var(--ir-border);
-  color: var(--ir-red);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-xs);
+}
+.ir-profile-item { transition: background 150ms ease, border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  .ir-profile-item { transition: none; }
+  .ir-profile-item:hover { transform: none; }
+  .ir-profile-head--link:hover .ir-profile-head-caret { transform: none; }
+}
+.ir-profile-item-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--ir-soft);
+  border: 1px solid var(--ir-border);
+  color: var(--ir-muted);
+}
+.ir-profile-item:hover .ir-profile-item-icon { color: var(--ir-text); }
+.ir-profile-item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ir-profile-item-sub { font-size: 0.74rem; font-weight: 400; color: var(--ir-muted); }
+.ir-profile-item--danger { color: var(--ir-danger-ink); }
+.ir-profile-item--danger .ir-profile-item-icon {
+  background: var(--ir-red-tint);
+  border-color: transparent;
+  color: var(--ir-danger-ink);
+}
+.ir-profile-item--danger:hover {
+  background: var(--ir-red-tint);
+  border-color: transparent;
+  color: var(--ir-danger-ink);
 }
 
 /* The key cap on the menu row that opens the shortcut sheet. It is the whole
@@ -7267,12 +7394,21 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
    rather than pinned to one line. It exists for the idle timeout — the rule is
    stated here, the running countdown is Shell's banner. */
 .ir-menu-note {
-  margin: 0;
-  padding: 0.1rem 0.6rem 0.6rem;
-  font-size: 0.72rem;
-  line-height: 1.45;
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin: 0.35rem;
+  padding: 0.65rem 0.7rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
   color: var(--ir-muted);
+  background: var(--ir-soft);
+  border: 1px solid var(--ir-border);
+  border-radius: 8px;
 }
+.ir-menu-note svg { flex: none; margin-top: 0.1rem; color: var(--ir-blue-ink); }
+.ir-menu-note span { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.ir-menu-note strong { font-size: 0.78rem; color: var(--ir-text); }
 
 /* ---- Preferences rows: shared by the Profile panel -----------------------
    These rows USED to live inside the top bar's menu, indented under a
@@ -8004,8 +8140,54 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
    in here is the advisory, which is prose on purpose.
    =========================================================================== */
 .dialog.about {
-  max-width: min(520px, 100%);
+  max-width: min(620px, calc(100vw - 2rem));
+  max-height: min(86vh, 760px);
+  overflow-y: auto;
 }
+.about-hero {
+  margin: -1rem -1rem 1rem;
+  padding: 1.1rem 1.25rem 1rem;
+  background: linear-gradient(135deg, var(--ir-navy) 0%, #133e87 70%, #1a4fa0 100%);
+  border-bottom: 3px solid var(--ir-gold);
+  border-radius: 8px 8px 0 0;
+  color: #fff;
+}
+.about-kicker {
+  margin: 0 0 0.3rem;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.75);
+}
+.about-hero h2 { margin: 0; font-size: 1.15rem; color: #fff; }
+.about-summary { margin: 0.5rem 0 0; font-size: 0.85rem; line-height: 1.55; color: rgba(255, 255, 255, 0.9); max-width: 58ch; }
+.about-status { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.25rem; }
+.about-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  border: 1px solid var(--line-bright);
+  background: var(--panel-raised);
+  color: var(--steel);
+}
+.about-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.about-pill.is-on { color: var(--green-ink); background: var(--green-bg); border-color: var(--green-line); }
+.about-pill.is-off { color: var(--steel); }
+.about-section {
+  margin: 1.1rem 0 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+.about-list { margin: 0; padding-left: 1.1rem; font-size: 0.85rem; line-height: 1.6; color: var(--paper); }
+.about-list li + li { margin-top: 0.25rem; }
 .about-lead {
   margin: 0 0 1rem;
   font-weight: 600;
@@ -9321,11 +9503,26 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
   border-radius: 0.4rem;
   background: var(--ir-card);
 }
+/* A PILL, LIKE THE DIRECTORY'S WAY BACK (owner request, 2026-11-14): white pill,
+   hairline border, dark ink — the register tokens carry it, so it holds in dark
+   mode too. Shared by the page and component copies of the sheet. */
 .ir-sheet-page__back {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  padding: 0.45rem 1.1rem;
+  border: 1px solid var(--ir-border);
+  border-radius: 999px;
+  background: var(--ir-card);
+  color: var(--ir-head-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
   white-space: nowrap;
+  cursor: pointer;
+}
+.ir-sheet-page__back:hover {
+  border-color: var(--ir-blue);
+  color: var(--ir-blue-ink);
 }
 .ir-sheet-page__ident {
   display: flex;
@@ -9417,11 +9614,22 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
   color: var(--ir-text);
 }
 .register-results__hint { font-weight: 400; color: var(--ir-muted); }
+/* The paper reserves the actions' width in its own right-hand padding — but
+   ONLY while the row carries actions. An admin's live rows are bare (see
+   rowMeta), so without the `:has` their facts would stop 11.5rem short of the
+   card's edge for buttons that are not there. */
 .reports-register .file-card__paper {
   grid-template-columns: 2rem minmax(11rem, 14rem) minmax(0, 1fr);
   min-height: 50px;
   gap: 1rem;
-  padding: 0.5rem 11.5rem 0.5rem 1rem;
+  padding: 0.5rem 1rem;
+}
+/* …and only above the breakpoint where the actions ride the row's end: below
+   1200px they dock at its foot, so no end reserve is owed at any width. */
+@media (min-width: 1201px) {
+  .reports-register .file-card__paper:has(.report-row__actions) {
+    padding-right: 11.5rem;
+  }
 }
 .reports-register .report-row__folder { width: 2rem; }
 .reports-register .report-row__head { gap: 0.4rem; }

@@ -152,6 +152,15 @@
   --sheet-act-2: #C0A9F5;
   --sheet-act-3: #9C77EE;
   --sheet-act-4: #8444F2;
+  /* Reports — GitHub's own green ladder, spent in exactly one place: the
+     directory's miniature. Green elsewhere means a STATE (the online dot,
+     `--green-ok` chips), so neither of the account sheet's readings wears it;
+     the miniature is the exception the station asked for. Step 1 is a pale
+     green that still reads as "something" against the shared empty day. */
+  --sheet-rep-1: #9BE9A8;
+  --sheet-rep-2: #40C463;
+  --sheet-rep-3: #30A14E;
+  --sheet-rep-4: #216E39;
   /* The switch's pressed fill, one per reading, and THE ONE PLACE a ramp colour
      carries text: white has to hold on it, which is why these are stated
      separately from the squares rather than taken from step 4 — the darkest
@@ -1289,6 +1298,33 @@ td.num, th.num { white-space: nowrap; }
    it, and centring one without the other put the chip under the gap between
    columns. */
 th.status, td.status { text-align: center; }
+/* The email column centres with its heading: a centred heading over a
+   left-aligned column reads as a labelling mistake, so the two move together. */
+th.email, td.email { text-align: center; }
+/* The reports column does the same: short centred counts on the table's right
+   hand, moved with their heading for the same reason. */
+th.reports, td.reports { text-align: center; }
+.users-reports-block {
+  display: inline-block;
+  vertical-align: middle;
+}
+/* The count reads in extra-bold, the row's second hero: at grid width the
+   words are small, and a regular weight would wash out beside the squares. */
+.users-reports { display: block; font-weight: 800; }
+/* THE MINIATURE: thirteen weeks of the sheet's own squares, sized past the big
+   sheet's own 11px — seven 16px squares and their gaps stand ~135px tall, the
+   row growing a little past the 120px face to hold them. The weeks and squares
+   are the sheet's own classes — only the size is the miniature's, set through
+   the same two variables the big grid runs on. */
+.users-mini {
+  --sheet-cell: 16px;
+  --sheet-gap: 4px;
+  display: inline-grid;
+  grid-auto-flow: column;
+  column-gap: var(--sheet-gap);
+  margin-top: 0.35rem;
+  vertical-align: middle;
+}
 
 /* The register's one sortable heading (see ReportsTable's STATUS_SORTS). It has
    to look like the heading it is, not like the app's filled buttons: the word
@@ -3326,6 +3362,94 @@ body.profile-panel-open {
   white-space: nowrap;
 }
 .users-name .bw-avatar { flex: none; }
+/* THE HERO PROFILE CELL (owner request): the directory reads as people first —
+   a 120px face with the name set large as the hero, the position (role) under
+   it, and the badge/username line under that. The face drives the row to about
+   three times its old height, and the other cells centre against the tall row.
+   Every hero line keeps its own ellipsis under the table's nowrap rule, so a
+   long name never stretches the row — the horizontal scroll stays the fallback
+   it was, not the norm. */
+.users-table tbody td { vertical-align: middle; }
+.users-hero { display: inline-flex; align-items: center; gap: 1rem; padding-block: 0.35rem; }
+.users-hero .bw-avatar { flex: none; }
+/* THE FOLDED TABLE (owner request, 2026-11-14): Compact swaps the tall heroes
+   for the dense register — one short row per account with a small face beside
+   the name. The status chip returns here (the tall view's dot and tag step out
+   with it), and every rule stays on tokens, so dark mode holds. */
+.users-table.is-compact tbody td { padding-block: 0.45rem; font-size: 0.85rem; }
+.users-table.is-compact .users-name { font-weight: 700; }
+/* THE ACTIVE DOT: a green circle on the face's bottom-right for active accounts
+   (the app's own presence green, the same one the profile menu's dot wears).
+   Inactive accounts wear no dot — the Status column still states every account
+   in words, so this is decoration and stays out of the accessibility tree. */
+.users-hero-face { position: relative; flex: none; }
+.users-hero-dot {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 3px solid var(--ir-filecard-paper);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+/* THE OFFLINE AGE: where the green dot would sit, an inactive face instead wears
+   how long the account has been away (`5m`, `3h`, `2d`, capped at `7d+`) — a
+   dark pill punched out of the photo with the same ring as the dot, so the two
+   states read as one idea. Decoration like the dot: the sr-only line states the
+   status and the Last sign-in cell states the exact stamp. */
+.users-hero-offline {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #0f1c3f;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  white-space: nowrap;
+  border: 2px solid var(--ir-filecard-paper);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+/* INACTIVE WEARS RED (owner request, 2026-11-14): a deactivated account gets a
+   red ring on its face and a red tag under its name — the green dot and the age
+   pill already speak for active and away, but nothing said "deactivated". The
+   `--red-*` tokens carry both themes, so this holds in dark mode too. */
+.users-table tr.is-inactive .users-hero-face .bw-avatar {
+  outline: 3px solid var(--red);
+  outline-offset: 3px;
+}
+.users-inactive-tag {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--red-bg);
+  border: 1px solid var(--red-line);
+  color: var(--red-text);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.users-hero-text { display: inline-flex; flex-direction: column; justify-content: center; min-width: 0; line-height: 1.3; }
+/* THE HERO: the name leads the row at display size, the way the face leads it
+   in pictures — the rows stand tall enough now (the grid sets them) that the
+   name can take the room without crowding the three lines under it. */
+.users-hero-name { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.01em; max-width: 24rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.users-hero-sub { font-size: 0.85rem; font-weight: 700; color: var(--steel); max-width: 24rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* THE ROLE WEARS ITS COLOUR (owner request, 2026-11-14): Admin reads in register
+   blue, Officer in lanyard gold — the same mapping as the dashboard's strap
+   legend, so the directory and the badges agree. Ink tokens, so dark mode
+   holds; any other role keeps the steel above. */
+.users-role-tag { font-weight: 800; }
+.users-role-tag--admin { color: var(--ir-blue-ink); }
+.users-role-tag--officer { color: var(--amber); }
+.users-hero-meta { font-size: 0.78rem; color: var(--cyan-dim); max-width: 24rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .users-role {
   display: inline-block;
   padding: 0.15rem 0.55rem;
@@ -3718,6 +3842,15 @@ body.profile-panel-open {
   --sheet-4: var(--sheet-act-4);
   --sheet-fill: var(--sheet-act-fill);
 }
+/* The directory's reports miniature. A ramp and one line, per the note above —
+   and no fill: nothing in the miniature carries text, so there is no label
+   colour to state. */
+.sheet--reports {
+  --sheet-1: var(--sheet-rep-1);
+  --sheet-2: var(--sheet-rep-2);
+  --sheet-3: var(--sheet-rep-3);
+  --sheet-4: var(--sheet-rep-4);
+}
 .sheet-head {
   display: flex;
   align-items: baseline;
@@ -3741,79 +3874,97 @@ body.profile-panel-open {
   color: var(--cyan-dim);
 }
 
-/* The switch: two buttons, one of them pressed. A segmented control rather than
-   a select, because both readings are always on screen and one is always
-   current — which is what a pressed state says and a dropdown cannot. */
-.sheet-switch {
-  display: inline-flex;
-  border: 1px solid var(--line);
+/* The toggle: ONE control for two readings. A sliding knob inside a single pill,
+   because there are only ever two readings and exactly one of them is current —
+   which is what a switch says. `role="switch"` with `aria-checked` carries the
+   same to a screen reader, and the accessible name always offers the reading a
+   press would show. */
+.sheet-toggle {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 0;
+  border: 1px solid var(--sheet-fill, var(--line-bright));
   border-radius: 999px;
-  overflow: hidden;
   background: var(--panel-raised);
-  transition: border-color 140ms ease;
-}
-
-/* THE RING FOLLOWS THE SELECTION. Two halves filling the same pill means the filled
-   half alone has to carry "this one is current", and against a dark pill a mid blue
-   does most of that — but the border is a second signal in the same colour, so the
-   state is legible in a screenshot, at a glance, and to a reader who cannot separate
-   the fill from the pill's own background. `:has` because the pressed state is a
-   child's business and the pill is what wears the ring. */
-.sheet-switch:has([aria-pressed='true']) {
-  border-color: var(--sheet-fill, var(--line-bright));
-}
-
-.sheet-switch__btn {
-  padding: 0.25rem 0.85rem;
-  border: 0;
-  background: none;
-  color: var(--steel);
   font-family: var(--font-hud);
+  cursor: pointer;
+}
+/* HOVER IS STATED, not inherited: the app's own `button:hover` paints a panel-grey
+   background, and saying it here means a later global change cannot quietly restyle
+   this pill out from under the knob. */
+.sheet-toggle:hover { background: var(--panel-raised); }
+
+/* THE RING IS ALWAYS THE CURRENT READING'S COLOUR. One reading is always current,
+   so the border needs no `:has` to follow the selection — it simply is the ring,
+   a second signal in the same colour as the knob for a reader who cannot separate
+   the fill from the pill's own background. The fallback is load-bearing: without it
+   a missing reading token would leave the pill ringless rather than visibly broken. */
+
+.sheet-toggle__opt {
+  position: relative;
+  z-index: 1;
+  padding: 0.25rem 0.85rem;
+  color: var(--steel);
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  cursor: pointer;
+  white-space: nowrap;
 }
-.sheet-switch__btn:hover { color: var(--paper); }
+/* THE LIT LABEL WEARS THE INK THAT HOLDS ON THE FILL — the label under the knob
+   reads in accent ink, the parked one stays quiet steel. */
+.sheet-toggle__opt[data-on] { color: var(--on-accent); }
 
-/* THE RING IS DRAWN INSIDE THE BUTTON (`outline-offset: -2px`), because the pill
-   CLIPS (`overflow: hidden`) and an outline outside the button would be cut off —
-   which would leave a keyboard user with no way to see where they are. A pressed
-   state is not a focus state: this one says which reading is current, that one says
-   which control the next key press lands on. */
-.sheet-switch__btn:focus-visible {
-  outline: 2px solid var(--focus-ring-strong);
-  outline-offset: -2px;
-}/* THE PRESSED HALF WEARS THE READING'S OWN COLOUR, so the switch and the squares
-   are the same colour at the same moment: an administrator who flips it can see
-   which reading they are in without reading the label again, and a screenshot of
-   the sheet carries the answer with it. `--sheet-fill` rather than the ramp's step
-   4, because in dark the deepest square is a light blue chosen to glow and white
-   ink does not hold on it (see the token's note).
+/* THE KNOB WEARS THE READING'S OWN COLOUR, so the toggle and the squares are the
+   same colour at the same moment: an administrator who flips it can see which
+   reading they are in without reading the label again, and a screenshot of the
+   sheet carries the answer with it. `--sheet-fill` rather than the ramp's step 4,
+   because in dark the deepest square is a light blue chosen to glow and white ink
+   does not hold on it (see the token's note).
 
-   THE FALLBACK IS NOT DECORATION. This rule is the ONLY thing marking which of the
-   two readings is current, so if the token chain ever failed to resolve the switch
-   would come up with both halves looking identical — the one failure mode that
+   THE FALLBACK IS NOT DECORATION. This knob is the ONLY thing marking which of the
+   two readings is current, so if the token chain ever failed to resolve the toggle
+   would come up with both labels looking identical — the one failure mode that
    makes the control silently useless rather than visibly broken. `var(--sheet-fill,
-   var(--accent-fill))` means a missing reading token still leaves a filled half.
-
-   HOVER IS STATED, not inherited: the app's own `button:hover` sets a panel-grey
-   background, and while this rule outranks it on specificity, saying it here means a
-   later global change cannot quietly put a hole in this control. */
-.sheet-switch__btn[aria-pressed='true'],
-.sheet-switch__btn[aria-pressed='true']:hover {
+   var(--accent-fill))` means a missing reading token still leaves a filled knob. */
+.sheet-toggle__knob {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc(50% - 2px);
+  border-radius: 999px;
   background: var(--sheet-fill, var(--accent-fill));
-  color: var(--on-accent);
+  transition: transform 160ms ease;
 }
-/* THE HOVER IS A WHITE VEIL, NOT A BRIGHTENING FILTER. On a button either would
+/* CHECKED MEANS ACTIVITY, which sits on the right: the knob travels exactly one of
+   its own widths — from spanning 2px..50% to spanning 50%..(100% - 2px), so both
+   ends keep the same 2px breathing room. */
+.sheet-toggle[aria-checked='true'] .sheet-toggle__knob {
+  transform: translateX(100%);
+}
+/* THE HOVER IS A WHITE VEIL, NOT A BRIGHTENING FILTER. On a knob either would
    work, but the app already refuses `brightness(>1)` anywhere in this stylesheet —
    Blink clamps a brightening filter on an SVG element to a no-op, so that rule is a
    file-wide guard against a shade that silently does nothing (see the pie chart's own
    test). An inset veil is the same lightening with no filter involved, so the
-   selection keeps its response and the guard keeps its teeth. */
-.sheet-switch__btn[aria-pressed='true']:hover {
+   selection keeps its response and the guard keeps its teeth. HOVER IS STATED, not
+   inherited: the app's own `button:hover` cannot reach inside the knob, but saying it
+   here means a later global change cannot quietly put a hole in this control. */
+.sheet-toggle:hover .sheet-toggle__knob {
   box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.08);
+}
+/* THE FOCUS RING SITS OUTSIDE THE PILL (`outline-offset: 2px`), because a toggle is
+   one control: the ring belongs around the whole decision, not around one label. A
+   checked state is not a focus state: one says which reading is current, the other
+   says where the next key press lands. */
+.sheet-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring-strong);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet-toggle__knob { transition: none; }
 }
 
 .sheet-grid {
@@ -6703,6 +6854,10 @@ body.station-white .st-role--officer { background: #dcf5e6; border-color: #15803
     white-space: normal;
     overflow: visible;
   }
+  .users-table tbody td .users-mini {
+    --sheet-cell: 12px;
+    --sheet-gap: 3px;
+  }
 }
 /* The day bands stay bands: ruled group headers between the cards, never cards
    themselves, so a date never reads as one more record. */
@@ -8911,11 +9066,14 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 
 /* ---- Command theme, LIGHT (owner request, 2026-10-30) ------------------------
    The dashboard wears the reference's layout — hero, four tinted-disc cards,
-   trend beside activity, bottom trio — but on the app's own light
-   official-document surface: white panels, ink text, one blue accent. Everything
+   trend beside activity, bottom trio — but on the app's own
+   official-document surface: theme panels, ink text, one blue accent. Everything
    in this block is scoped under `.dash--cmd` (the page root), so no rule here
-   can leak onto another screen. Where the light base rules already say it
-   (panel surface, chips, activity rows), there is no override at all. */
+   can leak onto another screen. Surfaces and ink read tokens (the dark theme
+   only overrides tokens), so this block needs no dark duplicate; the hex that
+   remains is brand and data chrome — badge artwork, ramps, status dots, icon
+   tiles and glows — which is the same object in both themes. Where the light
+   base rules already say it (chips, activity rows), there is no override at all. */
 .dash--cmd {
   --cmd-line: var(--line);
   --cmd-ink: var(--paper);
@@ -8932,7 +9090,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   border-radius: 0;
   border: 0;
   color: var(--cmd-ink);
-  background: #F3F6FB;
+  background: var(--void);
   box-shadow: none;
 }
 /* ---- Admin dashboard root: plain light, no photo, no art (owner request) --- */
@@ -8986,7 +9144,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--admin .dash-types__bar { background: var(--ir-gold); }
 /* ---- Command hero: the greeting, the station, and the moment it was read ---
    The station's own photograph rides the panel's right edge, masked into the
-   white rather than pasted beside the words; the station name sits over it as a
+   panel rather than pasted beside the words; the station name sits over it as a
    watermark. The clock is a light pill with its own hairline. */
 .dash--cmd .cmd-hero {
   position: relative;
@@ -8994,7 +9152,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   border: 0;
   border-bottom: 1px solid rgba(47, 107, 237, 0.5);
   border-radius: 0;
-  background: #ffffff;
+  background: var(--panel);
   box-shadow: 0 0 0 1px rgba(47, 107, 237, 0.08), 0 0 16px rgba(47, 107, 237, 0.14);
   box-shadow: 0 0 0 1px rgba(47, 107, 237, 0.12), 0 0 18px rgba(47, 107, 237, 0.18), 0 10px 24px -16px rgba(37, 99, 235, 0.4);
   padding: 22px 24px;
@@ -9024,26 +9182,39 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--cmd .cmd-hero__wash {
   position: absolute;
   inset: 0;
-  background: linear-gradient(105deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.55) 38%, rgba(255, 255, 255, 0.18) 62%, transparent 85%);
-}
-.dash--cmd .cmd-hero__station {
-  position: absolute;
-  right: 18px;
-  bottom: 10px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  color: rgba(15, 31, 61, 0.5);
-  white-space: nowrap;
+  background: linear-gradient(105deg, color-mix(in srgb, var(--panel) 88%, transparent) 0%, color-mix(in srgb, var(--panel) 55%, transparent) 38%, color-mix(in srgb, var(--panel) 18%, transparent) 62%, transparent 85%);
 }
 .dash--cmd .cmd-hero__text { position: relative; min-width: 0; flex: none; max-width: 36%; margin-right: auto; display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 2px; }
-.dash--cmd .cmd-hello { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.01em; color: #0f1f3d; }
-.dash--cmd .cmd-hello span { color: #1d4ed8; }
+/* NEW REPORT RIDES THE HERO (owner request, 2026-11-14): the quick action sits
+   lower-right of the banner — the toolbar row below the hero sat empty beside
+   it. A white pill in the register blue (owner request): it sits on the
+   station photograph, so it carries its own white rather than the panel token
+   behind the photo. Both literals are on the dark-mode exempt list, and the
+   pair reads in either theme. */
+.dash--cmd .cmd-hero .dash-quick { position: absolute; right: 18px; bottom: 18px; margin: 0; }
+.dash--cmd .cmd-hero__actions .dash-quick__btn {
+  background: #f0b429;
+  border: 2px solid #f0b429;
+  border-radius: 999px;
+  color: #1d2a44;
+  padding: 0.55rem 1.25rem;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 10px rgba(15, 31, 61, 0.25);
+}
+.dash--cmd .cmd-hero__actions .dash-quick__btn:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.4);
+}
+.dash--cmd .cmd-hello { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.01em; color: var(--cmd-ink); }
+.dash--cmd .cmd-hello span { color: var(--cmd-blue); }
 .dash--cmd .cmd-sub { margin: 2px 0 0; display: flex; flex-direction: row; align-items: center; white-space: nowrap; }
 .dash--cmd .cmd-sub__date,.dash--cmd .cmd-sub__day,.dash--cmd .cmd-sub__time { font-family: inherit; font-size: 15px; font-weight: 800; letter-spacing: 0.02em; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.dash--cmd .cmd-sub__date { color: #0f1f3d; margin-right: 10px; }
-.dash--cmd .cmd-sub__day { color: #5b6b84; margin-right: 10px; padding-left: 10px; border-left: 1px solid #e2e8f0; }
-.dash--cmd .cmd-sub__time { color: #b45309; padding-left: 10px; border-left: 1px solid #e2e8f0; }
+.dash--cmd .cmd-sub__date { color: var(--cmd-ink); margin-right: 10px; }
+.dash--cmd .cmd-sub__day { color: var(--cmd-muted); margin-right: 10px; padding-left: 10px; border-left: 1px solid var(--cmd-line); }
+.dash--cmd .cmd-sub__time { color: var(--cmd-gold); padding-left: 10px; border-left: 1px solid var(--cmd-line); }
 
 /* ---- Metric cards: the bold caption, the hero number, one line -----------
    Four tones, one shape: the number's echo wears the card's own family, and
@@ -9066,7 +9237,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  background: rgba(255, 255, 255, 0.88);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   border: 1px solid rgba(47, 107, 237, 0.5);
@@ -9111,38 +9282,47 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 /* The ID picker: walk the roster without leaving the card. Buttons stop the
    card link from firing, so picking a face never opens User Management. */
 .dash--cmd .cmd-id-picker { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
-.dash--cmd .cmd-id-nav { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1px solid #e2e8f0; background: #fff; color: #0b2545; font-size: 16px; font-weight: 800; line-height: 1; cursor: pointer; }
-.dash--cmd .cmd-id-nav:hover { border-color: #cbd5e1; background: #f8fafc; }
-.dash--cmd .cmd-id-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 800; color: #0b2545; text-align: center; }
-.dash--cmd .cmd-id-count { margin-left: 6px; font-size: 11px; font-weight: 700; color: #5b6b84; }
+.dash--cmd .cmd-id-nav { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--cmd-line); background: var(--panel); color: var(--cmd-ink); font-size: 16px; font-weight: 800; line-height: 1; cursor: pointer; }
+.dash--cmd .cmd-id-nav:hover { border-color: var(--line-bright); background: var(--panel-raised); }
+.dash--cmd .cmd-id-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 800; color: var(--cmd-ink); text-align: center; }
+.dash--cmd .cmd-id-count { margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--cmd-muted); }
 /* All faces inside the same Active Accounts plate: compact chips under the one
    hanging badge. The badge stays the only WebGL canvas; chips are plain
    images so five people fit without five contexts. */
 .dash--cmd .cmd-active-lanyard .lanyard { min-height: 230px; }
 .dash--cmd .cmd-active-lanyard-card.is-bare { padding: 6px; gap: 0; overflow: visible; }
-.dash--cmd .cmd-id-drop { display: block; margin-top: 6px; padding: 8px 10px; border-radius: 10px; text-align: center; font-size: 12px; font-weight: 800; color: #7c5e00; background: linear-gradient(180deg, #fef3c7, #fde68a); border: 1px solid #f0b429; box-shadow: 0 0 12px rgba(240, 180, 41, 0.55); pointer-events: none; }
+.dash--cmd .cmd-id-drop { display: block; margin-top: 6px; padding: 8px 10px; border-radius: 10px; text-align: center; font-size: 12px; font-weight: 800; color: var(--cmd-gold); background: var(--amber-bg); border: 1px solid var(--amber-line); box-shadow: 0 0 12px rgba(240, 180, 41, 0.55); pointer-events: none; }
 /* Presence on every badge: green dot while the heartbeat is fresh, amber with
    "Active Nm ago" while the desk just went quiet, grey Offline past the hour. */
-.dash--cmd .cmd-pres { position: absolute; right: 8px; bottom: 8px; z-index: 6; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.94); border: 1px solid #e2e8f0; font-size: 10px; font-weight: 800; color: #0b2545; pointer-events: none; white-space: nowrap; }
+.dash--cmd .cmd-pres { position: absolute; right: 8px; bottom: 8px; z-index: 6; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; background: var(--panel); border: 1px solid var(--cmd-line); font-size: 10px; font-weight: 800; color: var(--cmd-ink); pointer-events: none; white-space: nowrap; }
 .dash--cmd .cmd-pres i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .dash--cmd .cmd-pres--active i { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.9); }
 .dash--cmd .cmd-pres--away i { background: #f59e0b; }
-.dash--cmd .cmd-pres--offline { color: #64748b; }
-.dash--cmd .cmd-pres--offline i { background: #94a3b8; }
+.dash--cmd .cmd-pres--offline { color: var(--cmd-muted); }
+.dash--cmd .cmd-pres--offline i { background: var(--cmd-muted); }
 .dash--cmd .cmd-pres--static { position: static; margin-left: auto; }  .dash--cmd .cmd-id-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 6px; }
-  .dash--cmd .cmd-id-head__title { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #0b2545; }
+  .dash--cmd .cmd-id-head__title { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cmd-ink); }
   .dash--cmd .cmd-id-view { display: flex; gap: 2px; margin: 0; }
-.dash--cmd .cmd-id-view__btn { border: 0; background: transparent; color: #5b6b84; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; padding: 4px 8px; cursor: pointer; border-bottom: 2px solid transparent; }
-.dash--cmd .cmd-id-view__btn:hover { color: #0b2545; }
-.dash--cmd .cmd-id-view__btn.is-active { color: #0b2545; border-bottom-color: #f0b429; }
+.dash--cmd .cmd-id-head__right { display: flex; align-items: center; gap: 12px; }
+.dash--cmd .cmd-id-view__btn { border: 0; background: transparent; color: var(--cmd-muted); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; padding: 4px 8px; cursor: pointer; border-bottom: 2px solid transparent; }
+.dash--cmd .cmd-id-view__btn:hover { color: var(--cmd-ink); }
+.dash--cmd .cmd-id-view__btn.is-active { color: var(--cmd-ink); border-bottom-color: #f0b429; }
+/* THE STRAP LEGEND (owner request, 2026-11-14): blue hangs an Admin badge,
+   yellow an Officer one — the swatches wear the lanyards' own strap colours
+   (see strapColor in Dashboard.jsx), so the line and the cards agree. */
+.dash--cmd .cmd-id-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 0 2px; font-size: 11px; font-weight: 700; color: var(--cmd-muted); }
+.dash--cmd .cmd-id-legend__item { display: inline-flex; align-items: center; gap: 5px; }
+.dash--cmd .cmd-id-legend__swatch { width: 18px; height: 8px; border-radius: 999px; }
+.dash--cmd .cmd-id-legend__swatch--admin { background: #1d4ed8; }
+.dash--cmd .cmd-id-legend__swatch--officer { background: #eab308; }
 .dash--cmd .cmd-id-list { display: flex; flex-direction: column; gap: 6px; width: 100%; max-height: 320px; overflow-y: auto; }
-.dash--cmd .cmd-id-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; min-width: 0; }
+.dash--cmd .cmd-id-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--cmd-line); border-radius: 10px; background: var(--panel); min-width: 0; }
 .dash--cmd .cmd-id-row__face { position: relative; flex: none; width: 34px; height: 34px; border-radius: 50%; overflow: hidden; background: #1d4ed8; color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 800; }
 .dash--cmd .cmd-id-row__face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .dash--cmd .cmd-id-row__initials { position: relative; }
 .dash--cmd .cmd-id-row__main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.dash--cmd .cmd-id-row__name { font-size: 13px; font-weight: 800; color: #0b2545; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dash--cmd .cmd-id-row__sub { font-size: 11px; font-weight: 600; color: #5b6b84; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash--cmd .cmd-id-row__name { font-size: 13px; font-weight: 800; color: var(--cmd-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash--cmd .cmd-id-row__sub { font-size: 11px; font-weight: 600; color: var(--cmd-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash--cmd .cmd-active-lanyard-card.is-bare .cmd-active-lanyard { background: none; }
 /* One container, every badge: bigger cards in a horizontal slide, bare — no text.
    The row scrolls sideways when the roster outgrows the plate. */
@@ -9160,17 +9340,17 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    transform, no layout shift. */
 .dash--cmd .cmd-active-lanyard--mini .lanyard { transform-origin: 50% 0%; transition: transform 0.15s ease-out; }
 .dash--cmd .cmd-id-all { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 6px; margin-top: 8px; max-height: 132px; overflow-y: auto; }
-.dash--cmd .cmd-id-chip { display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 4px; border: 1px solid #e2e8f0; border-radius: 999px; background: #fff; cursor: pointer; min-width: 0; font-size: 11px; font-weight: 700; color: #0b2545; }
-.dash--cmd .cmd-id-chip:hover { border-color: #cbd5e1; background: #f8fafc; }
+.dash--cmd .cmd-id-chip { display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 4px; border: 1px solid var(--cmd-line); border-radius: 999px; background: var(--panel); cursor: pointer; min-width: 0; font-size: 11px; font-weight: 700; color: var(--cmd-ink); }
+.dash--cmd .cmd-id-chip:hover { border-color: var(--line-bright); background: var(--panel-raised); }
 .dash--cmd .cmd-id-chip.is-active { border-color: #f0b429; box-shadow: 0 0 0 2px rgba(240, 180, 41, 0.25); }
 .dash--cmd .cmd-id-chip__face { position: relative; flex: none; width: 24px; height: 24px; border-radius: 50%; overflow: hidden; background: #1d4ed8; color: #fff; display: grid; place-items: center; font-size: 10px; font-weight: 800; }
 .dash--cmd .cmd-id-chip__face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .dash--cmd .cmd-id-chip__initials { position: relative; }
 .dash--cmd .cmd-id-chip__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dash--cmd .cmd-id-meta { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; font-size: 12px; color: #334155; }
+.dash--cmd .cmd-id-meta { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; font-size: 12px; color: var(--cmd-muted); }
 .dash--cmd .cmd-id-meta__row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.dash--cmd .cmd-id-meta__row span { color: #5b6b84; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
-.dash--cmd .cmd-id-meta__row b { font-weight: 800; color: #0b2545; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash--cmd .cmd-id-meta__row span { color: var(--cmd-muted); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.dash--cmd .cmd-id-meta__row b { font-weight: 800; color: var(--cmd-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 
 /* ---- The shared range control, in the trend head ----------------------------
@@ -9198,7 +9378,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    micro-caption. Online cards carry a soft green aura; trouble turns the
    whole card amber; unknown stays quiet grey. */
 .dash--cmd .cmd-sys__box { overflow: hidden; }
-.dash--cmd .cmd-sys__box::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: #cbd5e1; }
+.dash--cmd .cmd-sys__box::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--line-bright); }
 .dash--cmd .cmd-sys__box.is-online::before { background: linear-gradient(180deg, #22c55e, #86efac); }
 .dash--cmd .cmd-sys__box.is-warn::before { background: linear-gradient(180deg, var(--amber), #fcd34d); }
 .dash--cmd .cmd-sys__glow { position: absolute; inset: -40px -40px auto auto; width: 140px; height: 140px; border-radius: 50%; background: radial-gradient(circle, rgba(34, 197, 94, 0.14), transparent 70%); pointer-events: none; }
@@ -9210,21 +9390,21 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--cmd .cmd-sys__box--storage .cmd-sys__icon { background: linear-gradient(135deg, #0e7490, #67e8f9); }
 .dash--cmd .cmd-sys__box--notifications .cmd-sys__icon { background: linear-gradient(135deg, #b45309, #fbbf24); }
 .dash--cmd .cmd-sys__label { grid-area: label; font-size: 13px; font-weight: 800; letter-spacing: 0.01em; }
-.dash--cmd .cmd-sys__state { grid-area: state; justify-self: end; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; padding: 3px 10px 3px 8px; border-radius: 999px; background: rgba(34, 197, 94, 0.12); color: #15803d; white-space: nowrap; }
-.dash--cmd .cmd-sys__box.is-warn .cmd-sys__state { background: rgba(245, 158, 11, 0.14); }
+.dash--cmd .cmd-sys__state { grid-area: state; justify-self: end; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; padding: 3px 10px 3px 8px; border-radius: 999px;  background: var(--green-bg); color: var(--green-ink); white-space: nowrap; }
+.dash--cmd .cmd-sys__box.is-warn .cmd-sys__state { background: var(--amber-bg); }
 .dash--cmd .cmd-sys__dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: cmd-sys-pulse 2s ease-out infinite; }
 @keyframes cmd-sys-pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); } 70% { box-shadow: 0 0 0 7px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
-.dash--cmd .cmd-sys__metric { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 1px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
-.dash--cmd .cmd-sys__metric-cap { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: #94a3b8; }
+.dash--cmd .cmd-sys__metric { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 1px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--cmd-line); }
+.dash--cmd .cmd-sys__metric-cap { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: var(--cmd-muted); }
 /* Wraps rather than ellipsising: the AI tile names the answering model, and
    an ellipsis could hide it on narrow screens. Other tiles' values are
    short, so this changes nothing for them. */
-.dash--cmd .cmd-sys__metric-val { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; color: var(--ir-navy, #0b2545); font-variant-numeric: tabular-nums; line-height: 1.2; overflow-wrap: anywhere; }
+.dash--cmd .cmd-sys__metric-val { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; color: var(--cmd-ink); font-variant-numeric: tabular-nums; line-height: 1.2; overflow-wrap: anywhere; }
 /* The grid's own pulse: when its readings were taken, and the hand that
    retakes them. A real function, not furniture — the grid re-asks the server
    every minute and on demand. */
-.dash--cmd .cmd-sys__foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #eef2f7; }
-.dash--cmd .cmd-sys__checked { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 700; color: #94a3b8; font-variant-numeric: tabular-nums; }
+.dash--cmd .cmd-sys__foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--cmd-line); }
+.dash--cmd .cmd-sys__checked { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 700; color: var(--cmd-muted); font-variant-numeric: tabular-nums; }
 .dash--cmd .cmd-sys__checked::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
 .dash--cmd .cmd-sys__box.is-warn .cmd-sys__state { color: var(--amber); }
 .dash-grid-trio { gap: 12px; margin-top: 12px; }
@@ -9252,7 +9432,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--cmd .cmd-donut__caption { fill: var(--cmd-muted); font-size: 11px; }
 .dash--cmd .cmd-donut__legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; font-size: 13px; min-width: 0; flex: 1; }
 .dash--cmd .cmd-donut__legend li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 4px 8px; margin: 0 -8px; border-radius: 8px; cursor: pointer; transition: background 140ms ease, transform 140ms ease; }
-.dash--cmd .cmd-donut__legend li:hover, .dash--cmd .cmd-donut__legend li.is-active { background: rgba(11, 37, 69, 0.07); transform: translateX(2px); }
+.dash--cmd .cmd-donut__legend li:hover, .dash--cmd .cmd-donut__legend li.is-active { background: color-mix(in srgb, var(--cmd-ink) 7%, transparent); transform: translateX(2px); }
 .dash--cmd .cmd-donut__dot { width: 10px; height: 10px; border-radius: 50%; }
 .dash--cmd .cmd-donut__name { color: var(--cmd-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash--cmd .cmd-donut__count { color: var(--paper); font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -9263,25 +9443,25 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 }
 /* Top Locations: the Map/List switch, the Naga City map, and its pins. The
    map owns a stacking context so Leaflet's panes never escape over the shell. */
-.dash--cmd .cmd-loc-toggle { display: inline-flex; gap: 2px; background: #eef2f7; border: 1px solid #e2e8f0; border-radius: 999px; padding: 2px; }
-.dash--cmd .cmd-loc-toggle button { border: none; background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 11px; font-weight: 800; color: #5b6b84; cursor: pointer; transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease; }
-.dash--cmd .cmd-loc-toggle button.is-on { background: #fff; color: var(--ir-navy, #0b2545); box-shadow: 0 1px 2px rgba(15, 31, 61, 0.18); }
-.dash--cmd .cmd-loc-toggle button:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+.dash--cmd .cmd-loc-toggle { display: inline-flex; gap: 2px; background: var(--panel-raised); border: 1px solid var(--cmd-line); border-radius: 999px; padding: 2px; }
+.dash--cmd .cmd-loc-toggle button { border: none; background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 11px; font-weight: 800; color: var(--cmd-muted); cursor: pointer; transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease; }
+.dash--cmd .cmd-loc-toggle button.is-on { background: var(--panel); color: var(--cmd-ink); box-shadow: 0 1px 2px rgba(15, 31, 61, 0.18); }
+.dash--cmd .cmd-loc-toggle button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
 .dash--cmd .cmd-locmap { display: flex; flex-direction: column; gap: 6px; }
-.dash--cmd .cmd-locmap__map { position: relative; z-index: 0; height: 380px; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; background: #eef2f7; }
+.dash--cmd .cmd-locmap__map { position: relative; z-index: 0; height: 380px; border-radius: 12px; border: 1px solid var(--cmd-line); overflow: hidden; background: var(--panel-raised); }
 .dash--cmd .cmd-locmap__map.leaflet-container { font: inherit; }
-.dash--cmd .cmd-locmap__map .leaflet-control-attribution { font-size: 9px; background: rgba(255, 255, 255, 0.75); }
+.dash--cmd .cmd-locmap__map .leaflet-control-attribution { font-size: 9px; background: color-mix(in srgb, var(--panel) 75%, transparent); }
 .dash--cmd .cmd-map-pin { display: grid; place-items: center; border-radius: 50%; background: var(--ir-navy, #0b2545); border: 2px solid #fff; box-shadow: 0 2px 8px rgba(11, 37, 69, 0.45); }
 .dash--cmd .cmd-map-pin span { color: #fff; font-size: 11px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 .dash--cmd .cmd-map-pin--top { background: var(--ir-gold, #f0b429); }
 .dash--cmd .cmd-map-pin--top span { color: var(--ir-navy, #0b2545); }
-.dash--cmd .cmd-locmap__note { margin: 0; font-size: 11px; font-weight: 600; color: #94a3b8; }
-.dash--cmd .cmd-locmap__link { border: none; background: none; padding: 0; font: inherit; font-weight: 800; color: #1d4ed8; cursor: pointer; }
+.dash--cmd .cmd-locmap__note { margin: 0; font-size: 11px; font-weight: 600; color: var(--cmd-muted); }
+.dash--cmd .cmd-locmap__link { border: none; background: none; padding: 0; font: inherit; font-weight: 800; color: var(--cmd-blue); cursor: pointer; }
 .dash--cmd .cmd-locmap__link:hover { text-decoration: underline; }
 /* The pin popup's own link: the popup is Leaflet's DOM, so its class is
    styled here rather than in a component. Opens the register seeded with
    the pin's place (see initialQ). */
-.dash--cmd .cmd-map-details { display: inline-block; margin-top: 6px; border: none; background: none; padding: 0; font-size: 12px; font-weight: 800; color: #1d4ed8; cursor: pointer; }
+.dash--cmd .cmd-map-details { display: inline-block; margin-top: 6px; border: none; background: none; padding: 0; font-size: 12px; font-weight: 800; color: var(--cmd-blue); cursor: pointer; }
 .dash--cmd .cmd-map-details:hover { text-decoration: underline; }
 /* Top locations: one row per place, each bar a share of the busiest street. */
 .dash--cmd .cmd-places { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
@@ -9301,7 +9481,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   grid-template-areas: "icon label state" "metric metric metric";
   column-gap: 10px;
   align-items: center;
-  background: linear-gradient(180deg, #ffffff, #f7fbff);
+  background: linear-gradient(180deg, var(--panel), var(--panel-raised));
   border: 1px solid var(--cmd-line);
   border-radius: 14px;
   padding: 12px 12px 12px 15px;
@@ -9310,12 +9490,12 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 }
 .dash--cmd .cmd-sys__box:hover { transform: translateY(-2px); box-shadow: 0 10px 22px -12px rgba(11, 37, 69, 0.35); }
 .dash--cmd .cmd-sys__box.is-warn { border-color: var(--amber); }
-.dash--cmd .cmd-sys__box.is-online .cmd-sys__state { color: #15803d; }
-.dash--cmd .cmd-sys__box.is-warn .cmd-sys__state { color: #b45309; }
-/* The hand-drawn charts keep the light base ink (chart-grid, chart-axis and the
-   1px stack-band seams); the page adds nothing over them. Activity rows and
-   status chips likewise wear the base light rules — except the System chip,
-   which the base sheet never named. */
+.dash--cmd .cmd-sys__box.is-online .cmd-sys__state { color: var(--green-ink); }
+.dash--cmd .cmd-sys__box.is-warn .cmd-sys__state { color: var(--amber); }
+/* The hand-drawn charts keep the base ink (chart-grid, chart-axis and the 1px
+   stack-band seams are tokens); the page adds nothing over them. Activity rows
+   are re-plated on theme panels below; status chips wear the base rules —
+   except the System chip, which the base sheet never named. */
 .dash--cmd .dash-status--system { background: var(--cyan-bg); color: var(--cyan); }
 @media (max-width: 1200px) {
   .dash--cmd .dash-kpis.cmd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -9325,6 +9505,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   .dash--cmd .dash-kpis.cmd-kpis { grid-template-columns: minmax(0, 1fr); }
   .dash--cmd .cmd-hero { flex-direction: column; align-items: stretch; }
   .dash--cmd .cmd-hero__text { align-items: flex-start; max-width: none; }
+  .dash--cmd .cmd-hero .dash-quick { position: static; margin: 10px 0 0; align-self: flex-start; }
   .dash--cmd .cmd-hero__photo { width: 100%; opacity: 0.35; }
   .dash--cmd .cmd-donut { flex-direction: column; }
   .dash--cmd .dash-toolbar { flex-direction: column; align-items: stretch; }
@@ -9344,7 +9525,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   gap: 6px;
   font-size: 12px;
   font-weight: 700;
-  color: #1d4ed8;
+  color: var(--cmd-blue);
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -9353,7 +9534,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--cmd .cmd-pills .cmd-pill + .cmd-pill {
   background: transparent;
   border: 0;
-  color: #1d4ed8;
+  color: var(--cmd-blue);
 }
 .dash--cmd .dash-toprow {
   display: flex;
@@ -9391,8 +9572,8 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   position: relative;
   background:
     linear-gradient(180deg, rgba(11, 37, 69, 0.05), rgba(11, 37, 69, 0) 120px),
-    #ffffff;
-  border: 1px solid #e2e8f0;
+    var(--panel);
+  border: 1px solid var(--cmd-line);
   border-radius: 16px;
   box-shadow: 0 1px 2px rgba(15, 31, 61, 0.06), 0 8px 24px -18px rgba(11, 37, 69, 0.45);
   padding: 14px 14px 14px;
@@ -9411,7 +9592,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   height: 4px;
   background: linear-gradient(90deg, var(--ir-navy, #0b2545) 0%, #2563eb 55%, var(--ir-gold, #f0b429) 100%);
 }
-.dash--cmd .dash-toprow .cmd-total-group:hover { transform: translateY(-2px); box-shadow: 0 6px 18px -8px rgba(15, 31, 61, 0.25); border-color: #cbd5e1; }
+.dash--cmd .dash-toprow .cmd-total-group:hover { transform: translateY(-2px); box-shadow: 0 6px 18px -8px rgba(15, 31, 61, 0.25); border-color: var(--line-bright); }
 .dash--cmd .dash-toprow .cmd-total-row { display: flex; flex-direction: row; align-items: stretch; gap: 12px; min-width: 0; }
 .dash--cmd .dash-toprow .cmd-total-row > .cmd-cardlink { display: flex; flex-direction: column; justify-content: center; flex: none; width: 328px; min-width: 0; border-radius: 12px; }
 .dash--cmd .dash-toprow .cmd-total-parent { display: flex; flex-direction: column; justify-content: flex-start; gap: 8px; padding: 8px 10px; margin: 2px 0; height: 100%; }
@@ -9419,44 +9600,46 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--cmd .dash-toprow .cmd-total-track { margin-top: auto; }
 .dash--cmd .dash-toprow .cmd-total-scale { margin-bottom: 2px; }
 .dash--cmd .dash-toprow .cmd-total-parent__top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; row-gap: 4px; gap: 10px; }
-.dash--cmd .dash-toprow .cmd-total-eyebrow { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ir-navy, #0b2545); }
+.dash--cmd .dash-toprow .cmd-total-eyebrow { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--cmd-ink); }
 .dash--cmd .dash-toprow .cmd-total-dot { width: 9px; height: 9px; border-radius: 50%; background: #2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14); flex: none; }
-.dash--cmd .dash-toprow .cmd-total-badge { font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #7c5e00; background: linear-gradient(180deg, #fef3c7, #fde68a); border: 1px solid #f5d76e; border-radius: 999px; padding: 1px 7px; }
-.dash--cmd .dash-toprow .cmd-total-view { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 800; color: #94a3b8; transition: color 160ms ease, gap 160ms ease; white-space: nowrap; }
+.dash--cmd .dash-toprow .cmd-total-badge { font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cmd-gold); background: var(--amber-bg); border: 1px solid var(--amber-line); border-radius: 999px; padding: 1px 7px; }
+.dash--cmd .dash-toprow .cmd-total-view { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 800; color: var(--cmd-muted); transition: color 160ms ease, gap 160ms ease; white-space: nowrap; }
 .dash--cmd .dash-toprow .cmd-total-view svg { width: 15px; height: 15px; transition: transform 160ms ease; }
-.dash--cmd .dash-toprow .cmd-total-row > .cmd-cardlink:hover .cmd-total-view { color: #1d4ed8; }
+.dash--cmd .dash-toprow .cmd-total-row > .cmd-cardlink:hover .cmd-total-view { color: var(--cmd-blue); }
 .dash--cmd .dash-toprow .cmd-total-row > .cmd-cardlink:hover .cmd-total-view svg { transform: translateX(3px); }
 /* The incident-type strip under the total: eyebrow, one row per type with
    its share of the range, each opening the register on that type. */
 .dash--cmd .dash-toprow .cmd-total-dot--gold { background: var(--ir-gold, #f0b429); box-shadow: 0 0 0 4px rgba(240, 180, 41, 0.16); }
-.dash--cmd .dash-toprow .cmd-total-types { border-top: 1px dashed #e2e8f0; padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.dash--cmd .dash-toprow .cmd-total-types { border-top: 1px dashed var(--cmd-line); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 .dash--cmd .dash-toprow .cmd-total-types__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.dash--cmd .dash-toprow .cmd-total-types__count { font-size: 10.5px; font-weight: 700; color: #5b6b84; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dash--cmd .dash-toprow .cmd-total-types__empty { margin: 0; font-size: 11.5px; font-weight: 600; color: #94a3b8; }
+.dash--cmd .dash-toprow .cmd-total-types__count { font-size: 10.5px; font-weight: 700; color: var(--cmd-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dash--cmd .dash-toprow .cmd-total-types__empty { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--cmd-muted); }
 .dash--cmd .dash-toprow .cmd-total-types__body { display: flex; align-items: center; gap: 14px; }
 .dash--cmd .dash-toprow .cmd-total-types__pie { flex: none; }
 .dash--cmd .dash-toprow .cmd-total-types__pie .cmd-donut__svg { width: 132px; height: 132px; }
-.dash--cmd .dash-toprow .cmd-donut__blank { width: 132px; height: 132px; border-radius: 50%; border: 16px solid #eef2f7; animation: cmd-blank-pulse 1.2s ease-in-out infinite; }
+.dash--cmd .dash-toprow .cmd-donut__blank { width: 132px; height: 132px; border-radius: 50%; border: 16px solid var(--panel-raised); animation: cmd-blank-pulse 1.2s ease-in-out infinite; }
 @keyframes cmd-blank-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 .dash--cmd .dash-toprow .cmd-total-types__rows { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .dash--cmd .dash-toprow .cmd-total-types__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .dash--cmd .dash-toprow .cmd-type-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 64px auto; align-items: center; gap: 10px; border: 1px solid transparent; border-radius: 9px; background: transparent; padding: 5px 8px; cursor: pointer; transition: background 140ms ease, border-color 140ms ease; }
-.dash--cmd .dash-toprow .cmd-type-row:hover { background: #f5f9ff; border-color: #dbe7fb; }
-.dash--cmd .dash-toprow .cmd-type-row:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
-.dash--cmd .dash-toprow .cmd-type-row__name { font-size: 11.5px; font-weight: 700; color: var(--ir-navy, #0b2545); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
-.dash--cmd .dash-toprow .cmd-type-row__track { display: block; height: 5px; border-radius: 999px; background: #eef2f7; border: 1px solid #e2e8f0; overflow: hidden; }
+.dash--cmd .dash-toprow .cmd-type-row:hover { background: var(--panel-raised); border-color: var(--line-bright); }
+.dash--cmd .dash-toprow .cmd-type-row:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.dash--cmd .dash-toprow .cmd-type-row__name { font-size: 11.5px; font-weight: 700; color: var(--cmd-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.dash--cmd .dash-toprow .cmd-type-row__track { display: block; height: 5px; border-radius: 999px; background: var(--panel-raised); border: 1px solid var(--cmd-line); overflow: hidden; }
 .dash--cmd .dash-toprow .cmd-type-row__fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #1d4ed8, #60a5fa); transition: width 500ms cubic-bezier(0.22, 1, 0.36, 1); }
-.dash--cmd .dash-toprow .cmd-type-row__num { font-size: 12px; font-weight: 800; color: var(--ir-navy, #0b2545); font-variant-numeric: tabular-nums; min-width: 24px; text-align: right; }
-.dash--cmd .dash-toprow .cmd-total-types__more { align-self: flex-start; border: none; background: none; padding: 0 8px; font-size: 10.5px; font-weight: 800; color: #94a3b8; cursor: pointer; transition: color 140ms ease; }
-.dash--cmd .dash-toprow .cmd-total-types__more:hover { color: #1d4ed8; }
+.dash--cmd .dash-toprow .cmd-type-row__num { font-size: 12px; font-weight: 800; color: var(--cmd-ink); font-variant-numeric: tabular-nums; min-width: 24px; text-align: right; }
+.dash--cmd .dash-toprow .cmd-total-types__more { align-self: flex-start; border: none; background: none; padding: 0 8px; font-size: 10.5px; font-weight: 800; color: var(--cmd-muted); cursor: pointer; transition: color 140ms ease; }
+.dash--cmd .dash-toprow .cmd-total-types__more:hover { color: var(--cmd-blue); }
 .dash--cmd .dash-toprow .cmd-total-hero { display: flex; align-items: flex-start; gap: 7px; flex-wrap: wrap; }
-.dash--cmd .dash-toprow .cmd-total-num { font-size: 54px; font-weight: 800; line-height: 0.95; letter-spacing: -0.035em; color: var(--ir-navy, #0b2545); font-variant-numeric: tabular-nums; text-shadow: 0 1px 0 #fff; }
+/* No light-ink text-shadow: the emboss assumed a white plate, and on a dark
+   plate it reads as a smudge under every figure. */
+.dash--cmd .dash-toprow .cmd-total-num { font-size: 54px; font-weight: 800; line-height: 0.95; letter-spacing: -0.035em; color: var(--cmd-ink); font-variant-numeric: tabular-nums; }
 
-.dash--cmd .dash-toprow .cmd-total-track { position: relative; display: flex; height: 5px; border-radius: 999px; background: #eef2f7; border: 1px solid #e2e8f0; overflow: hidden; }
+.dash--cmd .dash-toprow .cmd-total-track { position: relative; display: flex; height: 5px; border-radius: 999px; background: var(--panel-raised); border: 1px solid var(--cmd-line); overflow: hidden; }
 .dash--cmd .dash-toprow .cmd-total-seg { display: block; height: 100%; transition: width 500ms cubic-bezier(0.22, 1, 0.36, 1); }
 .dash--cmd .dash-toprow .cmd-total-seg--draft { background: linear-gradient(90deg, #f59e0b, var(--ir-gold, #f0b429)); }
 .dash--cmd .dash-toprow .cmd-total-seg--filed { background: linear-gradient(90deg, #1d4ed8, #60a5fa); flex: 1; min-width: 0; }
-.dash--cmd .dash-toprow .cmd-total-scale { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10.5px; font-weight: 700; color: #5b6b84; }
+.dash--cmd .dash-toprow .cmd-total-scale { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10.5px; font-weight: 700; color: var(--cmd-muted); }
 .dash--cmd .dash-toprow .cmd-total-scale__item { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
 .dash--cmd .dash-toprow .cmd-total-key { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
 .dash--cmd .dash-toprow .cmd-total-key--draft { background: var(--ir-gold, #f0b429); }
@@ -9466,29 +9649,29 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--cmd .dash-toprow .cmd-total-branch { display: none; }
 .dash--cmd .dash-toprow .cmd-total-children { display: flex; flex-direction: column; justify-content: center; gap: 10px; flex: none; width: 170px; min-width: 0; margin: 2px 0; }
 .dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink { border-radius: 12px; }
-.dash--cmd .dash-toprow .cmd-child { position: relative; display: flex; align-items: center; gap: 8px; border-radius: 11px; border: 1px solid #e2e8f0; padding: 12px 12px 12px 14px; margin: 2px; background: #f8fafc; overflow: hidden; transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease; }
+.dash--cmd .dash-toprow .cmd-child { position: relative; display: flex; align-items: center; gap: 8px; border-radius: 11px; border: 1px solid var(--cmd-line); padding: 12px 12px 12px 14px; margin: 2px; background: var(--panel-raised); overflow: hidden; transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease; }
 .dash--cmd .dash-toprow .cmd-child::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; }
-.dash--cmd .dash-toprow .cmd-child--draft { background: linear-gradient(180deg, #fffdf3, #fef9e7); }
+.dash--cmd .dash-toprow .cmd-child--draft { background: var(--amber-bg); }
 .dash--cmd .dash-toprow .cmd-child--draft::before { background: linear-gradient(180deg, #f59e0b, var(--ir-gold, #f0b429)); }
-.dash--cmd .dash-toprow .cmd-child--filed { background: linear-gradient(180deg, #f5f9ff, #eff6ff); }
+.dash--cmd .dash-toprow .cmd-child--filed { background: var(--cyan-bg); }
 .dash--cmd .dash-toprow .cmd-child--filed::before { background: linear-gradient(180deg, #1d4ed8, #60a5fa); }
 .dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink:hover .cmd-child,
-.dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink:focus-visible .cmd-child { transform: translateY(-2px); box-shadow: 0 8px 18px -10px rgba(15, 31, 61, 0.35); border-color: #cbd5e1; outline: none; }
-.dash--cmd .dash-toprow .cmd-child__icon { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: #fff; border: 1px solid #e2e8f0; color: var(--ir-navy, #0b2545); box-shadow: 0 1px 2px rgba(15, 31, 61, 0.08); }
+.dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink:focus-visible .cmd-child { transform: translateY(-2px); box-shadow: 0 8px 18px -10px rgba(15, 31, 61, 0.35); border-color: var(--line-bright); outline: none; }
+.dash--cmd .dash-toprow .cmd-child__icon { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: var(--panel); border: 1px solid var(--cmd-line); color: var(--cmd-ink); box-shadow: 0 1px 2px rgba(15, 31, 61, 0.08); }
 .dash--cmd .dash-toprow .cmd-child__icon svg { width: 16px; height: 16px; }
-.dash--cmd .dash-toprow .cmd-child--draft .cmd-child__icon { color: #92600a; border-color: #f5d76e; background: #fffbeb; }
-.dash--cmd .dash-toprow .cmd-child--filed .cmd-child__icon { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }
+.dash--cmd .dash-toprow .cmd-child--draft .cmd-child__icon { color: var(--cmd-gold); border-color: var(--amber-line); background: var(--panel); }
+.dash--cmd .dash-toprow .cmd-child--filed .cmd-child__icon { color: var(--cmd-blue); border-color: var(--cyan-bg-strong); background: var(--panel); }
 .dash--cmd .dash-toprow .cmd-child__main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
-.dash--cmd .dash-toprow .cmd-child__label { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.09em; color: #5b6b84; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dash--cmd .dash-toprow .cmd-child__num { font-size: 32px; font-weight: 800; letter-spacing: -0.035em; line-height: 0.95; color: var(--ir-navy, #0b2545); font-variant-numeric: tabular-nums; white-space: nowrap; max-width: 4ch; overflow: hidden; }
+.dash--cmd .dash-toprow .cmd-child__label { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.09em; color: var(--cmd-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash--cmd .dash-toprow .cmd-child__num { font-size: 32px; font-weight: 800; letter-spacing: -0.035em; line-height: 0.95; color: var(--cmd-ink); font-variant-numeric: tabular-nums; white-space: nowrap; max-width: 4ch; overflow: hidden; }
 .dash--cmd .dash-toprow .cmd-child__side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
 .dash--cmd .dash-toprow .cmd-child__share { font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; border-radius: 999px; padding: 2px 8px; border: 1px solid; }
-.dash--cmd .dash-toprow .cmd-child--draft .cmd-child__share { color: #92600a; background: #fef3c7; border-color: #f5d76e; }
-.dash--cmd .dash-toprow .cmd-child--filed .cmd-child__share { color: #1d4ed8; background: #dbeafe; border-color: #bfdbfe; }
-.dash--cmd .dash-toprow .cmd-child__go { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #94a3b8; border: 1px solid #e2e8f0; background: #fff; transition: color 160ms ease, border-color 160ms ease, transform 160ms ease, background 160ms ease; }
+.dash--cmd .dash-toprow .cmd-child--draft .cmd-child__share { color: var(--cmd-gold); background: var(--amber-bg); border-color: var(--amber-line); }
+.dash--cmd .dash-toprow .cmd-child--filed .cmd-child__share { color: var(--cmd-blue); background: var(--cyan-bg); border-color: var(--cyan-bg-strong); }
+.dash--cmd .dash-toprow .cmd-child__go { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: var(--cmd-muted); border: 1px solid var(--cmd-line); background: var(--panel); transition: color 160ms ease, border-color 160ms ease, transform 160ms ease, background 160ms ease; }
 .dash--cmd .dash-toprow .cmd-child__go svg { width: 12px; height: 12px; }
 .dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink:hover .cmd-child__go,
-.dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink:focus-visible .cmd-child__go { color: #fff; background: var(--ir-navy, #0b2545); border-color: var(--ir-navy, #0b2545); transform: translateX(2px); }
+.dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink:focus-visible .cmd-child__go { color: #fff; background: var(--accent-fill); border-color: var(--accent-fill); transform: translateX(2px); }
 .dash--cmd .dash-toprow .cmd-kpis--hierarchy > .cmd-cardlink .cmd-card { transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease; }
 .dash--cmd .dash-toprow .cmd-kpis--hierarchy > .cmd-cardlink:hover .cmd-card,
 .dash--cmd .dash-toprow .cmd-kpis--hierarchy > .cmd-cardlink:focus-visible .cmd-card { transform: translateY(-2px); }
@@ -9498,7 +9681,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   border-radius: 16px;
   padding: 18px;
   justify-content: center;
-  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  background: linear-gradient(180deg, var(--panel), var(--panel-raised));
 }
 .dash--cmd .dash-toprow .cmd-kpis--hierarchy > .cmd-cardlink .cmd-card__label { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; }
 .dash--cmd .dash-toprow .cmd-kpis--hierarchy > .cmd-cardlink .cmd-card__value { font-size: 38px; letter-spacing: -0.035em; }
@@ -9543,7 +9726,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   flex: 1;
   min-width: 220px;
   max-width: 380px;
-  background: #ffffff;
+  background: var(--panel);
   border: 1px solid rgba(47, 107, 237, 0.5);
   border-radius: 10px;
   padding: 8px 12px;
@@ -9567,8 +9750,8 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   gap: 8px;
   font-size: 13px;
   font-weight: 700;
-  color: #0f1f3d;
-  background: #ffffff;
+  color: var(--cmd-ink);
+  background: var(--panel);
   border: 1px solid rgba(47, 107, 237, 0.5);
   border-radius: 10px;
   padding: 8px 14px;
@@ -9582,7 +9765,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 /* A card that opens the register: the reading keeps its shape, the anchor
    carries the lift. */
 .dash--cmd .dash-panel {
-  background: rgba(255, 255, 255, 0.88);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   border: 1px solid rgba(47, 107, 237, 0.5);
@@ -9595,7 +9778,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0;
-  color: #0f1f3d;
+  color: var(--cmd-ink);
 }
 /* ---- Command vibe: the officer-home pairing (owner request) ----------------
    Navy + gold on THIS dashboard (hero, quick actions, small cards, Reports
@@ -9607,16 +9790,16 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--ir-navy);
+  color: var(--cmd-ink);
 }
-.dash--cmd .cmd-card__value { color: var(--ir-navy); }
+.dash--cmd .cmd-card__value { color: var(--cmd-ink); }
 .dash--cmd .dash-panel h2,
 .dash--cmd .dash-panel__title {
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-size: 13px;
   font-weight: 800;
-  color: var(--ir-navy);
+  color: var(--cmd-ink);
 }
 .dash--cmd .dash-panel h2::after,
 .dash--cmd .dash-panel__title::after {
@@ -9627,11 +9810,11 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   border-radius: 2px;
   background: var(--ir-gold);
 }
-.dash--cmd .dash-viewall { color: var(--ir-navy); font-weight: 800; }
+.dash--cmd .dash-viewall { color: var(--cmd-ink); font-weight: 800; }
 .dash--cmd .cmd-places__bar { background: linear-gradient(90deg, var(--ir-gold), var(--ir-gold-hi)); }
 /* ---- Minimal calm (owner request): flat light, hairline borders, no glow ---
    The reference home screen is quiet surfaces + thin grey borders; the blue
-   halos come off everywhere, leaving white cards on flat #F3F6FB. Navy
+   halos come off everywhere, leaving theme cards on the page plate. Navy
    titles, gold dashes and gold bars stay — they are the reference's own
    accents, not decoration. */
 .dash--cmd .cmd-hero,
@@ -9639,19 +9822,19 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--cmd .dash-panel,
 .dash--cmd .dash-search,
 .dash--cmd .dash-quick__btn {
-  border-color: #e2e8f0;
+  border-color: var(--cmd-line);
   box-shadow: 0 1px 2px rgba(15, 31, 61, 0.06);
 }
 .dash--cmd .cmd-cardlink:hover .cmd-card,
 .dash--cmd .cmd-cardlink:focus-visible .cmd-card {
   box-shadow: 0 4px 12px rgba(15, 31, 61, 0.08);
-  border-color: #cbd5e1;
+  border-color: var(--line-bright);
 }
 .dash--cmd .dash-quick__btn:hover { box-shadow: 0 1px 2px rgba(15, 31, 61, 0.06); }
-.dash--cmd .dash-panel__sub { color: #5b6b84; }
+.dash--cmd .dash-panel__sub { color: var(--cmd-muted); }
 .dash--cmd .dash-panel__mark {
-  background: rgba(47, 107, 237, 0.1);
-  color: #1d4ed8;
+  background: var(--cyan-bg);
+  color: var(--cmd-blue);
   box-shadow: none;
 }
 /* Quiet rows for the calm page: hairline grey borders, no blue halo — the
@@ -9659,14 +9842,14 @@ body.print-sheet-open .print-overlay { z-index: 200; }
    use. Record rows keep the register's amber file; system rows wear
    SystemMark's colleague/page glyphs on violet/blue washes. */
 .dash--cmd .dash-activity__row {
-  border-color: #e6ebf2;
+  border-color: var(--cmd-line);
   border-radius: 12px;
-  background: #ffffff;
+  background: var(--panel);
   box-shadow: none;
 }
 .dash--cmd .dash-activity__row:hover {
-  border-color: #cbd5e1;
-  background: #f8fafc;
+  border-color: var(--line-bright);
+  background: var(--panel-raised);
   box-shadow: 0 4px 12px rgba(15, 31, 61, 0.08);
 }
 .dash--cmd .dash-activity__row--system .dash-activity__mark { width: 40px; height: 40px; border-radius: 12px; }
@@ -9676,14 +9859,14 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash--cmd .dash-activity__title { letter-spacing: -0.005em; }
 .dash--cmd .dash-activity__id { font-variant-numeric: tabular-nums; }
 .dash--cmd .cmd-statuspill {
-  background: #ffffff;
-  border: 1px solid rgba(47, 107, 237, 0.4);
+  background: var(--panel-raised);
+  border: 1px solid var(--cmd-line);
   box-shadow: 0 0 10px rgba(47, 107, 237, 0.1);
 }
 .dash--cmd .cmd-cardlink { display: block; border-radius: 12px; color: inherit; text-decoration: none; }
 .dash--cmd .cmd-cardlink .cmd-card { transition: box-shadow 160ms ease, border-color 160ms ease; }
 .dash--cmd .cmd-cardlink:hover .cmd-card,
-.dash--cmd .cmd-cardlink:focus-visible .cmd-card { box-shadow: 0 0 18px rgba(47, 107, 237, 0.25); border-color: rgba(47, 107, 237, 0.7); }
+.dash--cmd .cmd-cardlink:focus-visible .cmd-card { box-shadow: 0 0 18px rgba(47, 107, 237, 0.25); border-color: var(--line-bright); }
 /* Visible type chips under the trend head — the right-click "Show only" made
    visible, answering to the same `type` every fetch reads. */
 /* The type chips above the trend are removed (owner request, 2026-10-30): each
@@ -9796,8 +9979,8 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   font-size: 13px;
   font-weight: 700;
   color: #fff;
-  background: var(--cmd-blue);
-  border: 1px solid var(--cmd-blue);
+  background: var(--accent-fill);
+  border: 1px solid var(--accent-fill);
   border-radius: 9px;
   padding: 8px 16px;
   cursor: pointer;
