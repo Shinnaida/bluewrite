@@ -47,12 +47,14 @@ Map<String, dynamic> blotterFilingFields({
       incidentType = exact;
       filled.add('Type of incident');
     } else if (stationTypes.isNotEmpty) {
-      final fromCategory = _closestType(str(fields['incident_category']), stationTypes);
+      final fromCategory =
+          _closestType(str(fields['incident_category']), stationTypes);
       incidentType = fromCategory ?? fallbackType;
       if (incidentType != fallbackType) filled.add('Type of incident');
     }
   } else {
-    final fromCategory = _closestType(str(fields['incident_category']), stationTypes);
+    final fromCategory =
+        _closestType(str(fields['incident_category']), stationTypes);
     if (fromCategory != null) {
       incidentType = fromCategory;
       filled.add('Type of incident');
@@ -82,7 +84,8 @@ Map<String, dynamic> blotterFilingFields({
   }
   final dGroups = (details['groups'] as Map?) ?? const {};
   for (final e in dGroups.entries) {
-    if (e.value is List && (e.value as List).isNotEmpty) ts[e.key.toString()] = e.value;
+    if (e.value is List && (e.value as List).isNotEmpty)
+      ts[e.key.toString()] = e.value;
   }
   final category = str(fields['incident_category']);
   if (category.isNotEmpty) ts['incident_category'] = category;

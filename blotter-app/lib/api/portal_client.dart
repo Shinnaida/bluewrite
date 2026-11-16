@@ -45,7 +45,8 @@ class PortalClient {
 
   /// The portal answers, and speaks our API. Anything else — wrong IP, the
   /// server down, a hotspot login page — refuses here with one sentence.
-  Future<void> testConnection({Duration timeout = const Duration(seconds: 8)}) async {
+  Future<void> testConnection(
+      {Duration timeout = const Duration(seconds: 8)}) async {
     http.Response res;
     try {
       res = await http.get(_u('/station')).timeout(timeout);
@@ -59,7 +60,8 @@ class PortalClient {
       return;
     }
     if (res.statusCode != 200 && res.statusCode != 401) {
-      throw PortalError('That address answered ${res.statusCode}, not BlueWrite. Check it and try again.');
+      throw PortalError(
+          'That address answered ${res.statusCode}, not BlueWrite. Check it and try again.');
     }
   }
 
@@ -67,7 +69,9 @@ class PortalClient {
   /// null when the password alone signed in (kept for roles that need none).
   Future<Map<String, dynamic>?> login(String username, String password) async {
     final res = await http
-        .post(_u('/login'), headers: _headers(), body: jsonEncode({'username': username, 'password': password}))
+        .post(_u('/login'),
+            headers: _headers(),
+            body: jsonEncode({'username': username, 'password': password}))
         .timeout(const Duration(seconds: 20));
     _keepCookies(res);
     final body = _decode(res);
@@ -86,7 +90,8 @@ class PortalClient {
   /// server tells them apart). Completes the session login() started.
   Future<void> verifyMfa(String code) async {
     final res = await http
-        .post(_u('/mfa/verify'), headers: _headers(), body: jsonEncode({'code': code}))
+        .post(_u('/mfa/verify'),
+            headers: _headers(), body: jsonEncode({'code': code}))
         .timeout(const Duration(seconds: 20));
     _keepCookies(res);
     final body = _decode(res);
@@ -101,7 +106,8 @@ class PortalClient {
   /// plaintext token is returned ONCE — the caller stores it, never shows it.
   Future<DeviceToken> issueDevice(String deviceName) async {
     final res = await http
-        .post(_u('/devices/issue'), headers: _headers(), body: jsonEncode({'device_name': deviceName}))
+        .post(_u('/devices/issue'),
+            headers: _headers(), body: jsonEncode({'device_name': deviceName}))
         .timeout(const Duration(seconds: 20));
     final body = _decode(res);
     if (res.statusCode == 201) {
@@ -133,7 +139,8 @@ class PortalClient {
   /// Report form reads, so a draft filed here never names a type the create
   /// would reject (see StationController::index).
   Future<List<String>> incidentTypes(String bearer) async {
-    final res = await http.get(_u('/station'), headers: _headers(bearer: bearer));
+    final res =
+        await http.get(_u('/station'), headers: _headers(bearer: bearer));
     final body = _decode(res);
     if (res.statusCode == 200) {
       final list = body['incident_types'];
@@ -149,7 +156,9 @@ class PortalClient {
     http.Response res;
     try {
       res = await http
-          .post(_u('/ocr/read'), headers: _headers(bearer: bearer), body: jsonEncode({'image': dataUrlImage}))
+          .post(_u('/ocr/read'),
+              headers: _headers(bearer: bearer),
+              body: jsonEncode({'image': dataUrlImage}))
           .timeout(const Duration(seconds: 75));
     } catch (_) {
       return null; // Offline station LAN: type it by hand.
@@ -158,7 +167,8 @@ class PortalClient {
     if (res.statusCode == 200 && body['configured'] == true) {
       final text = (body['text'] ?? '').toString().trim();
       if (text.isEmpty) return null;
-      return OcrRead(text: text, engine: (body['engine'] ?? 'online').toString());
+      return OcrRead(
+          text: text, engine: (body['engine'] ?? 'online').toString());
     }
     return null; // configured:false, 502, anything — the hand-typed path.
   }
@@ -167,13 +177,15 @@ class PortalClient {
   /// incident type, date/time, place, reporting party and disposition out of
   /// the officer's own words. Best-effort — null on any miss, so the caller
   /// files plain instead of blocking.
-  Future<Map<String, dynamic>?> classifyAccount(String bearer, String account) async {
+  Future<Map<String, dynamic>?> classifyAccount(
+      String bearer, String account) async {
     final text = account.trim();
     if (text.isEmpty) return null;
     try {
       final res = await http
           .post(_u('/ai/classify'),
-              headers: _headers(bearer: bearer), body: jsonEncode({'account': text}))
+              headers: _headers(bearer: bearer),
+              body: jsonEncode({'account': text}))
           .timeout(const Duration(seconds: 30));
       final body = _decode(res);
       if (res.statusCode == 200 && body['fields'] is Map) {
@@ -212,7 +224,8 @@ class PortalClient {
   /// with the scanned words already editable.
   Future<int> createDraft(String bearer, Map<String, dynamic> fields) async {
     final res = await http
-        .post(_u('/reports'), headers: _headers(bearer: bearer), body: jsonEncode(fields))
+        .post(_u('/reports'),
+            headers: _headers(bearer: bearer), body: jsonEncode(fields))
         .timeout(const Duration(seconds: 20));
     final body = _decode(res);
     if (res.statusCode == 201) return (body['report']['id'] as num).toInt();
@@ -221,37 +234,48 @@ class PortalClient {
 
   /// Append reviewed text to a draft's narrative. Read-modify-write: the
   /// phone holds no draft state, the server does.
-  Future<void> appendNarrative(String bearer, int reportId, String currentHtml, String additionHtml) async {
-    final get = await http.get(_u('/reports/$reportId/print'), headers: _headers(bearer: bearer));
-    if (get.statusCode != 200) throw PortalError(_msg(_decode(get), get.statusCode));
+  Future<void> appendNarrative(String bearer, int reportId, String currentHtml,
+      String additionHtml) async {
+    final get = await http.get(_u('/reports/$reportId/print'),
+        headers: _headers(bearer: bearer));
+    if (get.statusCode != 200)
+      throw PortalError(_msg(_decode(get), get.statusCode));
     final report = _decode(get)['report'] as Map<String, dynamic>;
     final merged = '${report['narrative'] ?? ''}$additionHtml';
     // Never wipe: when the draft already carries words, the capture lands
     // after them (mergeBlotterText's rule, enforced here in kind).
     final res = await http
-        .patch(_u('/reports/$reportId'), headers: _headers(bearer: bearer), body: jsonEncode({'narrative': merged}))
+        .patch(_u('/reports/$reportId'),
+            headers: _headers(bearer: bearer),
+            body: jsonEncode({'narrative': merged}))
         .timeout(const Duration(seconds: 20));
-    if (res.statusCode != 200) throw PortalError(_msg(_decode(res), res.statusCode));
+    if (res.statusCode != 200)
+      throw PortalError(_msg(_decode(res), res.statusCode));
   }
 
   /// File the photo plus its reviewed text — the bytes the portal checks the
   /// narrative against (see CapturesController::store).
-  Future<void> uploadCapture(
-      String bearer, int reportId, List<int> jpegBytes, String ocrText, String? engine) async {
-    final req = http.MultipartRequest('POST', _u('/reports/$reportId/captures'));
+  Future<void> uploadCapture(String bearer, int reportId, List<int> jpegBytes,
+      String ocrText, String? engine) async {
+    final req =
+        http.MultipartRequest('POST', _u('/reports/$reportId/captures'));
     req.headers['Authorization'] = 'Bearer $bearer';
     req.fields['ocr_text'] = ocrText;
     if (engine != null && engine.isNotEmpty) req.fields['engine'] = engine;
-    req.files.add(http.MultipartFile.fromBytes('photo', jpegBytes, filename: 'blotter.jpg'));
+    req.files.add(http.MultipartFile.fromBytes('photo', jpegBytes,
+        filename: 'blotter.jpg'));
     final streamed = await req.send().timeout(const Duration(seconds: 60));
     final res = await http.Response.fromStream(streamed);
-    if (res.statusCode != 201) throw PortalError(_msg(_decode(res), res.statusCode));
+    if (res.statusCode != 201)
+      throw PortalError(_msg(_decode(res), res.statusCode));
   }
 
   /// The phone's own sign-out: revokes exactly the token it arrived on.
   Future<void> revokeCurrent(String bearer) async {
-    final res = await http.delete(_u('/devices/current'), headers: _headers(bearer: bearer));
-    if (res.statusCode != 200) throw PortalError(_msg(_decode(res), res.statusCode));
+    final res = await http.delete(_u('/devices/current'),
+        headers: _headers(bearer: bearer));
+    if (res.statusCode != 200)
+      throw PortalError(_msg(_decode(res), res.statusCode));
   }
 
   Map<String, dynamic> _decode(http.Response res) {
@@ -273,7 +297,8 @@ class PortalClient {
 }
 
 class DeviceToken {
-  DeviceToken({required this.token, required this.expiresAt, required this.deviceName});
+  DeviceToken(
+      {required this.token, required this.expiresAt, required this.deviceName});
   final String token;
   final String expiresAt;
   final String deviceName;

@@ -128,7 +128,8 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
         const SizedBox(
             height: 20,
             width: 20,
-            child: Center(child: CircularProgressIndicator(color: StationDesk.gold))),
+            child: Center(
+                child: CircularProgressIndicator(color: StationDesk.gold))),
         const SizedBox(height: 20),
         const Text('Connecting to the BlueWrite server…',
             textAlign: TextAlign.center,
@@ -147,9 +148,12 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
           const SizedBox(height: 10),
           Text('Looking for the station server… $pct%',
               textAlign: TextAlign.center,
-              style: TextStyle(color: StationDesk.paper.withValues(alpha: 0.65), fontSize: 12)),
+              style: TextStyle(
+                  color: StationDesk.paper.withValues(alpha: 0.65),
+                  fontSize: 12)),
         ] else
-          Text('The phone finds the server itself when it is reachable — station Wi-Fi, or anywhere over the internet once the station publishes it.',
+          Text(
+              'The phone finds the server itself when it is reachable — station Wi-Fi, or anywhere over the internet once the station publishes it.',
               textAlign: TextAlign.center,
               style: StationDesk.note().copyWith(fontSize: 12)),
       ],
@@ -163,15 +167,20 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 32),
-          const Icon(Icons.wifi_off_outlined, color: StationDesk.gold, size: 44),
+          const Icon(Icons.wifi_off_outlined,
+              color: StationDesk.gold, size: 44),
           const SizedBox(height: 16),
           const Text('Could not reach the station server.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  color: StationDesk.paper, fontSize: 16, fontWeight: FontWeight.w600)),
+                  color: StationDesk.paper,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          Text('Check this phone\u2019s connection and that the station server is published, then try again.',
-              textAlign: TextAlign.center, style: StationDesk.note()),
+          Text(
+              'Check this phone\u2019s connection and that the station server is published, then try again.',
+              textAlign: TextAlign.center,
+              style: StationDesk.note()),
           const SizedBox(height: 24),
           FilledButton(
             style: StationDesk.goldAction(context),
@@ -181,7 +190,8 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
           TextButton(
             style: TextButton.styleFrom(foregroundColor: StationDesk.paper),
             onPressed: () => setState(() => _showManual = !_showManual),
-            child: Text(_showManual ? 'Hide manual entry' : 'Enter address manually'),
+            child: Text(
+                _showManual ? 'Hide manual entry' : 'Enter address manually'),
           ),
           if (_showManual) ...[
             TextField(
@@ -190,7 +200,12 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
               autocorrect: false,
               style: const TextStyle(color: StationDesk.paper),
               decoration: StationDesk.field('Server address',
-                  hint: 'http://172.16.51.252:8099'),
+                  // A FORMAT, not a station: this used to print one PC's old
+                  // DHCP address (172.16.51.252), which was stale the moment
+                  // the server moved and read as an instruction to type it.
+                  // The real address is on the station dashboard's Client
+                  // access card, and discovery fills the field in on its own.
+                  hint: 'http://<station-pc-ip>:8099'),
               onSubmitted: (_) => _connectManual(),
             ),
             const SizedBox(height: 8),
@@ -203,17 +218,18 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
               const SizedBox(height: 12),
               Text(_error!, style: StationDesk.error),
             ],
-          const SizedBox(height: 12),
-          FilledButton(
-            style: StationDesk.goldAction(context),
-            onPressed: _busy ? null : _connectManual,
-            child: _busy
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: StationDesk.ink))
-                : const Text('Continue'),
-          ),
+            const SizedBox(height: 12),
+            FilledButton(
+              style: StationDesk.goldAction(context),
+              onPressed: _busy ? null : _connectManual,
+              child: _busy
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: StationDesk.ink))
+                  : const Text('Continue'),
+            ),
           ],
         ],
       ),

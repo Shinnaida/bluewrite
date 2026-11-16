@@ -169,8 +169,8 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
                     ),
                     TextButton(
                       onPressed: () => Navigator.of(sheet).pop(),
-                      child: const Text('Close',
-                          style: TextStyle(color: _gold)),
+                      child:
+                          const Text('Close', style: TextStyle(color: _gold)),
                     ),
                   ],
                 ),
@@ -188,8 +188,7 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
                           child: Text(
                             'No kept texts yet — write one above and tap Keep.',
                             textAlign: TextAlign.center,
-                            style:
-                                TextStyle(color: _paper, height: 1.5),
+                            style: TextStyle(color: _paper, height: 1.5),
                           ),
                         )
                       : ListView.separated(
@@ -215,8 +214,7 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
                                     color: active
                                         ? _gold
                                         : _paper.withValues(alpha: 0.22)),
-                                color: Colors.white
-                                    .withValues(alpha: 0.04),
+                                color: Colors.white.withValues(alpha: 0.04),
                               ),
                               child: ListTile(
                                 dense: true,
@@ -228,14 +226,12 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
                                 subtitle: Text(
                                   '$stamp \u00b7 ${blotterWordCount(note.text)} ${blotterWordCount(note.text) == 1 ? 'word' : 'words'}${active ? ' \u00b7 in editor' : ''}',
                                   style: TextStyle(
-                                      color: _paper.withValues(
-                                          alpha: 0.55),
+                                      color: _paper.withValues(alpha: 0.55),
                                       fontSize: 11),
                                 ),
                                 trailing: IconButton(
                                   icon: Icon(Icons.delete_outline,
-                                      color: _paper.withValues(
-                                          alpha: 0.6),
+                                      color: _paper.withValues(alpha: 0.6),
                                       size: 20),
                                   tooltip: 'Delete kept text',
                                   onPressed: () async {
@@ -289,7 +285,8 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
       // SAME analysis as a pasted source text on the web: classify the
       // account, then the type-scoped details. Best-effort — a miss files
       // plain with the lately certification format below.
-      Map<String, dynamic>? read = await widget.client.classifyAccount(widget.bearer, text);
+      Map<String, dynamic>? read =
+          await widget.client.classifyAccount(widget.bearer, text);
       if (read != null) {
         final probe = blotterFilingFields(
           read: read,
@@ -299,7 +296,8 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
         );
         final probeType = (probe['incident_type'] ?? '').toString();
         if (probeType.isNotEmpty) {
-          final details = await widget.client.classifyDetails(widget.bearer, text, probeType);
+          final details = await widget.client
+              .classifyDetails(widget.bearer, text, probeType);
           if (details != null) read = {...read, 'details': details};
         }
       }
@@ -319,7 +317,8 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
         readReporter: (filing['reporter_name'] ?? '').toString(),
       );
       final now = DateTime.now();
-      final stamp = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}'
+      final stamp =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}'
           'T${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
       final draft = <String, dynamic>{
         'incident_type': filing['incident_type'],
@@ -330,12 +329,15 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
       // The typed recorder rides as a real field — not only as the RECORDED
       // BY line in the text — so the portal signature prints who filed it
       // instead of the filing account, in every sheet layout.
-      final filingTs = Map<String, dynamic>.from((filing['type_specific'] as Map?) ?? {});
-      if (_recordedBy.text.trim().isNotEmpty) filingTs['recorded_by'] = _recordedBy.text.trim();
+      final filingTs =
+          Map<String, dynamic>.from((filing['type_specific'] as Map?) ?? {});
+      if (_recordedBy.text.trim().isNotEmpty)
+        filingTs['recorded_by'] = _recordedBy.text.trim();
       if (_recordedPosition.text.trim().isNotEmpty) {
         filingTs['recorded_by_position'] = _recordedPosition.text.trim();
       }
-      if (_requestedBy.text.trim().isNotEmpty) filingTs['requested_by'] = _requestedBy.text.trim();
+      if (_requestedBy.text.trim().isNotEmpty)
+        filingTs['requested_by'] = _requestedBy.text.trim();
       if (filingTs.isNotEmpty) draft['type_specific'] = filingTs;
       if ((filing['reporter_name'] ?? '').toString().isNotEmpty) {
         draft['reporter_name'] = filing['reporter_name'];
@@ -380,15 +382,19 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
   Widget build(BuildContext context) {
     final String filedReceipt;
     if (_filled.isEmpty) {
-      filedReceipt = 'Draft #$_sentDraftId is waiting in Write Report on the portal. The typed text is already in its sheet — review it, then set the incident type and place there.';
+      filedReceipt =
+          'Draft #$_sentDraftId is waiting in Write Report on the portal. The typed text is already in its sheet — review it, then set the incident type and place there.';
     } else {
-      filedReceipt = 'Draft #$_sentDraftId is waiting in Write Report on the portal. Read from the text: ${_filled.join(', ')} — review everything and correct anything before finalizing.';
+      filedReceipt =
+          'Draft #$_sentDraftId is waiting in Write Report on the portal. Read from the text: ${_filled.join(', ')} — review everything and correct anything before finalizing.';
     }
     if (_sentDraftId != null) {
       return Scaffold(
         backgroundColor: _ink,
         appBar: AppBar(
-            backgroundColor: _ink, foregroundColor: _paper, title: const Text('Filed')),
+            backgroundColor: _ink,
+            foregroundColor: _paper,
+            title: const Text('Filed')),
         body: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
@@ -434,8 +440,8 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
                   right: 6,
                   top: 6,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 5, vertical: 1),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                     decoration: BoxDecoration(
                       color: _gold,
                       borderRadius: BorderRadius.circular(10),
@@ -461,7 +467,8 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
               maxLines: 12,
               style: const TextStyle(color: _paper),
               decoration: _deskField('Blotter account',
-                  hint: 'Write what happened, who was involved, when and where…'),
+                  hint:
+                      'Write what happened, who was involved, when and where…'),
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 6),
@@ -484,15 +491,6 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextField(
-                    controller: _recordedPosition,
-                    style: const TextStyle(color: _paper),
-                    decoration: _deskField('Position',
-                        hint: 'e.g. Desk Officer'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
                     controller: _requestedBy,
                     style: const TextStyle(color: _paper),
                     decoration: _deskField('Requested by',
@@ -507,8 +505,7 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
                 foregroundColor: _gold,
                 side: BorderSide(color: _gold.withValues(alpha: 0.6)),
               ),
-              onPressed:
-                  _text.text.trim().isEmpty ? null : _applyCertification,
+              onPressed: _text.text.trim().isEmpty ? null : _applyCertification,
               child: const Text('Apply certification format'),
             ),
             if (_error != null) ...[
@@ -520,10 +517,10 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
             const SizedBox(height: 20),
             FilledButton(
               style: FilledButton.styleFrom(
-                  backgroundColor: _gold, foregroundColor: _ink,
+                  backgroundColor: _gold,
+                  foregroundColor: _ink,
                   padding: const EdgeInsets.symmetric(vertical: 14)),
-              onPressed:
-                  (_sending || _text.text.trim().isEmpty) ? null : _send,
+              onPressed: (_sending || _text.text.trim().isEmpty) ? null : _send,
               child: _sending
                   ? const SizedBox(
                       height: 20,
@@ -538,8 +535,7 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
                 foregroundColor: _paper,
                 side: BorderSide(color: _paper.withValues(alpha: 0.35)),
               ),
-              onPressed:
-                  _text.text.trim().isEmpty ? null : _keepNote,
+              onPressed: _text.text.trim().isEmpty ? null : _keepNote,
               icon: const Icon(Icons.save_outlined, size: 18),
               label: const Text('Keep this text on this phone'),
             ),
@@ -548,8 +544,8 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
               _notes.isEmpty
                   ? 'Kept texts stay on this phone for this account even when the app closes. Tap + above to view them.'
                   : '${_notes.length} kept ${_notes.length == 1 ? 'text' : 'texts'} for this account — tap + above to pick one into the editor, then continue it to the web.',
-              style: TextStyle(
-                  color: _paper.withValues(alpha: 0.7), fontSize: 12),
+              style:
+                  TextStyle(color: _paper.withValues(alpha: 0.7), fontSize: 12),
             ),
           ],
         ),

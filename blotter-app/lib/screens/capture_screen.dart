@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
@@ -8,8 +7,8 @@ import 'package:image/image.dart' as img;
 import '../api/portal_client.dart';
 import '../storage/draft_store.dart';
 import '../storage/secure_store.dart';
-import 'app_files_screen.dart';
-import 'review_screen.dart';
+import 'photo_tray_screen.dart';
+import 'write_blotter_screen.dart';
 
 /// The camera. One job: a sharp, upright photo of the blotter page.
 ///
@@ -32,8 +31,8 @@ class _CaptureScreenState extends State<CaptureScreen> {
   Future<void>? _init;
   String? _error;
   bool _sending = false;
-  // Files kept on this phone (captured photos + kept texts, this account).
-  // The APP FILES button wears the total as its badge.
+  // Photos kept on this phone for this account. The Photos button wears
+  // the total as its badge.
   int _fileCount = 0;
 
   @override
@@ -60,17 +59,48 @@ class _CaptureScreenState extends State<CaptureScreen> {
     try {
       final tray = await _scopedTray();
       final photos = await tray.listPhotos();
-      final notes = await tray.listNotes();
       if (!mounted) return;
-      setState(() => _fileCount = photos.length + notes.length);
+      setState(() => _fileCount = photos.length);
     } catch (_) {
       // The count stays where it was — the button still opens the list.
     }
   }
 
-  Future<void> _openFiles() async {
+  Future<void> _openPhotos() async {
+    final token = widget.bearer ?? await _store.token();
+    final client =
+        widget.client ?? PortalClient((await _store.baseUrl()) ?? '');
+    if (token == null) {
+      if (mounted) {
+        setState(() =>
+            _error = 'This device sign-in is gone. Set up the app again.');
+      }
+      return;
+    }
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const AppFilesScreen()),
+      MaterialPageRoute(
+        builder: (_) => PhotoTrayScreen(client: client, bearer: token),
+      ),
+    );
+    if (!mounted) return;
+    _refreshFileCount();
+  }
+
+  Future<void> _openWrite() async {
+    final token = widget.bearer ?? await _store.token();
+    final client =
+        widget.client ?? PortalClient((await _store.baseUrl()) ?? '');
+    if (token == null) {
+      if (mounted) {
+        setState(() =>
+            _error = 'This device sign-in is gone. Set up the app again.');
+      }
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => WriteBlotterScreen(client: client, bearer: token),
+      ),
     );
     if (!mounted) return;
     _refreshFileCount();
@@ -88,10 +118,13 @@ class _CaptureScreenState extends State<CaptureScreen> {
         (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cameras.first,
       );
-      _controller = CameraController(rear, ResolutionPreset.high, enableAudio: false);
+      _controller =
+          CameraController(rear, ResolutionPreset.high, enableAudio: false);
       await _controller!.initialize();
     } catch (_) {
-      if (mounted) setState(() => _error = 'The camera could not be opened. Allow camera access and try again.');
+      if (mounted)
+        setState(() => _error =
+            'The camera could not be opened. Allow camera access and try again.');
     }
   }
 
@@ -104,9 +137,6 @@ class _CaptureScreenState extends State<CaptureScreen> {
   Future<void> _shutter() async {
     final c = _controller;
     if (c == null || !c.value.isInitialized || _sending) return;
-    // Held before the first await: pushing through a saved handle is the
-    // honest way to cross the async gaps below.
-    final navigator = Navigator.of(context);
     setState(() {
       _sending = true;
       _error = null;
@@ -115,26 +145,17 @@ class _CaptureScreenState extends State<CaptureScreen> {
       final shot = await c.takePicture();
       final raw = await shot.readAsBytes();
       final small = _downscale(raw);
+      final tray = await _scopedTray();
+      await tray.savePhoto(small);
+      await _refreshFileCount();
       if (!mounted) return;
-      final token = widget.bearer ?? await _store.token();
-      final client = widget.client ??
-          PortalClient((await _store.baseUrl()) ?? '');
-      if (token == null) {
-        setState(() => _error = 'This device sign-in is gone. Set up the app again.');
-        return;
-      }
-      navigator.push(
-        MaterialPageRoute(
-          builder: (_) => ReviewScreen(
-            client: client,
-            bearer: token,
-            jpegBytes: small,
-            dataUrl: 'data:image/jpeg;base64,${base64Encode(small)}',
-          ),
-        ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Page kept in the photos tray.')),
       );
     } catch (_) {
-      if (mounted) setState(() => _error = 'The photo could not be taken. Try again.');
+      if (mounted) {
+        setState(() => _error = 'The photo could not be taken. Try again.');
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -145,16 +166,19 @@ class _CaptureScreenState extends State<CaptureScreen> {
   Uint8List _downscale(Uint8List raw) {
     final decoded = img.decodeImage(raw);
     if (decoded == null) return raw;
-    final long = decoded.width > decoded.height ? decoded.width : decoded.height;
+    final long =
+        decoded.width > decoded.height ? decoded.width : decoded.height;
     if (long <= 1600) return img.encodeJpg(decoded, quality: 88);
-    final resized = img.copyResize(decoded, width: decoded.width >= decoded.height ? 1600 : null, height: decoded.width >= decoded.height ? null : 1600);
+    final resized = img.copyResize(decoded,
+        width: decoded.width >= decoded.height ? 1600 : null,
+        height: decoded.width >= decoded.height ? null : 1600);
     return img.encodeJpg(resized, quality: 85);
   }
 
   Future<void> _signOut() async {
     final token = widget.bearer ?? await _store.token();
-    final client = widget.client ??
-        PortalClient((await _store.baseUrl()) ?? '');
+    final client =
+        widget.client ?? PortalClient((await _store.baseUrl()) ?? '');
     if (token != null) {
       try {
         await client.revokeCurrent(token);
@@ -201,7 +225,8 @@ class _CaptureScreenState extends State<CaptureScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.videocam_off_outlined, color: paper, size: 44),
+                    const Icon(Icons.videocam_off_outlined,
+                        color: paper, size: 44),
                     const SizedBox(height: 16),
                     Text(_error!,
                         textAlign: TextAlign.center,
@@ -211,7 +236,8 @@ class _CaptureScreenState extends State<CaptureScreen> {
               ),
             );
           }
-          if (snap.connectionState != ConnectionState.done || _controller == null) {
+          if (snap.connectionState != ConnectionState.done ||
+              _controller == null) {
             return const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -239,7 +265,8 @@ class _CaptureScreenState extends State<CaptureScreen> {
                       right: 0,
                       child: Center(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 7),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.55),
                             borderRadius: BorderRadius.circular(20),
@@ -264,33 +291,53 @@ class _CaptureScreenState extends State<CaptureScreen> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const Text(
-                      'Fill the frame with the blotter page, hold steady, then press capture.',
+                      'Captured pages live in the tray — open Photos to check them, add more, or review.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: paper, height: 1.5),
                     ),
                     const SizedBox(height: 16),
-                    _ShutterButton(
-                      sending: _sending,
-                      onTap: _sending ? null : _shutter,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(_sending ? 'Working…' : 'Capture',
-                        style: TextStyle(
-                            color: paper.withValues(alpha: _sending ? 0.6 : 1),
-                            fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 18),
-                    // The app's own files: captured photos + kept texts for
-                    // this account. Yellow coin, labelled, count badged —
-                    // one tap lists everything the phone keeps.
-                    _AppFilesButton(
-                      count: _fileCount,
-                      onTap: _openFiles,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _AppFilesButton(
+                          count: _fileCount,
+                          label: 'Photos',
+                          icon: Icons.photo_library_outlined,
+                          onTap: _openPhotos,
+                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _ShutterButton(
+                              sending: _sending,
+                              onTap: _sending ? null : _shutter,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _sending ? 'Working…' : 'Capture',
+                              style: TextStyle(
+                                color:
+                                    paper.withValues(alpha: _sending ? 0.6 : 1),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        _AppFilesButton(
+                          count: 0,
+                          label: 'Write',
+                          icon: Icons.edit_outlined,
+                          onTap: _openWrite,
+                        ),
+                      ],
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 8),
                       Text(_error!,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: Color(0xFFE8A0A0), fontSize: 12)),
+                          style: const TextStyle(
+                              color: Color(0xFFE8A0A0), fontSize: 12)),
                     ],
                   ],
                 ),
@@ -313,7 +360,8 @@ class _PageFramePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     const inset = 26.0;
     const arm = 44.0;
-    final frame = Rect.fromLTWH(inset, inset, size.width - inset * 2, size.height - inset * 2);
+    final frame = Rect.fromLTWH(
+        inset, inset, size.width - inset * 2, size.height - inset * 2);
     final hair = Paint()
       ..color = Colors.white.withValues(alpha: 0.14)
       ..strokeWidth = 1;
@@ -325,8 +373,10 @@ class _PageFramePainter extends CustomPainter {
     // Each corner is one L drawn as a single path.
     canvas.drawPath(_corner(frame.topLeft, 1, 1, arm), gold);
     canvas.drawPath(_corner(Offset(frame.right, frame.top), -1, 1, arm), gold);
-    canvas.drawPath(_corner(Offset(frame.left, frame.bottom), 1, -1, arm), gold);
-    canvas.drawPath(_corner(Offset(frame.right, frame.bottom), -1, -1, arm), gold);
+    canvas.drawPath(
+        _corner(Offset(frame.left, frame.bottom), 1, -1, arm), gold);
+    canvas.drawPath(
+        _corner(Offset(frame.right, frame.bottom), -1, -1, arm), gold);
   }
 
   Path _corner(Offset at, double dx, double dy, double arm) {
@@ -360,7 +410,8 @@ class _ShutterButton extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-                color: const Color(0xFFC9A227).withValues(alpha: onTap == null ? 0.35 : 1),
+                color: const Color(0xFFC9A227)
+                    .withValues(alpha: onTap == null ? 0.35 : 1),
                 width: 3),
           ),
           padding: const EdgeInsets.all(5),
@@ -377,7 +428,8 @@ class _ShutterButton extends StatelessWidget {
                     child: CircularProgressIndicator(
                         strokeWidth: 3, color: Color(0xFF0C1B33)),
                   )
-                : const Icon(Icons.camera_alt, color: Color(0xFF0C1B33), size: 32),
+                : const Icon(Icons.camera_alt,
+                    color: Color(0xFF0C1B33), size: 32),
           ),
         ),
       ),
@@ -389,9 +441,16 @@ class _ShutterButton extends StatelessWidget {
 /// file count badged over its corner, and the label under it. One tap
 /// lists every photo and kept text this account keeps on the phone.
 class _AppFilesButton extends StatelessWidget {
-  const _AppFilesButton({required this.count, required this.onTap});
+  const _AppFilesButton({
+    required this.count,
+    required this.onTap,
+    this.icon = Icons.photo_library_outlined,
+    this.label = 'Photos',
+  });
   final int count;
   final VoidCallback onTap;
+  final IconData icon;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -421,8 +480,7 @@ class _AppFilesButton extends StatelessWidget {
                           offset: Offset(0, 4)),
                     ],
                   ),
-                  child: const Icon(Icons.description_outlined,
-                      color: Color(0xFF0C1B33), size: 28),
+                  child: Icon(icon, color: const Color(0xFF0C1B33), size: 26),
                 ),
                 if (count > 0)
                   Positioned(
@@ -447,11 +505,11 @@ class _AppFilesButton extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
-            const Text('APP FILES',
-                style: TextStyle(
+            Text(label,
+                style: const TextStyle(
                     color: Color(0xFFF4EFE3),
-                    fontSize: 11,
-                    letterSpacing: 2,
+                    fontSize: 10,
+                    letterSpacing: 1.2,
                     fontWeight: FontWeight.w700)),
           ],
         ),

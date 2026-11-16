@@ -117,8 +117,7 @@ class _AppFilesScreenState extends State<AppFilesScreen> {
                   ),
                   TextButton(
                     onPressed: () => Navigator.of(dialog).pop(),
-                    child:
-                        const Text('Close', style: TextStyle(color: _gold)),
+                    child: const Text('Close', style: TextStyle(color: _gold)),
                   ),
                 ],
               ),
@@ -143,8 +142,7 @@ class _AppFilesScreenState extends State<AppFilesScreen> {
               Flexible(
                 child: SingleChildScrollView(
                   child: Text(note.text,
-                      style:
-                          const TextStyle(color: _paper, height: 1.5)),
+                      style: const TextStyle(color: _paper, height: 1.5)),
                 ),
               ),
               const SizedBox(height: 8),
@@ -152,8 +150,7 @@ class _AppFilesScreenState extends State<AppFilesScreen> {
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => Navigator.of(dialog).pop(),
-                  child:
-                      const Text('Close', style: TextStyle(color: _gold)),
+                  child: const Text('Close', style: TextStyle(color: _gold)),
                 ),
               ),
             ],
@@ -230,33 +227,32 @@ class _AppFilesScreenState extends State<AppFilesScreen> {
                       const SizedBox(height: 8),
                       for (final note in _notes)
                         Builder(builder: (context) {
-                          final flat = note.text
-                              .trim()
-                              .replaceAll(RegExp(r'\s+'), ' ');
+                          final flat =
+                              note.text.trim().replaceAll(RegExp(r'\s+'), ' ');
                           final preview = flat.length > 90
                               ? '${flat.substring(0, 90)}…'
                               : flat;
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: _FileRow(
-                            leading: Container(
-                              width: 52,
-                              height: 52,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.06),
-                                borderRadius: BorderRadius.circular(8),
+                              leading: Container(
+                                width: 52,
+                                height: 52,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.06),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.description_outlined,
+                                    color: _paper, size: 26),
                               ),
-                              child: const Icon(Icons.description_outlined,
-                                  color: _paper, size: 26),
+                              title: preview,
+                              subtitle:
+                                  '${_stamp(note.createdAt)} · ${blotterWordCount(note.text)} ${blotterWordCount(note.text) == 1 ? 'word' : 'words'}${note.recordedBy.trim().isNotEmpty ? ' · ${note.recordedBy.trim()}' : ''}',
+                              onTap: () => _readNote(note),
+                              onDelete: () => _dropNote(note.id),
+                              deleteLabel: 'Delete kept text',
                             ),
-                            title: preview,
-                            subtitle:
-                                '${_stamp(note.createdAt)} · ${blotterWordCount(note.text)} ${blotterWordCount(note.text) == 1 ? 'word' : 'words'}${note.recordedBy.trim().isNotEmpty ? ' · ${note.recordedBy.trim()}' : ''}',
-                            onTap: () => _readNote(note),
-                            onDelete: () => _dropNote(note.id),
-                            deleteLabel: 'Delete kept text',
-                          ),
                           );
                         }),
                     ],
@@ -302,8 +298,8 @@ class _FileRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: _paper, fontSize: 13)),
         subtitle: Text(subtitle,
-            style: TextStyle(
-                color: _paper.withValues(alpha: 0.55), fontSize: 11)),
+            style:
+                TextStyle(color: _paper.withValues(alpha: 0.55), fontSize: 11)),
         trailing: IconButton(
           icon: Icon(Icons.delete_outline,
               color: _paper.withValues(alpha: 0.6), size: 20),

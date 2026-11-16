@@ -6,6 +6,7 @@ import 'package:blotter_capture/blotter_text.dart';
 
 import '../api/portal_client.dart';
 import '../blotter_filing.dart';
+import '../storage/draft_store.dart';
 
 /// The review gate — mirrors the web's BlotterCapture dialog (see
 /// BlotterCapture.jsx): photo beside the reading, word count, Recorded by /
@@ -21,11 +22,23 @@ class ReviewScreen extends StatefulWidget {
     required this.bearer,
     required this.jpegBytes,
     required this.dataUrl,
-  });
+  }) : pages = null;
+
+  /// Review one or more pages selected from the capture tray. The pages are
+  /// read in order and filed together as one draft.
+  const ReviewScreen.pages({
+    super.key,
+    required this.client,
+    required this.bearer,
+    required this.pages,
+  })  : jpegBytes = const [],
+        dataUrl = '';
+
   final PortalClient client;
   final String bearer;
   final List<int> jpegBytes;
   final String dataUrl;
+  final List<TrayPhoto>? pages;
 
   @override
   State<ReviewScreen> createState() => _ReviewScreenState();
@@ -40,6 +53,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
   bool _sending = false;
   String? _engine;
   String? _error;
+
+  List<String> get _pageUrls =>
+      widget.pages?.map((p) => p.dataUrl).toList() ?? [widget.dataUrl];
+  List<List<int>> get _pageBytes =>
+      widget.pages?.map((p) => p.bytes.toList()).toList() ?? [widget.jpegBytes];
   // Filing default, never asked: the officer sets the real type in the
   // Write Report sheet. Resolved from the station list at send time.
   String? _defaultType;
@@ -62,27 +80,40 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   Future<void> _start() async {
     try {
-      final results = await Future.wait([
-        widget.client.ocrRead(widget.bearer, widget.dataUrl),
-        widget.client.incidentTypes(widget.bearer),
-        widget.client.me(widget.bearer).catchError((_) => <String, String>{}),
-      ]);
+      final reads = await Future.wait(
+        _pageUrls.map((url) => widget.client.ocrRead(widget.bearer, url)),
+      );
+      final types = await widget.client.incidentTypes(widget.bearer);
+      final who = await widget.client
+          .me(widget.bearer)
+          .catchError((_) => <String, String>{});
       if (!mounted) return;
-      final read = results[0] as OcrRead?;
-      final types = (results[1] as List<String>);
-      final who = results[2] as Map<String, String>;
+      final parts = reads
+          .map((read) => cleanBlotterTranscription(read?.text ?? '').trim())
+          .where((text) => text.isNotEmpty)
+          .toList();
+      String? engine;
+      for (final read in reads) {
+        final found = (read?.engine ?? '').trim();
+        if (found.isNotEmpty) {
+          engine = found;
+          break;
+        }
+      }
       setState(() {
         _reading = false;
         _defaultType = types.isNotEmpty ? types.first : 'Other Incident';
         // Same clean as the web review: idempotent, cleaned once here.
-        _text.text = cleanBlotterTranscription(read?.text ?? '');
-        _engine = read?.engine;
+        _text.text = parts.join('\n\n');
+        _engine = engine;
         // Same prefill as the web dialog (defaultRecordedBy): the officer's
         // own name sits in Recorded by, editable before filing.
         final name = (who['full_name'] ?? '').trim();
-        _recordedBy.text = name.isNotEmpty ? name : (who['username'] ?? '').trim();
-        if (read == null || _text.text.trim().isEmpty) {
-          _error = 'The photo held no readable text — try a sharper, straighter shot of the blotter page.';
+        _recordedBy.text =
+            name.isNotEmpty ? name : (who['username'] ?? '').trim();
+        if (parts.isEmpty) {
+          _error =
+              'The photo held no readable text — try a sharper, straighter shot of the blotter page.';
         }
       });
     } on PortalError catch (e) {
@@ -109,7 +140,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
   Future<void> _send() async {
     var text = _text.text.trim();
     if (text.isEmpty) {
-      setState(() => _error = 'There is no text to file. Type the account or retake the photo.');
+      setState(() => _error =
+          'There is no text to file. Type the account or retake the photo.');
       return;
     }
     if (_location.text.trim().isEmpty) {
@@ -127,8 +159,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
       // disposition, type-specific block) instead of placeholders. Uses the
       // LATELY certification format below. Best-effort: a missed read files
       // plain with the formatted text.
-      Map<String, dynamic>? read = await widget.client.classifyAccount(widget.bearer, text);
-      final stationTypes = <String>[if ((_defaultType ?? '').trim().isNotEmpty) (_defaultType ?? '').trim()];
+      Map<String, dynamic>? read =
+          await widget.client.classifyAccount(widget.bearer, text);
+      final stationTypes = <String>[
+        if ((_defaultType ?? '').trim().isNotEmpty) (_defaultType ?? '').trim()
+      ];
       if (read != null) {
         final probe = blotterFilingFields(
           read: read,
@@ -138,13 +173,16 @@ class _ReviewScreenState extends State<ReviewScreen> {
         );
         final probeType = (probe['incident_type'] ?? '').toString();
         if (probeType.isNotEmpty) {
-          final details = await widget.client.classifyDetails(widget.bearer, text, probeType);
+          final details = await widget.client
+              .classifyDetails(widget.bearer, text, probeType);
           if (details != null) read = {...read, 'details': details};
         }
       }
       final filing = blotterFilingFields(
         read: read,
-        stationTypes: stationTypes.isNotEmpty ? stationTypes : [(_defaultType ?? 'Other Incident').trim()],
+        stationTypes: stationTypes.isNotEmpty
+            ? stationTypes
+            : [(_defaultType ?? 'Other Incident').trim()],
         fallbackType: _defaultType ?? 'Other Incident',
         typedLocation: _location.text,
       );
@@ -159,7 +197,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
         readReporter: (filing['reporter_name'] ?? '').toString(),
       );
       final now = DateTime.now();
-      final stamp = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}'
+      final stamp =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}'
           'T${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
       // What the officer reviewed IS what lands in the sheet: the draft is
       // filed with the reviewed + analysed text already in its narrative (as
@@ -168,14 +207,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
       // portal the officer opens the draft in Write Report — the text is in
       // the sheet, editable before the final report — with the photo beside it.
       final draft = <String, dynamic>{
-        'incident_type': (filing['incident_type'] ?? _defaultType ?? 'Other Incident').toString(),
+        'incident_type':
+            (filing['incident_type'] ?? _defaultType ?? 'Other Incident')
+                .toString(),
         'incident_datetime': stamp,
         'location': location,
         'narrative': blotterTextToHtml(text),
       };
-      final filingTs = Map<String, dynamic>.from((filing['type_specific'] as Map?) ?? {});
-      if (_recordedBy.text.trim().isNotEmpty) filingTs['recorded_by'] = _recordedBy.text.trim();
-      if (_requestedBy.text.trim().isNotEmpty) filingTs['requested_by'] = _requestedBy.text.trim();
+      final filingTs =
+          Map<String, dynamic>.from((filing['type_specific'] as Map?) ?? {});
+      if (_recordedBy.text.trim().isNotEmpty)
+        filingTs['recorded_by'] = _recordedBy.text.trim();
+      if (_requestedBy.text.trim().isNotEmpty)
+        filingTs['requested_by'] = _requestedBy.text.trim();
       if (filingTs.isNotEmpty) draft['type_specific'] = filingTs;
       if ((filing['reporter_name'] ?? '').toString().isNotEmpty) {
         draft['reporter_name'] = filing['reporter_name'];
@@ -184,7 +228,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
         draft['action_taken'] = filing['action_taken'];
       }
       final id = await widget.client.createDraft(widget.bearer, draft);
-      await widget.client.uploadCapture(widget.bearer, id, widget.jpegBytes, text, _engine);
+      for (final bytes in _pageBytes) {
+        await widget.client
+            .uploadCapture(widget.bearer, id, bytes, text, _engine);
+      }
       if (!mounted) return;
       setState(() => _sentDraftId = id);
     } on PortalError catch (e) {
@@ -283,11 +330,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           color: _gold.withValues(alpha: 0.16),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: _gold.withValues(alpha: 0.6)),
+                          border:
+                              Border.all(color: _gold.withValues(alpha: 0.6)),
                         ),
                         child: Text('${_engine!} read',
                             style: const TextStyle(color: _gold, fontSize: 12)),
@@ -304,17 +353,23 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(11),
-                      child: Image.memory(Uint8List.fromList(widget.jpegBytes),
+                      child: Image.memory(Uint8List.fromList(_pageBytes.first),
                           height: 220, fit: BoxFit.cover),
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text('Source photo',
-                      style: TextStyle(color: _paper.withValues(alpha: 0.55), fontSize: 12)),
+                  Text(
+                    widget.pages != null && widget.pages!.length > 1
+                        ? 'Source photo — page 1 of ${widget.pages!.length}'
+                        : 'Source photo',
+                    style: TextStyle(
+                        color: _paper.withValues(alpha: 0.55), fontSize: 12),
+                  ),
                   const SizedBox(height: 14),
                   Text(
                     '${blotterWordCount(_text.text)} ${blotterWordCount(_text.text) == 1 ? 'word' : 'words'} to check against the photo — correct anything the recognition got wrong, then file it into the draft.',
-                    style: TextStyle(color: _paper.withValues(alpha: 0.7), fontSize: 12),
+                    style: TextStyle(
+                        color: _paper.withValues(alpha: 0.7), fontSize: 12),
                   ),
                   const SizedBox(height: 10),
                   TextField(
@@ -331,7 +386,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
                         child: TextField(
                           controller: _recordedBy,
                           style: const TextStyle(color: _paper),
-                          decoration: _deskField('Recorded by', hint: 'e.g. PSSg Caballero J.'),
+                          decoration: _deskField('Recorded by',
+                              hint: 'e.g. PSSg Caballero J.'),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -339,8 +395,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
                         child: TextField(
                           controller: _requestedBy,
                           style: const TextStyle(color: _paper),
-                          decoration:
-                              _deskField('Requested by', hint: 'name of who requested'),
+                          decoration: _deskField('Requested by',
+                              hint: 'name of who requested'),
                         ),
                       ),
                     ],
@@ -351,7 +407,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       foregroundColor: _gold,
                       side: BorderSide(color: _gold.withValues(alpha: 0.6)),
                     ),
-                    onPressed: _text.text.trim().isEmpty ? null : _applyCertification,
+                    onPressed:
+                        _text.text.trim().isEmpty ? null : _applyCertification,
                     child: const Text('Apply certification format'),
                   ),
                   const SizedBox(height: 12),
@@ -364,7 +421,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     const SizedBox(height: 12),
                     Text(_error!,
                         style: const TextStyle(
-                            color: Color(0xFFE8A0A0), fontSize: 12, height: 1.4)),
+                            color: Color(0xFFE8A0A0),
+                            fontSize: 12,
+                            height: 1.4)),
                   ],
                   const SizedBox(height: 20),
                   Row(
@@ -373,9 +432,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
                         child: OutlinedButton(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: _paper,
-                            side: BorderSide(color: _paper.withValues(alpha: 0.35)),
+                            side: BorderSide(
+                                color: _paper.withValues(alpha: 0.35)),
                           ),
-                          onPressed: _sending ? null : () => Navigator.of(context).pop(),
+                          onPressed: _sending
+                              ? null
+                              : () => Navigator.of(context).pop(),
                           child: const Text('Cancel'),
                         ),
                       ),
@@ -384,8 +446,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
                         child: FilledButton(
                           style: FilledButton.styleFrom(
                               backgroundColor: _gold, foregroundColor: _ink),
-                          onPressed:
-                              (_sending || _text.text.trim().isEmpty) ? null : _send,
+                          onPressed: (_sending || _text.text.trim().isEmpty)
+                              ? null
+                              : _send,
                           child: _sending
                               ? const SizedBox(
                                   height: 20,

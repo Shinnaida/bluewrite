@@ -19,7 +19,8 @@ class SecureStore {
   static const _kPinCheck = 'bw.pin_check';
   static const _kUsername = 'bw.username';
 
-  Future<void> saveSetup({required String baseUrl, required String token}) async {
+  Future<void> saveSetup(
+      {required String baseUrl, required String token}) async {
     await _storage.write(key: _kBaseUrl, value: baseUrl);
     await _storage.write(key: _kToken, value: token);
   }
@@ -28,7 +29,8 @@ class SecureStore {
   /// exists: discovery runs before sign-in, so the address cannot wait for
   /// saveSetup. Signing out keeps it — signing in again is setup, retyping
   /// the address is not.
-  Future<void> saveBaseUrl(String baseUrl) => _storage.write(key: _kBaseUrl, value: baseUrl);
+  Future<void> saveBaseUrl(String baseUrl) =>
+      _storage.write(key: _kBaseUrl, value: baseUrl);
 
   Future<String?> baseUrl() => _storage.read(key: _kBaseUrl);
   Future<String?> token() => _storage.read(key: _kToken);
@@ -73,7 +75,8 @@ class SecureStore {
   String _hash(String pin, String salt) {
     var digest = sha256.convert(utf8.encode('blotter-capture|$salt|$pin'));
     for (var i = 0; i < 999; i++) {
-      digest = sha256.convert([...digest.bytes, ...utf8.encode('blotter-capture|$salt|$pin')]);
+      digest = sha256.convert(
+          [...digest.bytes, ...utf8.encode('blotter-capture|$salt|$pin')]);
     }
     return digest.toString();
   }

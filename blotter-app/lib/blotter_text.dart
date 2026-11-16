@@ -25,8 +25,11 @@ String mergeBlotterText(String currentHtml, String incomingText) {
   return '$currentHtml$html';
 }
 
-String _escape(String s) =>
-    s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+String _escape(String s) => s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 
 String _stripTags(String html) => html.replaceAll(RegExp(r'<[^>]*>'), '');
 
@@ -39,7 +42,8 @@ String cleanBlotterTranscription(String text) {
       .replaceAll(RegExp(r'[\u201C\u201D]'), '"')
       .replaceAll(RegExp(r'[\u2018\u2019]'), "'")
       .replaceAll('\u2026', '...');
-  out = out.replaceAll(RegExp(r"[|`_#*~^+={<>{}\[\]@$&\\\\\u2500-\u257F]+"), '');
+  out =
+      out.replaceAll(RegExp(r"[|`_#*~^+={<>{}\[\]@$&\\\\\u2500-\u257F]+"), '');
   final kept = <String>[];
   for (final line in out.split('\n')) {
     if (line.trim().isEmpty) {
@@ -56,7 +60,9 @@ String cleanBlotterTranscription(String text) {
 /// shapes the reviewed text with the RECORDED BY line plus the closing
 /// issuance line, without rewording anything. Idempotent.
 String formatBlotterCertification(String text,
-    {String recordedBy = '', String recordedByPosition = '', String requestedBy = ''}) {
+    {String recordedBy = '',
+    String recordedByPosition = '',
+    String requestedBy = ''}) {
   final raw = text.replaceAll(RegExp(r'\r\n?'), '\n');
   if (raw.trim().isEmpty) return '';
   final cleaned = raw
@@ -70,8 +76,8 @@ String formatBlotterCertification(String text,
   final requestor =
       requestedBy.trim().isEmpty ? 'name of who requested' : requestedBy.trim();
   final lines = cleaned.split('\n');
-  final hasRecordedBy =
-      lines.any((line) => RegExp(r'recorded\s*by', caseSensitive: false).hasMatch(line));
+  final hasRecordedBy = lines.any(
+      (line) => RegExp(r'recorded\s*by', caseSensitive: false).hasMatch(line));
   final hasIssuance = RegExp(r'this certification is issued upon the request',
           caseSensitive: false)
       .hasMatch(cleaned);
@@ -81,12 +87,15 @@ String formatBlotterCertification(String text,
       recorder,
       recordedByPosition.trim(),
     ].where((s) => s.isNotEmpty).join(' - ');
-    final recordedLine = who.isNotEmpty ? 'RECORDED BY :  $who' : 'RECORDED BY :';
-    final remarksIdx = lines
-        .indexWhere((line) => RegExp(r'^[ \t]*REMARKS\s*:', caseSensitive: false).hasMatch(line));
+    final recordedLine =
+        who.isNotEmpty ? 'RECORDED BY :  $who' : 'RECORDED BY :';
+    final remarksIdx = lines.indexWhere((line) =>
+        RegExp(r'^[ \t]*REMARKS\s*:', caseSensitive: false).hasMatch(line));
     if (remarksIdx >= 0) {
-      final before =
-          lines.sublist(0, remarksIdx).join('\n').replaceAll(RegExp(r'\n+$'), '');
+      final before = lines
+          .sublist(0, remarksIdx)
+          .join('\n')
+          .replaceAll(RegExp(r'\n+$'), '');
       final atRemarks = lines.sublist(remarksIdx).join('\n');
       out = '$before\n\n$recordedLine\n\n$atRemarks';
     } else {

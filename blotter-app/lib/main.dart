@@ -24,7 +24,8 @@ class BlotterApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'BlueWrite',
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFF0C1B33)),
+      theme: ThemeData(
+          useMaterial3: true, colorSchemeSeed: const Color(0xFF0C1B33)),
       home: const _Gate(),
     );
   }
@@ -107,7 +108,8 @@ class _GateState extends State<_Gate> {
     if (found != baseUrl) await _store.saveBaseUrl(found);
     navigator.pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (_) => CaptureScreen(client: PortalClient(found), bearer: token),
+        builder: (_) =>
+            CaptureScreen(client: PortalClient(found), bearer: token),
       ),
       (_) => false,
     );

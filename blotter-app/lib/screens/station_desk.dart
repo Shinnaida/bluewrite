@@ -105,20 +105,28 @@ class StationDesk {
               Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: gold.withValues(alpha: 0.7), width: 2),
+                  border:
+                      Border.all(color: gold.withValues(alpha: 0.7), width: 2),
                   boxShadow: const [
-                    BoxShadow(color: Colors.black54, blurRadius: 16, offset: Offset(0, 6)),
+                    BoxShadow(
+                        color: Colors.black54,
+                        blurRadius: 16,
+                        offset: Offset(0, 6)),
                   ],
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(22),
-                  child: Image.asset('assets/bluewrite-mark.png', width: 88, height: 88),
+                  child: Image.asset('assets/bluewrite-mark.png',
+                      width: 88, height: 88),
                 ),
               ),
               const SizedBox(height: 8),
               const Text('BLUEWRITE',
                   style: TextStyle(
-                      color: paper, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: 3)),
+                      color: paper,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 3)),
               const SizedBox(height: 2),
               Text('CITY OF NAGA POLICE STATION',
                   style: TextStyle(
