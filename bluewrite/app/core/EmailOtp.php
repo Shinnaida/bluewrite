@@ -243,7 +243,11 @@ final class EmailOtp
             . "and tell an administrator.\r\n\r\n"
             . "Nobody at the department will ever ask you for this code.\r\n";
 
-        $baseUrl = trim((string) (Config::section('app')['base_url'] ?? ''));
+        // The address is MEASURED, not remembered: the configured override wins
+        // when one is set, otherwise the server reports its own interfaces —
+        // so a server PC that changed networks still mails a working address
+        // with no config edit (see ServerAddress).
+        $baseUrl = ServerAddress::publicBaseUrl();
         if ($baseUrl !== '') {
             $body .= "\r\n" . $baseUrl . "\r\n";
         }

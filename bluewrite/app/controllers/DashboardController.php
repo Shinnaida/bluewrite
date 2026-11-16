@@ -12,6 +12,7 @@ use App\Core\ReportCaptures;
 // second factor can deliver before a shift starts — never for its credentials.
 use App\Core\Mailer;
 use App\Core\Response;
+use App\Core\ServerAddress;
 use App\Core\Session;
 use PDO;
 use PDOException;
@@ -719,6 +720,31 @@ final class DashboardController
         Response::json(200, [
             'system' => $this->systemHealth(),
             'system_detail' => $this->systemDetails(),
+            'checked_at' => date('c'),
+        ]);
+    }
+
+    /**
+     * GET /server/address — where THIS server lives on the LAN, for the
+     * dashboard's client-access card: the officer at the desk reads or copies
+     * the address a client laptop must type, instead of typing an IP from
+     * memory that went stale when the server PC changed networks.
+     *
+     * Any signed-in role may read it (the officer showing a client in is often
+     * not an Admin): a LAN IPv4 is not a secret — it is already printed in
+     * every sign-in email — and the response carries no credentials, only
+     * addresses, the port this request arrived on, and the primary URL first.
+     * `primary` is '' when the machine has no LAN address to give; the card
+     * then says so rather than inventing one.
+     */
+    public function address(): void
+    {
+        Auth::requireUser();
+        $urls = ServerAddress::urls();
+        Response::json(200, [
+            'primary' => $urls[0] ?? '',
+            'urls' => $urls,
+            'port' => ServerAddress::port(),
             'checked_at' => date('c'),
         ]);
     }

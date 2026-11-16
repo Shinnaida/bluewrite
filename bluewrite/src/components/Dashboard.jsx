@@ -1558,6 +1558,73 @@ function AiInsights({ data, onFilterType }) {
   );
 }
 
+/**
+ * CLIENT ACCESS — the address a client laptop types, shown where it is read.
+ *
+ * The station kept losing this to memory: the server PC moves networks, DHCP
+ * hands it a new address, and every officer still types the old one. So the
+ * dashboard shows what the server's own interfaces say (GET /server/address),
+ * primary first, with a Copy button — the officer at the desk copies it onto
+ * the client instead of reciting digits. Omitted entirely when the read fails
+ * (the charts are the page); an empty primary means the machine has no LAN
+ * address to give, and the card says that rather than inventing one.
+ *
+ * It rides the command hero directly under the role/shift pills (owner
+ * request, 2026-11-16): the address belongs beside who is on watch, not in a
+ * banner of its own above the page. One compact strip — label, URL, Copy —
+ * with the same-Wi-Fi reminder on the quiet line under it.
+ *
+ * Exported for the same reason RecentActivity is: a card that renders as an
+ * empty plate passes every source-reading test, so the fixture renders this
+ * with the payload the endpoint really sends and reads the markup.
+ */
+export function ClientAccess({ addr, notify }) {
+  const urls = Array.isArray(addr?.urls) ? addr.urls.filter(Boolean) : [];
+  const primary = String(addr?.primary || urls[0] || '');
+  const [copied, setCopied] = useState(false);
+  if (!addr || urls.length === 0) return null;
+  const copyPrimary = async () => {
+    const text = primary.endsWith('/') ? primary : `${primary}/`;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      setCopied(true);
+      notify?.('Client address copied. Paste it into the client browser.');
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      notify?.('Copy failed — type the address exactly as shown.');
+    }
+  };
+  return (
+    <section className="dash-access" role="region" aria-label="Client access">
+      <span className="dash-access__tag">Client access</span>
+      {primary ? (
+        <>
+          <code className="dash-access__url">{primary.endsWith('/') ? primary : `${primary}/`}</code>
+          <button
+            type="button"
+            className="dash-access__copy"
+            onClick={copyPrimary}
+            title="Copy this address for the client PC — same Wi-Fi as this server"
+          >
+            {copied ? 'Copied ✓' : 'Copy'}
+          </button>
+        </>
+      ) : (
+        <span className="dash-access__none">This server has no LAN address right now — check its network cable or Wi-Fi.</span>
+      )}
+    </section>
+  );
+}
+
 export default function Dashboard({
   user,
   notify,
@@ -1701,6 +1768,25 @@ export default function Dashboard({
   useEffect(() => {
     loadRequests();
   }, [loadRequests]);
+
+  // Where THIS server lives on the LAN, for the client-access card: the
+  // address a client laptop must type, measured by the server per request
+  // (see DashboardController::address) — never typed from memory, so a moved
+  // server shows its new address here on its own. A separate read like the
+  // requests above: a failure omits the card, never the page.
+  const [serverAddr, setServerAddr] = useState(null);
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      try {
+        const out = await api('/server/address');
+        if (on && live.current) setServerAddr(out);
+      } catch {
+        // Omitted, like the requests card: the charts are the page.
+      }
+    })();
+    return () => { on = false; };
+  }, []);
 
   // The ID roster: active accounts only, alphabetical, so the picker walks the
   // same directory User Management shows. A failure here leaves the headcount up
@@ -2057,6 +2143,13 @@ export default function Dashboard({
             <span className="cmd-pill">{user?.role ?? 'Admin'} · {user?.badge_number ?? ''}</span>
             <span className="cmd-pill">Shift: {shift}</span>
           </p>
+          {/* ---- Client access: the address client PCs type ------------------
+              The role and the watch are named here, so the address a second
+              machine must type sits on the same line of sight, under the
+              pills (owner request, 2026-11-16) — measured by the server per
+              request, not typed from memory, so a moved server already shows
+              its new address. Omitted entirely when the read fails. */}
+          <ClientAccess addr={serverAddr} notify={notify} />
         </div>
         {/* NEW REPORT RIDES THE HERO (owner request, 2026-11-14): the quick
             action sits lower-right of the banner, above the station caption —

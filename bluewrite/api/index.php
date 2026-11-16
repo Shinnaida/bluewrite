@@ -75,6 +75,10 @@ require __DIR__ . '/../app/core/DeviceTokens.php';
 // A blotter-capture photo filed against a report (migration 025): the stored
 // bytes live outside the web root, like the avatars. Same require rule.
 require __DIR__ . '/../app/core/ReportCaptures.php';
+// Where THIS server lives on the LAN, measured per request (see ServerAddress):
+// the dashboard's client-access card and the sign-in emails read it, so moving
+// the server PC no longer means hand-editing config. Same require rule.
+require __DIR__ . '/../app/core/ServerAddress.php';
 // How far along each draft is: the tally Home's draft cards wear, derived from
 // the row itself so it is right for a draft any client saved (see the class).
 // Reached by ReportsController::index, and required here for this project's
@@ -440,6 +444,14 @@ try {
     // Admin-only inside the controller, like the dashboard it serves.
     if ($seg0 === 'system' && $seg1 === 'health' && $method === 'GET') {
         (new DashboardController())->health();
+    }
+
+    // GET /server/address — where this server lives on the LAN (see
+    // DashboardController::address): the dashboard's client-access card reads
+    // it so the desk can copy the address clients must type. Any signed-in
+    // role inside the controller; LAN addresses are not secrets.
+    if ($seg0 === 'server' && $seg1 === 'address' && $method === 'GET') {
+        (new DashboardController())->address();
     }
 
     // The dashboard's "Search the news" panel: a proxy to the news API, so the

@@ -9259,7 +9259,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   inset: 0;
   background: linear-gradient(105deg, color-mix(in srgb, var(--panel) 88%, transparent) 0%, color-mix(in srgb, var(--panel) 55%, transparent) 38%, color-mix(in srgb, var(--panel) 18%, transparent) 62%, transparent 85%);
 }
-.dash--cmd .cmd-hero__text { position: relative; min-width: 0; flex: none; max-width: 36%; margin-right: auto; display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 2px; }
+.dash--cmd .cmd-hero__text { position: relative; min-width: 0; flex: none; max-width: 52%; margin-right: auto; display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 2px; }
 /* NEW REPORT RIDES THE HERO (owner request, 2026-11-14): the quick action sits
    lower-right of the banner — the toolbar row below the hero sat empty beside
    it. A white pill in the register blue (owner request): it sits on the
@@ -9582,6 +9582,7 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   .dash--cmd .cmd-hero__text { align-items: flex-start; max-width: none; }
   .dash--cmd .cmd-hero .dash-quick { position: static; margin: 10px 0 0; align-self: flex-start; }
   .dash--cmd .cmd-hero__photo { width: 100%; opacity: 0.35; }
+  .dash-access__url { font-size: 0.78rem; }
   .dash--cmd .cmd-donut { flex-direction: column; }
   .dash--cmd .dash-toolbar { flex-direction: column; align-items: stretch; }
   .dash--cmd .dash-search { max-width: none; }
@@ -11825,6 +11826,60 @@ body.profile-panel-open.ai-panel-open .dash-dock {
 .dash-signin-alert ul { margin: 0; padding-left: 1.1rem; }
 .dash-signin-alert li { margin: 0.15rem 0; line-height: 1.5; }
 .dash-signin-alert .dash-signin-note { margin: 0.5rem 0 0; color: var(--ir-muted, #5b6577); }
+
+/* ---- Client access ---------------------------------------------------------
+   The address client laptops type, shown on the dashboard so the desk copies
+   it instead of reciting a memorised IP that went stale on the last move.
+   It rides the command hero under the role/shift pills (owner request,
+   2026-11-16): a hairline strip in the hero's own text column rather than a
+   card of its own above the page. Label, then the address as the loudest
+   thing in it, Copy beside it, and the reminder on a quiet line below. */
+.dash-access {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  max-width: 100%;
+  margin: 8px 0 0;
+  padding: 7px 0 0;
+  border: 0;
+  border-top: 1px solid var(--cmd-line, #d6dce8);
+  border-radius: 0;
+  background: none;
+  color: var(--cmd-ink, #14213d);
+  font-size: 0.8rem;
+}
+.dash-access__tag {
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cmd-muted, #5b6577);
+}
+.dash-access__url {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  background: var(--inset-bg, #eef1f6);
+  border: 1px solid var(--cmd-line, #d6dce8);
+  border-radius: 7px;
+  padding: 2px 7px;
+  user-select: all;
+}
+.dash-access__copy {
+  padding: 1px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--navy, #0b2545);
+  background: var(--navy, #0b2545);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.dash-access__copy:hover { background: #12305e; border-color: #12305e; }
+.dash-access__none { color: #b45309; font-size: 0.78rem; }
 
 /* ---- Account requests (migration 019) --------------------------------------
    An officer asking for a password reset or a sign-in-address fix. A flag list,
