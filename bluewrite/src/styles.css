@@ -3874,6 +3874,81 @@ body.profile-panel-open {
   color: var(--cyan-dim);
 }
 
+/* The switch: two buttons, one of them pressed. A segmented control rather than
+   a select, because both readings are always on screen and one is always
+   current — which is what a pressed state says and a dropdown cannot. */
+.sheet-switch {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--panel-raised);
+  transition: border-color 140ms ease;
+}
+
+/* THE RING FOLLOWS THE SELECTION. Two halves filling the same pill means the filled
+   half alone has to carry "this one is current", and against a dark pill a mid blue
+   does most of that — but the border is a second signal in the same colour, so the
+   state is legible in a screenshot, at a glance, and to a reader who cannot separate
+   the fill from the pill's own background. `:has` because the pressed state is a
+   child's business and the pill is what wears the ring. */
+.sheet-switch:has([aria-pressed='true']) {
+  border-color: var(--sheet-fill, var(--line-bright));
+}
+
+.sheet-switch__btn {
+  padding: 0.25rem 0.85rem;
+  border: 0;
+  background: none;
+  color: var(--steel);
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.sheet-switch__btn:hover { color: var(--paper); }
+
+/* THE RING IS DRAWN INSIDE THE BUTTON (`outline-offset: -2px`), because the pill
+   CLIPS (`overflow: hidden`) and an outline outside the button would be cut off —
+   which would leave a keyboard user with no way to see where they are. A pressed
+   state is not a focus state: this one says which reading is current, that one says
+   which control the next key press lands on. */
+.sheet-switch__btn:focus-visible {
+  outline: 2px solid var(--focus-ring-strong);
+  outline-offset: -2px;
+}/* THE PRESSED HALF WEARS THE READING'S OWN COLOUR, so the switch and the squares
+   are the same colour at the same moment: an administrator who flips it can see
+   which reading they are in without reading the label again, and a screenshot of
+   the sheet carries the answer with it. `--sheet-fill` rather than the ramp's step
+   4, because in dark the deepest square is a light blue chosen to glow and white
+   ink does not hold on it (see the token's note).
+
+   THE FALLBACK IS NOT DECORATION. This rule is the ONLY thing marking which of the
+   two readings is current, so if the token chain ever failed to resolve the switch
+   would come up with both halves looking identical — the one failure mode that
+   makes the control silently useless rather than visibly broken. `var(--sheet-fill,
+   var(--accent-fill))` means a missing reading token still leaves a filled half.
+
+   HOVER IS STATED, not inherited: the app's own `button:hover` sets a panel-grey
+   background, and while this rule outranks it on specificity, saying it here means a
+   later global change cannot quietly put a hole in this control. */
+.sheet-switch__btn[aria-pressed='true'],
+.sheet-switch__btn[aria-pressed='true']:hover {
+  background: var(--sheet-fill, var(--accent-fill));
+  color: var(--on-accent);
+}
+/* THE HOVER IS A WHITE VEIL, NOT A BRIGHTENING FILTER. On a button either would
+   work, but the app already refuses `brightness(>1)` anywhere in this stylesheet —
+   Blink clamps a brightening filter on an SVG element to a no-op, so that rule is a
+   file-wide guard against a shade that silently does nothing (see the pie chart's own
+   test). An inset veil is the same lightening with no filter involved, so the
+   selection keeps its response and the guard keeps its teeth. */
+.sheet-switch__btn[aria-pressed='true']:hover {
+  box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.08);
+}
+
 /* The toggle: ONE control for two readings. A sliding knob inside a single pill,
    because there are only ever two readings and exactly one of them is current —
    which is what a switch says. `role="switch"` with `aria-checked` carries the

@@ -73,6 +73,40 @@ final class UsersController
              ORDER BY u.full_name'
         )->fetchAll();
 
+        // REPORTS FOR THE DIRECTORY'S RIGHT HAND: how many each account has filed,
+        // plus the sparse per-day map the miniature zero-fills — two grouped queries
+        // for the whole station rather than one read per row. Both cover the trailing
+        // 91 days, so the count and the grid can never disagree; deleted reports count
+        // in neither, because the register's own list hides `deleted_at` rows. UNKNOWN
+        // is NULL, not zero: a zero is a claim the officer never filed anything, and
+        // the directory must not print a claim it cannot back.
+        $reportCounts = null;
+        $reportDays = null;
+        try {
+            $from = (new \DateTimeImmutable('today'))->modify('-90 days')->format('Y-m-d H:i:s');
+            $rc = $pdo->prepare(
+                'SELECT created_by, COUNT(*) AS n FROM reports
+                 WHERE deleted_at IS NULL AND created_at >= :from GROUP BY created_by'
+            );
+            $rc->execute([':from' => $from]);
+            $reportCounts = [];
+            foreach ($rc->fetchAll() as $r) {
+                $reportCounts[(int) $r['created_by']] = (int) $r['n'];
+            }
+            $ds = $pdo->prepare(
+                'SELECT created_by, DATE(created_at) AS day, COUNT(*) AS n FROM reports
+                 WHERE deleted_at IS NULL AND created_at >= :from GROUP BY created_by, day'
+            );
+            $ds->execute([':from' => $from]);
+            $reportDays = [];
+            foreach ($ds->fetchAll() as $dr) {
+                $uid = (int) $dr['created_by'];
+                $reportDays[$uid][(string) $dr['day']] = (int) $dr['n'];
+            }
+        } catch (\Throwable $e) {
+            error_log('reports unreadable, directory counts unknown: ' . $e->getMessage());
+        }
+
         foreach ($rows as &$row) {
             $row['photo_url'] = AvatarPhoto::url(
                 (int) $row['id'],
@@ -80,6 +114,8 @@ final class UsersController
                 $row['photo_updated_at'] === null ? null : (string) $row['photo_updated_at']
             );
             unset($row['photo_path'], $row['photo_updated_at']);
+            $row['report_count'] = $reportCounts === null ? null : ($reportCounts[(int) $row['id']] ?? 0);
+            $row['report_days'] = $reportDays === null ? null : ($reportDays[(int) $row['id']] ?? (object) []);
         }
         unset($row);
 
