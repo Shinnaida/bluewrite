@@ -1144,3 +1144,5 @@ final class SystemInstructionTest extends TestCase
         $this->assertStringContainsString('Formal capitals', $instruction);
         $this->assertStringContainsString('institutional acronyms', $instruction);
     }
+
+}
