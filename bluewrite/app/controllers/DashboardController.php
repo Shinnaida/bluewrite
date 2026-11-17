@@ -70,6 +70,27 @@ final class DashboardController
     private const MAX_RANGE_DAYS = 366;
 
     /**
+     * WHEN A COLUMN STOPS BEING A DAY, in days of window.
+     *
+     * The trend is a column chart, and a column needs width. A 366-day window in a
+     * half-width panel leaves every column about 1.2 pixels, so the chart stops
+     * being a chart and becomes a comb — which is what an "All time" range does the
+     * moment the register holds one incident older than the rest of it: a single
+     * backdated report stretched the window to 759 days and drew 759 one-pixel
+     * columns, the whole station's year of work reduced to a smear at the right
+     * edge. It read as "the chart is empty", and it was not wrong to read it that
+     * way.
+     *
+     * So the window is never shortened — the numbers stay the register's own — and
+     * the COLUMN is what widens: a day up to four months, a week up to about
+     * fourteen, a calendar month beyond that. Same rule as the incident-rank chart
+     * (src/lib/categoryRank.js): resolution is chosen from what the range HOLDS, not
+     * from what the menu calls it.
+     */
+    private const DAY_BUCKET_MAX_DAYS = 120;
+    private const WEEK_BUCKET_MAX_DAYS = 420;
+
+    /**
      * Cheap per-user throttle (Phase 4 hardening). The dashboard is
      * read-only, authenticated and LAN-only, so this is belt-and-braces —
      * keyed by USER id, not IP, because station LAN IPs are shared/NATed.
@@ -221,7 +242,17 @@ final class DashboardController
              FROM reports WHERE deleted_at IS NULL"
         )->fetch() ?: ['total' => 0, 'pending' => 0, 'submitted' => 0, 'finalized' => 0];
 
-        // ---- Series over time (zero-filled per day) ------------------------
+        // ---- Series over time (zero-filled, in the unit the plot can draw) ---
+        //
+        // Every day in the window is still accounted for; what changes is how many
+        // days a column stands for. `date` is the FIRST day of the column and `end`
+        // the last, so a week is "2026-11-09 … 2026-11-15" and a month is its first
+        // day — the client labels the column from those two, and nothing downstream
+        // has to know which unit it is being handed in order to sum it.
+        //
+        // The counts are summed from the SAME daily rows either way, so a bucketed
+        // range cannot disagree with the totals it is part of: the columns add up to
+        // `$currentTotal` exactly as the daily ones did.
         $stmt = $pdo->prepare(
             "SELECT DATE(incident_datetime) AS d, COUNT(*) AS cnt
              FROM reports {$where}
@@ -233,13 +264,30 @@ final class DashboardController
         foreach ($stmt->fetchAll() as $r) {
             $byDate[(string) $r['d']] = (int) $r['cnt'];
         }
-        $series = [];
+
+        $days = [];
         $cursor = strtotime($from);
         $end = strtotime($to);
         while ($cursor <= $end) {
-            $day = date('Y-m-d', $cursor);
-            $series[] = ['date' => $day, 'count' => $byDate[$day] ?? 0];
+            $days[] = date('Y-m-d', $cursor);
             $cursor = strtotime('+1 day', $cursor);
+        }
+
+        $spanDays = count($days);
+        $bucket = $spanDays <= self::DAY_BUCKET_MAX_DAYS
+            ? 'day'
+            : ($spanDays <= self::WEEK_BUCKET_MAX_DAYS ? 'week' : 'month');
+        [$buckets, $bucketOfDay] = self::bucketDays($days, $bucket);
+
+        $series = [];
+        foreach ($buckets as $b) {
+            $series[] = ['date' => $b['start'], 'end' => $b['end'], 'count' => 0];
+        }
+        foreach ($days as $i => $day) {
+            $count = $byDate[$day] ?? 0;
+            if ($count !== 0) {
+                $series[$bucketOfDay[$i]]['count'] += $count;
+            }
         }
 
         // ---- The same series, cut by incident type ---------------------------
@@ -271,14 +319,18 @@ final class DashboardController
         }
         $seriesByType = [];
         foreach ($byTypeDay as $typeName => $perDay) {
-            $counts = [];
+            $counts = array_fill(0, count($series), 0);
             $typeTotal = 0;
-            // Walked in the SAME zero-filled day order as $series, so count N of
-            // every type lines up with day N of the totals by construction
-            // rather than by a convention the client has to trust.
-            foreach ($series as $point) {
-                $c = $perDay[$point['date']] ?? 0;
-                $counts[] = $c;
+            // Walked in the SAME zero-filled day order as $series and summed into
+            // the same columns, so count N of every type lines up with column N of
+            // the totals by construction rather than by a convention the client has
+            // to trust — the day and the week/month units alike.
+            foreach ($days as $i => $day) {
+                $c = $perDay[$day] ?? 0;
+                if ($c === 0) {
+                    continue;
+                }
+                $counts[$bucketOfDay[$i]] += $c;
                 $typeTotal += $c;
             }
             $seriesByType[] = [
@@ -588,11 +640,74 @@ final class DashboardController
             'meta' => [
                 'from' => $from,
                 'to' => $to,
+                // What one column of seriesOverTime stands for: 'day', 'week' or
+                // 'month'. The chart names its axis and its card from this rather
+                // than counting columns, so the words and the drawing cannot drift.
+                'bucket' => $bucket,
                 'type' => $typeFilter,
                 'scope' => $scope,
                 'availableTypes' => $availableTypes,
             ],
         ]);
+    }
+
+    /**
+     * Cut a zero-filled day list into the columns the plot will draw.
+     *
+     * Returns the columns (`start`, `end`, and a `key` used only while grouping
+     * months) plus, for every day index, the column it belongs to — the map that
+     * lets the daily counts and the per-type counts be summed into the SAME
+     * columns without either one walking a different list.
+     *
+     * WEEKS AND MONTHS ARE END-ANCHORED, which is the choice that needs saying. A
+     * column that ends today is "this week" to the reader looking at the right edge
+     * of the chart; start-anchored columns drift a day further from that every
+     * month the window moves, and the newest column ends up being a partial week
+     * nobody can see the seam of. Months are calendar months for the same reason —
+     * "October" is a month, and thirty chunks of 30 days are not.
+     *
+     * With 'day' the map is the identity and the output is exactly what this endpoint
+     * has always returned, so nothing that reads a daily series has to change.
+     */
+    private static function bucketDays(array $days, string $bucket): array
+    {
+        $buckets = [];
+        $ofDay = [];
+
+        if ($bucket === 'month') {
+            foreach ($days as $i => $day) {
+                $key = substr($day, 0, 7);
+                $last = count($buckets) - 1;
+                if ($last >= 0 && $buckets[$last]['key'] === $key) {
+                    $buckets[$last]['end'] = $day;
+                } else {
+                    $buckets[] = ['key' => $key, 'start' => $day, 'end' => $day];
+                }
+                $ofDay[$i] = count($buckets) - 1;
+            }
+
+            return [$buckets, $ofDay];
+        }
+
+        $size = $bucket === 'week' ? 7 : 1;
+        $total = count($days);
+        $ends = [];
+        for ($i = $total - 1; $i >= 0; $i -= $size) {
+            $ends[] = $i;
+        }
+        foreach (array_reverse($ends) as $b => $endIndex) {
+            $startIndex = max(0, $endIndex - $size + 1);
+            $buckets[] = [
+                'key' => $days[$startIndex],
+                'start' => $days[$startIndex],
+                'end' => $days[$endIndex],
+            ];
+            for ($i = $startIndex; $i <= $endIndex; $i++) {
+                $ofDay[$i] = $b;
+            }
+        }
+
+        return [$buckets, $ofDay];
     }
 
     /**
@@ -784,12 +899,12 @@ final class DashboardController
         } catch (\Throwable $e) {
             $free = null;
         }
-        $aiCfg = NarrativeService::aiConfig();
-        $model = $aiCfg['gemini']['model'] ?? null;
+        // The model answering AI calls (Gemini is the only provider).
+        $models = NarrativeService::configuredModels();
         return [
             'database' => $ping === null ? null : ($ping < 1 ? '<1 ms' : $ping . ' ms'),
             'storage' => $free,
-            'ai' => is_string($model) && $model !== '' ? $model : null,
+            'ai' => $models === [] ? null : implode(' → ', $models),
         ];
     }
 
@@ -811,12 +926,12 @@ final class DashboardController
      */
     private function systemHealth(): array
     {
-        $aiCfg = NarrativeService::aiConfig();
-        $aiKey = (string) (getenv('GEMINI_API_KEY') ?: ($aiCfg['gemini']['api_key'] ?? ''));
         return [
             'database' => 'online',
             'storage' => is_writable(ReportCaptures::directory()) ? 'online' : 'readonly',
-            'ai' => (NarrativeService::enabled() && $aiKey !== '') ? 'online' : 'offline',
+            // Online when the provider is enabled AND carries a key (see
+            // NarrativeService::hasProviderKey).
+            'ai' => (NarrativeService::enabled() && NarrativeService::hasProviderKey()) ? 'online' : 'offline',
             'notifications' => 'online',
         ];
     }

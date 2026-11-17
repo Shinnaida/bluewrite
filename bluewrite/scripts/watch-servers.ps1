@@ -4,7 +4,7 @@
 #  THE PROBLEM THIS SOLVES. The app reports "Connection to the BlueWrite server
 #  was lost", or the browser shows ERR_CONNECTION_REFUSED, the moment the origin
 #  the tab is open on stops answering: on 5180 the Vite dev server, on 8099 the
-#  PHP API that also serves the built app. A server started by hand — from a
+#  Apache host that serves both the app and its API. A server started by hand — from a
 #  terminal, or from an AI session whose processes die with it — is a server that
 #  is eventually gone, and every time it went, someone had to notice and start it
 #  again. This script is that someone, and it does not need to be told.
@@ -82,7 +82,11 @@ param(
   # Register / inspect / remove the scheduled task instead of repairing.
   [switch] $Install,
   [switch] $Uninstall,
-  [switch] $Status
+  [switch] $Status,
+  # Regenerate storage\apache\bluewrite-httpd.conf from the template and print its
+  # path. Repair does this on its own whenever 8099 is down; this verb exists so a
+  # human can re-render (and then `httpd -t` it) without stopping the server.
+  [switch] $RenderConfig
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -156,6 +160,14 @@ function Start-Detached {
   return $result
 }
 
+# Paths go into the Apache config, which wants forward slashes and quoted values
+# (this checkout sits under "Shaine Jayme"). One helper instead of a scriptblock
+# invoked with & at every call site.
+function ConvertTo-SlashPath {
+  param([string] $Path)
+  return ([string] $Path).Replace('\', '/')
+}
+
 function Find-Php {
   # Laragon is where this machine's PHP lives (see README); the newest version
   # installed wins, and PATH is the fallback for anything else.
@@ -168,6 +180,116 @@ function Find-Php {
   $onPath = Get-Command php -ErrorAction SilentlyContinue
   if ($onPath) { return $onPath.Source }
   return $null
+}
+
+# Apache, found the same way PHP is: the newest version installed under Laragon's
+# bin\apache, with PATH as the fallback. The configuration it is started with is
+# this repo's scripts\apache\bluewrite-httpd.conf, not Laragon's own httpd.conf —
+# so this instance serves BlueWrite on 8099 and leaves any other site alone.
+function Find-Apache {
+  $found = Get-ChildItem 'C:\laragon\bin\apache' -Directory -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending |
+    ForEach-Object { Join-Path $_.FullName 'bin\httpd.exe' } |
+    Where-Object { Test-Path $_ } |
+    Select-Object -First 1
+  if ($found) { return $found }
+  $onPath = Get-Command httpd -ErrorAction SilentlyContinue
+  if ($onPath) { return $onPath.Source }
+  return $null
+}
+
+# The newest PHP folder that can actually be LOADED INTO APACHE: it needs both
+# the Apache SAPI bridge (php*apache2_4.dll) and the thread-safe core
+# (php*ts.dll). A version that ships only CLI binaries is skipped here rather
+# than chosen and then failing at Apache startup — the wildcard is deliberate,
+# because those file names carry the PHP major version.
+function Find-PhpApacheDir {
+  $found = Get-ChildItem 'C:\laragon\bin\php' -Directory -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending |
+    Where-Object {
+      (Get-ChildItem $_.FullName -Filter 'php*apache2_4.dll' -ErrorAction SilentlyContinue) -and
+      (Get-ChildItem $_.FullName -Filter 'php*ts.dll' -ErrorAction SilentlyContinue)
+    } |
+    Select-Object -First 1
+  if ($found) { return $found.FullName }
+  return $null
+}
+
+# ---- Render the Apache config from what is installed -------------------------
+# THIS IS WHAT MAKES A LARAGON OR PHP UPGRADE HARMLESS. The template in
+# scripts\apache names no versions; this fills in the Apache folder, the PHP
+# folder and this checkout, and writes storage\apache\bluewrite-httpd.conf. A new
+# `httpd-2.4.x-…` or `php-8.4.x-…` folder is therefore picked up on the next
+# start with nothing edited by hand, instead of leaving a config pointing at a
+# folder that no longer exists (which is what used to happen, and what made the
+# stack quietly fall back to php -S).
+#
+# The LoadFile block is generated too: one line per dependency DLL that EXISTS in
+# the chosen PHP folder, so a PHP build that drops or renames one drops the line
+# with it rather than stopping Apache from starting.
+#
+# Rewritten only when the content changes, so a healthy machine does not churn
+# the file every minute — and the one write after an upgrade goes into the log.
+function Write-ApacheConfig {
+  $template = Join-Path $PSScriptRoot 'apache\bluewrite-httpd.conf.template'
+  if (-not (Test-Path $template)) {
+    Write-Note "api  Apache template missing at $template"
+    return $null
+  }
+  $httpd = Find-Apache
+  if (-not $httpd) { return $null }  # the caller already logs this
+  $phpDir = Find-PhpApacheDir
+  if (-not $phpDir) {
+    Write-Note 'api  no PHP folder that Apache can load (wanted php*apache2_4.dll + php*ts.dll under C:\laragon\bin\php)'
+    return $null
+  }
+
+  # <apache>\bin\httpd.exe -> <apache>
+  $serverRoot = Split-Path -Parent (Split-Path -Parent $httpd)
+  $phpOut = ConvertTo-SlashPath $phpDir
+  $repoOut = ConvertTo-SlashPath $root
+
+  $tsDll = (Get-ChildItem $phpDir -Filter 'php*ts.dll' -ErrorAction SilentlyContinue | Select-Object -First 1).Name
+  $loads = @(('LoadFile "{0}/{1}"' -f $phpOut, $tsDll))
+  foreach ($dll in @('libssh2.dll', 'nghttp2.dll', 'libsodium.dll', 'brotlicommon.dll', 'brotlidec.dll')) {
+    if (Test-Path (Join-Path $phpDir $dll)) {
+      $loads += ('LoadFile "{0}/{1}"' -f $phpOut, $dll)
+    }
+  }
+
+  # UTF8 ON BOTH SIDES, explicitly. The template is UTF-8 (it has em dashes in
+  # its comments), and PowerShell 5.1's default for Get-Content is the ANSI
+  # codepage — which both mangled the comments and made every render look
+  # different from the file it had just written, so the "only when it changes"
+  # comparison below never matched. The write is UTF-8 without a BOM, which is
+  # what Apache wants from a config file.
+  $utf8 = New-Object System.Text.UTF8Encoding($false)
+  try { $text = Get-Content -Path $template -Raw -Encoding UTF8 -ErrorAction Stop }
+  catch {
+    Write-Note "api  Apache template could not be read: $template"
+    return $null
+  }
+  $text = $text.Replace('@@SERVER_ROOT@@', (ConvertTo-SlashPath $serverRoot))
+  $text = $text.Replace('@@PHP_DIR@@', $phpOut)
+  $text = $text.Replace('@@REPO_ROOT@@', $repoOut)
+  $text = $text.Replace('@@PHP_LOADFILE_BLOCK@@', ($loads -join "`r`n"))
+
+  foreach ($dir in @('storage\apache', 'storage\logs', 'storage\sessions')) {
+    $path = Join-Path $root $dir
+    if (-not (Test-Path $path)) { New-Item -ItemType Directory -Path $path -Force | Out-Null }
+  }
+  $outFile = Join-Path $root 'storage\apache\bluewrite-httpd.conf'
+  $before = if (Test-Path $outFile) { Get-Content -Path $outFile -Raw -Encoding UTF8 } else { $null }
+  if ($before -ne $text) {
+    try {
+      [System.IO.File]::WriteAllText($outFile, $text, $utf8)
+      Write-Note ('api  rendered Apache config for {0} + {1} -> {2}' -f (Split-Path -Leaf $serverRoot), (Split-Path -Leaf $phpDir), $outFile)
+    } catch {
+      Write-Note "api  Apache config could not be written to $outFile"
+      return $null
+    }
+  }
+  return $outFile
 }
 
 # Node is taken from PATH rather than from a fixed install: it is installed by an
@@ -196,24 +318,78 @@ function Find-MySql {
   return $null
 }
 
-# ---- The API + the built app (http://<lan-ip>:8099/) ------------------------
-# One PHP process, no node anywhere in the path: the origin that has proved
-# durable here, and the one to hand someone with a browser open in front of them.
-# Bound to ALL interfaces on purpose: the phone app reaches this same port over
-# the station Wi-Fi (see docs\LAN_SETUP.md), and a loopback-only bind would
-# make the server invisible to it. Windows Firewall rule "BlueWrite LAN 8099"
-# is what decides which networks may come in — not this bind.
+# ---- The app + its API (http://<lan-ip>:8099/) ------------------------------
+# APACHE, NOT `php -S`, and that IS the repair. PHP's built-in server answers ONE
+# REQUEST AT A TIME, so with two workstations on the register the second waits
+# behind the first (measured here: six simultaneous calls took 1,166 ms against
+# 90 ms for one). Apache's Windows MPM answers each request on its own thread —
+# see scripts\apache\bluewrite-httpd.conf, which is the file this starts.
+#
+# PHP-FPM is not the alternative on Windows: the PHP binaries ship no
+# php-fpm.exe (FPM is POSIX-only), and this Apache has no mod_fcgid. mod_php is
+# the concurrent setup here, and the config file loads it.
+#
+# PORT AND BIND ARE UNCHANGED: 8099 on ALL interfaces, because the client PC and
+# the phone app reach this same port over the station Wi-Fi (see
+# docs\LAN_SETUP.md) and a loopback-only bind would make the server invisible to
+# them. Windows Firewall rule "BlueWrite LAN 8099" is what decides which
+# networks may come in — not this bind.
+#
+# UPGRADES ARE HANDLED, NOT SURVIVED. The Apache configuration is RENDERED on
+# every start from scripts\apache\bluewrite-httpd.conf.template, against whatever
+# C:\laragon\bin\apache and C:\laragon\bin\php currently hold (see
+# Write-ApacheConfig). Laragon's folders carry versions in their names, so a
+# config with those typed into it dies the day either is upgraded — and the
+# symptom is "BlueWrite is down", not "a folder was renamed". Re-rendering picks
+# the new folders up instead. That is the upgrade fix; it is not the fallback.
+#
+# THE FALLBACK IS A LAST RESORT AND IT IS LABELLED. If Apache still cannot start
+# (no PHP build with the Apache DLL, a broken template), the app comes up on the
+# single-request server rather than the station losing its register — but the log
+# line says DEGRADED, and -Status names php -S as the program on 8099 instead of
+# printing a bare "up". A queue that looks like the network is the failure this
+# wording exists to prevent.
 function Repair-Api {
   foreach ($port in $ApiPort) {
     if (Test-Port $port) { continue }
+    $started = $false
+    $httpd = Find-Apache
+    # RENDERED ON EVERY START against what is installed — this is the upgrade
+    # path, not a cache. Nothing here names a version.
+    $conf = if ($httpd) { Write-ApacheConfig } else { $null }
+    if (-not $httpd) {
+      Write-Note "api  $port DOWN - no httpd.exe found (looked in C:\laragon\bin\apache and PATH)"
+    } elseif (-not $conf) {
+      Write-Note "api  $port DOWN - the Apache config could not be rendered (see the line above for the reason)"
+    } else {
+      $res = Start-Detached -FilePath $httpd -ArgumentList @('-f', $conf)
+      if ($res.ReturnValue -eq 0) {
+        # STARTED IS NOT ANSWERING. httpd spawns its child, loads mod_php and
+        # only then listens, so the port is asked rather than assumed.
+        for ($i = 0; $i -lt 20; $i++) {
+          Start-Sleep -Milliseconds 500
+          if (Test-Port $port) {
+            Write-Note ('api  {0} DOWN -> started Apache (mod_php, threaded) from {1}' -f $port, $conf)
+            $started = $true
+            break
+          }
+        }
+        if (-not $started) {
+          Write-Note ('api  {0} DOWN - Apache started but never answered; read storage\logs\apache-error.log' -f $port)
+        }
+      } else {
+        Write-Note ('api  {0} DOWN - Apache would not start (WMI returned {1})' -f $port, $res.ReturnValue)
+      }
+    }
+    if ($started) { continue }
     $php = Find-Php
     if (-not $php) {
-      Write-Note "api  $port DOWN - no php.exe found (looked in C:\laragon\bin\php and PATH)"
+      Write-Note "api  $port DOWN - no php.exe found either (looked in C:\laragon\bin\php and PATH)"
       continue
     }
     $res = Start-Detached -FilePath $php -ArgumentList @('-S', "0.0.0.0:$port", '-t', 'public', 'router.php')
     if ($res.ReturnValue -eq 0) {
-      Write-Note ('api  {0} DOWN -> started {1} (hidden)' -f $port, $php)
+      Write-Note ('api  {0} DEGRADED -> Apache is NOT serving; started php -S instead (SINGLE REQUEST: workstations queue). -Status names this state.' -f $port)
     } else {
       Write-Note ('api  {0} DOWN - could not start it (WMI returned {1})' -f $port, $res.ReturnValue)
     }
@@ -253,8 +429,9 @@ function Repair-Dev {
 # connect cannot tell them apart — but only one of them has the BlueWrite schema.
 # netstat names the owning pid and WMI turns that into a path, which is the only
 # honest way to tell them apart; the path is what the log gets to name.
-function Get-DbOwner {
-  $line = netstat -ano | Select-String (':{0}\s' -f $DbPort) |
+function Get-PortOwner {
+  param([int] $Port)
+  $line = netstat -ano | Select-String (':{0}\s' -f $Port) |
     Where-Object { $_.Line -match 'LISTENING' } |
     Select-Object -First 1
   if (-not $line) { return $null }
@@ -264,6 +441,12 @@ function Get-DbOwner {
   $proc = Get-CimInstance Win32_Process -Filter ("ProcessId = {0}" -f $ownerPid) -ErrorAction SilentlyContinue
   if ($proc) { return $proc.ExecutablePath }
   return $null
+}
+
+# The database's own question — which program holds 3306 — kept as a named call
+# so every existing reader means exactly what it meant before.
+function Get-DbOwner {
+  return Get-PortOwner -Port $DbPort
 }
 
 # THE DATABASE IS NOT A WEB SERVER, and this function is still the same rule as
@@ -515,7 +698,19 @@ function Show-Status {
     Write-Host ('task   {0}: NOT INSTALLED (run with -Install)' -f $TaskName)
   }
   foreach ($port in $ApiPort) {
-    Write-Host ('api    http://127.0.0.1:{0}/  {1}' -f $port, $(if (Test-Port $port) { 'up' } else { 'DOWN' }))
+    if (-not (Test-Port $port)) {
+      Write-Host ('api    http://127.0.0.1:{0}/  DOWN' -f $port)
+      continue
+    }
+    # WHICH PROGRAM IS ANSWERING, because "up" is not enough here: php -S is also
+    # up, and it is the single-request state this machine must not sit in quietly.
+    $exe = Get-PortOwner -Port $port
+    $leaf = if ($exe) { Split-Path -Leaf $exe } else { '' }
+    $who = if ($leaf -like 'httpd*') { '  (Apache, threaded)' }
+           elseif ($leaf -like 'php*') { '  (php -S: SINGLE REQUEST - workstations queue)' }
+           elseif ($leaf -ne '') { "  ($leaf)" }
+           else { '' }
+    Write-Host ('api    http://127.0.0.1:{0}/  up{1}' -f $port, $who)
   }
   foreach ($port in $DevPort) {
     Write-Host ('dev    http://127.0.0.1:{0}/  {1}' -f $port, $(if (Test-Port $port) { 'up' } else { 'DOWN' }))
@@ -531,6 +726,16 @@ function Show-Status {
     Write-Host ('db     127.0.0.1:{0}  DOWN' -f $DbPort)
   }
   Write-Host ('log    {0}' -f $LogPath)
+}
+
+if ($RenderConfig) {
+  $conf = Write-ApacheConfig
+  if (-not $conf) {
+    Write-Host 'could not render the Apache config - see the reason above or in the watchdog log'
+    exit 1
+  }
+  Write-Host $conf
+  exit 0
 }
 
 if ($Uninstall) {

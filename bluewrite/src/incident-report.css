@@ -414,20 +414,25 @@
 }
 
 /* ===========================================================================
-   1b. The Admin's rail (owner request, 2026-10-12)
+   1b. The Admin's rail (owner request, 2026-10-12 — redesigned 2026-11-16)
 
    An Admin's navigation is a RAIL on the left of the window rather than pills at
-   the right of a bar: the department's lockup at its head, the five supervisory
-   destinations under it as full-width rows, and the ACCOUNT at its foot — the
+   the right of a bar: the department's lockup at its head, a dateline under it,
+   the five supervisory destinations as rows, and the ACCOUNT at its foot — the
    bell and the profile control, which used to be all the top bar still drew over
-   an Admin's screens. The strip is gone; the rail is the whole of that chrome
-   (owner request, 2026-10-12).
+   an Admin's screens. The strip is gone; the rail is the whole of that chrome.
 
-   THE LETTERHEAD IS THE BAR'S OWN CLASSES, deliberately: `.ir-brand-seal` and the
-   three `.ir-brand-*` lines are the same artwork and the same three facts, set
-   the same way, and a rail that redrew them would be a second answer to "what is
-   this system called". They are stacked in a narrower box here, which is the only
-   difference.
+   WHAT THE COLUMN IS MADE OF, because every one of these is a layer and the next
+   reader will be tempted to flatten them:
+     · three radial washes over a vertical navy — a lit head, a cool shoulder and
+       a foot that falls away — so a tall, mostly empty rail still has depth;
+     · the station photograph, masked so it dissolves into the navy instead of
+       stopping in a hard line above the seals;
+     · a fixed grain (see `::after`), because a flat gradient this large bands on
+       a cheap panel;
+     · a letterhead, its dateline, two NAMED groups of rows, an account plate.
+   Every texture here is a bundled file or a gradient: the station LAN has no
+   internet, so nothing in this chrome is fetched.
 
    IT IS NOT THE OLD DARK RAIL. That one (`.sidebar`, still in styles.css for
    whoever reads the history) was a resizable file browser holding the officer's
@@ -436,22 +441,49 @@
    =========================================================================== */
 .ir-sidebar {
   /* Fixed width, and deliberately not draggable: there is no list inside it to
-     make room for, so a handle would be a control with nothing to adjust. */
+     make room for, so a handle would be a control with nothing to adjust. It is
+     wider than the first rail because a row now carries a tile beside its label,
+     and a rail that ellipsises its destinations has to be unfolded to be read. */
   flex: none;
-  width: clamp(12.5rem, 15vw, 15rem);
+  /* THE RAIL'S OWN WIDTH, NAMED. The account menu is fixed to the WINDOW (it
+     drops from the top edge — see 1c), so it cannot read the rail's box from
+     the flow; this is the one number it needs to sit just beside the column. */
+  --ir-rail-w: clamp(15.5rem, 16.5vw, 17rem);
+  /* …and THE RAIL'S OWN FOOT LINE: only the column's bottom padding, measured
+     from the window's bottom edge. The menu's foot is set on this line (see 1c),
+     so the panel opens LOW beside the account — its foot under the seals, at the
+     base of the column — rather than hovering above the plate. Being measured
+     from the foot, not the head, is what keeps that true at any window height. */
+  --ir-rail-foot: 0.9rem;
+  /* The rail's inks and hairlines, named once. Everything in this column is drawn
+     on ONE fixed navy surface — the rail does not follow the page theme, and the
+     four washes below are stated against it — so this is a small, closed palette
+     and a rule below never has to name a colour of its own. */
+  --ir-rail-ink: rgba(255, 255, 255, 0.74);
+  --ir-rail-ink-dim: rgba(255, 255, 255, 0.55);
+  --ir-rail-line: rgba(255, 255, 255, 0.10);
+  --ir-rail-line-soft: rgba(255, 255, 255, 0.06);
+  --ir-rail-plate: rgba(255, 255, 255, 0.055);
+  --ir-rail-plate-hi: rgba(255, 255, 255, 0.10);
+  /* ONE CURVE for the column, so a hover, a plate lift and the width fold all
+     settle with the same weight — spring-ish, quick out, long tail in. */
+  --ir-rail-ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  width: var(--ir-rail-w);
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 1.1rem 0.75rem 1.25rem;
-  /* The bar's own navy, so the rail and the strip beside it read as one chrome
-     rather than as two navies that nearly match. */
-  background: var(--ir-navy);
+  padding: clamp(1.05rem, 1.6vw, 1.35rem) clamp(0.7rem, 1.1vw, 0.85rem) 0.9rem;
+  /* THE GROUND: gold at the head where the letterhead sits, the app's own blue
+     at the right shoulder, a deeper navy under the foot, over a vertical navy. */
+  background:
+    radial-gradient(115% 52% at 8% -10%, rgba(240, 180, 41, 0.16), transparent 62%),
+    radial-gradient(90% 42% at 112% 26%, rgba(46, 110, 216, 0.30), transparent 62%),
+    radial-gradient(150% 62% at 50% 112%, rgba(19, 62, 135, 0.42), transparent 70%),
+    linear-gradient(180deg, #0b2545 0%, #092039 46%, #061729 100%);
   color: #fff;
-  /* The page scrolls; the rail does not. Its own list is five rows, so it never
-     needs a scrollbar — the page is the thing that grows. NOT `overflow: hidden`
-     any more, and that is load-bearing: the account menu and the notification
-     feed hang OUTSIDE the rail's own box (the popovers in 1c), and a clipping
-     column would cut them off at its edge. Nothing else in here overflows. */
+  /* NOTHING IS CLIPPED. The account menu and the notification feed hang OUTSIDE
+     the rail's own box (see 1c), and a clipping column would cut them off at its
+     edge. Nothing else in here overflows. */
   overflow: visible;
   /* …and it therefore paints ABOVE the page beside it. `.main` is a positioned
      z-index 1 box, so without this the account's menu would slide under the
@@ -459,10 +491,54 @@
      (z-index 96 and up), which must still cover it. */
   position: relative;
   z-index: 30;
+  /* Its own stacking context, so the grain below can blend with the rail's ground
+     and nothing behind the column can bleed into it. */
+  isolation: isolate;
+  /* The whole empty surface folds the rail (see AppSidebar.jsx), so it says so. */
+  cursor: pointer;
+  transition: width 0.5s var(--ir-rail-ease);
 }
-/* The station photo behind the rail. Absolute cover under the content: the
-   rail keeps its navy as the fallback, the photo paints over it at low
-   opacity, and the brand/nav/foot sit above it. */
+
+/* THE SEAM between the chrome and the page: a hairline on the rail's own right
+   edge, brightest at the head and gone by the foot, so the two surfaces meet
+   without the hard two-tone edge a plain border draws. */
+.ir-sidebar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.06) 34%,
+    rgba(255, 255, 255, 0.02) 72%,
+    transparent 100%
+  );
+}
+
+/* THE GRAIN, fixed to the rail's surface and never attached to anything that
+   scrolls. It is an inline SVG turbulence, not a PNG: one request fewer on a LAN
+   and no asset to keep in step with this rule. Overlay rather than a flat wash so
+   it textures the photograph and the gradient alike instead of greying them. */
+.ir-sidebar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23grain)' opacity='0.28'/%3E%3C/svg%3E");
+}
+
+/* The station photo behind the rail. Decoration only, and it FADES OUT toward the
+   foot rather than ending on a line — the seals below sit on the navy, not on a
+   half-lit wall. Desaturated a little so it reads as a wall behind the column
+   instead of as a second image competing with the seals. */
 .ir-sidebar__backdrop {
   position: absolute;
   inset: 0;
@@ -470,49 +546,63 @@
   height: 100%;
   object-fit: cover;
   object-position: center top;
-  opacity: 0.28;
+  opacity: 0.2;
+  filter: grayscale(0.35) contrast(1.05);
   pointer-events: none;
+  /* Faded by 44% and gone by 86%: the photograph is a wall behind the head of the
+     column, not a mural under the account. At full strength its own lettering read
+     as a second set of words under the seals. */
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.52) 44%, transparent 86%);
+  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.52) 44%, transparent 86%);
 }
+
+/* Everything the officer reads sits above the ground, the photograph and the
+   grain. One rule, so a new block in the column only has to be added here. */
 .ir-sidebar__brand,
+.ir-sidebar__dateline,
 .ir-sidebar__nav,
 .ir-sidebar__foot {
   position: relative;
   z-index: 1;
 }
 
+/* ---- The letterhead ------------------------------------------------------ */
 .ir-sidebar__brand {
   display: flex;
   align-items: center;
   gap: 0.6rem;
   /* The rail's own padding is the row's, so the lockup starts on the same left
      edge as the destinations under it rather than indented from them. */
-  padding: 0.2rem 0.35rem 0.9rem;
-  margin-bottom: 0.6rem;
-  /* A button, which this app styles at element level (styles.css `button`): the
-     plate, the hairline and the centred text all have to be taken back off it —
-     and then the ONE edge that is wanted back is put on by hand. THE WORDS ARE
-     CLOSED BY A RULE, the same job the bar's blue seam does under the whole
-     chrome, one level down. */
   width: 100%;
+  padding: 0.3rem 0.45rem 0.75rem;
+  /* A button, which this app styles at element level (styles.css `button`): the
+     plate, the hairline and the centred text all have to be taken back off it.
+     The words are closed by the DATELINE's rule now, one step below. */
   background: none;
   border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 0;
+  border-radius: 14px;
   color: inherit;
   text-align: left;
+  transition: background 0.55s var(--ir-rail-ease);
 }
-.ir-sidebar__brand:hover { background: rgba(255, 255, 255, 0.08); }
+.ir-sidebar__brand:hover { background: rgba(255, 255, 255, 0.055); }
+.ir-sidebar__brand:active { background: rgba(255, 255, 255, 0.09); }
+.ir-sidebar__brand:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .ir-sidebar__logo {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.65rem;
   min-width: 0;
 }
+/* The shield, lifted off the ground with its own shadow rather than a plate: it
+   is already a coloured mark on transparent ink, and a plate behind it would be
+   a second box around a box. */
 .ir-sidebar__mark {
   flex: none;
-  height: 3.2rem;
+  height: 3rem;
   width: auto;
   object-fit: contain;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
 }
 .ir-sidebar__word {
   display: flex;
@@ -521,130 +611,477 @@
 }
 /* The login's wordmark, drawn small: BLUE in white, WRITE in the department's gold. */
 .ir-sidebar__wordmark {
-  font-size: 1.45rem;
+  font-size: 1.5rem;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   line-height: 1;
   color: #ffffff;
 }
 .ir-sidebar__wordmark em {
   font-style: normal;
-  color: #f0b429;
+  color: var(--ir-gold);
 }
+/* Micro caps, and quieter than the wordmark by a wide margin: the tagline is a
+   caption under a name, not a second line of it. */
 .ir-sidebar__tagline {
-  margin-top: 0.3rem;
+  margin-top: 0.34rem;
   font-size: 0.5rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.115em;
+  line-height: 1.45;
   text-transform: uppercase;
-  color: #ffffff;
+  color: rgba(255, 255, 255, 0.58);
 }
 .ir-sidebar__tagline-accent {
-  color: #f0b429;
+  color: var(--ir-gold);
 }
-/* The foot of the rail: the profile, then the seal line beneath it. The margin
-   pushes the whole block to the bottom of the column. */
-.ir-sidebar__foot {
-  margin-top: auto;
-}
-.ir-sidebar__seals {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.35rem 0.5rem;
-}
-.ir-sidebar__seals img {
-  height: 1.6rem;
-  width: auto;
-  object-fit: contain;
-  flex: none;
-}
-.ir-sidebar__seals-text {
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  line-height: 1.3;
-  text-align: center;
-  color: #ffffff;
-}
-.ir-sidebar__brand:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 
+/* ---- The dateline: the day and the station's clock ----------------------- */
+/* A printed sheet prints its date under its letterhead; this column is a desk,
+   so it prints the date it is working in — and the time, which is the one thing
+   on this rail that changes while it is being looked at. */
+.ir-sidebar__dateline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0.45rem 1.2rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--ir-rail-line);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ir-rail-ink-dim);
+}
+.ir-sidebar__dateline-day {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* The day is a word, so it gets the small-text ink rather than the label ink:
+     0.55 on navy is the floor for micro caps, and this is one step up from it. */
+  color: rgba(255, 255, 255, 0.66);
+}
+/* Tabular figures and a baseline-aligned zone: the clock must not shuffle its
+   own width as the digits change, or the day beside it moves every minute. */
+.ir-sidebar__dateline-time {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.32rem;
+  flex: none;
+  color: #fff;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+.ir-sidebar__dateline-zone {
+  font-size: 0.5rem;
+  letter-spacing: 0.16em;
+  color: var(--ir-rail-ink-dim);
+}
+
+/* ---- The destinations ---------------------------------------------------- */
 .ir-sidebar__nav {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.16rem;
+  padding: 0 0.15rem;
+}
+/* A GROUP HEADING, not a destination: micro caps at the weight of a printed
+   label, so the five rows read as two jobs — supervision and the station itself
+   — instead of as one undifferentiated list. */
+.ir-sidebar__section {
+  margin: 0 0 0.42rem;
+  padding: 0 0.45rem;
+  font-size: 0.53rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ir-rail-ink-dim);
+}
+/* The second group is separated by a rule, so the heading is not the only thing
+   telling a reader that a new job starts here. `:not(:first-child)` counts the
+   section labels themselves, not the rows between them. */
+.ir-sidebar__section:not(:first-child) {
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--ir-rail-line-soft);
 }
 
-/* A DESTINATION HERE IS A ROW, not a pill: the mark and the label on one full
-   width, which is what makes a rail scannable down its left edge. Sentence case
-   and the bar's own ink, so the two chromes word and paint a destination the
-   same way. */
+/* A DESTINATION HERE IS A ROW, not a pill: the mark in its own tile and the
+   label on one full width, which is what makes a rail scannable down its left
+   edge. The tile also gives every drawing the same optical box whatever it does
+   inside the 24-unit grid. */
 .ir-side-link {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
   width: 100%;
-  padding: 0.7rem 0.8rem;
+  padding: 0.42rem 0.45rem;
   background: none;
   border: 0;
-  border-radius: 10px;
-  color: rgba(255, 255, 255, 0.82);
+  border-radius: 0.8rem;
+  color: var(--ir-rail-ink);
   font-family: var(--font-body);
   font-size: 0.88rem;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.005em;
+  line-height: 1.2;
   text-transform: none;
   text-align: left;
+  transition:
+    background 0.55s var(--ir-rail-ease),
+    color 0.35s var(--ir-rail-ease),
+    transform 0.55s var(--ir-rail-ease);
+}
+.ir-side-link__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.62rem;
+  background: var(--ir-rail-plate);
+  /* The inset highlight is what makes a 6% white plate read as milled rather
+     than as a flat swatch: one line of light along the top edge. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 0 1px var(--ir-rail-line-soft);
+  color: rgba(255, 255, 255, 0.8);
+  transition:
+    background 0.55s var(--ir-rail-ease),
+    color 0.35s var(--ir-rail-ease),
+    transform 0.6s var(--ir-rail-ease),
+    box-shadow 0.55s var(--ir-rail-ease);
 }
 .ir-side-link:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.045);
   color: #fff;
 }
-/* "You are here", in the reference's own shape: the current row is a LIFTED
-   PLATE with the accent hanging off its leading edge — a plate rather than the
-   bar's bottom border, because a row in a column has no bottom edge to share
-   with a rule the way a pill does. */
-.ir-side-link[aria-current='page'] {
-  background: var(--ir-navy-hi);
+.ir-side-link:hover .ir-side-link__mark {
+  background: var(--ir-rail-plate-hi);
   color: #fff;
-  box-shadow: inset 3px 0 0 var(--ir-bar-accent);
+  transform: translateY(-1px);
 }
+/* Physical press: the row gives a pixel, so the pointer gets an answer. */
+.ir-side-link:active { transform: scale(0.985); }
 .ir-side-link:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
-/* Tap-the-rail collapse (owner request): no button — the rail's own empty
-   surface is the control, so it shows the pointer and a focus ring of its own.
-   Presses on destinations, the lockup and the account chrome are left alone
-   by the handler in AppSidebar.jsx. */
-.ir-sidebar { cursor: pointer; }
+/* "You are here": a warm glass plate with the accent hanging off its leading
+   edge, and the mark itself filled with the gold so the current destination is
+   findable from across a desk and not only by reading. The edge is a 3px bar
+   rather than the plate's own border, because a row in a column has no bottom
+   edge to share with a rule the way the bar's pill does. */
+.ir-side-link[aria-current='page'] {
+  color: #fff;
+  background: linear-gradient(
+    100deg,
+    rgba(240, 180, 41, 0.16),
+    rgba(255, 255, 255, 0.05) 58%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 0 0 1px rgba(240, 180, 41, 0.20);
+}
+.ir-side-link[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: -0.35rem;
+  top: 50%;
+  width: 3px;
+  height: 1.2rem;
+  border-radius: 3px;
+  background: var(--ir-bar-accent);
+  box-shadow: 0 0 14px rgba(240, 180, 41, 0.55);
+  transform: translateY(-50%);
+}
+.ir-side-link[aria-current='page'] .ir-side-link__mark {
+  background: var(--ir-bar-accent);
+  /* Navy on the gold, never white: white on this gold is 2:1 (see --ir-on-gold). */
+  color: var(--ir-on-gold);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 8px 18px rgba(240, 180, 41, 0.28);
+}
+
+/* ---- The foot: shortcuts, the account, the seals ------------------------- */
+/* `margin-top: auto` is the whole of "at the foot": the rail is a full-height
+   column, so this block is its last row and everything above stays at the head. */
+.ir-sidebar__foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 1.15rem;
+}
+
+/* The shortcut sheet's door. Quieter than a destination on purpose — it opens
+   something, it does not go anywhere — but drawn in the same row rhythm so the
+   foot does not read as a different product's controls. */
+.ir-sidebar__shortcut {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.42rem 0.45rem;
+  background: none;
+  border: 0;
+  border-radius: 0.7rem;
+  color: rgba(255, 255, 255, 0.66);
+  font-family: var(--font-body);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: left;
+  transition: background 0.5s var(--ir-rail-ease), color 0.3s var(--ir-rail-ease);
+}
+.ir-sidebar__shortcut:hover { background: rgba(255, 255, 255, 0.045); color: #fff; }
+.ir-sidebar__shortcut:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.ir-sidebar__shortcut-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+.ir-sidebar__shortcut-label { flex: 1 1 auto; min-width: 0; }
+/* A key cap, not a badge: inset, small, and stating the same `?` the account
+   menu shows. Two spellings of one shortcut is how a shortcut gets forgotten. */
+.ir-sidebar__kbd {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.3rem;
+  border-radius: 0.4rem;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow:
+    inset 0 0 0 1px var(--ir-rail-line),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* THE ACCOUNT IN A MACHINED PLATE — an outer shell and an inner core, so the
+   profile control reads as a plate set into the rail rather than as a control
+   dropped on a photograph. The two radii are concentric: the core's is the
+   shell's minus its own 3px rim, which is what keeps the curves parallel. */
+.ir-sidebar__account {
+  padding: 3px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+.ir-sidebar__account-core {
+  border-radius: 13px;
+  padding: 0.18rem;
+  background: linear-gradient(180deg, rgba(6, 23, 41, 0.55), rgba(4, 15, 28, 0.72));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+/* The plate is the edge now. The chrome's own top rule and padding would draw a
+   second border inside the plate, so they are taken back here — two classes beat
+   the one-class rule it is adjusting whatever order the sheet puts them in. */
+.ir-sidebar__account .ir-chrome--rail {
+  border-top: 0;
+  padding-top: 0;
+}
+
+/* The seal line. It is the foot of printed stationery, so it is quiet: a hairline,
+   the two badges, and the station's name in micro caps UNDER them. The caption is
+   given a full-width line of its own (`flex-basis: 100%` and an order past the
+   images) because flanked between two seals it broke wherever it ran out of room —
+   "CITY OF NAGA POLICE STATION" then a stranded "· BLUEWRITE" beneath it. */
+.ir-sidebar__seals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem 0.6rem;
+  margin-top: 0.1rem;
+  padding: 0.62rem 0.3rem 0.15rem;
+  border-top: 1px solid var(--ir-rail-line-soft);
+}
+.ir-sidebar__seals-text {
+  flex: 0 0 100%;
+  order: 3;
+}
+.ir-sidebar__seals img {
+  flex: none;
+  height: 1.35rem;
+  width: auto;
+  object-fit: contain;
+  opacity: 0.92;
+}
+.ir-sidebar__seals-text {
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-align: center;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* The rail's own focus ring: it is a control (tap to fold), so it says so. */
 .ir-sidebar:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
 
-/* Collapsed rail: icons only. Text nodes cannot be targeted, so the rows go
-   silent by size while their marks (fixed-size svg) keep drawing. */
-.ir-sidebar.is-collapsed { width: 4.25rem; padding-left: 0.6rem; padding-right: 0.6rem; }
+/* ---- Entry: the column arrives, it does not appear ----------------------- */
+/* The same heavy fade-up every screen in this product opens with, staggered a
+   few tens of milliseconds per row so the eye is led down the column instead of
+   being handed all five at once. Transform and opacity only. */
+@keyframes ir-rail-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.ir-sidebar__brand,
+.ir-sidebar__dateline,
+.ir-sidebar__section,
+.ir-side-link,
+.ir-sidebar__shortcut,
+.ir-sidebar__account,
+.ir-sidebar__seals {
+  animation: ir-rail-in 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.ir-sidebar__dateline { animation-delay: 0.03s; }
+.ir-sidebar__section { animation-delay: 0.06s; }
+/* `nth-of-type` counts the row buttons among their siblings, so the headings and
+   the labels between them do not throw the stagger off. */
+.ir-sidebar__nav .ir-side-link:nth-of-type(1) { animation-delay: 0.08s; }
+.ir-sidebar__nav .ir-side-link:nth-of-type(2) { animation-delay: 0.11s; }
+.ir-sidebar__nav .ir-side-link:nth-of-type(3) { animation-delay: 0.14s; }
+.ir-sidebar__nav .ir-side-link:nth-of-type(4) { animation-delay: 0.17s; }
+.ir-sidebar__nav .ir-side-link:nth-of-type(5) { animation-delay: 0.2s; }
+.ir-sidebar__shortcut { animation-delay: 0.24s; }
+.ir-sidebar__account { animation-delay: 0.27s; }
+.ir-sidebar__seals { animation-delay: 0.3s; }
+
+/* THE PLATE MUST NOT KEEP ITS TRANSFORM once it has arrived. `both` holds the
+   finished animation's last keyframe for good — and that keyframe is
+   `transform: none`, which while a keyframe is applying resolves to the IDENTITY
+   MATRIX, not to nothing. Any transform at all, identity included, makes a box a
+   containing block for `position: fixed`, and the rail's account menu is fixed to
+   the WINDOW (see 1c). Trapped in here it was laid out against the plate at the
+   foot of the column: it opened downward off the bottom of the screen instead of
+   dropping from the top edge. `backwards` keeps the stagger (the plate still
+   waits out its 0.27s in the dark) and hands the property back to the sheet when
+   the 0.62s is up, so the plate ends as a plain box with nothing anchored to it. */
+.ir-sidebar__account { animation-fill-mode: backwards; }
+
+/* ---- Collapsed rail: marks only ----------------------------------------- */
+/* Text nodes cannot be targeted, so the rows go silent by size while their marks
+   (a fixed-size tile around a fixed-size svg) keep drawing. The new blocks hide
+   rather than shrink: a dateline with no day in it is a rule with a time. */
+.ir-sidebar.is-collapsed {
+  --ir-rail-w: 4.75rem;
+  padding-left: 0.55rem;
+  padding-right: 0.55rem;
+}
 .ir-sidebar.is-collapsed .ir-sidebar__word,
-.ir-sidebar.is-collapsed .ir-sidebar__seals-text { display: none; }
+.ir-sidebar.is-collapsed .ir-sidebar__dateline,
+.ir-sidebar.is-collapsed .ir-sidebar__section,
+.ir-sidebar.is-collapsed .ir-sidebar__shortcut-label,
+.ir-sidebar.is-collapsed .ir-sidebar__kbd,
+.ir-sidebar.is-collapsed .ir-sidebar__seals-text {
+  display: none;
+}
+.ir-sidebar.is-collapsed .ir-sidebar__brand { padding-left: 0.2rem; padding-right: 0.2rem; }
 .ir-sidebar.is-collapsed .ir-sidebar__logo { justify-content: center; }
-.ir-sidebar.is-collapsed .ir-side-link { justify-content: center; font-size: 0; gap: 0; }
+.ir-sidebar.is-collapsed .ir-sidebar__mark { height: 2.35rem; }
+.ir-sidebar.is-collapsed .ir-sidebar__nav { padding: 0; }
+.ir-sidebar.is-collapsed .ir-side-link {
+  justify-content: center;
+  gap: 0;
+  padding: 0.36rem;
+  font-size: 0;
+}
+.ir-sidebar.is-collapsed .ir-sidebar__shortcut { justify-content: center; padding: 0.4rem; }
+.ir-sidebar.is-collapsed .ir-sidebar__seals { padding-left: 0; padding-right: 0; }
 .ir-sidebar.is-collapsed .ir-profile-trigger-name,
 .ir-sidebar.is-collapsed .ir-profile-caret { display: none; }
 .ir-sidebar.is-collapsed .ir-profile-trigger { justify-content: center; }
-.ir-sidebar { transition: width 180ms ease; }
-@media (prefers-reduced-motion: reduce) {
-  .ir-sidebar { transition: none; }
-}
-/* Narrow window: the rail becomes a top strip so the register keeps its
-   columns. The destinations scroll sideways; the account stays at the end. */
+
+/* ---- Narrow window: the rail becomes a top strip ------------------------ */
+/* So the register keeps its columns. The destinations scroll sideways and the
+   square grain is switched off: on a strip this short it reads as glitter. The
+   dateline, the headings and the seals go — a strip has no depth for them. */
 @media (max-width: 760px) {
   .shell--admin { flex-direction: column; }
   .shell--admin .ir-sidebar,
-  .shell--admin .ir-sidebar.is-collapsed { width: auto; flex-direction: row; align-items: center; padding: 0.6rem; }
+  .shell--admin .ir-sidebar.is-collapsed {
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.65rem;
+    background: linear-gradient(100deg, #0b2545 0%, #0a2440 55%, #081c33 100%);
+  }
+  .shell--admin .ir-sidebar::after { display: none; }
   .shell--admin .ir-sidebar__backdrop { object-position: center center; }
-  .shell--admin .ir-sidebar__brand { border-bottom: 0; margin-bottom: 0; padding: 0.2rem 0.4rem; }
-  .shell--admin .ir-sidebar__nav { flex-direction: row; overflow-x: auto; flex: 1; }
-  .shell--admin .ir-side-link { width: auto; white-space: nowrap; font-size: 0.82rem; }
-  .shell--admin .ir-sidebar__foot { margin-top: 0; }
+  .shell--admin .ir-sidebar__brand { width: auto; padding: 0.15rem 0.3rem; }
+  /* The tagline is a caption UNDER a wordmark, and a horizontal strip has no
+     under: left in, it stacked into four lines and set the strip's height to 91px.
+     The wordmark and the shield are what identify the strip. */
+  .shell--admin .ir-sidebar__tagline { display: none; }
+  .shell--admin .ir-sidebar__mark { height: 2.15rem; }
+  .shell--admin .ir-sidebar__wordmark { font-size: 1.15rem; }
+  .shell--admin .ir-sidebar__dateline { display: none; }
+  .shell--admin .ir-sidebar__nav {
+    flex: 1 1 auto;
+    flex-direction: row;
+    gap: 0.3rem;
+    padding: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .shell--admin .ir-sidebar__nav::-webkit-scrollbar { display: none; }
+  .shell--admin .ir-sidebar__section { display: none; }
+  .shell--admin .ir-side-link {
+    width: auto;
+    padding: 0.34rem 0.6rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+  .shell--admin .ir-side-link__mark { width: 1.55rem; height: 1.55rem; border-radius: 0.5rem; }
+  .shell--admin .ir-side-link[aria-current='page']::before { display: none; }
+  .shell--admin .ir-sidebar__foot {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0;
+    padding-top: 0;
+  }
+  .shell--admin .ir-sidebar__shortcut { display: none; }
+  .shell--admin .ir-sidebar__account { padding: 2px; border-radius: 14px; }
+  .shell--admin .ir-sidebar__account-core { padding: 0.1rem; }
   .shell--admin .ir-sidebar__seals { display: none; }
+}
+
+/* ---- Reduced motion ----------------------------------------------------- */
+/* The product already carries a document-wide switch (styles.css); this is the
+   rail's own part of it, stated next to the rules it switches off so the entry
+   animation cannot be the one effect that ignores the preference. */
+@media (prefers-reduced-motion: reduce) {
+  .ir-sidebar,
+  .ir-sidebar__brand,
+  .ir-sidebar__dateline,
+  .ir-sidebar__section,
+  .ir-side-link,
+  .ir-side-link__mark,
+  .ir-sidebar__shortcut,
+  .ir-sidebar__account,
+  .ir-sidebar__seals {
+    animation: none;
+    transition: none;
+  }
 }
 
 /* ---- 1c. The account chrome: ONE component, two chromes ------------------
@@ -702,22 +1139,69 @@
   margin-left: auto;
 }
 
-/* THE TWO POPOVERS OPEN UP, AND THE BELL'S OPENS RIGHT. Neither is a style
-   preference: the rail stands on the window's left edge with the account at its
-   FOOT, so there is nothing above the account to drop a menu into, and a panel
-   anchored `right: 0` at the left edge of the screen would open almost entirely
-   off it. Up and inwards is the only direction with room. */
+/* THE ACCOUNT MENU HANGS ABOVE THE ACCOUNT, and stops when it meets the head of
+   the window (owner request, twice).
+
+   It has been three things. It opened UPWARD from the trigger and overflowed:
+   the panel carries the identity door, the session note, resources and sign out,
+   which is taller than the room above a laptop's rail foot, so its first rows
+   went off the top edge. It was then pinned to the top edge beside the rail,
+   which cleared the overflow and lost the plot — the menu for the account at the
+   BOTTOM of the column arrived at the top of the window, a screen away from the
+   control that opened it.
+
+   NOW it is both: its FOOT is set at the base of the column (owner request), so
+   the panel opens low beside the account it belongs to, and its height is capped
+   by whatever room is left above it. Anchoring to the foot is what a
+   trigger-anchored menu could not do — `--ir-rail-foot` names the rail's last
+   line of padding, so the panel's bottom is fixed relative to the window's
+   bottom and its top can be computed down from the window's top. On a short
+   window the cap bites and the panel scrolls itself instead of leaving the
+   screen; on a tall one it simply sits at the bottom of the screen beside the
+   rail, which is where the eye falls after pressing the account at the foot.
+
+   FIXED, NOT ABSOLUTE: the trigger's containing block is its own row inside the
+   column, and only the viewport offers the window's foot as an anchor.
+   `--ir-rail-w` is the column's width, so the panel starts just past the rail
+   and leaves the destinations visible.
+
+   The BELL beside it still opens up: its panel is a short feed anchored at the
+   corner, and it is the one thing that genuinely has room there. */
 .ir-chrome--rail .ir-profile-menu {
+  position: fixed;
   top: auto;
-  bottom: calc(100% + 0.5rem);
-  left: 0;
+  bottom: var(--ir-rail-foot, 8.9rem);
+  left: calc(var(--ir-rail-w, 15rem) + 0.4rem);
   right: auto;
+  max-height: calc(100vh - var(--ir-rail-foot, 8.9rem) - 0.75rem);
+  max-height: calc(100dvh - var(--ir-rail-foot, 8.9rem) - 0.75rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ir-border) transparent;
 }
 .ir-chrome--rail .ir-bell-panel {
   top: auto;
   bottom: calc(100% + 0.5rem);
   left: 0;
   right: auto;
+}
+/* Narrow window: the rail becomes a TOP STRIP (see the 760px block above), so
+   the account is already at the top of the window and the panel drops BELOW it,
+   anchored to the trigger. A fixed panel pinned to the top edge would land on
+   the strip it belongs to. Kept here, after the rule it overrides: both
+   selectors are two classes, so the LATER one wins — inside the earlier media
+   block it would have been silently overruled. */
+@media (max-width: 760px) {
+  .ir-chrome--rail .ir-profile-menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    bottom: auto;
+    left: auto;
+    right: 0;
+    max-height: calc(100vh - 6rem);
+    max-height: calc(100dvh - 6rem);
+  }
 }
 
 /* ===========================================================================
@@ -817,8 +1301,44 @@
    rules and margins, exactly as they were inside the card, so nothing had to be
    re-spaced to survive the box leaving. `overflow: hidden` went with the border
    it existed for — there is no rounded corner left to bleed past. */
+/* ---- The genie: a sheet pouring out of the card that opened it -------------
+   The ghost the open animation flies (see src/lib/genie.js). It is a sheet, not
+   a copy of the form: the strips are plain colour, laid over the page while the
+   report fades in underneath them, and they are removed the moment the flight
+   ends. Above the page (which is a z-index 1 box) and below the dialogs at 96 —
+   a report opening must never cover the sheet that is already asking a question. */
+.ir-genie {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+/* Each strip arrives as its own band of the page and leaves as a compressed
+   band of the card, so it is nothing but a transform: no layout on any frame,
+   and the lag between neighbours is what draws the funnel's sides. */
+.ir-genie-strip {
+  position: absolute;
+  display: block;
+  background: linear-gradient(180deg, var(--ir-card, #fff) 0%, var(--ir-soft, #f4f7fc) 100%);
+  transform-origin: 0 0;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ir-genie { display: none; }
+}
 .ir-case-panel {
   margin-bottom: 1rem;
+  /* THE REPORT ARRIVES OUT OF THE CARD THAT OPENED IT (owner request): the
+     desktop's open-a-window move, run on the page rather than on a picture of
+     it (see the FLIP in ReportEditor, pages/Reports.jsx). The motion itself is
+     the script's — it needs the clicked card's box, which no stylesheet can
+     see — and all the sheet has to state is where its own origin is: the growth
+     is anchored at this panel's top-left corner, or the page would swell from
+     its middle and the card's position would mean nothing. */
+  transform-origin: 0 0;
 }
 /* The masthead's BACKDROP: the station's banner artwork (src/assets), laid
    INSIDE the band as its own ground. One <img> in the markup (Reports.jsx), not
@@ -2206,11 +2726,11 @@
      NOTE: those extra rows are not free — each one costs a row gap, which is
      why the grid above states a column gap and leaves the row rhythm to the
      blocks' own margins. */
-  /* THE FRAME, NOT THE CARD: the gradient-blob wrapper (GradientBlobCard) wraps
-     the whole instrument (see Reports.jsx), so the frame is the workspace's
-     grid item and carries the placement and the ONE-SIZE bound below; the card
-     fills it and keeps its own inner scroll, so a taller panel scrolls INSIDE
-     the frame exactly as it always did. */
+  /* THE FRAME, NOT THE CARD: the frame (AiFrame, see Reports.jsx) wraps the
+     whole instrument, so the frame is the workspace's grid item and carries
+     the placement and the ONE-SIZE bound below; the card fills it and keeps
+     its own inner scroll, so a taller panel scrolls INSIDE the frame exactly
+     as it always did. */
   .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame {
     grid-column: 2;
     grid-row: 1 / span 50;
@@ -2245,14 +2765,8 @@
     height: calc(80dvh - 1.6rem);
     max-height: calc(80dvh - 1.6rem);
   }
-  /* The card fills the frame, and it is the INNER SCROLLER: content taller
-     than the box scrolls inside the card, behind the frame's electric edge. */
-  .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame > .gradient-blob-card__glass {
-    flex: 1 1 auto;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
+  /* The card is the frame's direct child now — no glass plate between them —
+     so the fill below lands on the card itself. */
   .ir-form:not(.ir-form--stepped):not(.ir-form--sheet) > .ir-ai-frame .ir-card--accent {
     flex: 1 1 auto;
     display: flex;
@@ -2308,13 +2822,34 @@
   }
 }
 
-/* ---- The assistant's gradient frame ---------------------------------------
-   The blob wrapper (GradientBlobCard) owns its own paint — no canvas, no clip
-   window to restate here. What the layout still owes the frame is the spacing:
-   the card's own `--wide` margin would open a gap between the glassy plate and
-   the card it carries. The frame takes the margin instead where the form is a
-   plain block (the stepped format's review step); the sidebar states its own
-   zero on the frame above. */
+/* ---- The assistant's frame -------------------------------------------------
+   A flat navy keyline around the whole instrument — navy head, tinted body and
+   all — drawn from tokens so it reads in both themes. What the frosted-glass
+   demo card gave this block was motion: a blob walking the card's corners and
+   a comet running its border, forever, on every report the station opens. The
+   frame keeps the instrument's distinction and drops the theatre: no
+   animation, no blur, no second paint layer to drift from the card it wraps.
+
+   One instrument, not a box in a box: the card inside the ring drops its own
+   border and ground — its navy head and tinted body stay, because they are the
+   face — and the ring clips its square corners. What the layout still owes the
+   frame is the spacing: the card's own `--wide` margin would open a gap
+   between the ring and the card it carries, so the frame takes the margin
+   instead where the form is a plain block; the sidebar states its own zero on
+   the frame above. */
+.ir-ai-frame {
+  background: var(--cyan-bg);
+  border: 2px solid var(--ir-navy);
+  border-radius: 14px;
+  box-shadow: 0 12px 30px -22px rgba(11, 37, 69, 0.55);
+  overflow: hidden;
+}
+.ir-ai-frame > .ir-card {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
 .ir-ai-frame .ir-card--wide {
   margin-top: 0;
 }
@@ -7163,13 +7698,22 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
   z-index: 60;
   min-width: 19rem;
   max-width: min(20.5rem, calc(100vw - 2rem));
+  /* Same cap in the bar chrome: the menu drops from the top edge, so its room
+     is the window under it. A short window scrolls the panel instead of
+     pushing Log out past the bottom edge. */
+  max-height: calc(100vh - 6rem);
+  max-height: calc(100dvh - 6rem);
+  overflow-y: auto;
   padding: 0.5rem;
   background: linear-gradient(180deg, var(--ir-card) 0%, var(--ir-soft) 130%);
   border: 1px solid var(--ir-border);
   border-radius: 16px;
   box-shadow: var(--shadow-lg), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
   color: var(--ir-text);
-  overflow: hidden;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ir-border) transparent;
 }
 .ir-profile-menu::before {
   content: "";
@@ -7180,9 +7724,25 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
 }
 
 .ir-profile-menu { animation: ir-menu-in 180ms cubic-bezier(0.32, 0.72, 0, 1); transform-origin: top right; }
-.ir-chrome--rail .ir-profile-menu { transform-origin: bottom left; }
+/* The rail's panel hangs ABOVE its trigger, so it grows from its own foot and
+   lifts into place. Same 180ms and the same curve as the bar's drop — only the
+   direction is mirrored, so both menus feel like the same hand.
+
+   COLUMN ONLY: below 760px the rail is a top strip and the panel drops BELOW
+   the trigger again (see 1c), so there the bar's downward entrance is the right
+   one and this must not reach it. */
+@media (min-width: 761px) {
+  .ir-chrome--rail .ir-profile-menu {
+    transform-origin: bottom left;
+    animation-name: ir-menu-in-up;
+  }
+}
 @keyframes ir-menu-in {
   from { opacity: 0; transform: translateY(-4px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ir-menu-in-up {
+  from { opacity: 0; transform: translateY(4px) scale(0.99); }
   to { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -7409,6 +7969,243 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
 .ir-menu-note svg { flex: none; margin-top: 0.1rem; color: var(--ir-blue-ink); }
 .ir-menu-note span { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .ir-menu-note strong { font-size: 0.78rem; color: var(--ir-text); }
+
+/* ===========================================================================
+   THE ACCOUNT MENU, REFINED (owner request, 2026-11-16)
+
+   It was already a card with the station's blue-to-gold rule across its top.
+   What it lacked was a FOCAL POINT: the face, the name, the badge line and the
+   door into the profile were four things of the same size, the same ink and the
+   same white, so the eye had nowhere to land and the identity read as a caption
+   above a list.
+
+   Three moves, and none of them adds information:
+
+     1. The identity is a PLATE — tinted, hairlined, lifted a pixel on hover —
+        with the face ringed and the role chip in its role's own colour. It is
+        the one object in the menu that looks like a thing rather than a row.
+     2. "View profile & preferences" is that plate's FOOTER: full width, on its
+        own hairline, chevron to the far edge. It is a door, so it is drawn as a
+        door and not as a third line of description.
+     3. The eyebrows carry a rule out to the panel's edge. That is what parts
+        the groups; without it the separators were doing all the work and the
+        panel read as one long list.
+
+   Nothing here changes what the menu says or does — the rows, their order, the
+   session note and the danger row are untouched, and both chromes (bar and rail)
+   draw this same sheet.
+   =========================================================================== */
+
+/* A deeper, softer card: the menu floats over a page and beside a navy rail, and
+   the old shadow was sized for a tooltip. The hairline stays, so the panel has an
+   edge of its own against the page it lands on. */
+.ir-profile-menu {
+  min-width: 19.5rem;
+  max-width: min(21rem, calc(100vw - 2rem));
+  padding: 0.6rem;
+  border-radius: 18px;
+  box-shadow:
+    0 30px 60px -30px rgba(11, 37, 69, 0.55),
+    0 12px 24px -18px rgba(11, 37, 69, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.75) inset;
+}
+/* The station rule, inset and rounded at both ends: an accent ON the card rather
+   than a painted edge of it — the same treatment the rail's letterhead gives the
+   same gradient. */
+.ir-profile-menu::before {
+  margin: 0 0.1rem 0.5rem;
+  border-radius: 999px;
+}
+
+/* The eyebrows are rules now: the label, then a hairline that runs to the panel's
+   edge. Two of them (the identity and Resources), so the panel reads as three
+   groups instead of one column of rows. */
+.ir-profile-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.5rem 0.55rem 0.45rem;
+  font-size: 0.63rem;
+  letter-spacing: 0.12em;
+}
+.ir-profile-eyebrow::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, var(--ir-border), transparent);
+}
+
+/* ---- 1. The identity plate ------------------------------------------------ */
+.ir-profile-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.8rem;
+  row-gap: 0.55rem;
+  padding: 0.75rem 0.75rem 0.6rem;
+}
+.ir-profile-head--link {
+  position: relative;
+  /* The footer is positioned by negative margins to reach the plate's edges, so the
+     plate is what clips it to the radius. A box-shadow (the focus ring) is drawn
+     outside the element and is not clipped by this. */
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ir-blue-ink) 14%, var(--ir-border));
+  border-radius: 14px;
+  background:
+    radial-gradient(160% 140% at 100% 0%, color-mix(in srgb, var(--ir-blue-tint) 85%, #ffffff) 0%, transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--ir-soft) 55%, #ffffff) 0%, #ffffff 100%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(11, 37, 69, 0.06);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+/* THE PLATE HAS A SPINE: a role-coloured bar down its left edge — the same cue the
+   Live desk's header plate and the rail's account row use. `:has` takes the colour
+   from the chip that STATES the role, so a role the palette has no colour for gets
+   the neutral spine rather than a guess at one. It is drawn behind the footer (a
+   child paints over a ::before), so it runs the identity row and stops at the
+   footer's hairline — which is what makes the footer read as the plate's foot. */
+.ir-profile-head--link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--ir-tile-line);
+  transition: background 150ms ease;
+}
+.ir-profile-head--link:has(.ir-profile-role--admin)::before { background: var(--ir-blue-ink); }
+.ir-profile-head--link:has(.ir-profile-role--officer)::before { background: var(--ir-gold); }
+.ir-profile-head--link:hover {
+  background:
+    radial-gradient(160% 140% at 100% 0%, color-mix(in srgb, var(--ir-blue-tint) 85%, #ffffff) 0%, transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--ir-soft) 30%, #ffffff) 0%, #ffffff 100%);
+  border-color: color-mix(in srgb, var(--ir-blue-ink) 28%, var(--ir-tile-line));
+  box-shadow:
+    0 16px 30px -22px rgba(11, 37, 69, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  transform: translateY(-1px);
+}
+/* The face sits ON the plate: a card-coloured gap, then a ring in the station's
+   blue rather than a flat border. It is the same `.bw-avatar` face the bar, the
+   rail, the thread and the profile panel draw — only its size belongs here. */
+.ir-profile-menu .ir-profile-avatar {
+  box-shadow:
+    0 0 0 2px var(--ir-card),
+    0 0 0 3.5px color-mix(in srgb, var(--ir-blue-ink) 20%, var(--ir-tile-line)),
+    0 8px 14px -10px rgba(11, 37, 69, 0.6);
+}
+.ir-profile-menu .ir-profile-avatar {
+  width: 46px;
+  height: 46px;
+  font-size: 0.95rem;
+}
+.ir-profile-dot {
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--ir-card);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, #22c55e 20%, transparent),
+    0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.ir-profile-name {
+  font-size: 1rem;
+  letter-spacing: -0.012em;
+}
+.ir-profile-role {
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  padding: 0.14rem 0.5rem;
+}
+/* Admin is the register blue, Officer the lanyard gold — the dashboard's own
+   mapping, so a role means the same thing here as it does on the charts. The
+   gold ink is written out rather than derived: `--ir-gold` at text size on white
+   is a highlight colour, not a readable one. */
+.ir-profile-role--admin {
+  color: var(--ir-blue-ink);
+  background: color-mix(in srgb, var(--ir-blue-ink) 12%, #ffffff);
+  border-color: color-mix(in srgb, var(--ir-blue-ink) 28%, transparent);
+}
+.ir-profile-role--officer {
+  color: #7a5400;
+  background: color-mix(in srgb, var(--ir-gold) 18%, #ffffff);
+  border-color: color-mix(in srgb, var(--ir-gold) 55%, transparent);
+}
+.ir-profile-meta {
+  font-size: 0.76rem;
+  color: var(--ir-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 2. The plate's footer: the door into the profile -------------------- */
+.ir-profile-view {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.5rem -0.75rem -0.6rem;
+  padding: 0.52rem 0.75rem 0.56rem;
+  border-top: 1px solid var(--ir-border);
+  border-radius: 0 0 13px 13px;
+  /* Opaque, so the plate's spine stops at this hairline instead of crossing the
+     footer: the foot is part of the plate, not part of the identity. */
+  background: var(--ir-card);
+  font-size: 0.79rem;
+  font-weight: 650;
+  color: var(--ir-blue-ink);
+  transition: background 150ms ease, color 150ms ease;
+}
+.ir-profile-view .ir-profile-head-caret { margin-left: auto; }
+.ir-profile-head--link:hover .ir-profile-view {
+  background: var(--ir-blue-tint);
+  color: var(--ir-blue-ink-hi);
+}
+
+/* ---- 3. The list below it ------------------------------------------------- */
+/* Separators fade at both ends, so a hairline parts two groups without drawing a
+   box around either. */
+.ir-profile-sep {
+  margin: 0.5rem 0.45rem;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ir-border) 18%,
+    var(--ir-border) 82%,
+    transparent 100%
+  );
+}
+.ir-profile-item {
+  gap: 0.7rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 10px;
+}
+.ir-profile-item-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, var(--ir-card), var(--ir-soft));
+}
+.ir-profile-item:hover .ir-profile-item-icon { border-color: var(--ir-tile-line); }
+/* The session note is a quiet strip, not a second card: it states a rule, and the
+   only thing that should catch the eye in this menu is the account itself. */
+.ir-menu-note {
+  margin: 0.4rem 0.2rem;
+  border-radius: 10px;
+  /* No border: the note states a rule, and a boxed card beside the account plate
+     competes with the one thing in this menu that should be looked at first. */
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ir-soft) 55%, #ffffff);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ir-profile-head--link { transition: none; }
+  .ir-profile-head--link:hover { transform: none; }
+  .ir-profile-view { transition: none; }
+}
 
 /* ---- Preferences rows: shared by the Profile panel -----------------------
    These rows USED to live inside the top bar's menu, indented under a

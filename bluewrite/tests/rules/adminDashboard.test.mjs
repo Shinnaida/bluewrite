@@ -350,7 +350,11 @@ test('the chart card is headed by its name and the range control', () => {
     css.includes('.dash-grid-main--split > .dash-panel:first-child'),
     'the trend card lost its trimmed foot',
   );
-  assert.match(src, /<ChartKey byType=\{chartTypes\} \/>/);
+  // …and the key is told WHAT A COLUMN IS. An All-time range draws months (see
+  // DashboardController::DAY_BUCKET_MAX_DAYS), and a key that called every column
+  // a day would describe a chart that is not on screen, so the unit travels with
+  // the payload's meta rather than being assumed here.
+  assert.match(src, /<ChartKey byType=\{chartTypes\} unit=\{chartBucket\} \/>/);
   assert.match(src, /<RangeSelect preset=\{preset\} onPick=\{applyPreset\} \/>/);
   assert.match(src, /const applyPreset = \(days\) => \{[\s\S]{0,120}?setPreset\(days\)/);
 

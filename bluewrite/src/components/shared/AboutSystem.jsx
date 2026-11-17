@@ -19,7 +19,8 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../lib/api.js';
-import { AI_ADVISORY, DEPARTMENT, SYSTEM_TITLE } from '../../lib/appInfo.js';
+import { AI_ADVISORY, APP_VERSION, DEPARTMENT, SYSTEM_CAPABILITIES, SYSTEM_SUMMARY, SYSTEM_TITLE } from '../../lib/appInfo.js';
+import { IDLE_LIMIT_MIN } from '../../lib/session.js';
 
 /** The station's letterhead fields, in the order the panel prints them. */
 const HEADER_ROWS = [
@@ -89,13 +90,31 @@ export default function AboutSystem({ user, onClose }) {
         aria-labelledby="about-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="about-title">About this system</h2>
-        <p className="about-lead">
-          BLUE<em>WRITE</em> — {SYSTEM_TITLE}.
-        </p>
+        <div className="about-hero">
+          <div>
+            <p className="about-kicker">Republic of the Philippines · {DEPARTMENT}</p>
+            <h2 id="about-title">About this system</h2>
+            <p className="about-lead">
+              BLUE<em>WRITE</em> — {SYSTEM_TITLE} · v{APP_VERSION}
+            </p>
+            <p className="about-summary">{SYSTEM_SUMMARY}</p>
+          </div>
+        </div>
 
+        <div className="about-status" role="status">
+          <span className={`about-pill ${aiEnabled ? 'is-on' : 'is-off'}`}>AI drafting: {aiEnabled === null ? 'Checking…' : aiEnabled ? 'Enabled' : 'Not configured'}</span>
+          <span className={`about-pill ${station === false ? 'is-off' : 'is-on'}`}>Server: {station === null ? 'Reading…' : station === false ? 'Unreachable' : 'Answering'}</span>
+        </div>
+        <h3 className="about-section">What it does</h3>
+        <ul className="about-list">
+          {SYSTEM_CAPABILITIES.map((cap) => (
+            <li key={cap}>{cap}</li>
+          ))}
+        </ul>
+        <h3 className="about-section">This deployment</h3>
         <dl className="about-facts">
           <Fact label="Department">{DEPARTMENT}</Fact>
+          <Fact label="Build">Station edition · v{APP_VERSION}</Fact>
           {HEADER_ROWS.map(([key, label]) => (
             <Fact key={key} label={label}>
               {pending(header?.[key])}
@@ -116,16 +135,19 @@ export default function AboutSystem({ user, onClose }) {
                 : 'Unavailable'}
           </Fact>
           <Fact label="AI drafting">
-            {aiEnabled === null ? 'Checking…' : aiEnabled ? 'Enabled' : 'Not configured'}
-          </Fact>
-          {/* The officer's own line, marked as such: on a shared workstation the
-              panel is often read out to somebody else, and "which build" and
-              "which account" are the two questions that get mixed up. */}
-          <Fact label="Signed in as">
-            {user.full_name} · Badge {user.badge_number} · {user.role}
+            {aiEnabled === null ? 'Checking…' : aiEnabled ? 'Enabled — suggestions only, you verify every fact' : 'Not configured on this installation'}
           </Fact>
         </dl>
 
+        <h3 className="about-section">Your session</h3>
+        <dl className="about-facts">
+          <Fact label="Signed in as">
+            {user.full_name} · Badge {user.badge_number} · {user.role}
+          </Fact>
+          <Fact label="Auto sign-out">After {IDLE_LIMIT_MIN} minutes without activity — an open draft is saved first</Fact>
+        </dl>
+        <h3 className="about-section">Support call script</h3>
+        <p className="about-note">Read these three lines down the phone: build v{APP_VERSION}, station {pending(header?.station_name)}, signed in as {user.full_name} (Badge {user.badge_number}). If a row says Unavailable, the server could not be reached — the panel still opens so the call can continue.</p>
         <p className="about-note">{AI_ADVISORY}</p>
 
         <div className="actions">

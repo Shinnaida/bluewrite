@@ -210,6 +210,44 @@ test('sign-ins and the trail are drawn as acts, and an unknown action shows as i
   assert.match(html, /<span class="acct-list__stamp">BL-2026-0091<\/span>/);
 });
 
+test('every action the server logs has a sentence, not a code', async () => {
+  const { actionLabel } = await load();
+
+  // THE DRAWER SHOWED THE GAP FIRST: `ai.arrange` and `ai.classify` printed raw
+  // on the live desk while the map only knew the terminology chatbot. Every
+  // code below is a string Audit::log actually writes (see the controllers) —
+  // each must come back a sentence. Truly unknown codes still print as
+  // themselves (pinned by the test above); that fallback is unchanged.
+  for (const [code, sentence] of [
+    ['ai.arrange', 'Arranged the narrative'],
+    ['ai.classify', 'Classified the incident type'],
+    ['ai.classify.details', 'Classified the incident details'],
+    ['ai.enhance', 'Enhanced the narrative'],
+    ['ai.narrative.generate', 'Generated a draft narrative'],
+    ['ai.narrative.tighten', 'Tightened the narrative'],
+    ['ocr.read', 'Read text from a photo'],
+    ['report.print', 'Opened the print view'],
+    ['report.export', 'Exported reports'],
+    ['report.capture_add', 'Photo filed against a report'],
+    ['report.capture_review', 'Reviewed a filed photo'],
+    ['report.verification', 'Verified a translated report'],
+    ['device.issue', 'Trusted this device'],
+    ['device.revoke', 'Revoked a trusted device'],
+    ['station.update', 'Updated station settings'],
+    ['station.seal_set', 'Set a station seal'],
+    ['station.seal_clear', 'Cleared a station seal'],
+    ['login.password_ok', 'Password accepted — code required'],
+    ['mfa.verified', 'Verified the second factor'],
+    ['mfa.code_resent', 'Requested a new sign-in code'],
+    ['mfa.break_glass', 'Break-glass recovery used'],
+    ['account.request_submitted', 'Requested account recovery'],
+    ['account.request_handled', 'Handled a recovery request'],
+    ['account.request_unmatched', 'Recovery attempt for an unknown account'],
+  ]) {
+    assert.equal(actionLabel(code), sentence, code);
+  }
+});
+
 test('no sign-ins yet is a sentence about when they start being kept', async () => {
   const { renderProfile } = await load();
   const html = renderProfile({ signIns: [] });

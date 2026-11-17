@@ -22,6 +22,21 @@ bluewrite_extracted.txt
 # They are working files, not source: never commit them.
 .tmp-*
 
+# Build/probe logs and JVM crash dumps (the launcher and the phone app's Gradle
+# daemon write these beside the code)
+*.log
+
+# Editor-local launch files and draw.io scratch: backups, temp files, and the
+# stray .class files a draw.io export leaves behind
+.vscode/
+*.drawio.bkp
+*.drawio.dtmp
+.$*
+*.class
+
+# A stray shell-redirect artifact (`echo > ^`)
+^
+
 # OS junk
 Thumbs.db
 .DS_Store

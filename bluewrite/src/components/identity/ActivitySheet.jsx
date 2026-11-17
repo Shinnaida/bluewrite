@@ -69,29 +69,36 @@ export default function ActivitySheet({
 
   return (
     // THE READING IS ON THE ROOT, and it is what chooses the ramp (`.sheet--attendance`
-    // / `.sheet--activity`): the squares, the legend's samples and the pressed half of
-    // the switch all read the same five variables, so the switch and the drawing can
-    // never be two different colours at once.
+    // / `.sheet--activity`): the squares, the legend's samples and the toggle's knob
+    // all read the same five variables, so the toggle and the drawing can never be
+    // two different colours at once.
     <div className={`sheet sheet--${metric}`}>
       <div className="sheet-head">
-        {/* TWO READINGS OF THE SAME RECORD, and a switch rather than a second chart: they
-            share a window, a grid and a legend, so drawing them apart would be two sheets
-            of the same year. `aria-pressed` rather than a radio group because both buttons
-            are always visible and one is always current — which is what a pressed state
-            says and a radio does not. */}
-        <div className="sheet-switch" role="group" aria-label="What the sheet counts">
+        {/* TWO READINGS OF THE SAME RECORD, and one toggle rather than a second chart:
+            they share a window, a grid and a legend, so drawing them apart would be two
+            sheets of the same year. `role="switch"` because there are exactly two readings
+            and exactly one is current — checked means activity (right), unchecked means time
+            (left), and the name always offers the reading a press would show. */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={metric === 'activity'}
+          aria-label={metric === 'activity' ? 'Show the time reading' : 'Show the activity reading'}
+          className="sheet-toggle"
+          onClick={() => onMetric(metric === 'activity' ? 'attendance' : 'activity')}
+        >
           {METRICS.map((m) => (
-            <button
+            <span
               key={m}
-              type="button"
-              className="sheet-switch__btn"
-              aria-pressed={m === metric}
-              onClick={() => onMetric(m)}
+              className="sheet-toggle__opt"
+              data-on={m === metric || undefined}
+              aria-hidden="true"
             >
               {METRIC_INFO[m].label}
-            </button>
+            </span>
           ))}
-        </div>
+          <span className="sheet-toggle__knob" aria-hidden="true" />
+        </button>
 
         {/* The absolute numbers, in words: they are the half of this the colours cannot
             carry (see the relative-shading note on the legend). A read still in flight

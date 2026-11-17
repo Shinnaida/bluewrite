@@ -24,6 +24,18 @@ final class ReportsController
     private const LEGACY_TYPES = ['Physical Injury', 'Vehicular Accident', 'Drug-related', 'Other'];
 
     /**
+     * How long a composing stamp means "and still is".
+     *
+     * Fifteen seconds against the composer's five-second ping: two lost
+     * requests on a busy LAN do not blink the pen badge off and on while
+     * somebody is mid-sentence, and a closed laptop stops showing within a
+     * breath. Read by PresenceController::snapshot and UsersController::index
+     * as well as below — one window, stated once, so the board, the directory
+     * and the endpoint cannot disagree about what counts as now.
+     */
+    public const COMPOSING_WINDOW = 15;
+
+    /**
      * Owner request (2026-11-02): completeness never blocks — bypassed, not
      * deleted. The rules still exist and still run, but a BLANK field never
      * refuses a write. Shape validation (lengths, enums, formats, malformed
@@ -1241,6 +1253,50 @@ final class ReportsController
         ]);
     }
 
+    /**
+     * "I am composing this report" — a latch, not a save.
+     *
+     * THE WRITER IS THE SESSION, which is the whole permission model: this
+     * route says something about the person making the request, so the user id
+     * comes from Auth and the report id from the path — there is no id a caller
+     * could pass to put a draft in somebody else's hands. The report must exist
+     * and not be deleted, refused the same 404 anything else gets, because a
+     * stamp aimed at nothing is a badge that points nowhere.
+     *
+     * IT WRITES AT MOST ONE ROW and returns a bare acknowledgement, because the
+     * client already knows what it just did. It is NOT in the audit trail: like
+     * the message-typing latch (016), a keystroke in a draft is less than a
+     * save, not more. STALENESS IS THE ONLY EXPIRY — a stamp older than the
+     * window above is simply not fresh, so a session that died mid-sentence
+     * cannot leave the station showing pen badges forever. No sweep, no delete
+     * route, no cron.
+     */
+    public function composing(string $id): void
+    {
+        $user = Auth::requireUser();
+        $reportId = (int) $id;
+        $pdo = Database::pdo();
+
+        $exists = $pdo->prepare('SELECT COUNT(*) AS n FROM reports WHERE id = :id AND deleted_at IS NULL');
+        $exists->execute([':id' => $reportId]);
+        if ((int) $exists->fetch()['n'] === 0) {
+            Response::json(404, ['error' => 'Report not found.']);
+        }
+
+        // ONE STATEMENT, INSERT OR REFRESH. Reading the existing stamp and
+        // deciding in PHP would race two pings; the latch holds one row per
+        // writer and the newest touch wins, which is the only ordering a
+        // "right now" signal needs.
+        $stmt = $pdo->prepare(
+            'INSERT INTO report_composing (user_id, report_id, updated_at)
+                  VALUES (:uid, :rid, NOW())
+             ON DUPLICATE KEY UPDATE report_id = :rid, updated_at = NOW()'
+        );
+        $stmt->execute([':uid' => (int) $user['id'], ':rid' => $reportId]);
+
+        Response::json(200, ['ok' => true]);
+    }
+
     public function update(string $id): void
     {
         $user = Auth::requireUser();
@@ -1809,6 +1865,54 @@ n     * reports; Admin and Officer may print any.
             'verification_label' => $status['label'],
             'verifications' => $verifications,
             'captures' => $captures,
+        ]);
+    }
+
+    /**
+     * The live peek at one report: status, type, place, when it last changed,
+     * and the opening of the narrative — and nothing else.
+     *
+     * WHY THIS EXISTS BESIDE printData. The desk drawer polls while it is open,
+     * and polling printData would write a `report.print` row every few seconds
+     * — a trail of the administrator watching, not of anything the officer did.
+     * This read is silent the way the presence snapshot is silent, for the same
+     * reason: it is liveness, not access. Opening the drawer still goes through
+     * printData once (which logs the view, as any opening should); the ticks
+     * after that only ask "what changed". The visibility rule is printData's
+     * own, stated once more rather than loosened for convenience.
+     */
+    public function live(string $id): void
+    {
+        $user = Auth::requireUser();
+        $pdo = Database::pdo();
+
+        $stmt = $pdo->prepare(
+            'SELECT r.id, r.status, r.incident_type, r.location, r.updated_at, r.narrative
+             FROM reports r
+             WHERE r.id = :id AND r.deleted_at IS NULL'
+        );
+        $stmt->execute([':id' => (int) $id]);
+        $report = $stmt->fetch();
+        if ($report === false) {
+            Response::json(404, ['error' => 'Report not found.']);
+        }
+        if (!ReportVerification::mayViewForVerification($user, $report)) {
+            Response::json(403, ['error' => 'You can only open reports you recorded.']);
+        }
+
+        $narrative = (string) ($report['narrative'] ?? '');
+        Response::json(200, [
+            'report' => [
+                'id' => (int) $report['id'],
+                'status' => (string) $report['status'],
+                'incident_type' => (string) $report['incident_type'],
+                'location' => $report['location'] === null ? null : (string) $report['location'],
+                'updated_at' => (string) $report['updated_at'],
+                // The opening, not the document: enough to see the work moving,
+                // short enough that the drawer never becomes a second editor.
+                'narrative_excerpt' => mb_substr($narrative, 0, 600),
+                'narrative_truncated' => mb_strlen($narrative) > 600,
+            ],
         ]);
     }
 

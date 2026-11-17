@@ -14,10 +14,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  COMPOSING_PING_MS,
   HEARTBEAT_MS,
   RAIL_SLOTS,
+  SNAPSHOT_MS,
   STALE_GRACE_SECONDS,
   ageRoster,
+  applySnapshot,
   chatheadTitle,
   isSelf,
   onDutyLabel,
@@ -204,4 +207,57 @@ test('the rail draws everybody but the session\u2019s own account', () => {
   // returned nothing.
   assert.deepEqual(withoutSelf(undefined, { id: 3 }), []);
   assert.deepEqual(withoutSelf(null, { id: 3 }), []);
+});
+
+test('the snapshot tick is quick, and the composer ping sits inside the server window', () => {
+  // Five seconds against the server's fifteen (ReportsController::
+  // COMPOSING_WINDOW): two lost requests do not blink the badge, and a closed
+  // tab stops showing within a breath. If either side moves, this is the test
+  // that says they disagreed.
+  assert.equal(SNAPSHOT_MS, 5000);
+  assert.equal(COMPOSING_PING_MS, 5000);
+  assert.ok(COMPOSING_PING_MS * 3 <= 15000, 'two lost pings must still be inside the window');
+});
+
+test('a snapshot folds composing flags into rows and nothing else', () => {
+  const rows = [
+    { id: 1, full_name: 'Maria Santos', photo_url: '/old.jpg', composing_report_id: null },
+    { id: 2, full_name: 'Ana Cruz', photo_url: '/ana.jpg', composing_report_id: 9 },
+  ];
+  const { rows: merged, changed, hasNew } = applySnapshot(rows, [
+    { id: 1, composing_report_id: 12 },
+    { id: 2, composing_report_id: null },
+  ]);
+
+  // The flags move to the snapshot's answer — on for Maria, expired for Ana —
+  // and everything else rides along untouched, so a live tick can never
+  // clobber a name or a face a slower read is carrying.
+  assert.equal(merged[0].composing_report_id, 12);
+  assert.equal(merged[1].composing_report_id, null);
+  assert.equal(merged[0].photo_url, '/old.jpg');
+  assert.equal(changed, true);
+  assert.equal(hasNew, false);
+});
+
+test('a quiet snapshot changes nothing and names strangers', () => {
+  const rows = [{ id: 1, full_name: 'Maria Santos', composing_report_id: 12 }];
+
+  // Same flag back: no new objects, no render — a tick with no news is free.
+  const same = applySnapshot(rows, [{ id: 1, composing_report_id: 12 }]);
+  assert.equal(same.changed, false);
+  assert.equal(same.rows[0], rows[0]);
+  assert.equal(same.hasNew, false);
+
+  // An id the rows have never seen is somebody new: only a full read can
+  // introduce them, so the caller re-reads instead of merging.
+  const stranger = applySnapshot(rows, [{ id: 7, composing_report_id: 3 }]);
+  assert.equal(stranger.hasNew, true);
+
+  // Junk is a quiet tick, not a crash — and a missing flag reads as "not
+  // composing", never as a claim either way.
+  const junk = applySnapshot(rows, [null, { id: 1 }, { id: 'nonsense' }]);
+  assert.equal(junk.rows[0].composing_report_id, null);
+  assert.equal(junk.changed, true);
+  assert.equal(junk.hasNew, false);
+  assert.deepEqual(applySnapshot(undefined, undefined), { rows: [], changed: false, hasNew: false });
 });

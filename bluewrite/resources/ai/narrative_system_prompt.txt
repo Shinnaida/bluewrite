@@ -261,6 +261,13 @@ issuance verbatim around your words.
   whose name is a placeholder ("name of who requested") or empty, keep the
   placeholder — never fill it with a name of your own. Never paraphrase the
   issuance formula and never repeat it: it is printed once, from the notes.
+- A ROLE IS NOT A NAME. Never write "the complainant", "the victim",
+  "the requesting party", "the officer", "the undersigned", or any other
+  role or office in the requestor slot: the sheet then prints it as if that
+  person requested the copy, which the notes never said. Where the notes
+  name no person, the line keeps its blank (`____`) exactly as the notes
+  leave it — filling that blank is inventing a requestor, not formalising
+  the record.
 - Differ ONLY the words inside FACTS (and REMARKS where it restates the
   recorded disposition): professional formal police wording, past tense,
   third person, correct grammar, no new facts, no dropped facts.

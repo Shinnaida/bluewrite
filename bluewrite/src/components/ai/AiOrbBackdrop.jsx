@@ -3,8 +3,7 @@
 // The glowing gradient behind the assistant's face. The integration prompt
 // shipped `gradient-orb.tsx` — a fullscreen shader orb in TSX on
 // @react-three/fiber — and this file is that component translated into the
-// app's own conventions (JSX + plain CSS, plain `three`), exactly as
-// GradientBlobCard.jsx was translated from its shadcn/Tailwind source. The
+// app's own conventions (JSX + plain CSS, plain `three`). The
 // VERBATIM copy of the prompt lives at src/components/ui/gradient-orb.tsx so a
 // future update can be diffed against it rather than re-derived.
 //
@@ -36,8 +35,8 @@
 //      SourceAlpha pair — the default would multiply the colour by its own
 //      alpha a second time and the glow would come out muddy.
 //
-//   2. THE COLOURS ARE THE APP'S OWN, ALL BLUE (the GradientBlobCard
-//      precedent). The source's purple (0.616, 0, 1.0) and orange
+//   2. THE COLOURS ARE THE APP'S OWN, ALL BLUE. The source's purple
+//      (0.616, 0, 1.0) and orange
 //      (1.0, 0.373, 0.122) are replaced with the same blue family that card
 //      already declares: the band navy, the surface blue and the bright blue
 //      ink. Behind a blue SVG sphere on a blue-white card, the source's ramp
@@ -169,7 +168,7 @@ const fragmentShader = /* glsl */ `
   }
 
   // THE APP'S BLUE FAMILY, not the prompt's blue/purple/orange — see the file
-  // header, deviation 2. The three are GradientBlobCard's own ramp: the band
+  // header, deviation 2. The three are the app's own ramp: the band
   // navy (#0B2A5C), the surface blue (#2F7BE0) and the bright blue ink
   // (#4DA3FF), stated as literals because a shader cannot read a CSS token.
   const vec3 baseColor0 = vec3(0.184, 0.482, 0.878);

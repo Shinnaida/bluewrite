@@ -73,6 +73,20 @@ test('every account is drawn, and the Actions column is gone for good', async ()
   }
 });
 
+test('a composing account wears the writing tag beside the name, in either view', async () => {
+  const { renderDirectory, ACCOUNTS } = await load();
+  const users = [{ ...ACCOUNTS[0], composing_report_id: 7 }];
+
+  // Tall and folded alike: the amber tag beside the name — while an account
+  // without the latch wears none of it.
+  for (const html of [renderDirectory({ users }), renderDirectory({ users, compact: true })]) {
+    assert.match(html, /users-writing-tag/);
+  }
+  // Tall rows carry the whole sentence, and the screen-reader status with it.
+  assert.match(renderDirectory({ users }), /writing a report/);
+  assert.doesNotMatch(renderDirectory(), /users-writing-tag/, 'the tag leaked onto idle rows');
+});
+
 test('the hidden account never renders, in either view', async () => {
   const { renderDirectory, ACCOUNTS } = await load();
   const elena = ACCOUNTS.find((a) => a.username === 'e.ramos');

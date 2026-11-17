@@ -14,7 +14,16 @@ const JOINTS = 4;
 const NODE_WEIGHT = 1 / 0.05;
 const MAX_STEP = 1 / 960;
 const ITERATIONS = 2;
-const SAMPLES = 72;
+const SAMPLES = 144;
+/**
+ * Render resolution floor. A canvas the size of a badge is cheap to overdraw, and
+ * most station monitors report devicePixelRatio 1 — which is exactly the screen on
+ * which a card's rounded corner and its hairline bevel show their stair-steps. 1.8
+ * then a downsample is the cheapest anti-aliasing there is; the cap stays at 3 so a
+ * 4K display does not render a 200px badge at 1200px wide.
+ */
+const SUPERSAMPLE = 1.8;
+const MAX_PIXEL_RATIO = 3;
 const FOV = 24;
 const STRAP_WIDTH = 0.36;
 const RING_RADIUS = 0.095;
@@ -241,16 +250,19 @@ const buildCardGeometry = layout => {
     slot.height / 2 + BEVEL
   );
   outline.holes.push(hole);
+  // TESSELATION. 24 segments around the corners is enough at 100px and visibly
+  // faceted on the bevel at badge size once the canvas is supersampled — the
+  // rounded edge is the silhouette, so it is the one place extra vertices are seen.
   const body = new THREE.ExtrudeGeometry(outline, {
     depth: THICKNESS,
     bevelEnabled: true,
     bevelThickness: BEVEL,
     bevelSize: BEVEL,
-    bevelSegments: 5,
-    curveSegments: 24
+    bevelSegments: 8,
+    curveSegments: 56
   });
   body.translate(0, 0, -THICKNESS / 2);
-  const face = new THREE.ShapeGeometry(outline, 24);
+  const face = new THREE.ShapeGeometry(outline, 56);
   const position = face.getAttribute('position');
   const uv = face.getAttribute('uv');
   for (let i = 0; i < position.count; i++) {
@@ -269,8 +281,8 @@ const buildClampGeometry = width => {
     bevelEnabled: true,
     bevelThickness: 0.014,
     bevelSize: 0.014,
-    bevelSegments: 6,
-    curveSegments: 10
+    bevelSegments: 8,
+    curveSegments: 24
   });
   geometry.translate(0, 0, -0.01);
   return geometry;
@@ -335,7 +347,10 @@ const makeCanvasTexture = (canvas, anisotropy) => {
 };
 
 const buildGrainTexture = () => {
-  const size = 128;
+  // 256 rather than 128: the field is repeated 5x7 across the card face, so a 128px
+  // tile is a 26px pattern stretched over the whole face — a visible repeat rather
+  // than the paper tooth it is meant to be.
+  const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
@@ -372,7 +387,9 @@ const buildGrainTexture = () => {
 };
 
 const buildWeaveTexture = () => {
-  const size = 128;
+  // Matched to the grain for the same reason: this one is the STRAP's thread, seen
+  // close up along the whole length of the band.
+  const size = 256;
   const threads = 8;
   const random = seeded(19);
   const fiber = Float32Array.from({ length: size * size }, () => random());
@@ -765,6 +782,17 @@ const Lanyard = ({
       return undefined;
     }
     renderer.setClearColor(0x000000, 0);
+    // SHADOWS ON A CANVAS WITH NOTHING TO CATCH THEM. The catcher is a plane the
+    // camera looks straight through (see shadePlane below): it draws only the
+    // darkening the card casts onto it, which reads as the badge hanging in front of
+    // the page for the same reason a drop shadow does, but the shadow MOVES with the
+    // card when it swings or flips, and never with the page underneath it.
+    renderer.shadowMap.enabled = true;
+    // PCFShadowMap, not PCFSoftShadowMap: this build of three has retired the soft
+    // variant (it logs a warning and silently substitutes this one anyway). The
+    // softness is bought with shadow.radius on the light instead, which is the knob
+    // that still exists.
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.NeutralToneMapping;
     renderer.toneMappingExposure = 1;
@@ -782,7 +810,44 @@ const Lanyard = ({
     keyLight.position.set(-2.5, 4, 6);
     const fillLight = new THREE.DirectionalLight(0xffffff, 0.35);
     fillLight.position.set(3, -1, 4);
-    scene.add(keyLight, fillLight);
+    // A RIM, just off the back-right edge. The card is white on a dark dashboard, so
+    // its bevel and its thickness are the only things saying it is an object rather
+    // than a picture — and a bevel with no light raking across it is a flat line.
+    const rimLight = new THREE.DirectionalLight(0xcfe0ff, 0.55);
+    rimLight.position.set(3.5, 1.5, -6);
+    scene.add(keyLight, fillLight, rimLight);
+
+    // THE SHADOW LIGHT CARRIES NO LIGHT: intensity 0, castShadow on. Its direction is
+    // chosen for where the shadow should fall (almost straight on, a shade under the
+    // card, the way a badge hanging off a page would), independently of the key light
+    // that shapes the plastic — tidy, and the reason the two jobs are separate lights.
+    const shadeLight = new THREE.DirectionalLight(0xffffff, 0);
+    shadeLight.position.set(-0.55, 1.1, 4);
+    shadeLight.castShadow = true;
+    // 512 per side, not 1024: the shadow falls on a badge 200 pixels wide, and every
+    // hanging card owns its own renderer — at 1024 the depth target would cost more
+    // video memory across a full roster than the shadow is worth.
+    shadeLight.shadow.mapSize.set(512, 512);
+    shadeLight.shadow.bias = -0.0008;
+    shadeLight.shadow.normalBias = 0.02;
+    // A badge shadow has no hard edge anywhere: the card is a hand's width off the
+    // page, and the light behind it is the room, not a lamp. Radius is PCF's softness.
+    shadeLight.shadow.radius = 4;
+    Object.assign(shadeLight.shadow.camera, { left: -2.4, right: 2.4, top: 3.2, bottom: -3.2, near: 0.5, far: 14 });
+    shadeLight.shadow.camera.updateProjectionMatrix();
+    scene.add(shadeLight);
+
+    // The invisible catcher. Behind the card's full swing (the card is 1.6 wide and
+    // turns about its own centre, so it never reaches 1.1 back), and large enough to
+    // hold the shadow at the widest zoom. ShadowMaterial draws the shadow and nothing
+    // else, which is what keeps the page's own gradient visible through it.
+    const shadePlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(6.5, 7.5),
+      new THREE.ShadowMaterial({ opacity: 0.22, transparent: true, depthWrite: false })
+    );
+    shadePlane.position.set(0, 0, -1.1);
+    shadePlane.receiveShadow = true;
+    scene.add(shadePlane);
 
     const imageCache = new Map();
     const images = { front: null, back: null, strap: null };
@@ -842,21 +907,29 @@ const Lanyard = ({
     const bodyMesh = new THREE.Mesh(undefined, edgeMaterial);
     const frontMesh = new THREE.Mesh(undefined, frontMaterial);
     const backMesh = new THREE.Mesh(undefined, backMaterial);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(RING_RADIUS, RING_TUBE, 18, 72), metalMaterial);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(RING_RADIUS, RING_TUBE, 36, 144), metalMaterial);
     ring.rotation.y = Math.PI / 2 - 0.7;
     cardGroup.add(bodyMesh, frontMesh, backMesh, ring);
     scene.add(cardGroup);
+    // The extruded body is the card's whole silhouette (the faces sit inside it), so
+    // one caster per object is enough — and the strap casts too, which is what tells
+    // you the card is hanging from something rather than floating.
 
     const bandGeometry = buildBandGeometry(SAMPLES);
     const band = new THREE.Mesh(bandGeometry, bandMaterial);
     band.frustumCulled = false;
+    band.castShadow = true;
     scene.add(band);
 
     const clampGroup = new THREE.Group();
     const clampMesh = new THREE.Mesh(buildClampGeometry(STRAP_WIDTH), metalMaterial);
     clampMesh.position.y = EYELET_RADIUS + CLAMP_BODY / 2 - 0.004;
-    const eyelet = new THREE.Mesh(new THREE.TorusGeometry(EYELET_RADIUS, 0.0105, 14, 40), metalMaterial);
+    const eyelet = new THREE.Mesh(new THREE.TorusGeometry(EYELET_RADIUS, 0.0105, 24, 72), metalMaterial);
     clampGroup.add(clampMesh, eyelet);
+    clampMesh.castShadow = true;
+    eyelet.castShadow = true;
+    bodyMesh.castShadow = true;
+    ring.castShadow = true;
     scene.add(clampGroup);
 
     const sim = createSimulation();
@@ -1244,7 +1317,7 @@ const Lanyard = ({
     const resize = () => {
       view.width = Math.max(1, container.clientWidth);
       view.height = Math.max(1, container.clientHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 3));
+      renderer.setPixelRatio(Math.min(Math.max(window.devicePixelRatio || 1, SUPERSAMPLE), MAX_PIXEL_RATIO));
       renderer.setSize(view.width, view.height, false);
       apply();
       render();
@@ -1278,9 +1351,10 @@ const Lanyard = ({
       canvas.removeEventListener('pointercancel', onPointerUp);
       canvas.removeEventListener('lostpointercapture', onPointerUp);
       canvas.removeEventListener('touchstart', onTouchStart);
-      [bodyMesh, frontMesh, backMesh, ring, clampMesh, eyelet, band].forEach(mesh => mesh.geometry?.dispose());
-      [frontMaterial, backMaterial, edgeMaterial, metalMaterial, bandMaterial].forEach(material => material.dispose());
+      [bodyMesh, frontMesh, backMesh, ring, clampMesh, eyelet, band, shadePlane].forEach(mesh => mesh.geometry?.dispose());
+      [frontMaterial, backMaterial, edgeMaterial, metalMaterial, bandMaterial, shadePlane.material].forEach(material => material.dispose());
       [frontTexture, backTexture, strapTexture, grain, weave].forEach(texture => texture.dispose());
+      shadeLight.shadow.map?.dispose();
       environment.dispose();
       renderer.dispose();
       if (canvas.parentNode) canvas.parentNode.removeChild(canvas);

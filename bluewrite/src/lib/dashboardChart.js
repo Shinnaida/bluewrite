@@ -252,21 +252,34 @@ export const CHART_MENU = {
 
 /**
  * @param {object} ctx
- * @param {string} ctx.date        the day under the pointer (YYYY-MM-DD)
+ * @param {string} ctx.date        the column under the pointer, by its FIRST day
+ *                                 (YYYY-MM-DD) — what an action filters to
+ * @param {string} ctx.end         the column's last day, when a column is more than
+ *                                 one day (a week or a month); '' for a day
+ * @param {string} ctx.unit        'day' | 'week' | 'month' — what a column stands
+ *                                 for. Only the WORDS change with it: an action
+ *                                 still acts on the column's date range, so a
+ *                                 month's "filter to this month" narrows the range
+ *                                 to that month rather than to its first day.
+ * @param {string} ctx.dateLabel   how to write that range in a sentence, when it is
+ *                                 not just the ISO date
  * @param {string} ctx.type        the incident type under the pointer, or '' when
  *                                 the pointer is on the plot background rather
  *                                 than on a box. The type-specific entry is shown
  *                                 only for a real box: "show only this type" is
- *                                 meaningless over a day's colour stack.
- * @param {number} ctx.total       reports on that day
+ *                                 meaningless over a column's colour stack.
+ * @param {number} ctx.total       reports in that column
  * @param {string} ctx.activeType  the incident-type filter in force, if any
  * @param {string} ctx.activeDay   the day the range is already narrowed to, if it
  *                                 is narrowed to one
- * @param {boolean} ctx.pinned     whether that day's card is pinned open
+ * @param {boolean} ctx.pinned     whether that column's card is pinned open
  * @param {string} ctx.scope       'all' (station-wide) or 'mine'
  */
 export function chartMenuItems({
   date,
+  end = '',
+  unit = 'day',
+  dateLabel = '',
   type = '',
   total = 0,
   activeType = '',
@@ -276,11 +289,17 @@ export function chartMenuItems({
 } = {}) {
   if (!date) return [];
   const n = Number.isFinite(Number(total)) ? Number(total) : 0;
+  // Every label below was written for a day, because a day was the only unit this
+  // plot had. A bucketed range would then describe a month as "this day", which is
+  // the kind of sentence a reader acts on and is wrong about — so the unit is
+  // substituted into the same sentences rather than given a second set of them.
+  const one = unit === 'week' || unit === 'month' ? unit : 'day';
+  const label = dateLabel || date;
   const items = [
     {
       key: CHART_MENU.focusDay,
-      label: 'Filter the chart to this day',
-      hint: `The chart and the figures above it become ${date} alone.`,
+      label: `Filter the chart to this ${one}`,
+      hint: `The chart and the figures above it become ${label} alone.`,
       disabled: activeDay === date,
     },
   ];
@@ -295,25 +314,25 @@ export function chartMenuItems({
   items.push(
     {
       key: CHART_MENU.openReports,
-      label: "Open that day's reports",
+      label: one === 'day' ? "Open that day's reports" : 'Open those reports',
       // The register has no scope of its own: an officer's own list is already
       // theirs, but for an Admin who has the chart on "My reports" the register
       // would open on the whole station — more than the count this hint promises.
       // Said here rather than acted on, because closing that gap means a new
       // server-side filter, not a menu entry.
       hint:
-        `${n} ${n === 1 ? 'report' : 'reports'} on ${date}${type ? ` of type ${type}` : ''}, in All Reports.` +
+        `${n} ${n === 1 ? 'report' : 'reports'} on ${label}${type ? ` of type ${type}` : ''}, in All Reports.` +
         (scope === 'mine' ? ' That list is the station\u2019s, not only your own reports.' : ''),
       disabled: n === 0,
     },
     {
       key: CHART_MENU.copyDay,
-      label: "Copy the day's breakdown",
+      label: one === 'day' ? "Copy the day's breakdown" : `Copy the ${one}\u2019s breakdown`,
       hint: 'The date, the scope, and each incident type with its count, as text.',
     },
     {
       key: CHART_MENU.pinDay,
-      label: pinned ? 'Unpin this day' : 'Pin this day open',
+      label: pinned ? `Unpin this ${one}` : `Pin this ${one} open`,
       hint: pinned
         ? 'Closes the pinned breakdown card.'
         : 'Keeps the breakdown card on screen while you look elsewhere.',

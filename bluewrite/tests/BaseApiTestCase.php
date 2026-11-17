@@ -147,6 +147,11 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // reviewed_at/reviewed_by and the register counts only unreviewed
         // captures, so the scratch DB must carry both columns.
         $this->runSqlFile(__DIR__ . '/../migrations/029_capture_reviewed.sql');
+        // 030 is the report-composing latch. The composing route writes it and
+        // both live reads (GET /users, GET /presence/snapshot) join it, so the
+        // scratch DB must carry the table or those reads fail as unknown-table
+        // 500s rather than as assertions.
+        $this->runSqlFile(__DIR__ . '/../migrations/030_report_composing.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         // Every account that OWES a second factor has an email address, because
@@ -308,7 +313,8 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
      *
      * request() decodes and discards the body, which is right for every document
      * endpoint and useless for an image: the assertions worth making about an
-     * avatar are about the bytes themselves (is it a JPEG, is it 256px square).
+     * avatar are about the bytes themselves (is it a JPEG, is it a square, and how
+     * wide).
      *
      * @return array{status:int, bytes:string, contentType:string}
      */

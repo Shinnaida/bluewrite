@@ -825,9 +825,9 @@ final class NarrativeController
     {
         Auth::requireUser();
         $cfg = NarrativeService::aiConfig();
-        $key = (string) (getenv('GEMINI_API_KEY') ?: ($cfg['gemini']['api_key'] ?? ''));
+        // The tools work when the provider is enabled AND carries a key.
         Response::json(200, [
-            'enabled' => NarrativeService::enabled() && $key !== '',
+            'enabled' => NarrativeService::enabled() && NarrativeService::hasProviderKey(),
             'provider' => (string) ($cfg['provider'] ?? 'gemini'),
         ]);
     }
@@ -906,7 +906,10 @@ final class NarrativeController
             return 'The AI service rejected this station\'s key. An administrator needs to install a valid key — your report is not affected.';
         }
         if ($status === 402) {
-            return 'The station\'s AI billing credit is depleted. An administrator needs to top up billing at AI Studio — your report is not affected.';
+            // Both vendors bill on their own account (Gemini prepaid credit,
+            // OpenAI credit); the sentence names neither because an officer
+            // cannot act on the difference — an administrator can.
+            return 'The station\'s AI billing credit is depleted. An administrator needs to top up the AI account — your report is not affected.';
         }
         if ($status !== null && $status >= 400 && $status < 500) {
             return 'The AI service rejected this station\'s request. Tell an administrator — your report is not affected.';

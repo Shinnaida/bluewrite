@@ -148,9 +148,15 @@ function useActivityCounts(onConnError) {
  * it is cut off along with everything else. `.profile-block-inner` is the clipper
  * and `.profile-block-body` is the animating track; neither carries padding.
  */
+const SECTION_ICONS = {
+  identity: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0',
+  activity: 'M4 20V10M10 20V4M16 20v-8M22 20H2',
+  preferences: 'M4 8h10M18 8h2M4 16h2M10 16h10M14 5v6M8 13v6',
+  security: 'M12 3l7 3v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6z',
+};
 function PanelSection({ id, title, summary, open, onToggle, children }) {
   return (
-    <section className="profile-block" aria-labelledby={`${id}-title`}>
+    <section className={`profile-block profile-block--${id}`} aria-labelledby={`${id}-title`}>
       <h3 className="profile-block-heading">
         <button
           type="button"
@@ -159,6 +165,11 @@ function PanelSection({ id, title, summary, open, onToggle, children }) {
           aria-controls={`${id}-body`}
           onClick={onToggle}
         >
+          <span className="profile-block-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d={SECTION_ICONS[id] ?? SECTION_ICONS.activity} />
+            </svg>
+          </span>
           <span className="profile-block-title" id={`${id}-title`}>{title}</span>
           {summary && <span className="profile-block-summary">{summary}</span>}
           <svg
@@ -566,7 +577,7 @@ export default function ProfilePanel({
                 set one, initials when they have not. It is shown here but changed
                 in Preferences, because this block is what the department issued
                 and that is the answer to "why is there no edit control here". */}
-            <Avatar user={user} className="profile-panel-avatar" />
+            <span className="profile-avatar-wrap"><Avatar user={user} className="profile-panel-avatar" /><span className="profile-verified" title="Department-issued account" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 2.4 3.4-.5 1 3.3 3 1.7-1.5 3.1 1.5 3.1-3 1.7-1 3.3-3.4-.5L12 22l-2.4-2.4-3.4.5-1-3.3-3-1.7L3.7 12 2.2 8.9l3-1.7 1-3.3 3.4.5z" opacity="0.95" /><path d="M10.6 14.6l-2.1-2.1 1.1-1.1 1 1 3.7-3.7 1.1 1.1z" fill="var(--ir-navy)" /></svg></span></span>
             <div className="profile-identity-text">
               <p className="profile-identity-name">{user.full_name}</p>
               <p className="profile-identity-meta">
@@ -581,12 +592,12 @@ export default function ProfilePanel({
             )}
           </div>
 
-          <dl className="profile-facts">
-            <div className="profile-fact">
+          <dl className="profile-facts profile-facts--tiles">
+            <div className="profile-fact profile-fact--member">
               <dt>Member since</dt>
               <dd>{memberSince || '—'}</dd>
             </div>
-            <div className="profile-fact">
+            <div className="profile-fact profile-fact--seen">
               <dt>Last signed in</dt>
               {/* An account that has never signed in is a real state — an admin
                   creates the record before the officer first uses it — so it
@@ -612,7 +623,13 @@ export default function ProfilePanel({
           onToggle={() => toggleSection('activity')}
         >
           <p className="profile-block-note">{scope.note}</p>
-          <ul className="profile-counts">
+          {Number.isFinite(counts?.unfinished) && Number.isFinite(counts?.total) && counts.total > 0 && (
+            <div className="profile-progress" role="progressbar" aria-valuemin={0} aria-valuemax={counts.total} aria-valuenow={counts.finalized ?? 0} aria-label={`${counts.finalized ?? 0} of ${counts.total} reports finalized`}>
+              <div className="profile-progress-track"><span className="profile-progress-fill" style={{ width: `${Math.round(((counts.finalized ?? 0) / counts.total) * 100)}%` }} /></div>
+              <p className="profile-progress-label">{Math.round(((counts.finalized ?? 0) / counts.total) * 100)}% finalized · {counts.unfinished} still open</p>
+            </div>
+          )}
+          <ul className="profile-counts" aria-label="Report counts" aria-live="polite">
             {rows.map((row) => (
               <li key={row.key} className="profile-count">
                 <span className="profile-count-num" data-pending={counts === undefined ? 'true' : undefined}>

@@ -522,24 +522,26 @@ test('the page states measured against estimated, and the sheet itself is drawn 
   assert.doesNotMatch(measuredOnly, /sheet-basis/);
 });
 
-test('the switch offers both readings, and says which one is showing', async () => {
+test('the toggle offers both readings, and says which one is showing', async () => {
   const { renderSheet } = await load();
 
   // THE READING IS ON THE ROOT, which is what picks the ramp: the squares, the legend's samples
-  // and the pressed half of the switch all read the same five variables, so the switch and the
+  // and the toggle's knob all read the same five variables, so the toggle and the
   // drawing cannot be two different colours at once.
   const attendance = renderSheet({ metric: 'attendance' });
   assert.match(attendance, /<div class="sheet sheet--attendance">/);
-  assert.match(attendance, /<div class="sheet-switch" role="group" aria-label="What the sheet counts">/);
-  assert.match(attendance, /<button type="button" class="sheet-switch__btn" aria-pressed="true">Time<\/button>/);
-  assert.match(attendance, /<button type="button" class="sheet-switch__btn" aria-pressed="false">Activity<\/button>/);
+  assert.match(attendance, /<button type="button" role="switch" aria-checked="false" aria-label="Show the activity reading" class="sheet-toggle">/);
+  assert.match(attendance, /<span class="sheet-toggle__opt" data-on="true" aria-hidden="true">Time<\/span>/);
+  assert.match(attendance, /<span class="sheet-toggle__opt" aria-hidden="true">Activity<\/span>/);
+  assert.match(attendance, /<span class="sheet-toggle__knob" aria-hidden="true"><\/span>/);
   // The summary is that reading's own sentence, in that reading's own unit — a duration here,
   // a count there.
   assert.match(attendance, /at a desk across \d+ days/);
 
   const activity = renderSheet({ metric: 'activity' });
   assert.match(activity, /<div class="sheet sheet--activity">/);
-  assert.match(activity, /<button type="button" class="sheet-switch__btn" aria-pressed="true">Activity<\/button>/);
+  assert.match(activity, /<button type="button" role="switch" aria-checked="true" aria-label="Show the time reading" class="sheet-toggle">/);
+  assert.match(activity, /<span class="sheet-toggle__opt" data-on="true" aria-hidden="true">Activity<\/span>/);
   assert.match(activity, /recorded acts? on \d+ days/);
   assert.match(activity, /<span class="sheet-legend__name">Recorded activity<\/span>/);
   assert.match(activity, /aria-label="Recorded activity sheet from 2026-06-28 to 2026-09-26: /);
@@ -685,31 +687,34 @@ test('each reading has its own ramp, and neither is inherited from the other', a
   // the drawing knows which reading it is.
   assert.match(css, /\.sheet--attendance \{ --sheet-1: var\(--sheet-ins-1\); --sheet-2: var\(--sheet-ins-2\); --sheet-3: var\(--sheet-ins-3\); --sheet-4: var\(--sheet-ins-4\); --sheet-fill: var\(--sheet-ins-fill\); \}/);
   assert.match(css, /\.sheet--activity \{ --sheet-1: var\(--sheet-act-1\); --sheet-2: var\(--sheet-act-2\); --sheet-3: var\(--sheet-act-3\); --sheet-4: var\(--sheet-act-4\); --sheet-fill: var\(--sheet-act-fill\); \}/);
-  assert.match(css, /\.sheet-switch__btn\[aria-pressed='true'\], \.sheet-switch__btn\[aria-pressed='true'\]:hover \{ background: var\(--sheet-fill, var\(--accent-fill\)\); color: var\(--on-accent\); \}/);
+  assert.match(css, /\.sheet-toggle__knob \{ position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc\(50% - 2px\); border-radius: 999px; background: var\(--sheet-fill, var\(--accent-fill\)\); transition: transform 160ms ease; \}/);
+  // CHECKED MEANS ACTIVITY, which sits on the right: the knob travels one of its own widths.
+  assert.match(css, /\.sheet-toggle\[aria-checked='true'\] \.sheet-toggle__knob \{ transform: translateX\(100%\); \}/);
 });
 
-test('the switch says which reading is current, and where the keyboard is', async () => {
+test('the toggle says which reading is current, and where the keyboard is', async () => {
   const css = flat(await readCss());
 
-  // (The fill rule itself is pinned above; what this pins is that the pressed half has a hover
-  // of its own, so the app's global `button:hover` panel-grey can never put a hole in the fill
-  // while a pointer is over the selected reading.)
+  // (The fill rule itself is pinned above; what this pins is that the knob has a hover
+  // of its own, so a later global change can never put a hole in the fill while a
+  // pointer is over the toggle.)
   //
   // AND IT IS A VEIL RATHER THAN A BRIGHTENING FILTER: this stylesheet refuses `brightness(>1)`
   // anywhere in it, because Blink clamps a brightening filter on an SVG element to a no-op and
   // the pie chart's test guards that file-wide. A white veil is the same lightening with no
   // filter, so the response stays and the guard keeps its teeth.
-  assert.match(css, /\.sheet-switch__btn\[aria-pressed='true'\]:hover \{ box-shadow: inset 0 0 0 999px rgba\(255, 255, 255, 0\.08\); \}/);
+  assert.match(css, /\.sheet-toggle:hover \.sheet-toggle__knob \{ box-shadow: inset 0 0 0 999px rgba\(255, 255, 255, 0\.08\); \}/);
 
-  // THE RING FOLLOWS THE SELECTION, so the state is legible even where the fill and the pill's
-  // own background are close — a second signal in the same colour as the first.
-  assert.match(css, /\.sheet-switch:has\(\[aria-pressed='true'\]\) \{ border-color: var\(--sheet-fill, var\(--line-bright\)\); \}/);
+  // THE LIT LABEL WEARS ACCENT INK, so the knob carries the state twice — fill plus label.
+  assert.match(css, /\.sheet-toggle__opt\[data-on\] \{ color: var\(--on-accent\); \}/);
 
-  // …AND A FOCUS RING OF ITS OWN. A pressed state is not a focus state: one says which reading
-  // is current, the other says where the next key press lands. The offset is negative because
-  // the pill clips — an outline drawn outside the button would be cut off, which is the same as
-  // having none.
-  assert.match(css, /\.sheet-switch__btn:focus-visible \{ outline: 2px solid var\(--focus-ring-strong\); outline-offset: -2px; \}/);
+  // …AND A FOCUS RING OF ITS OWN. A checked state is not a focus state: one says which reading
+  // is current, the other says where the next key press lands. The offset is positive because
+  // the ring belongs around the whole decision, not around one label.
+  assert.match(css, /\.sheet-toggle:focus-visible \{ outline: 2px solid var\(--focus-ring-strong\); outline-offset: 2px; \}/);
+
+  // AND THE KNOB STAYS STILL FOR REDUCED MOTION: the state change is instant, not animated.
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.sheet-toggle__knob \{ transition: none; \}\s*\}/);
 
   // The measured-or-estimated line is the quietest thing on the card, and it exists.
   assert.match(css, /\.sheet-basis \{ margin: 0\.2rem 0 0; font-size: 0\.72rem; color: var\(--cyan-dim\); \}/);

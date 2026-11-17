@@ -116,7 +116,22 @@ function drawStatusPill(ctx, W, H, presence) {
   ctx.restore();
 }
 /** Photo front with the status pill printed on it: cover-fit portrait, pill
- * bottom-right, so the whole badge reads as one ID. */
+ * bottom-right, so the whole badge reads as one ID.
+ *
+ * THIS IS WHERE A SOFT PHOTOGRAPH IS MADE SOFTER OR KEPT INTACT. A stored avatar is
+ * a square of at most 1024 (AvatarPhoto::EDGE) and a card face is 1024x1440, so
+ * cover-fitting it is an enlargement — with the canvas default that enlargement is
+ * the cheap bilinear one, which is exactly the mush that made the badges look out
+ * of focus next to the crisp strap and clamp around them. The quality is set to
+ * 'high' so the one resample in this pipeline is the browser's good filter; nothing
+ * after this point rescales the face again (Lanyard draws it at its own size).
+ *
+ * JPEG, NOT PNG. A photograph at this size as PNG is a megabyte of data URL held in
+ * state per badge and handed to the texture uploader; at 0.92 it is a fraction of
+ * that, and at a 200px card nobody can tell them apart. The drawn-initials
+ * fallback stays PNG (see personIdFallbackFront) — flat ink and small text are what
+ * PNG is actually good at.
+ */
 function paintIdPhotoFront(img, presence) {
   try {
     const W = 1024;
@@ -126,12 +141,14 @@ function paintIdPhotoFront(img, presence) {
     canvas.height = H;
     const ctx = canvas.getContext('2d');
     if (!ctx || !img) return undefined;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     const s = Math.max(W / img.width, H / img.height);
     const w = img.width * s;
     const h = img.height * s;
     ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
     drawStatusPill(ctx, W, H, presence);
-    return canvas.toDataURL('image/png');
+    return canvas.toDataURL('image/jpeg', 0.92);
   } catch {
     return undefined;
   }
@@ -1912,9 +1929,11 @@ export default function Dashboard({
    * than no button looking active. `preset` is only a highlight — the range itself
    * is `dates`, which is what the chart fetch and its day axis read.
    */
-  const focusDay = (date) => {
+  const focusDay = (date, end) => {
     clearPreset();
-    setDates({ from: date, to: date });
+    // The whole column, not its first day: a month column's "filter to this month"
+    // narrows the chart to that month, and a day column passes no `end` at all.
+    setDates({ from: date, to: end || date });
   };
 
   /**
@@ -1925,8 +1944,8 @@ export default function Dashboard({
    * ReportsTable), so this names an existing filter rather than inventing one; what
    * is new is only that the dashboard can now set them.
    */
-  const openDay = ({ date, type: dayType }) =>
-    onOpenReports?.({ date_from: date, date_to: date, type: dayType || '' });
+  const openDay = ({ date, end, type: dayType }) =>
+    onOpenReports?.({ date_from: date, date_to: end || date, type: dayType || '' });
 
   const k = data?.kpis;
   // The three hero cards read the REGISTER, not the window (owner request,
@@ -1950,6 +1969,10 @@ export default function Dashboard({
   // one entry allowed to sit out of volume order. Read off the CHART's window,
   // never the page's, so the stack always answers the range on screen.
   const chartTypes = useMemo(() => orderForDisplay(chartData?.seriesByType), [chartData?.seriesByType]);
+  // What one column of the trend stands for, decided by the server that built the
+  // window (see DashboardController::bucketDays). Read from meta rather than guessed
+  // from the column count, so "week" on the axis is the server's week.
+  const chartBucket = chartData?.meta?.bucket ?? 'day';
 
   // The donut and the places: all read from the same register response the
   // panels around them read, so no card can disagree with the charts under
@@ -2446,7 +2469,7 @@ export default function Dashboard({
             // the range itself is `dates`, which is what every fetch reads.
             aside={
               <>
-                <ChartKey byType={chartTypes} />
+                <ChartKey byType={chartTypes} unit={chartBucket} />
                 <RangeSelect preset={preset} onPick={applyPreset} />
               </>
             }
@@ -2458,6 +2481,7 @@ export default function Dashboard({
             <StatusBars status={data?.statusBreakdown} />
             <StackedColumns
               series={chartData?.seriesOverTime ?? []}
+              bucket={chartBucket}
               byType={chartTypes}
               scope={scope}
               type={type}
@@ -2671,19 +2695,32 @@ function PanelInfo({ label, title, note, hint, children }) {
  * it is the one explanation that needs the map from colour to incident type, which no
  * other chart has.
  */
-function ChartKey({ byType }) {
+/**
+ * The month a bucketed column stands for, in the axis's own short form ("Oct 2026").
+ *
+ * UTC deliberately: the payload's dates are calendar dates with no clock in them, and
+ * parsing them in a station timezone west of Greenwich would name the month before.
+ */
+const MONTH_LABEL = new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+function ChartKey({ byType, unit = 'day' }) {
   // Nothing in range means no colours to explain, and a control that opens an empty
   // panel is worse than no control.
   if (!byType.length) return null;
+  // A COLUMN IS A DAY, A WEEK OR A MONTH, and the key says which. On All time the
+  // plot draws months; a key that still called every column a day would describe a
+  // chart that is not on screen. The unit comes from the payload's meta (see
+  // DashboardController::DAY_BUCKET_MAX_DAYS), never from counting columns here.
+  const one = bucketNoun(unit, 1);
   return (
     <PanelInfo
       label="What the incident type colours mean"
       title="What the column colours mean"
-      note="Each column is one day. Bands stack from the bottom up, most frequent at the axis, so the band sitting on the baseline is the station's commonest incident. The number is how many reports of that type were filed in this range. Bands tall enough to hold it carry the incident type, written inside the column."
+      note={`Each column is one ${one}. Bands stack from the bottom up, most frequent at the axis, so the band sitting on the baseline is the station's commonest incident. The number is how many reports of that type were filed in this range. Bands tall enough to hold it carry the incident type, written inside the column.`}
       // Where a reader looks for how to read the chart, so it is where the chart
       // says it can be right-clicked. Hovering a column finds the breakdown;
       // nothing about hovering it suggests the actions behind the right button.
-      hint="Right-click a day for its actions — filter the range to it, open its reports in the register, copy the breakdown, or pin it open."
+      hint={`Right-click a ${one} for its actions — filter the range to it, open its reports in the register, copy the breakdown, or pin it open.`}
     >
       <ul className="dash-legend">
         {byType.map((cat, rank) => (
@@ -2748,7 +2785,11 @@ function segTag(type, x, midY, w, h, muted) {
   return null;
 }
 
-function StackedColumns({
+// Exported for the fixture that renders it: a column chart whose columns are a
+// pixel wide passes every source-reading test there is, and the unit it draws in
+// comes from the payload rather than from anything this file can be inspected for.
+// Same reason RecentActivity and ClientAccess are exported.
+export function StackedColumns({
   series,
   byType,
   // The chart's own filters, needed because a menu entry has to describe the state
@@ -2757,6 +2798,13 @@ function StackedColumns({
   scope = 'all',
   type = '',
   activeDay = '',
+  // What one column stands for: 'day' | 'week' | 'month', from the payload's meta.
+  // The window is the SERVER's to know — it derived it from the register, so it is
+  // the only side that knows how long it is — and this component's whole share of
+  // that decision is saying the right word in the five places it used to say "day":
+  // the axis, the magnified card, the right-click menu, the clipboard line and the
+  // plot's description for assistive tech.
+  bucket = 'day',
   notify,
   // The three things this chart cannot do for itself: it can filter nothing in the
   // Dashboard's state, and it cannot leave the screen.
@@ -2773,6 +2821,23 @@ function StackedColumns({
   // The foot is trimmed (owner request, 2026-10-30): 16px under the axis is
   // all the axis labels need, so no empty band sits at the plot's foot.
   const PAD = { l: 34, r: 12, t: 14, b: 16 };
+  const unit = bucket === 'week' || bucket === 'month' ? bucket : 'day';
+  const one = bucketNoun(unit, 1);
+  /**
+   * What a column calls itself.
+   *
+   * A day keeps MM-DD — the form the axis has always used, and the one the range
+   * printed above the chart makes unambiguous. A week names both of its ends,
+   * because "week of the 9th" and "week of the 15th" are the same week and only the
+   * pair says which. A month is named, because its first day is a technicality the
+   * count under it is not about — 86 reports happened in October, not on the 1st.
+   */
+  const spanLabel = useCallback((point) => {
+    if (!point) return '';
+    if (unit === 'day') return point.date.slice(5);
+    if (unit === 'week') return `${point.date.slice(5)}–${String(point.end ?? point.date).slice(5)}`;
+    return MONTH_LABEL.format(new Date(`${point.date}T00:00:00Z`));
+  }, [unit]);
   const [hover, setHover] = useState(null); // index into series
   const [picked, setPicked] = useState(null); // ramp step of the box under the pointer
   // The day whose card is held open, kept as a DATE rather than as an index. The
@@ -2977,7 +3042,14 @@ function StackedColumns({
     // The browser's own menu is swallowed only once there is something to put in
     // its place.
     e.preventDefault();
-    setMenu({ idx, day: day.date, type: box?.type ?? '', at: { x: e.clientX, y: e.clientY } });
+    setMenu({
+      idx,
+      day: day.date,
+      end: day.end,
+      label: spanLabel(day),
+      type: box?.type ?? '',
+      at: { x: e.clientX, y: e.clientY },
+    });
   };
 
   /**
@@ -2990,7 +3062,9 @@ function StackedColumns({
    */
   async function copyDay(ctx) {
     const rows = bands.filter((b) => b.day === ctx.idx);
-    const text = dayBreakdownText(ctx.day, rows, { scope, type });
+    // The column's own label rather than its first day: pasted text that said
+  // "86 reports on 2026-10-01" for October would be a precise-looking falsehood.
+  const text = dayBreakdownText(ctx.label || ctx.day, rows, { scope, type });
     if (!text) return;
     try {
       // A blocked clipboard (permissions, insecure origin) is reported rather than
@@ -3005,9 +3079,9 @@ function StackedColumns({
 
   /** Dispatch one menu entry. Kept by KEY, so the entries stay data. */
   function runMenuAction(key, ctx) {
-    if (key === CHART_MENU.focusDay) onFocusDay?.(ctx.day);
+    if (key === CHART_MENU.focusDay) onFocusDay?.(ctx.day, ctx.end);
     else if (key === CHART_MENU.onlyType) onOnlyType?.(ctx.type === type ? '' : ctx.type);
-    else if (key === CHART_MENU.openReports) onOpenDay?.({ date: ctx.day, type: ctx.type });
+    else if (key === CHART_MENU.openReports) onOpenDay?.({ date: ctx.day, end: ctx.end, type: ctx.type });
     else if (key === CHART_MENU.copyDay) copyDay(ctx);
     else if (key === CHART_MENU.pinDay) setPinned((cur) => (cur === ctx.day ? null : ctx.day));
   }
@@ -3031,7 +3105,14 @@ function StackedColumns({
     if (!day) return;
     e.preventDefault();
     const box = e.currentTarget.getBoundingClientRect();
-    setMenu({ idx, day: day.date, type: '', at: { x: box.left + 12, y: box.top + 12 } });
+    setMenu({
+      idx,
+      day: day.date,
+      end: day.end,
+      label: spanLabel(day),
+      type: '',
+      at: { x: box.left + 12, y: box.top + 12 },
+    });
   };
 
   // De-duplicated, because a one-day range makes all three of these the same day —
@@ -3047,9 +3128,9 @@ function StackedColumns({
   // to try the right button.
   const plotLabel = `${
     top.length
-      ? `Reports per day by incident type. Most frequent: ${top.map((c) => `${c.type}, ${c.total}`).join('; ')}`
-      : 'Reports per day'
-  }. Right-click a day for its actions.`;
+      ? `Reports per ${one} by incident type. Most frequent: ${top.map((c) => `${c.type}, ${c.total}`).join('; ')}`
+      : `Reports per ${one}`
+  }. Right-click a ${one} for its actions.`;
 
   return (
     // Leaving the plot closes everything, and the boundary is this wrapper rather
@@ -3169,7 +3250,7 @@ function StackedColumns({
                 labelIdx.length === 1 ? 'middle' : n === 0 ? 'start' : n === labelIdx.length - 1 ? 'end' : 'middle'
               }
             >
-              {series[idx].date.slice(5)}
+              {spanLabel(series[idx])}
             </text>
           ) : null
         )}
@@ -3212,7 +3293,7 @@ function StackedColumns({
                 above the chart, so dropping the year stays unambiguous — and the
                 shorter string is what lets the count column be narrow enough to sit
                 under it. */}
-            <span className="dash-mag__date">{shownDay.date.slice(5)}</span>
+            <span className="dash-mag__date">{spanLabel(shownDay)}</span>
           </div>
           <ul className="dash-mag__stack">
             {dayBands.map((b) => (
@@ -3220,8 +3301,8 @@ function StackedColumns({
                 key={b.type}
                 className={picked === b.rank ? 'is-picked' : undefined}
                 style={{ minHeight: `${Math.max(MAG_BAND_MIN_H, Math.round(b.value * pxPerReport))}px` }}
-                title={`Double-click to open ${b.type} reports for ${shownDay.date} in All Reports`}
-                onDoubleClick={() => onOpenDay?.({ date: shownDay.date, type: b.type })}
+                title={`Double-click to open ${b.type} reports for ${spanLabel(shownDay)} in All Reports`}
+                onDoubleClick={() => onOpenDay?.({ date: shownDay.date, end: shownDay.end, type: b.type })}
               >
                 <span className="dash-mag__chip" style={{ background: rampColor(b.rank) }} aria-hidden="true" />
                 <span className="dash-mag__name">{b.type}</span>
@@ -3247,9 +3328,12 @@ function StackedColumns({
       {menu && (
         <RowMenu
           at={menu.at}
-          label={`Actions for ${menu.day}`}
+          label={`Actions for ${menu.label ?? menu.day}`}
           items={chartMenuItems({
             date: menu.day,
+            end: menu.end,
+            unit,
+            dateLabel: menu.label,
             type: menu.type,
             total: series[menu.idx]?.count ?? 0,
             activeType: type,

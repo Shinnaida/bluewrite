@@ -3,9 +3,10 @@
 // WHY THE BROWSER SHRINKS THE PHOTOGRAPH BEFORE SENDING IT. Two reasons, and the
 // second one is what decides the design:
 //
-//   1. A photograph off a phone is three to eight megabytes and an avatar is drawn
-//      at forty-four pixels. Sending the original over a station LAN, per officer
-//      and per re-upload, is waste in the plainest sense.
+//   1. A photograph off a phone is three to eight megabytes, and the copy this app
+//      actually draws — the hanging ID badge on the dashboard — is a 1024x1440 card
+//      face. Sending the original over a station LAN, per officer and per re-upload,
+//      is waste in the plainest sense.
 //
 //   2. PHP on this deployment accepts 2 MB (upload_max_filesize), so a full-size
 //      photograph would not arrive AT ALL: the request comes back with an empty
@@ -23,11 +24,24 @@
 // than it looks: the server has no exif extension to read the orientation tag with,
 // so the browser is the only place in this pipeline that can see it.
 
-/** What we send. The server keeps 256px; this is the source it cuts that from. */
-export const UPLOAD_EDGE = 512;
+/**
+ * What we send. The server keeps at most 1024px (AvatarPhoto::EDGE); this is the
+ * source it cuts that from.
+ *
+ * LARGER THAN THE SERVER KEEPS, ON PURPOSE. A little headroom is what lets the
+ * server's centre-crop take the square it wants without the browser's own crop
+ * being the last word on sharpness — and the difference between 1024 and 1280 in
+ * this direction costs a few tens of kilobytes, once, at upload.
+ */
+export const UPLOAD_EDGE = 1280;
 
-/** JPEG quality for the re-encode. Visually lossless at this size, ~60 KB. */
-const QUALITY = 0.9;
+/**
+ * JPEG quality for the re-encode. At 1280 that is roughly 250 KB — a twentieth of
+ * the photograph it came from, and past the point where the eye can tell it from
+ * the original at badge size. Below it, the webcam grain on a shirt collar starts
+ * to smear, which the larger stored copy would faithfully preserve.
+ */
+const QUALITY = 0.92;
 
 /**
  * The largest file worth decoding at all, far above anything a camera produces.
@@ -141,6 +155,12 @@ export async function prepareAvatar(file, edge = UPLOAD_EDGE) {
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, edge, edge);
+  // THE GOOD RESAMPLER. A phone photograph is several thousand pixels wide and
+  // this is the step that throws most of them away, so it is the one place where a
+  // cheap filter shows: the default 'low' gives a slightly crunchy downscale, and
+  // every later stage (server crop, badge paint) faithfully enlarges that crunch.
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(source, sx, sy, side, side, 0, 0, edge, edge);
   if (typeof source.close === 'function') source.close();
 

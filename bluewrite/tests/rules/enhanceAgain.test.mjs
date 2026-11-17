@@ -92,6 +92,22 @@ test('the translation path translates the account the press runs on', () => {
   );
 });
 
+test('Enhance hands the model the page as the officer ordered it (2026-11-14)', () => {
+  // Re-formatting an edited page before enhancing re-orders it into the
+  // template's canonical order, so a page whose blocks were swapped came back
+  // in the FIRST arrangement's layout — and the reveal then typed that. The
+  // ink is the arranged document: it goes to the model as written, and only a
+  // raw account is arranged first.
+  const src = code(PANEL);
+  const at = src.indexOf('const enhanceReport');
+  assert.notEqual(at, -1, 'enhanceReport is gone');
+  const body = src.slice(at, src.indexOf('presentDraftResult()', at));
+  assert.ok(
+    body.includes('const sourceText = enhancePaper !== \'\''),
+    'Enhance still re-arranges the officer\u2019s page before enhancing it',
+  );
+});
+
 test('re-runs re-point the mid-run guard at the rewound account (paper must change)', () => {
   const src = code(PANEL);
   // beginFreshRun rewinds the paper to the original; the guard compares the

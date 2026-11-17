@@ -3436,6 +3436,42 @@ body.profile-panel-open {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+/* COMPOSING WEARS AMBER (live presence): an account with a fresh composing
+   latch gets a pen pill beside the name — in the hero row and in the compact
+   row alike — with a dot that hurries while the typing is still happening.
+   The sr-only status line states it in words, so this is decoration. */
+.users-writing-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-line);
+  color: var(--amber);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.users-writing-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--amber);
+  flex: none;
+  animation: users-writing-blink 1.2s ease-in-out infinite;
+}
+@keyframes users-writing-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .users-writing-dot { animation: none; }
+}
 .users-hero-text { display: inline-flex; flex-direction: column; justify-content: center; min-width: 0; line-height: 1.3; }
 /* THE HERO: the name leads the row at display size, the way the face leads it
    in pictures — the rows stand tall enough now (the grid sets them) that the
@@ -3872,81 +3908,6 @@ body.profile-panel-open {
   margin: 0.2rem 0 0;
   font-size: 0.72rem;
   color: var(--cyan-dim);
-}
-
-/* The switch: two buttons, one of them pressed. A segmented control rather than
-   a select, because both readings are always on screen and one is always
-   current — which is what a pressed state says and a dropdown cannot. */
-.sheet-switch {
-  display: inline-flex;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--panel-raised);
-  transition: border-color 140ms ease;
-}
-
-/* THE RING FOLLOWS THE SELECTION. Two halves filling the same pill means the filled
-   half alone has to carry "this one is current", and against a dark pill a mid blue
-   does most of that — but the border is a second signal in the same colour, so the
-   state is legible in a screenshot, at a glance, and to a reader who cannot separate
-   the fill from the pill's own background. `:has` because the pressed state is a
-   child's business and the pill is what wears the ring. */
-.sheet-switch:has([aria-pressed='true']) {
-  border-color: var(--sheet-fill, var(--line-bright));
-}
-
-.sheet-switch__btn {
-  padding: 0.25rem 0.85rem;
-  border: 0;
-  background: none;
-  color: var(--steel);
-  font-family: var(--font-hud);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.sheet-switch__btn:hover { color: var(--paper); }
-
-/* THE RING IS DRAWN INSIDE THE BUTTON (`outline-offset: -2px`), because the pill
-   CLIPS (`overflow: hidden`) and an outline outside the button would be cut off —
-   which would leave a keyboard user with no way to see where they are. A pressed
-   state is not a focus state: this one says which reading is current, that one says
-   which control the next key press lands on. */
-.sheet-switch__btn:focus-visible {
-  outline: 2px solid var(--focus-ring-strong);
-  outline-offset: -2px;
-}/* THE PRESSED HALF WEARS THE READING'S OWN COLOUR, so the switch and the squares
-   are the same colour at the same moment: an administrator who flips it can see
-   which reading they are in without reading the label again, and a screenshot of
-   the sheet carries the answer with it. `--sheet-fill` rather than the ramp's step
-   4, because in dark the deepest square is a light blue chosen to glow and white
-   ink does not hold on it (see the token's note).
-
-   THE FALLBACK IS NOT DECORATION. This rule is the ONLY thing marking which of the
-   two readings is current, so if the token chain ever failed to resolve the switch
-   would come up with both halves looking identical — the one failure mode that
-   makes the control silently useless rather than visibly broken. `var(--sheet-fill,
-   var(--accent-fill))` means a missing reading token still leaves a filled half.
-
-   HOVER IS STATED, not inherited: the app's own `button:hover` sets a panel-grey
-   background, and while this rule outranks it on specificity, saying it here means a
-   later global change cannot quietly put a hole in this control. */
-.sheet-switch__btn[aria-pressed='true'],
-.sheet-switch__btn[aria-pressed='true']:hover {
-  background: var(--sheet-fill, var(--accent-fill));
-  color: var(--on-accent);
-}
-/* THE HOVER IS A WHITE VEIL, NOT A BRIGHTENING FILTER. On a button either would
-   work, but the app already refuses `brightness(>1)` anywhere in this stylesheet —
-   Blink clamps a brightening filter on an SVG element to a no-op, so that rule is a
-   file-wide guard against a shade that silently does nothing (see the pie chart's own
-   test). An inset veil is the same lightening with no filter involved, so the
-   selection keeps its response and the guard keeps its teeth. */
-.sheet-switch__btn[aria-pressed='true']:hover {
-  box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.08);
 }
 
 /* The toggle: ONE control for two readings. A sliding knob inside a single pill,
@@ -7376,6 +7337,10 @@ button.dash-kpi--link:focus-visible {
    translated)" line — owner request, 2026-10-06, see ReportSheetBody.jsx. A
    rule for a node that is never rendered is a rule that reads as a feature.) */
 
+/* The narrative's heading (owner request, 2026-11-16): FACTS, on its own
+   line above the account. */
+.pr-narrative-head { display: block; }
+
 .pr-narrative {
   /* Justified on the paper (owner request) — both Arrange Only and Enhance
      Wording read here. The last line stays start-aligned by default, the
@@ -9634,8 +9599,13 @@ body.print-sheet-open .print-overlay { z-index: 200; }
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
+/* THE PLATE'S COLUMN IS A CEILING, NOT A WIDTH. It was a hard 520px, which is
+   wider than the dashboard column on a laptop: the plate then stood past its
+   own panel and the panel clipped it, so the plate lost its right border and
+   the last of the two child cards went with it. `minmax(0, 520px)` keeps the
+   designed width when there is room and hands back the rest when there is not. */
 .dash--cmd .dash-toprow .dash-kpis.cmd-kpis.cmd-kpis--hierarchy {
-  grid-template-columns: 520px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 520px) minmax(0, 1fr);
   gap: 12px;
   align-items: start;
   justify-content: start;
@@ -9670,7 +9640,13 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 }
 .dash--cmd .dash-toprow .cmd-total-group:hover { transform: translateY(-2px); box-shadow: 0 6px 18px -8px rgba(15, 31, 61, 0.25); border-color: var(--line-bright); }
 .dash--cmd .dash-toprow .cmd-total-row { display: flex; flex-direction: row; align-items: stretch; gap: 12px; min-width: 0; }
-.dash--cmd .dash-toprow .cmd-total-row > .cmd-cardlink { display: flex; flex-direction: column; justify-content: center; flex: none; width: 328px; min-width: 0; border-radius: 12px; }
+/* The row is 328 + 12 + 170 = 510 wide inside a plate whose content box is
+   520 - 28 of padding = 490. The two numbers were both rigid, so the children
+   ran 20px past the padding and the plate's own `overflow: hidden` cut the
+   right margin off both cards — the one thing a card must never lose. They are
+   flex bases now: the designed widths when the plate is wide enough, and a
+   proportional give when it is not. */
+.dash--cmd .dash-toprow .cmd-total-row > .cmd-cardlink { display: flex; flex-direction: column; justify-content: center; flex: 1 1 328px; min-width: 0; border-radius: 12px; }
 .dash--cmd .dash-toprow .cmd-total-parent { display: flex; flex-direction: column; justify-content: flex-start; gap: 8px; padding: 8px 10px; margin: 2px 0; height: 100%; }
 .dash--cmd .dash-toprow .cmd-total-hero { margin-top: 2px; }
 .dash--cmd .dash-toprow .cmd-total-track { margin-top: auto; }
@@ -9723,8 +9699,8 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 /* The branch connector was removed (owner request) — parent and children
    sit side by side with a clean gap instead. Kept hidden in case. */
 .dash--cmd .dash-toprow .cmd-total-branch { display: none; }
-.dash--cmd .dash-toprow .cmd-total-children { display: flex; flex-direction: column; justify-content: center; gap: 10px; flex: none; width: 170px; min-width: 0; margin: 2px 0; }
-.dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink { border-radius: 12px; }
+.dash--cmd .dash-toprow .cmd-total-children { display: flex; flex-direction: column; justify-content: center; gap: 10px; flex: 0 1 170px; min-width: 132px; margin: 2px 0; }
+.dash--cmd .dash-toprow .cmd-total-children .cmd-cardlink { border-radius: 12px; min-width: 0; }
 .dash--cmd .dash-toprow .cmd-child { position: relative; display: flex; align-items: center; gap: 8px; border-radius: 11px; border: 1px solid var(--cmd-line); padding: 12px 12px 12px 14px; margin: 2px; background: var(--panel-raised); overflow: hidden; transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease; }
 .dash--cmd .dash-toprow .cmd-child::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; }
 .dash--cmd .dash-toprow .cmd-child--draft { background: var(--amber-bg); }

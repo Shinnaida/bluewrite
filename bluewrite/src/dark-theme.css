@@ -206,6 +206,14 @@
   --sheet-act-2: #4F3A8F;
   --sheet-act-3: #7357C9;
   --sheet-act-4: #A98BF5;
+  /* Reports — the dark half of GitHub's green ladder, for the directory's
+     miniature alone (see the light theme's note on why green is spent nowhere
+     else): the shared empty day is a lifted panel, and the four working steps
+     climb to a green bright enough to read as "the most" on a dark card. */
+  --sheet-rep-1: #0E4429;
+  --sheet-rep-2: #006D32;
+  --sheet-rep-3: #26A641;
+  --sheet-rep-4: #39D353;
   /* The switch's pressed fill. NOT the deepest step: in dark that step is a
      light blue chosen to glow as a square, and white on it measures about
      2.4:1 — so each reading states its own fill, one step down and still

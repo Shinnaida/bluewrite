@@ -157,11 +157,11 @@ import Dropdown from './Dropdown.jsx';
 // The AI assistance card's animated frame (React Bits, JS-CSS variant) — one
 // wrapper at each of the panel's three mounts, so the assistant reads as the
 // one live instrument on the form in every format.
-// The AI assistance card's animated frame (adapted from a 21st.dev card, JSX +
-// CSS): a blurred gradient blob — the capstone's navy/blue/gold — walking behind
-// a glassy plate that carries the panel. One wrapper at each of the panel's
-// three mounts, so the assistant reads as the one live instrument on the form.
-import GradientBlobCard from './GradientBlobCard.jsx';
+// The AI assistance card's frame (AiFrame): a flat navy keyline around the whole
+// instrument — navy head, tinted body and all — instead of the frosted-glass demo
+// card that used to wrap it. One wrapper at each of the panel's live mounts, so
+// the assistant reads as the one live instrument on the form.
+import AiFrame from './shared/AiFrame.jsx';
 import AiNarrativePanel from './AiNarrativePanel.jsx';
 // Phase 6 Stage 4 — the translation review surface: the original beside the
 // English, the derived status, and (when the server allows it) the verify /
@@ -5046,16 +5046,16 @@ export function ReportEditor({
             one live copy on screen at a time, which is what the panel's own
             side panel and body class require. */}
         {!stepped && !sheet && canEdit && (
-          /* The electric frame is OUTSIDE the card, by request: it wraps the
+          /* The frame is OUTSIDE the card, by request: it wraps the
              whole instrument — navy head, tinted body and all — instead of
              framing the panel inside it. The sidebar's placement and ONE-SIZE
              bound moved onto the frame with it (see the workspace rules in
              incident-report.css). */
-          <GradientBlobCard className="ir-ai-frame">
+          <AiFrame>
             <IrCard wide accent icon="brain" badge="Beta" title="AI assistance">
               {aiPanel}
             </IrCard>
-          </GradientBlobCard>
+          </AiFrame>
         )}
 
         {/* The final step: the five sections read back as ONE document, with one
@@ -5094,11 +5094,11 @@ export function ReportEditor({
             panel already sits under the narrative field, where the writing
             happens. */}
         {stepped && activeStep === REVIEW_STEP && canEdit && (
-          <GradientBlobCard className="ir-ai-frame">
+          <AiFrame>
             <IrCard wide accent icon="brain" badge="Beta" title="AI assistance">
               {aiPanel}
             </IrCard>
-          </GradientBlobCard>
+          </AiFrame>
         )}
 
         {/* Stepped format: the way forward sits at the END of the panel, where
@@ -5298,9 +5298,9 @@ export function ReportEditor({
 
       {sheet && canEdit && (
         <div className="ir-sheet-ai">
-          <GradientBlobCard className="ir-ai-frame">
+          <AiFrame>
             {aiPanel}
-          </GradientBlobCard>
+          </AiFrame>
         </div>
       )}
 

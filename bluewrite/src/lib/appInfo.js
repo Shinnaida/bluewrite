@@ -13,6 +13,15 @@
 /** The system's own names, as they appear in the bar and on the gate. */
 export const DEPARTMENT = 'Public Safety Department';
 export const SYSTEM_TITLE = 'Official Incident Reporting System';
+export const APP_VERSION = '0.1.0';
+export const SYSTEM_SUMMARY =
+  'BlueWrite is the station\u2019s official desk for writing, filing, and tracking police incident reports — drafts stay yours until filed, every filed page keeps the officer who wrote it.';
+export const SYSTEM_CAPABILITIES = [
+  'Write and save incident reports as drafts, then file them for review',
+  'Track drafts, submitted, and finalized reports in one register',
+  'AI drafting help that only suggests wording — you verify every fact',
+  'Role-based access with a full audit trail of who did what',
+];
 
 /**
  * The office the system serves — the station the seals belong to, and the name

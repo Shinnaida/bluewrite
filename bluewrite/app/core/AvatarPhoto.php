@@ -18,10 +18,28 @@ namespace App\Core;
  *
  *   WHAT IS STORED. A re-encode, not the uploaded bytes. Even a real JPEG can
  *     carry a second payload in a comment segment, so an avatar is DECODED and
- *     written back out as a plain 256px JPEG: what lands in the folder is
+ *     written back out as a plain square JPEG: what lands in the folder is
  *     something this class produced, not something a client sent. The one
  *     exception is a deployment whose GD cannot decode the format (see
  *     store()) — and that exception is named rather than silent.
+ *
+ *   HOW BIG. Up to EDGE, and never up.
+ *
+ *     The circle next to a name is 44 pixels and would be happy with a thumbnail,
+ *     but this file is also the SOURCE of the dashboard's hanging ID badges: the
+ *     card face is painted at 1024x1440 (see paintIdPhotoFront in Dashboard.jsx)
+ *     and cover-fit from the stored square. At 256 that step is a 5.6x enlargement
+ *     of bytes that are already lossy, which is precisely the soft, blocky look an
+ *     officer reports as "the photos are pixelated". At 1024 the same step is
+ *     1.4x — one resample, done with the good filter — and the badge is as sharp as
+ *     the photograph that was uploaded.
+ *
+ *     A SMALL SOURCE IS NOT ENLARGED. Upscaling adds no detail, only bytes, so the
+ *     stored edge is min(EDGE, the short side of what arrived): a 600px photograph
+ *     is kept at 600 rather than blown up to a soft 1024. That means the STORED
+ *     FILE IS NOT ALWAYS EDGE, which is why the size is a ceiling and not a
+ *     promise — nothing downstream may assume 1024, and nothing does (both the
+ *     avatar circle and the badge cover-fit whatever arrives).
  *
  *   THE SQUARE. Every face in this app is drawn in a circle, so a 4:3 or 16:9
  *     photograph is centre-cropped to a square rather than squashed into one.
@@ -49,10 +67,22 @@ final class AvatarPhoto
     /** Upload ceiling. PHP's own upload_max_filesize is 2M on this deployment. */
     public const MAX_BYTES = 2097152;
 
-    /** The stored edge, in pixels, in both directions. */
-    public const EDGE = 256;
+    /**
+     * The stored edge, in pixels, in both directions — a ceiling, not a promise
+     * (see normalise(): a smaller photograph is kept at its own size).
+     *
+     * 1024 because that is the width of an ID badge's face texture: storing more
+     * than the card can draw is bytes nobody sees, storing less is the upscale
+     * that made the badges look out of focus.
+     */
+    public const EDGE = 1024;
 
-    private const JPEG_QUALITY = 82;
+    /**
+     * 88 rather than 82: at 1024 the artefacts of a cheap quantisation start to
+     * show on a face, and the whole point of the larger file is sharpness. It costs
+     * roughly 120-300 KB a photograph, which is nothing for a station LAN.
+     */
+    private const JPEG_QUALITY = 88;
 
     /**
      * Detected type => extension. Deliberately short: the three formats a phone
@@ -180,9 +210,9 @@ final class AvatarPhoto
     }
 
     /**
-     * Decode, centre-crop to a square and write a 256px JPEG. False when GD is
-     * absent or cannot read the format — never a partial file: the destination is
-     * written only by imagejpeg(), which creates it itself.
+     * Decode, centre-crop to a square and write it as a JPEG of at most EDGE. False
+     * when GD is absent or cannot read the format — never a partial file: the
+     * destination is written only by imagejpeg(), which creates it itself.
      */
     private static function normalise(string $src, string $dest): bool
     {
@@ -209,15 +239,20 @@ final class AvatarPhoto
             return false;
         }
 
-        // Centre-crop the largest square, then scale that square to EDGE.
+        // Centre-crop the largest square, then scale that square DOWN to EDGE —
+        // never up to it. A source smaller than EDGE is stored at its own size:
+        // enlarging it would add file size and no detail, and would also destroy
+        // the only reliable signal that the copy is a small one (the file's own
+        // dimensions).
         $edge = min($w, $h);
         $sx = (int) (($w - $edge) / 2);
         $sy = (int) (($h - $edge) / 2);
+        $target = min(self::EDGE, $edge);
 
-        $square = imagecreatetruecolor(self::EDGE, self::EDGE);
+        $square = imagecreatetruecolor($target, $target);
         $white = imagecolorallocate($square, 255, 255, 255);
-        imagefilledrectangle($square, 0, 0, self::EDGE, self::EDGE, $white);
-        imagecopyresampled($square, $image, 0, 0, $sx, $sy, self::EDGE, self::EDGE, $edge, $edge);
+        imagefilledrectangle($square, 0, 0, $target, $target, $white);
+        imagecopyresampled($square, $image, 0, 0, $sx, $sy, $target, $target, $edge, $edge);
 
         $ok = imagejpeg($square, $dest, self::JPEG_QUALITY);
 

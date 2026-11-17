@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // `apiUpload` is `api` for a body that is a FILE (multipart/form-data) — the one
 // shape on this API that is not JSON, used by the two photo routes.
 import { api, apiUpload } from '../lib/api.js';
+import { SNAPSHOT_MS, applySnapshot } from '../lib/presence.js';
 import { checkPassword, MIN_LENGTH, passwordHint } from '../lib/passwordPolicy.js';
 // The face: how it is drawn (the same circle the roster and Profile draw), how a
 // chosen file becomes the 512px square that is sent, and the camera that can take
@@ -377,7 +378,7 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
                   onMenu(u, { x: box.left + 12, y: box.bottom }, e.currentTarget, true);
                 }}
               >
-                <td data-label="Full name"><span className="users-name"><Avatar user={u} size={32} /><span>{u.full_name}</span></span></td>
+                <td data-label="Full name"><span className="users-name"><Avatar user={u} size={32} /><span>{u.full_name}</span>{u.composing_report_id != null && (<span className="users-writing-tag"><span className="users-writing-dot" aria-hidden="true" />writing</span>)}</span></td>
                 <td data-label="Badge no.">{u.badge_number}</td>
                 <td data-label="Username">{u.username}</td>
                 <td data-label="Email">{u.email ? <span className="users-email" title={u.email}>{u.email}</span> : <span className="users-none">Not recorded</span>}</td>
@@ -482,7 +483,7 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
                       ) : null}
                     </span>
                     <span className="users-hero-text">
-                      <span className="users-hero-name">{u.full_name}</span>
+                      <span className="users-hero-name">{u.full_name}{u.composing_report_id != null && (<span className="users-writing-tag"><span className="users-writing-dot" aria-hidden="true" />writing a report…</span>)}</span>
                       {inactive && (<span className="users-inactive-tag">Inactive</span>)}
                       {/* THE ROLE WEARS ITS COLOUR (owner request, 2026-11-14): Admin
                           reads in register blue, Officer in lanyard gold — the same
@@ -500,7 +501,7 @@ export function UsersTable({ users = [], onOpen = () => {}, onEdit = () => {}, o
                       {/* The dot and badge above are decoration, so the status
                           still has words for the readers who cannot see them —
                           with the exact stamp the column used to carry. */}
-                      <span className="sr-only">Status: {u.status}{seen ? `, last seen ${seen}` : ''}</span>
+                      <span className="sr-only">Status: {u.status}{u.composing_report_id != null ? ', writing a report now' : ''}{seen ? `, last seen ${seen}` : ''}</span>
                     </span>
                   </span>
                 </td>
@@ -617,6 +618,60 @@ export default function Users({ notify, initialUserId = null }) {
 
   useEffect(() => {
     load();
+  }, []);
+
+  // Mirror of the rows for the live tick below: synced after every render, so
+  // the tick always merges into what is on screen rather than a stale copy.
+  const usersRef = useRef(null);
+  useEffect(() => {
+    usersRef.current = users;
+  }, [users]);
+
+  // THE LIVE TICK. Every few seconds the directory asks the snapshot — who is
+  // connected, who is composing — and folds it into the rows. Only the flag
+  // moves, so filters, sort and any open form are untouched; an id the rows
+  // have never seen means somebody new, and the tick re-reads /users instead
+  // of showing a stranger's badge on nobody's row.
+  useEffect(() => {
+    const snap = async () => {
+      try {
+        const data = await api('/presence/snapshot');
+        const cur = usersRef.current;
+        if (!Array.isArray(cur)) return;
+        const { rows, changed, hasNew } = applySnapshot(cur, data.online);
+        if (hasNew) load();
+        else if (changed) setUsers(rows);
+      } catch {
+        // Silent: the thirty-second read is the backstop, and a live signal
+        // that failed to arrive is not a fact anybody needs told.
+      }
+    };
+    snap();
+    const id = window.setInterval(snap, SNAPSHOT_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // THE DIRECTORY READS ITSELF, again and again: a new account — or a colleague
+  // signing in on another machine — walks onto the list without a refresh. Thirty
+  // seconds, the same cadence as the presence beat, and only while the tab is
+  // looked at: a hidden tab does no work, and coming back re-reads at once, so
+  // the first frame after Alt-Tab is already true. The read only replaces the
+  // rows; filters, sort, menus and any open form hold their own state, so a
+  // refresh never steals what is being typed.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') load();
+    }, 30000);
+    const onVisible = () => {
+      if (!document.hidden) load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
   }, []);
 
   // WHAT THE OPEN ACCOUNT PAGE SHOWS.

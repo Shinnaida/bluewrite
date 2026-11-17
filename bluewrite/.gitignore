@@ -19,6 +19,35 @@ resources/ai/.cache_state.json
 # folder is created on demand, so an empty checkout has nothing here at all.
 storage/avatars/
 
+# Evidence photographs attached to reports (migration 025, ReportCaptures). Same
+# rule as the avatars above: STATION DATA written by POST /reports/{id}/captures,
+# never source, and it must not reach the repo.
+storage/report_captures/
+
+# The Apache watchdog's PID and the rendered runtime bits it writes at start.
+storage/logs/
+
+# A working backup taken beside the sheet rules it replaced, not the rules.
+.sheet-revert-backup/
+
+# Top-level images/pages kept beside the app while a surface is measured:
+# downloaded design references, dumped pages and UI-probe screenshots. Nothing
+# under src/assets or public/ lives at this level, and scripts/launcher/package.cmd
+# strips exactly this set when it stages a release, so it is not app source.
+/*.png
+/*.jpg
+/n364.txt
+/dashboard-improved.html
+/devcheck-genie.html
+
+# PHP session files for the Apache host (the rendered Apache config sets
+# session.save_path here). Per-browser sign-in state, machine-local, never source.
+storage/sessions/
+
+# The Apache config RENDERED at start from scripts/apache/bluewrite-httpd.conf.template.
+# Generated per machine (it carries installed Apache/PHP paths), so it is not source.
+storage/apache/
+
 # Dependencies & build
 node_modules/
 public/assets/

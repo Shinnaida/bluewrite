@@ -1,7 +1,12 @@
-# BlueWrite — Apache rules for the LAN deployment document root.
-# Serves the built React bundle; routes /api/* to the PHP front controller
+# BlueWrite — Apache routing rules for the LAN deployment document root.
+# Serves the built app; routes /api/* to the PHP front controller
 # (public/api.php -> ../api/index.php).
 # NOTE: this file lives in public-assets/ and is copied into public/ on build.
+#
+# These rules are the Apache twin of router.php, which does the same job under
+# PHP's built-in server: API to PHP, real files as themselves, everything else
+# to the shell. Keep the two in step — a path that works on one and 404s on the
+# other is the difference between the dev server and the station server.
 
 RewriteEngine On
 
@@ -11,3 +16,28 @@ RewriteRule ^api/ api.php [QSA,L]
 # Static assets: never rewrite, let Apache serve them.
 RewriteCond %{REQUEST_URI} ^/assets/
 RewriteRule ^ - [L]
+
+# Real files and folders (the shell, pictures, sw.js, api.php, this file).
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Everything else is a deep link into the app (/login, /reports/12…) — hand it
+# the shell and let the app decide what to draw. Without this every such URL is
+# a 404 from Apache while the same URL works under `php -S`.
+RewriteRule ^ index.html [L]
+
+# WHICH FRONT END THIS SERVES, because there are two in public/.
+#   index.html + assets/index-*.js  the built React app — what this checkout
+#                                   actually deploys, and what router.php served.
+#   index.php                      a SECOND, server-rendered front end (the
+#                                   modules app). It is tracked and reachable
+#                                   directly (/index.php?r=login), but the files
+#                                   its pages ask for — assets/css/shared/app.css
+#                                   and assets/js/** — are not in this checkout,
+#                                   so routing pages to it would serve them
+#                                   unstyled and inert.
+# So the fallback above is correct FOR WHAT IS DEPLOYED, not in general. If the
+# modules app is ever built and shipped, this is the one rule to change: send its
+# routes to index.php (modules/README.md describes the routing it expects) and
+# drop the shell fallback.

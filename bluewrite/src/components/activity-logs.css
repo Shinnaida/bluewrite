@@ -1,0 +1,1013 @@
+/* ============================================================
+   Activity Logs (Audit Trail) — the station's read of who did what.
+
+   A wide column: the station photograph overhead, three live tiles under it,
+   and the records card with its own tabs, toolbar and trail beneath. Colours
+   come from the app's role tokens and nothing else, so the dark theme answers
+   through the same file — no hard-coded ink or paper here except the hero's
+   own navy wash, which is white text on a photograph like the gate's.
+   ============================================================ */
+
+.alog {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 1560px;
+  margin: 0 auto;
+  width: 100%;
+  font-family: var(--font-body);
+  color: var(--paper);
+}
+
+/* ---- The three tiles ----------------------------------------------------
+   Total / Active / Security, each with its own 14-day line at the foot — the
+   tile says its number in words AND draws its trend, so the eye gets the shape
+   of the trail before the table is read. The drawing is decorative: the number
+   and the window beside it are the fact. */
+.alog-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.9rem;
+}
+.alog-kpi {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 158px;
+  background: var(--panel);
+  border: 0;
+  border-radius: 16px;
+  padding: 1rem 1.1rem 0;
+  box-shadow: 0 1px 2px rgba(16, 35, 63, 0.05), 0 10px 28px -20px rgba(16, 35, 63, 0.28);
+  overflow: hidden;
+}
+.alog-kpi__top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+/* The mark is a bare glyph, not a boxed tile: no ground, no edge, so nothing
+   reads as a border around it. The tone still carries the meaning. */
+.alog-kpi__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: none;
+}
+.alog-kpi__label {
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+.alog-kpi__value {
+  margin-top: 0.6rem;
+  font-size: 2.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+}
+.alog-kpi__sub {
+  margin: 0.42rem 0 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--steel);
+}
+.alog-kpi__sub strong {
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+}
+.alog-kpi__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  margin-left: 0.5rem;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--cyan);
+  cursor: pointer;
+}
+.alog-kpi__link:hover {
+  text-decoration: underline;
+}
+.alog-kpi__link:focus-visible,
+.alog-kpi__link:hover {
+  outline: none;
+}
+.alog-kpi__link:focus-visible {
+  box-shadow: 0 0 0 2px var(--cyan);
+  border-radius: 4px;
+}
+/* The line's own box: full-bleed to the tile's edges, with room for the hover
+   tip above it. The tone lives on the wrap so the line, the today dot and the
+   hover cursor all inherit the one colour. */
+.alog-kpi__sparkwrap {
+  position: relative;
+  width: calc(100% + 2.2rem);
+  margin: auto -1.1rem 0;
+  padding-top: 22px;
+  color: var(--steel);
+}
+/* A line with dates behind it is pressable: the pointer says so, and the
+   keyboard ring borrows the tile's own tone so it never clashes with it. */
+.alog-kpi__sparkwrap.is-pickable {
+  cursor: pointer;
+}
+.alog-kpi__sparkwrap.is-pickable:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+.alog-kpi--blue .alog-kpi__sparkwrap { color: var(--cyan); }
+.alog-kpi--green .alog-kpi__sparkwrap { color: var(--green-ok); }
+.alog-kpi--amber .alog-kpi__sparkwrap { color: var(--amber); }
+.alog-kpi__spark {
+  display: block;
+  width: 100%;
+  height: 36px;
+}
+.alog-kpi__sparkbox {
+  position: relative;
+  height: 36px;
+}
+.alog-kpi__sparkbox .alog-kpi__spark {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+/* Today's point, always dotted: the value the tile's own sub-line names. The
+   panel-coloured ring keeps the dot readable where the line meets the wash. */
+.alog-kpi__today {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 2px var(--panel);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.alog-kpi__cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: currentColor;
+  opacity: 0.45;
+  transform: translateX(-0.5px);
+  pointer-events: none;
+}
+/* The hovered day's exact reading. Pinned to the wrap's headroom rather than to
+   the point, so a peak near the tile's edge never clips it. */
+.alog-kpi__tip {
+  position: absolute;
+  top: 0;
+  left: 8px;
+  padding: 0.1rem 0.45rem;
+  border-radius: 6px;
+  background: var(--panel-raised);
+  border: 1px solid var(--line-bright);
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--paper);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.alog-kpi.is-loading .alog-kpi__value {
+  color: transparent;
+  background: var(--panel-raised);
+  border-radius: 8px;
+  max-width: 5.5rem;
+}
+.alog-kpi--blue .alog-kpi__icon {
+  color: var(--cyan);
+}
+.alog-kpi--blue .alog-kpi__spark {
+  color: var(--cyan);
+  background: none;
+}
+.alog-kpi--green .alog-kpi__icon {
+  color: var(--green-ok);
+}
+.alog-kpi--green .alog-kpi__spark {
+  color: var(--green-ok);
+}
+.alog-kpi--amber .alog-kpi__icon {
+  color: var(--amber);
+}
+.alog-kpi--amber .alog-kpi__spark {
+  color: var(--amber);
+}
+
+/* ---- The records card --------------------------------------------------- */
+.alog-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(16, 35, 63, 0.05), 0 14px 34px -24px rgba(16, 35, 63, 0.3);
+  overflow: hidden;
+}
+.alog-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+  padding: 1.05rem 1.2rem 0.9rem;
+}
+.alog-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+/* A bare glyph like the KPI marks: no tile, no edge that reads as a border. */
+.alog-panel__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  background: none;
+  color: var(--cyan);
+}
+.alog-panel__title h1 {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--paper);
+}
+.alog-panel__title p {
+  margin: 0.12rem 0 0;
+  font-size: 0.76rem;
+  color: var(--steel);
+  font-variant-numeric: tabular-nums;
+}
+.alog-panel__state {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+}
+/* THE LIVE BADGE. Real, not dressing: the re-read runs every 30 seconds while the
+   tab is visible, and this badge states whether it is happening. */
+.alog-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.28rem 0.7rem 0.28rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--green-ok);
+  background: var(--green-bg);
+  border: 1px solid var(--green-line);
+  white-space: nowrap;
+}
+.alog-live i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: alog-ping 2.4s ease-out infinite;
+}
+@keyframes alog-ping {
+  0% { box-shadow: 0 0 0 0 rgba(21, 128, 61, 0.5); }
+  70% { box-shadow: 0 0 0 6px rgba(21, 128, 61, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(21, 128, 61, 0); }
+}
+.alog-live--paused {
+  color: var(--amber);
+  background: var(--amber-bg);
+  border-color: var(--amber-line);
+}
+.alog-live--paused i {
+  animation: none;
+}
+.alog-updated {
+  font-size: 0.72rem;
+  color: var(--cyan-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- The views -----------------------------------------------------------
+   Tabs with an underline, in the document's own voice: the selected view is the
+   page's current section, named by its bottom rule. */
+.alog-tabs {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0 1.2rem;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+.alog-tab {
+  appearance: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  margin-bottom: -1px;
+  padding: 0.7rem 0.9rem 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--steel);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.alog-tab:hover {
+  color: var(--paper);
+}
+.alog-tab:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.alog-tab[aria-selected='true'] {
+  color: var(--cyan);
+  border-bottom-color: var(--cyan);
+}
+.alog-tab__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.5rem;
+  padding: 0.08rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--amber);
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-line);
+}
+
+/* ---- Toolbar: search, Filters, Sort, Export ------------------------------- */
+.alog-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 1.2rem;
+  border-bottom: 1px solid var(--line);
+}
+.alog-search {
+  flex: 1 1 19rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 42px;
+  padding: 0 0.85rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--paper);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.alog-search:focus-within {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--cyan-bg);
+}
+.alog-search__icon {
+  flex: none;
+  color: var(--cyan-dim);
+}
+.alog-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.86rem;
+  color: var(--paper);
+}
+.alog-search input::placeholder {
+  color: var(--cyan-dim);
+}
+.alog-search__clear {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--panel-raised);
+  color: var(--steel);
+  cursor: pointer;
+}
+.alog-search__clear:hover {
+  color: var(--paper);
+}
+.alog-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.alog-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 42px;
+  padding: 0 0.9rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 10px;
+  background: var(--panel);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--paper);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+.alog-tool:hover:not(:disabled) {
+  border-color: var(--cyan);
+}
+.alog-tool:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+.alog-tool:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.alog-tool[aria-expanded='true'] {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--cyan-bg);
+}
+.alog-tool__badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.4rem;
+  padding: 0.06rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+  background: var(--cyan);
+}
+.alog-tool--export {
+  background: var(--ir-navy);
+  border-color: var(--ir-navy);
+  color: #ffffff;
+}
+.alog-tool--export:hover:not(:disabled) {
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+
+/* ---- The folded filters -------------------------------------------------- */
+.alog-filters {
+  padding: 0.95rem 1.2rem 1.05rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-raised);
+}
+.alog-filters__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.alog-filters__title {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--paper);
+}
+.alog-filters__hint {
+  margin: 0.15rem 0 0;
+  font-size: 0.76rem;
+  color: var(--steel);
+}
+.alog-filters__side {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+}
+.alog-filters__count {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--cyan);
+  background: var(--cyan-bg);
+  white-space: nowrap;
+}
+.alog-filters__clear {
+  border: 0;
+  background: none;
+  padding: 0.3rem 0.2rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--cyan);
+  cursor: pointer;
+}
+.alog-filters__clear:hover {
+  text-decoration: underline;
+}
+.alog-filters__grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+.alog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  min-width: 0;
+}
+.alog-field > span {
+  font-family: var(--font-hud);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+.alog-field select,
+.alog-field input {
+  width: 100%;
+  height: 42px;
+  padding: 0 0.65rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 9px;
+  background: var(--panel);
+  font: inherit;
+  font-size: 0.83rem;
+  color: var(--paper);
+}
+.alog-field select:focus-visible,
+.alog-field input:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -1px;
+  border-color: var(--cyan);
+}
+
+/* ---- The trail table ------------------------------------------------------ */
+.alog-tablewrap {
+  overflow-x: auto;
+}
+.alog-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.82rem;
+}
+.alog-col--entry { width: 4.1rem; }
+.alog-col--time { width: 7.2rem; }
+.alog-col--officer { width: 12.5rem; }
+.alog-col--action { width: 13.8rem; }
+.alog-col--record { width: 7rem; }
+.alog-col--ip { width: 8.2rem; }
+.alog-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-hud);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--cyan-dim);
+  white-space: nowrap;
+}
+.alog-table tbody td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  color: var(--paper);
+  white-space: nowrap;
+}
+.alog-table tbody tr:not(.alog-day):hover {
+  background: var(--cyan-bg);
+}
+.alog-table tbody tr:not(.alog-day):focus-within {
+  background: var(--cyan-bg);
+}
+/* The day rule: a raised band with a gold inset on the left, siblings of the tabs'
+   selected rule in navy and gold. Solid paper behind it so sticky rows — none as
+   of writing — and its own neighbours never show through. */
+.alog-day th {
+  padding: 0.48rem 0.75rem;
+  background: var(--panel-raised);
+  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  box-shadow: inset 3px 0 0 var(--ir-gold);
+}
+.alog-day__label {
+  font-family: var(--font-hud);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+.alog-day__count {
+  float: right;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--cyan-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The numbered margin of a bound blotter: the id is monotonic and never reused,
+   so the margin is a log sequence rather than a count that restarts per page. */
+.alog-entry {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--cyan-dim);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.alog-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  color: var(--paper);
+}
+/* ONE voice for the row: every cell wears the same sans and ink, so Time, Officer
+   and Record read as one record. The pill names the severity, not the record, and
+   keeps its own colours. */
+.alog-officer {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.alog-officer__face {
+  flex: none;
+}
+.alog-officer__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.alog-officer__text strong {
+  font-size: 0.82rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alog-officer__text small {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--cyan-dim);
+  font-variant-numeric: tabular-nums;
+}
+.alog-officer__sys {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--panel-raised);
+  border: 1px solid var(--line-bright);
+  color: var(--cyan-dim);
+}
+/* The severity pill. A dot-drop of its colour plus a tinted ground, so it holds
+   its meaning at a glance and still reads when colour is not the reader's cue —
+   the label is always there in words. */
+.alog-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  max-width: 100%;
+  padding: 0.24rem 0.6rem 0.24rem 0.5rem;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.alog-pill__icon {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+.alog-pill__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.alog-pill--red { color: var(--red-text, var(--red)); background: var(--red-bg); border-color: var(--red-line); }
+.alog-pill--amber { color: var(--amber); background: var(--amber-bg); border-color: var(--amber-line); }
+.alog-pill--green { color: var(--green-ok); background: var(--green-bg); border-color: var(--green-line); }
+.alog-pill--violet { color: var(--violet); background: var(--cyan-bg); border-color: var(--violet); }
+.alog-pill--blue { color: var(--cyan); background: var(--cyan-bg); border-color: var(--cyan); }
+.alog-pill--slate { color: var(--steel); background: var(--panel-raised); border-color: var(--line-bright); }
+.alog-report {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.45rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 7px;
+  background: var(--panel);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.alog-report:hover {
+  border-color: var(--cyan);
+  background: var(--cyan-bg);
+}
+.alog-report--static {
+  cursor: default;
+}
+.alog-report--static:hover {
+  border-color: var(--line-bright);
+  background: var(--panel);
+}
+.alog-entity {
+  font-size: 0.8rem;
+  color: var(--steel);
+}
+.alog-dash {
+  color: var(--cyan-dim);
+}
+.alog-detail {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--steel);
+  max-width: 100%;
+}
+.alog-ip {
+  font-size: 0.76rem;
+  color: var(--cyan-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Empty, skeleton, error ----------------------------------------------- */
+.alog-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+.alog-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--cyan-bg);
+  color: var(--cyan);
+  margin-bottom: 0.25rem;
+}
+.alog-empty h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: var(--paper);
+}
+.alog-empty p {
+  margin: 0;
+  max-width: 30rem;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--steel);
+}
+.alog-empty__action {
+  margin-top: 0.6rem;
+}
+.alog-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1.1rem 1.2rem;
+}
+.alog-skeleton__row {
+  height: 46px;
+  border-radius: 9px;
+  background: linear-gradient(100deg, var(--panel-raised) 30%, var(--line) 50%, var(--panel-raised) 70%);
+  background-size: 200% 100%;
+  animation: alog-shimmer 1.4s linear infinite;
+}
+@keyframes alog-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.alog-error {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 1.2rem;
+  background: var(--red-bg);
+  border-bottom: 1px solid var(--red-line);
+  color: var(--paper);
+  font-size: 0.82rem;
+}
+.alog-error__mark {
+  flex: none;
+  color: var(--red-text, var(--red));
+}
+.alog-error p {
+  margin: 0;
+  flex: 1 1 12rem;
+}
+.alog-error__retry {
+  border: 1px solid var(--red-line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 0.32rem 0.7rem;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--red-text, var(--red));
+  cursor: pointer;
+}
+
+/* ---- Footer: range and numbered pages ------------------------------------- */
+.alog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+  padding: 0.8rem 1.2rem;
+  border-top: 1px solid var(--line);
+  background: var(--panel-raised);
+}
+.alog-foot__summary {
+  font-size: 0.76rem;
+  color: var(--steel);
+}
+.alog-foot__summary strong {
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+}
+.alog-pager {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex-wrap: wrap;
+}
+.alog-page {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 0.5rem;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--steel);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.alog-page:hover:not(:disabled) {
+  background: var(--cyan-bg);
+  color: var(--cyan);
+}
+.alog-page:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+.alog-page:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.alog-page[aria-current='page'] {
+  background: var(--ir-navy);
+  border-color: var(--ir-navy);
+  color: #ffffff;
+}
+.alog-page__gap {
+  padding: 0 0.15rem;
+  color: var(--cyan-dim);
+}
+
+/* ---- One arrival ------------------------------------------------------------ */
+@keyframes alog-arrive {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .alog-kpi:nth-child(1) { animation: alog-arrive 260ms ease-out 50ms both; }
+  .alog-kpi:nth-child(2) { animation: alog-arrive 260ms ease-out 110ms both; }
+  .alog-kpi:nth-child(3) { animation: alog-arrive 260ms ease-out 170ms both; }
+  .alog-panel { animation: alog-arrive 260ms ease-out 210ms both; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .alog-live i,
+  .alog-skeleton__row {
+    animation: none;
+  }
+}
+
+/* ---- Narrow screens ----------------------------------------------------------
+   Below 900px the trail turns into cards: the head folds away (visually — it
+   stays in the accessibility tree) and every cell becomes its own labelled line
+   under the card. Nothing scrolls sideways; a phone-width page reads top to bottom.
+   The day bands stay bands between the cards, never cards themselves. */
+@media (max-width: 900px) {
+  .alog-filters__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .alog-table {
+    table-layout: auto;
+  }
+  .alog-table colgroup {
+    display: none;
+  }
+  .alog-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .alog-table,
+  .alog-table tbody,
+  .alog-table tr,
+  .alog-table td {
+    display: block;
+    width: 100%;
+  }
+  .alog-table tbody tr:not(.alog-day) {
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .alog-table tbody td {
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+    border-bottom: 0;
+    padding: 0.2rem 0;
+    white-space: normal;
+  }
+  .alog-table tbody td::before {
+    content: attr(data-label);
+    flex: none;
+    width: 6.5rem;
+    font-family: var(--font-hud);
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--cyan-dim);
+  }
+  .alog-detail {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .alog-day th {
+    display: block;
+  }
+  .alog-filters__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .alog-foot {
+    justify-content: center;
+  }
+  .alog-panel__state {
+    margin-left: 0;
+  }
+}

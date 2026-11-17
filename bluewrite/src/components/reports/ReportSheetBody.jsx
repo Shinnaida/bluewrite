@@ -73,7 +73,9 @@ import {
   correctNagaPlaceLines,
   correctNagaPlaceLinesHtml,
   emphasizeIssuanceRequestorHtml,
+  blankUnnamedIssuanceRequestor,
   splitHtmlLines,
+  revealHtmlPrefix,
 } from '../../lib/narrativeText.js';
 import { sanitizeRichHtml, containsRichTags, richTextToPlain, sanitizeLetterHtml } from '../../lib/richText.js';
 import RichTextArea from './RichTextArea.jsx';
@@ -110,6 +112,93 @@ function prefersReducedMotion() {
 // Item amounts print bare ("- 284,370.00"), matching the scanned sheet.
 function fmtItemValue(v) {
   return N(v).replace(/^[₱P]\s*/, '');
+}
+
+// A line of the arranged letter that is a labeled header row ("Place: …",
+// "Time/Date: …", "Complainant: …"): a short label, a colon, then its value.
+const NARRATIVE_LABEL_LINE = /^[A-Za-z][A-Za-z0-9 /&'().,#-]{0,45}:\s*/;
+
+/**
+ * Owner request (2026-11-16): the narrative is titled FACTS directly above the
+ * ACCOUNT, not above the labeled rows an arranged letter carries. When the
+ * letter opens with those rows (Place, Time/Date, Complainant, Suspect, …),
+ * they stay exactly where they are and the caption is placed before the first
+ * line of prose; a letter with no such rows is titled at its top. A letter
+ * that already writes its own "Facts:" label is left alone, so the caption is
+ * never printed twice.
+ *
+ * @param {string} html the finished narrative html (already sanitized)
+ * @returns {string}
+ */
+function withFactsCaption(html) {
+  const blocks = splitHtmlLines(html);
+  if (blocks.length === 0) return html;
+  let lead = 0;
+  let labels = 0;
+  let labelled = false;
+  for (let i = 0; i < blocks.length; i += 1) {
+    const text = blocks[i].text.trim();
+    if (text === '') continue;
+    if (!NARRATIVE_LABEL_LINE.test(text)) break;
+    if (/^facts\b/i.test(text)) labelled = true;
+    lead = i + 1;
+    labels += 1;
+  }
+  if (labelled) return html;
+  const at = labels > 0 && lead < blocks.length ? lead : 0;
+  // Inline, with its own breaks: it splits a <br> line flow and a <p> flow
+  // alike without nesting a block inside a paragraph. The second break is the
+  // one line of air between the caption and the account (owner request,
+  // 2026-11-16) — the heading never sits flush on the paragraph.
+  const caption = '<strong>FACTS:</strong><br><br>';
+  return [
+    ...blocks.slice(0, at).map((b) => b.html),
+    caption,
+    ...blocks.slice(at).map((b) => b.html),
+  ].join('');
+}
+
+/**
+ * The plain-text half of the same rule (owner request, 2026-11-16): a plain
+ * narrative may open with its own labeled rows too (a blotter's "PLACE OF
+ * INCIDENT:", "T/D:", "COMPLAINANT:", …), so the caption is placed before
+ * its first prose line there as well. Returns the text before the account
+ * (`lead`, '' when there are no labeled rows), the account and what trails it
+ * (`rest`), whether the caption belongs at the very top, and whether it should
+ * print at all (a narrative that already says FACTS keeps its own label).
+ *
+ * @param {string} text the narrative as the sheet prints it
+ * @returns {{ lead: string, rest: string, atTop: boolean, show: boolean }}
+ */
+function placePlainFactsCaption(text) {
+  const value = String(text ?? '');
+  const lines = value.split('\n');
+  let lead = 0;
+  let labels = 0;
+  let labelled = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    if (line === '') {
+      // A blank line inside the labeled rows belongs with them.
+      if (labels > 0) lead = i + 1;
+      continue;
+    }
+    if (!NARRATIVE_LABEL_LINE.test(line)) break;
+    if (/^facts\b/i.test(line)) labelled = true;
+    labels += 1;
+    lead = i + 1;
+  }
+  // A narrative that already writes its own "Facts:" label is left alone, so
+  // the caption is never printed twice (the rich half does the same).
+  if (labelled) return { lead: '', rest: value, atTop: true, show: false };
+  // No labeled rows: the caption opens the narrative, exactly as before.
+  if (labels === 0 || lead >= lines.length) return { lead: '', rest: value, atTop: true, show: true };
+  return {
+    lead: lines.slice(0, lead).join('\n').replace(/\n+$/, ''),
+    rest: lines.slice(lead).join('\n'),
+    atTop: false,
+    show: true,
+  };
 }
 
 
@@ -589,11 +678,15 @@ export default function ReportSheetBody({
   // echoes the incident title below Remarks; the sheet already prints the
   // title quoted above the facts, so the echo is skipped the same way.
   const sheetTitle = reportTitle(report, ts);
-  const narrativeText = caseValue(correctNagaPlaceLines(stripRedundantSheetFooter(stripRedundantSheetHeader(stripLeadingBlotterRestatement(richTextToPlain(String(narrativeRaw ?? ''))), sheetTitle), sheetTitle))) || '—';
+  // The issuance line's requestor prints blank when nobody is named: a role
+  // ("the complainant") or the formatter's placeholder never stands in for a
+  // person (owner request, 2026-11-16).
+  const narrativeText = blankUnnamedIssuanceRequestor(caseValue(correctNagaPlaceLines(stripRedundantSheetFooter(stripRedundantSheetHeader(stripLeadingBlotterRestatement(richTextToPlain(String(narrativeRaw ?? ''))), sheetTitle), sheetTitle)))) || '—';
+  const plainFacts = placePlainFactsCaption(narrativeText);
   // The finished letter's own html (see the narrative block): the progressive
   // reveal below splits THIS, so the typing converges exactly on the final
   // format instead of swapping it in at the end.
-  const narrativeHtml = emphasizeIssuanceRequestorHtml(correctNagaPlaceLinesHtml(sanitizeRichHtml(stripRedundantSheetFooterHtml(stripRedundantSheetHeaderHtml(narrativeRaw, sheetTitle), sheetTitle))));
+  const narrativeHtml = withFactsCaption(emphasizeIssuanceRequestorHtml(blankUnnamedIssuanceRequestor(correctNagaPlaceLinesHtml(sanitizeRichHtml(stripRedundantSheetFooterHtml(stripRedundantSheetHeaderHtml(narrativeRaw, sheetTitle), sheetTitle))))));
 
   // NOTABLE FINDINGS / ACTION TAKEN: a generate proposal replaces them; a
   // tighten (or no proposal) leaves the committed values untouched.
@@ -1074,21 +1167,30 @@ export default function ReportSheetBody({
            blotter-entry restatement is dropped, because the certification
            line directly above already states it; this also cleans a legacy
            row stored before the server stopped adding one. Task 9 — the text
-           types itself in; the heading over it was removed by owner request
-           (2026-11-02), so every incident's sheet reads without a label. ---- */}
+           types itself in. Owner request (2026-11-16): the heading over the
+           narrative is back, worded FACTS only — never "FACTS OF THE CASE". ---- */}
       <div className="pr-narrative">
-        {/* Owner request (2026-11-02): the heading over the narrative is
-            removed on every incident's sheet — the account reads on its own,
-            with no label above it. */}
+        {/* Owner request (2026-11-16): the narrative is titled FACTS directly
+            above the ACCOUNT. A rich (arranged) letter carries its labeled
+            header rows, so its caption rides inside `narrativeHtml` (see
+            withFactsCaption); a plain narrative is split the same way (see
+            placePlainFactsCaption) and draws the caption between its rows and
+            its account; the editing box has no rows of its own to skip, so it
+            titles the field. */}
         {editInner && onEditNarrative ? (
-          <RichTextArea
-            value={narrativeRaw}
-            onChange={onEditNarrative}
-            className="pr-narrative-edit"
-            ariaLabel="Facts of the case — edit on the letter"
-            rows={10}
-            toolbar="none"
-          />
+          <>
+            <strong className="pr-narrative-head">
+              {animate ? typeChrome(CL('facts head', "FACTS:")) : CL('facts head', "FACTS:")}
+            </strong>
+            <RichTextArea
+              value={narrativeRaw}
+              onChange={onEditNarrative}
+              className="pr-narrative-edit"
+              ariaLabel="Facts of the case — edit on the letter"
+              rows={10}
+              toolbar="none"
+            />
+          </>
         ) : narrativeRich && !animate ? (
           <div
             className="pr-narrative-html"
@@ -1117,9 +1219,16 @@ export default function ReportSheetBody({
               slotAcc += b.text.length;
               finished += b.html;
             });
-            const typed = current === -1
-              ? null
-              : val(caseValue(correctNagaPlaceLines(richTextToPlain(blocks[current].html))));
+            // The current line types its FINAL html prefix (tags intact), so
+            // bolds, spacing and breaks read exactly as the finished report
+            // while typing — never a plain blob that restyles at the end.
+            let typedHtml = null;
+            if (current !== -1) {
+              const blockStart = slotAcc;
+              slotAcc += blocks[current].text.length;
+              const shownInBlock = Math.max(0, Math.min(blocks[current].text.length, cursor - blockStart));
+              typedHtml = revealHtmlPrefix(blocks[current].html, shownInBlock);
+            }
             blocks.forEach((b, i) => {
               if (current === -1 || i <= current) return;
               slotAcc += b.text.length;
@@ -1127,12 +1236,35 @@ export default function ReportSheetBody({
             return (
               <>
                 {finished !== '' && <span dangerouslySetInnerHTML={{ __html: finished }} />}
-                {typed !== null && <span className="pr-narrative-text">{typed}</span>}
+                {typedHtml !== null && (
+                  <span className="pr-narrative-text">
+                    <span dangerouslySetInnerHTML={{ __html: typedHtml }} />
+                    <span className="pr-caret" aria-hidden="true" />
+                  </span>
+                )}
               </>
             );
           })()}</div>
+        ) : !plainFacts.show ? (
+          <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(plainFacts.rest); })()}</span>
+        ) : plainFacts.atTop ? (
+          <>
+            <strong className="pr-narrative-head">
+              {(() => { typeOn = typeBody; return val(CL('facts head', "FACTS:")); })()}
+            </strong>
+            <br />
+            <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(plainFacts.rest); })()}</span>
+          </>
         ) : (
-          <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(narrativeText); })()}</span>
+          <>
+            <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(plainFacts.lead); })()}</span>
+            <br />
+            <strong className="pr-narrative-head">
+              {(() => { typeOn = typeBody; return val(CL('facts head', "FACTS:")); })()}
+            </strong>
+            <br />
+            <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(plainFacts.rest); })()}</span>
+          </>
         )}
       </div>
 
@@ -1175,6 +1307,59 @@ export default function ReportSheetBody({
                 className="pr-findings-html"
                 dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(findingsHtml) }}
               />
+              {structuredFindings.map((fnd, i) => {
+                typeOn = typeFindings;
+                return (
+                  <div className="pr-entry" key={`find-struct-${i}`}>{val(`- ${caseValue(fnd)}`)}</div>
+                );
+              })}
+            </>
+          ) : findingsRich ? (
+            // Typing a rich draft types the FINAL format, like the narrative
+            // above: finished lines draw their formatted html and the current
+            // line types its final html prefix (tags intact), so bolds and
+            // spacing read exactly as the finished report mid-sequence.
+            // `animate` is true on this branch (the still branch above owns
+            // `!animate`).
+            <>
+              <div className="pr-findings-html">{(() => {
+                typeOn = typeFindings;
+                const blocks = splitHtmlLines(sanitizeRichHtml(findingsHtml));
+                let finished = '';
+                let current = -1;
+                let off = slotAcc;
+                blocks.forEach((b, i) => {
+                  if (b.text.length > 0 && current === -1 && cursor < off + b.text.length) current = i;
+                  off += b.text.length;
+                });
+                blocks.forEach((b, i) => {
+                  if (current !== -1 && i >= current) return;
+                  slotAcc += b.text.length;
+                  finished += b.html;
+                });
+                let typedHtml = null;
+                if (current !== -1) {
+                  const blockStart = slotAcc;
+                  slotAcc += blocks[current].text.length;
+                  const shownInBlock = Math.max(0, Math.min(blocks[current].text.length, cursor - blockStart));
+                  typedHtml = revealHtmlPrefix(blocks[current].html, shownInBlock);
+                }
+                blocks.forEach((b, i) => {
+                  if (current === -1 || i <= current) return;
+                  slotAcc += b.text.length;
+                });
+                return (
+                  <>
+                    {finished !== '' && <span dangerouslySetInnerHTML={{ __html: finished }} />}
+                    {typedHtml !== null && (
+                      <span className="pr-entry">
+                        <span dangerouslySetInnerHTML={{ __html: typedHtml }} />
+                        <span className="pr-caret" aria-hidden="true" />
+                      </span>
+                    )}
+                  </>
+                );
+              })()}</div>
               {structuredFindings.map((fnd, i) => {
                 typeOn = typeFindings;
                 return (

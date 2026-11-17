@@ -22,14 +22,22 @@ import { INPUT_MAX_BYTES, UPLOAD_EDGE, checkAvatarFile, squareCrop } from '../..
 // in this pipeline cannot drift apart without a failure here.
 const server = readFileSync(new URL('../../app/core/AvatarPhoto.php', import.meta.url), 'utf8');
 
-test('the upload is smaller than the stored copy can ever need', () => {
-  // The server keeps 256px square (AvatarPhoto::EDGE). Sending exactly that would
-  // leave nothing to cut from a landscape photograph and nothing for a
-  // high-density display, so the client sends twice it — and the number is
-  // asserted against the server's own so the pair cannot drift.
-  assert.equal(UPLOAD_EDGE, 512);
+test('the upload is larger than the stored copy can ever need', () => {
+  // The server keeps a square of at most AvatarPhoto::EDGE, and that number is
+  // read from the class that owns it so the two ends of this pipeline cannot drift
+  // apart without a failure here.
+  //
+  // TWO RULES, AND THE SECOND IS THE ONE THAT WAS LEARNED THE HARD WAY. The client
+  // must send at least what the server keeps (a smaller upload is a smaller face,
+  // whatever the server would have liked). And the server must keep ENOUGH: the
+  // dashboard paints an ID badge face at 1024x1440 (paintIdPhotoFront), cover-fitting
+  // this square into it, so a stored edge well under 1024 is a visible enlargement
+  // of already-lossy bytes — the soft, "pixelated" badges this floor exists to
+  // prevent. 768 is the smallest stored edge whose enlargement onto that card stays
+  // under 2x.
   const edge = Number(/public const EDGE = (\d+);/.exec(server)?.[1]);
   assert.ok(edge > 0, 'AvatarPhoto::EDGE must be a number literal');
+  assert.ok(edge >= 768, `the stored edge must suit the 1024px badge face, got ${edge}`);
   assert.ok(UPLOAD_EDGE >= edge, 'the client must not send less than the server keeps');
 });
 

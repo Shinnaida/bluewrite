@@ -132,6 +132,93 @@ test('roles wear their colour on the drawing, the roster and the legend', async 
   assert.match(html, /conn-hub__seen-dot/);
 });
 
+// ---------------------------------------------------------------------------
+// The desk that is composing a report
+// ---------------------------------------------------------------------------
+
+test('an account composing a report wears the writing badge and says so on its chip', async () => {
+  const { render, stampAgo } = await load();
+  const html = render([
+    user(1, 'Maria Santos', { last_seen_at: stampAgo(0), role: 'Officer', last_report_write_at: stampAgo(1) }),
+    user(2, 'Ana Cruz', { last_seen_at: stampAgo(0), role: 'Officer' }),
+  ]);
+
+  // One composing desk, one badge: the node is marked, the pen bubble is drawn,
+  // and the roster pill names the work instead of the idle label.
+  assert.equal((html.match(/conn-hub__node[^"]*is-writing/g) || []).length, 1, 'only the composing account may be marked');
+  assert.match(html, /conn-hub__node-write/);
+  assert.match(html, /writing a report/);
+  // The reader hears it too: the svg names who is on, so it must name who writes.
+  assert.match(html, /Maria Santos \(writing a report\)/);
+  assert.doesNotMatch(html, /Ana Cruz \(writing a report\)/);
+});
+
+test('a live composing latch marks the node the same way a fresh save does', async () => {
+  const { render, stampAgo } = await load();
+  const html = render([
+    user(1, 'Maria Santos', { last_seen_at: stampAgo(0), role: 'Officer', last_report_write_at: null, composing_report_id: 41 }),
+  ]);
+
+  // No save on the trail at all — the latch alone is the whole claim.
+  assert.match(html, /conn-hub__node[^"]*is-writing/);
+  assert.match(html, /writing a report/);
+  assert.match(html, /Maria Santos \(writing a report\)/);
+});
+
+test('every workstation opens the same live desk panel', async () => {
+  const { render, stampAgo } = await load();
+  const html = render([
+    user(1, 'Maria Santos', { last_seen_at: stampAgo(0), role: 'Officer' }),
+  ]);
+
+  // Closed until asked: the drawer is state, and renderToString runs no
+  // effects, so a fresh paint must not carry it.
+  assert.doesNotMatch(html, /conn-hub__live/, 'the desk drawer is open on first paint');
+
+  // But both doors are on the drawing: the node and the roster row are
+  // labelled controls pointing at the same account.
+  assert.match(html, /role="button"/);
+  assert.match(html, /Show live activity for Maria Santos/);
+
+  const src = await readSrc('src/components/ConnectionHub.jsx');
+  // The wiring behind the doors: click or keyboard toggles one id, Escape
+  // closes it, and the open desk re-reads that account's trail on a tick.
+  // The panel states outright that no screen is ever shown: "live" here is
+  // the trail, not a display.
+  assert.match(src, /toggleSelected\(u\.id\)/);
+  assert.match(src, /onKeyDown=\{\(e\) => onTriggerKey\(e, u\.id\)\}/);
+  assert.match(src, /if \(e\.key === 'Escape'\) setSelectedId\(null\);/);
+  assert.match(src, /api\(`\/audits\?user_id=\$\{user\.id\}&per_page=/);
+  assert.match(src, /never their screen/);
+  assert.doesNotMatch(src, /LiveScreen|screenshare/, 'the live-screen viewer is gone');
+  // The preview is a logged opening plus silent ticks: print once (the trail
+  // records the view, as any opening should), then the excerpt asks only
+  // what changed — never a print row per tick.
+  assert.match(src, /api\(`\/reports\/\$\{composingId\}\/print`\)/);
+  assert.match(src, /api\(`\/reports\/\$\{composingId\}\/live`\)/);
+  assert.match(src, /narrative_excerpt/);
+  // The drawer reads as a dossier, not a stack of slips: a role chip and an
+  // event count in the header, and the trail as a timeline — one rail, dots
+  // inked by the action's family.
+  assert.match(src, /conn-hub__live-role/);
+  assert.match(src, /conn-hub__live-total/);
+  assert.match(src, /conn-hub__live-rail/);
+  assert.match(src, /trailKind\(a\.action\)/);
+});
+
+test('a report touch older than five minutes is not writing any more', async () => {
+  const { render, stampAgo } = await load();
+  const html = render([
+    user(1, 'Maria Santos', { last_seen_at: stampAgo(0), role: 'Officer', last_report_write_at: stampAgo(6) }),
+  ]);
+
+  // Still connected — the desk is there — but the badge and the pill are gone.
+  assert.match(html, /1 signed in/);
+  assert.doesNotMatch(html, /is-writing/);
+  assert.doesNotMatch(html, /writing a report/);
+  assert.match(html, /active now/);
+});
+
 test('an account that is not connected is not listed either, and the empty state says why', async () => {
   const { render, stampAgo } = await load();
   const stale = render([user(2, 'Ana Cruz', { last_seen_at: stampAgo(60), role: 'Officer' })]);
@@ -196,4 +283,30 @@ test('somebody reports in: the shell owns the beat, and a hidden tab does not be
   assert.match(beat, /if \(inFlight \|\| document\.hidden\) return;/);
   assert.match(beat, /setInterval\(beat, HEARTBEAT_MS\)/);
   assert.match(beat, /document\.addEventListener\('visibilitychange', onVisible\)/);
+});
+
+test('the composer re-stamps its latch while the draft is open', async () => {
+  const composer = await readSrc('src/pages/Reports.jsx');
+
+  // While the editor holds an editable report it tells the server somebody is
+  // writing there — best-effort, silent, and never from a background tab.
+  assert.match(composer, /api\(`\/reports\/\$\{editingId\}\/composing`, \{ method: 'POST' \}\)/);
+  assert.match(composer, /setInterval\(ping, COMPOSING_PING_MS\)/);
+  assert.match(composer, /if \(stopped \|\| document\.hidden\) return;/);
+});
+
+test('a newly signed-in desk is detected without a refresh', async () => {
+  const panel = await readSrc('src/components/ConnectionHub.jsx');
+  const users = await readSrc('src/components/Users.jsx');
+
+  // THE HUB RE-READS on its thirty-second tick and the moment the tab is looked
+  // at again, so a colleague signing in walks onto the drawing by themselves.
+  assert.match(panel, /setInterval\(load, 30000\)/);
+  assert.match(panel, /document\.addEventListener\('visibilitychange', onVisible\)/);
+
+  // AND THE DIRECTORY BEHIND IT does the same — a new account must appear on the
+  // list, not wait for a refresh — while a hidden tab does no work at all.
+  assert.match(users, /window\.setInterval\(/);
+  assert.match(users, /document\.visibilityState === 'visible'/);
+  assert.match(users, /window\.addEventListener\('focus', onVisible\)/);
 });

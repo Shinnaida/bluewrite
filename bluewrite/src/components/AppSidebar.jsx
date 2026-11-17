@@ -24,8 +24,28 @@
 // IT IS NOT THE OLD DARK RAIL BACK. That rail (`.sidebar`, still in styles.css
 // for whoever reads the history) was a resizable file browser that carried the
 // officer's reports and a collapse toggle, and it was removed on purpose. This
-// one navigates and nothing else: no list, no resize handle, no collapse, and it
-// is drawn only for ADMIN — the officer's screens are untouched.
+// one navigates and nothing else: no list, no resize handle, and it is drawn only
+// for ADMIN — the officer's screens are untouched.
+//
+// WHAT THIS RAIL ADDED ON TOP OF THE FIVE ROWS (redesign, 2026-11-16). The column
+// was five links and then a long silence down to the seals. It now reads like the
+// desk it belongs to:
+//
+//   · a LETTERHEAD DATELINE — the day and the station's own clock, under the
+//     wordmark the way a printed sheet prints its date. It is the one piece of
+//     live information an incident desk checks all shift, and it is read from the
+//     station's timezone rather than the workstation's, because a report is
+//     stamped in the station's time and not in whatever a laptop was set to.
+//   · SECTION HEADINGS — "Supervision" and "Station", so five rows read as two
+//     jobs rather than as a list with no shape. They are DRAWN FROM THE SAME
+//     ADMIN_LINKS the bar declares (a heading is keyed to the destination that
+//     opens its group), so a sixth destination cannot arrive in a group that has
+//     no name without this file saying where it goes.
+//   · a SHORTCUTS door at the foot. The sheet already existed behind the `?` key
+//     and a row in the account menu; an Admin who lives in this rail gets it one
+//     press away instead of inside a menu they have to open first.
+//   · a nested account plate and seal line, so the foot of the column is a
+//     composed block rather than two controls floating on the photograph.
 //
 // It carries the SEAL AND THE THREE LINES for the same reason the bar does, and
 // reads them from the same two places: the artwork out of the bundle (the LAN has
@@ -34,7 +54,7 @@
 // sheet read them from. The comment stays in one home: AppTopBar.jsx explains why
 // they are imported rather than typed out.
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { DEPARTMENT, STATION, SYSTEM_TITLE } from '../lib/appInfo.js';
 import pnpSeal from '../assets/pnp-logo.png';
 import citySeal from '../assets/city-of-naga-seal.png';
@@ -46,6 +66,82 @@ import { ADMIN_LINKS, NavIcon, activeFor } from './AppTopBar.jsx';
 // And the account chrome lives in its own, for the same reason read the other way
 // round: the bar and the rail draw the same bell and the same menu (see the file).
 import AppChrome from './AppChrome.jsx';
+
+// ---------------------------------------------------------------------------
+// The station's clock
+//
+// READ IN THE STATION'S TIMEZONE, not the workstation's. The rail states when the
+// desk thinks it is; a PC whose clock was never set, or a browser opened over a
+// remote desktop from another country, would otherwise put a time on the rail that
+// no report on the system agrees with. Naga City keeps Philippine Standard Time
+// all year — the country has no daylight saving — so the zone is a constant rather
+// than something this file has to compute.
+//
+// The formatters are built ONCE, at module scope: Intl objects are not cheap to
+// construct, and a new one per render would be the most expensive thing on this
+// component.
+// ---------------------------------------------------------------------------
+const STATION_TIMEZONE = 'Asia/Manila';
+const STATION_TIME = new Intl.DateTimeFormat('en-GB', {
+  hour: '2-digit',
+  minute: '2-digit',
+  // `h23`, not `hour12: false`: some ICU builds answer that with `h24`, which
+  // prints midnight as 24:00 — a time no log on this station would ever show.
+  hourCycle: 'h23',
+  timeZone: STATION_TIMEZONE,
+});
+const STATION_DAY = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  timeZone: STATION_TIMEZONE,
+});
+
+/**
+ * The station's day and minute, kept current.
+ *
+ * IT TICKS ON THE MINUTE, and it wakes on the NEXT minute boundary rather than on
+ * an arbitrary 60-second beat: a clock opened at 22:53:57 that ticks a minute later
+ * shows 22:53 for a minute and seven seconds, which is a clock that is wrong for
+ * most of the time it is looked at. One timeout to the boundary, then a plain
+ * interval. Nothing here runs while the tab is closed, and a hidden tab's timer is
+ * throttled by the browser — which only means the first paint after coming back
+ * may be a minute stale until the next tick, never permanently wrong.
+ */
+function useStationClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    let interval;
+    const toNextMinute = 60000 - (Date.now() % 60000);
+    const first = setTimeout(() => {
+      setNow(new Date());
+      interval = setInterval(() => setNow(new Date()), 60000);
+    }, toNextMinute);
+    return () => {
+      clearTimeout(first);
+      clearInterval(interval);
+    };
+  }, []);
+  return {
+    // en-GB writes the day first, which is the order a log is read in.
+    day: STATION_DAY.format(now).replace(',', ''),
+    time: STATION_TIME.format(now),
+    stamp: now.toISOString(),
+  };
+}
+
+/**
+ * Which heading opens each group of destinations.
+ *
+ * KEYED BY THE DESTINATION THAT OPENS IT, so the groups are read out of the one
+ * list above rather than as a second list of kinds that has to be kept in the same
+ * order. A destination a heading does not name simply continues the group above
+ * it — which is what ALL_REPORTS and USER_MANAGEMENT are: supervision.
+ */
+const SECTION_OF = {
+  dashboard: 'Supervision',
+  audits: 'Station',
+};
 
 export default function AppSidebar({
   current,
@@ -89,6 +185,10 @@ export default function AppSidebar({
     });
   };
 
+  // The dateline. Held here rather than passed in: it is the rail's own reading of
+  // the clock, and no other screen has an opinion about it.
+  const clock = useStationClock();
+
   // Tap-the-rail collapse (owner request): no button — tapping the rail's own
   // empty surface folds it to icons, tapping again brings it back. Presses
   // that land on anything interactive (destinations, the lockup, the bell,
@@ -120,6 +220,7 @@ export default function AppSidebar({
       {/* The station photo behind the rail. Decoration only: the rail's own text is
           the content, so the image is hidden from assistive technology. */}
       <img className="ir-sidebar__backdrop" src={stationPhoto} alt="" aria-hidden="true" />
+
       {/* The lockup doubles as Home, like the bar's: an Admin's home base is the
           Dashboard. A button rather than a link because it changes the screen
           in place, which is what every destination below it does. */}
@@ -144,21 +245,52 @@ export default function AppSidebar({
         </span>
       </button>
 
+      {/* THE DATELINE. The day and the station's clock, under the letterhead the
+          way a printed sheet prints them. `dateTime` carries the machine-readable
+          stamp; the zone is decoration because PST is stated for a reader who
+          already knows which station they are standing in. The spoken label is
+          there because a bare "22:53" read out of context could be anything. */}
+      <div className="ir-sidebar__dateline">
+        <span className="ir-sidebar__dateline-day">{clock.day}</span>
+        <time className="ir-sidebar__dateline-time" dateTime={clock.stamp}>
+          {clock.time}
+          <span className="ir-sidebar__dateline-zone" aria-hidden="true">PHT</span>
+          <span className="sr-only"> — station time</span>
+        </time>
+      </div>
+
       {/* A landmark of its own, so the rail is reachable as navigation rather
-          than as a column of buttons at the head of every Admin screen. */}
+          than as a column of buttons at the head of every Admin screen.
+
+          THE HEADINGS ARE INSIDE THE LANDMARK and hidden from the a11y tree: they
+          group the rows visually, while each row's own label is what a screen
+          reader hears, and reading "Supervision" before "Dashboard" adds a word
+          that announces nothing a user of the list can act on. */}
       <nav className="ir-sidebar__nav" aria-label="Admin">
         {ADMIN_LINKS.map((l) => (
-          <button
-            key={l.kind}
-            type="button"
-            className="ir-side-link"
-            aria-current={active === l.kind ? 'page' : undefined}
-            onClick={() => onNavigate(l.kind)}
-            title={collapsed ? l.label : undefined}
-          >
-            <NavIcon name={l.icon} />
-            {l.label}
-          </button>
+          <React.Fragment key={l.kind}>
+            {SECTION_OF[l.kind] && (
+              <p className="ir-sidebar__section" aria-hidden="true">
+                {SECTION_OF[l.kind]}
+              </p>
+            )}
+            <button
+              type="button"
+              className="ir-side-link"
+              aria-current={active === l.kind ? 'page' : undefined}
+              onClick={() => onNavigate(l.kind)}
+              title={collapsed ? l.label : undefined}
+            >
+              {/* The mark in its own tile: a rail is scanned down one edge, and a
+                  tile gives every glyph the same optical box whatever its drawing
+                  does inside the 24-unit grid. Decoration, like the drawing it
+                  holds — the label beside it is the name. */}
+              <span className="ir-side-link__mark" aria-hidden="true">
+                <NavIcon name={l.icon} />
+              </span>
+              {l.label}
+            </button>
+          </React.Fragment>
         ))}
       </nav>
 
@@ -167,25 +299,55 @@ export default function AppSidebar({
           account menu are not navigation, and a screen reader listing this
           rail's destinations should not hear them twice. */}
       <div className="ir-sidebar__foot">
-        {/* The station's two seals, above the profile, with the station and the
-            build between them. Decoration: the line is also said in full, so the
-            images are hidden from a screen reader. */}
-        <div className="ir-sidebar__seals" aria-hidden="true">
-          <img src={pnpSeal} alt="" />
-          <span className="ir-sidebar__seals-text">
-            {STATION} · BlueWrite
+        {/* The sheet already opens from the `?` key and from the account menu;
+            this is the door for someone who lives in the rail and has never
+            opened that menu. The key cap is the same `?` the menu shows, because
+            two spellings of one shortcut is how a shortcut gets forgotten. */}
+        <button
+          type="button"
+          className="ir-sidebar__shortcut"
+          onClick={onShortcuts}
+          title="Keyboard shortcuts (?)"
+        >
+          <span className="ir-sidebar__shortcut-mark" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
+              <rect x="2.5" y="6" width="19" height="12" rx="2.5" />
+              <path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M7.5 14h9" />
+            </svg>
           </span>
-          <img src={citySeal} alt="" />
+          <span className="ir-sidebar__shortcut-label">Shortcuts</span>
+          <kbd className="ir-sidebar__kbd" aria-hidden="true">?</kbd>
+        </button>
+
+        {/* The account in a machined plate: an outer shell and an inner core, so
+            the profile control reads as a plate set into the rail rather than as
+            a control dropped on a photograph. The chrome keeps every rule it has
+            — only its border and top padding are taken back, because the plate is
+            the edge now (see `.ir-sidebar__account` in incident-report.css). */}
+        <div className="ir-sidebar__account">
+          <div className="ir-sidebar__account-core">
+            <AppChrome
+              variant="rail"
+              user={user}
+              onOpenProfile={onOpenProfile}
+              onLogout={onLogout}
+              onShortcuts={onShortcuts}
+              onOpenReport={onOpenReport}
+            />
+          </div>
         </div>
 
-        <AppChrome
-          variant="rail"
-          user={user}
-          onOpenProfile={onOpenProfile}
-          onLogout={onLogout}
-          onShortcuts={onShortcuts}
-          onOpenReport={onOpenReport}
-        />
+        {/* The station's two seals, under the account, with the station and the
+            system's name between them. Decoration: the line is also said in full,
+            so the images are hidden from a screen reader. */}
+        <div className="ir-sidebar__seals" aria-hidden="true">
+          <img src={pnpSeal} alt="" />
+          {/* The station only. The system's own name is the wordmark at the head
+              of this very column, and the second half of this line was making the
+              caption wrap onto a stranded "· BlueWrite" beneath it. */}
+          <span className="ir-sidebar__seals-text">{STATION}</span>
+          <img src={citySeal} alt="" />
+        </div>
       </div>
     </aside>
   );

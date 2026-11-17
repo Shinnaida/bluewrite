@@ -75,11 +75,12 @@ final class UsersController
 
         // REPORTS FOR THE DIRECTORY'S RIGHT HAND: how many each account has filed,
         // plus the sparse per-day map the miniature zero-fills — two grouped queries
-        // for the whole station rather than one read per row. Both cover the trailing
-        // 91 days, so the count and the grid can never disagree; deleted reports count
-        // in neither, because the register's own list hides `deleted_at` rows. UNKNOWN
-        // is NULL, not zero: a zero is a claim the officer never filed anything, and
-        // the directory must not print a claim it cannot back.
+        // for the whole station rather than one read per row, which is what N calls
+        // to /reports?created_by= would be. Both cover the trailing 91 days, so the
+        // count and the grid can never disagree; deleted reports count in neither,
+        // because the register's own list hides `deleted_at` rows. UNKNOWN is NULL,
+        // not zero: a zero is a claim the officer never filed anything, and the
+        // directory must not print a claim it cannot back.
         $reportCounts = null;
         $reportDays = null;
         try {
@@ -107,6 +108,50 @@ final class UsersController
             error_log('reports unreadable, directory counts unknown: ' . $e->getMessage());
         }
 
+        // WHO IS WRITING RIGHT NOW: the latest report-composing action per
+        // account inside the same five minutes Connected now counts as "at a
+        // desk". Composing means putting something INTO a report — starting
+        // one, editing one, attaching a capture, reading a page of evidence in,
+        // or generating its narrative — not printing, exporting, archiving or
+        // reviewing it. One grouped read over the recent trail rather than one
+        // read per row; the window keeps it to the rows that could still count.
+        $reportWrites = null;
+        try {
+            $ww = $pdo->query(
+                "SELECT a.user_id, MAX(a.created_at) AS last_write
+                 FROM audit_logs a
+                 WHERE a.action IN ('report.create', 'report.update', 'report.capture_add', 'ocr.read', 'ai.narrative.generate')
+                   AND a.created_at >= NOW() - INTERVAL 5 MINUTE
+                 GROUP BY a.user_id"
+            )->fetchAll();
+            $reportWrites = [];
+            foreach ($ww as $w) {
+                $reportWrites[(int) $w['user_id']] = (string) $w['last_write'];
+            }
+        } catch (\Throwable $e) {
+            error_log('audit trail unreadable, writing flags unknown: ' . $e->getMessage());
+        }
+
+        // THE LIVE LATCH, separately: which composer is open on each desk, if
+        // the stamp is fresh. A read of its own — in the same try/catch shape
+        // as the counts above — so a station that has not run migration 030
+        // yet gets a directory with no pen badges instead of a 500 with no
+        // directory at all. The window is the controller's, stated once.
+        $composing = null;
+        try {
+            $window = ReportsController::COMPOSING_WINDOW;
+            $cw = $pdo->query(
+                'SELECT user_id, report_id FROM report_composing
+                  WHERE updated_at >= NOW() - INTERVAL ' . $window . ' SECOND'
+            )->fetchAll();
+            $composing = [];
+            foreach ($cw as $w) {
+                $composing[(int) $w['user_id']] = (int) $w['report_id'];
+            }
+        } catch (\Throwable $e) {
+            error_log('composing latch unreadable, live flags unknown: ' . $e->getMessage());
+        }
+
         foreach ($rows as &$row) {
             $row['photo_url'] = AvatarPhoto::url(
                 (int) $row['id'],
@@ -116,6 +161,17 @@ final class UsersController
             unset($row['photo_path'], $row['photo_updated_at']);
             $row['report_count'] = $reportCounts === null ? null : ($reportCounts[(int) $row['id']] ?? 0);
             $row['report_days'] = $reportDays === null ? null : ($reportDays[(int) $row['id']] ?? (object) []);
+            // Which report the composer has open, if the latch is fresh (the read
+            // above already expired it): an int the board draws its pen badge
+            // from, or null — never a stale claim about finished work, and null
+            // as well when the latch table is unreadable, for the reason the
+            // report counts above give: a missing migration must not fail the
+            // whole directory.
+            $row['composing_report_id'] = $composing === null ? null : ($composing[(int) $row['id']] ?? null);
+            // NULL is unknown (the trail could not be read) as well as "not
+            // writing": like `report_count` above, a missing stamp must never
+            // print as a claim either way.
+            $row['last_report_write_at'] = $reportWrites === null ? null : ($reportWrites[(int) $row['id']] ?? null);
         }
         unset($row);
 

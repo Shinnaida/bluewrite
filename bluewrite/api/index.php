@@ -485,6 +485,13 @@ try {
     if ($seg0 === 'presence' && $seg1 === 'heartbeat' && $method === 'POST') {
         (new PresenceController())->heartbeat();
     }
+    // The live snapshot (migration 030): who is connected and who is composing,
+    // and nothing else — polled every few seconds by the screens that draw
+    // "who is here right now", which must not pay for the /users read on a
+    // live tick. Read-only, so it never disturbs the tallies the beat keeps.
+    if ($seg0 === 'presence' && $seg1 === 'snapshot' && $method === 'GET') {
+        (new PresenceController())->snapshot();
+    }
 
     // Messages between officers. ANY signed-in role, and the scope is the
     // session's own id on every route — there is no cross-account read, and no
@@ -607,8 +614,22 @@ try {
             if ($parts[2] === 'captures' && isset($parts[3]) && ($parts[4] ?? null) === 'review' && !isset($parts[5]) && $method === 'POST') {
                 (new CapturesController())->review((string) $seg1, (string) $parts[3]);
             }
+            // "I am composing this report" (migration 030): a latch, not a save —
+            // one row per writer, expired by the reader, so the board can draw
+            // its pen badge while the typing is still happening. There is no
+            // matching GET, because the answer rides the reads the screens
+            // showing it are already making.
+            if ($parts[2] === 'composing' && !isset($parts[3]) && $method === 'POST') {
+                $c->composing((string) $seg1);
+            }
             if ($parts[2] === 'print' && $method === 'GET') {
                 $c->printData((string) $seg1);
+            }
+            // The live peek (see ReportsController::live): the desk drawer's
+            // tick. Silent by design — opening the drawer goes through print
+            // once, which logs the view; the ticks only ask what changed.
+            if ($parts[2] === 'live' && !isset($parts[3]) && $method === 'GET') {
+                $c->live((string) $seg1);
             }
             if ($parts[2] === 'restore' && $method === 'PATCH') {
                 $c->restore((string) $seg1);

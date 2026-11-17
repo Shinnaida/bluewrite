@@ -568,6 +568,13 @@ export default function AiNarrativePanel({
   // Absent → the deskbar Keep/Discard below stays the only choice.
   toolbarMount = null,
   onSaveDraft = null,
+  // EXPLICIT-SAVE TICK (owner request, 2026-11-14): bumped by the editor on
+  // every successful saveDraft (toolbar Save, Save Draft button, Ctrl+S,
+  // print). The panel refreshes its proposal to the saved page when it
+  // changes (see savedTickSeen below), so the next press freezes and types
+  // the page the officer saved — never the first arrangement. Absent → no
+  // refresh, as before.
+  savedTick = 0,
 }) {
   const [mode, setMode] = useState('idle'); // idle|ready|loading|done|error|manual
   const [draft, setDraft] = useState(null); // { narrative, suggestions, possibleGaps, addedContentWarnings, gloss, sourceGloss, ambiguities, pinnedTerms }
@@ -1488,10 +1495,19 @@ export default function AiNarrativePanel({
       // its only job is wording. It cannot reorder the parts, invent a section
       // or drop one, because the layout it receives is the document the officer
       // is already looking at — the same deterministic text Arrange produces.
+      // AN EDITED PAGE IS ALREADY ARRANGED (owner request, 2026-11-14): running
+      // the formatter over ink the officer has moved blocks on re-orders it
+      // into the template's own order before the model ever sees it — so a page
+      // with Action taken and Recorded by swapped came back in the FIRST
+      // arrangement's layout, and that is what the reveal typed. Officer ink is
+      // handed over exactly as it reads (Enhance keeps the source's layout, see
+      // preserveLayout); only a raw account is arranged first.
       const arrangedText = reportHtmlToPlain(
         formatIncidentReportHtml(accountText, { sentenceCase: true }),
       ).trim();
-      const sourceText = arrangedText === '' ? accountText : arrangedText;
+      const sourceText = enhancePaper !== ''
+        ? enhancePaper
+        : (arrangedText === '' ? accountText : arrangedText);
       setMode('loading');
       setThinkPhase('waiting');
       setMessage(null);
@@ -1756,7 +1772,7 @@ export default function AiNarrativePanel({
       }
       if (!streamed) {
         try {
-          const arranged = await api('/ai/arrange', { method: 'POST', body: { account: accountText } });
+        const arranged = await api('/ai/arrange', { method: 'POST', body: { account: accountText } });
           const text = String(arranged?.report ?? '').trim();
           // The model arranges; it never invents. A name, plate, code or
           // vehicle marker from nowhere is guessing, so the answer is dropped
@@ -2710,6 +2726,39 @@ export default function AiNarrativePanel({
       window.clearTimeout(hide);
     };
   }, [satisfiedSaved]);
+  // REFRESH ON SAVE (owner request, 2026-11-14): an explicit save persists
+  // the page the officer is looking at — including hand edits that never
+  // entered this proposal — so the proposal is refreshed to those saved
+  // words. Without it the next press freezes the FIRST arrangement into
+  // paperAtPressRef and the paper draws/replays that stale proposal for the
+  // whole run, even though the model works from the edited page. Only when
+  // the proposal IS the page (applied, or the satisfied receipt standing on
+  // it): a proposal the arrival effect held back for review must survive a
+  // save untouched, or Keep would confirm words the officer never reviewed.
+  // Review-box typing is draft-local until Accept carries it over, so it
+  // wins where it holds newer typing of its own — a save must not eat it.
+  // Spread first: the arranged/enhanced flags, gaps and everything else stay.
+  const savedTickSeen = useRef(0);
+  useEffect(() => {
+    if (!savedTick || savedTick === savedTickSeen.current) return;
+    savedTickSeen.current = savedTick;
+    if (!draft || (provisionalState !== 'applied' && !satisfiedSaved)) return;
+    const liveFindings = String(notableFindings ?? '');
+    const liveStatus = String(actionTaken ?? '');
+    setDraft((d) => {
+      if (!d) return d;
+      const next = { ...d, narrative };
+      if (normaliseLineSet(String(d.findingsText ?? '').split('\n')) === normaliseLineSet(liveFindings.split('\n'))) {
+        next.notableFindings = liveFindings.split('\n').map((l) => l.trim()).filter(Boolean);
+        next.findingsText = liveFindings;
+      }
+      if (String(d.statusText ?? '').trim() === liveStatus.trim()) {
+        next.actionTaken = liveStatus;
+        next.statusText = liveStatus;
+      }
+      return next;
+    });
+  }, [savedTick, draft, provisionalState, satisfiedSaved, narrative, notableFindings, actionTaken]);
   const satisfiedBar = satisfiedVisible
     ? createPortal(
       (

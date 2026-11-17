@@ -31,13 +31,14 @@ test('print draws the shared sheet, never its own copy', () => {
   assert.doesNotMatch(BODY, /pr-narrative|pr-findings|pr-actions/, 'print carries its own prose markup');
 });
 
-test('viewing a draft or the finalize review draws whole — no typing replay', () => {
-  // Owner request: opening a draft and the finalize review must show the
-  // exact sheet at once, never replaying the typing sequence. A page that
-  // types itself in reads as a load fault on a record the officer only
-  // opened to read, and the review must show what will be filed immediately.
-  assert.match(PRINT, /revealFinal=\{false\}/, 'print still replays the final typing sequence');
-  assert.doesNotMatch(PRINT, /finalTyped/, 'the one-shot final flag is still here');
+test('the finished sheet types itself in once — auto-print stays whole', () => {
+  // Owner request: the finalize review, the sheet page and the print preview
+  // replay the sheet's typing sequence once over the COMMITTED values (click
+  // skips, reduced-motion draws whole). The auto-print dialog never replays —
+  // it prints ~150ms after load, so a mid-sequence print would be half-typed.
+  assert.match(PRINT, /revealFinal=\{[^}]*!finalTyped/, 'the final letter no longer types itself in');
+  assert.match(PRINT, /onRevealComplete=\{\(\) => setFinalTyped\(true\)\}/, 'the one-shot final flag never releases');
+  assert.match(PRINT, /canAnimateFinal/, 'the auto-print guard is gone');
 });
 
 test('the read letter honors every ribbon alignment, justify included', () => {
@@ -79,10 +80,17 @@ test('the shared sheet renders one html for screen and print', () => {
   // conclusive City of Naga spelling at render (owner request, 2026-11-02),
   // and the issuance line's requestor name prints bold, ALL CAPS and
   // underlined (owner request).
+  // ...then blanks an unnamed requestor (owner request, 2026-11-16: a role is
+  // not a person), and finally places the FACTS caption above the account.
   assert.match(
     LEAF,
-    /const narrativeHtml = emphasizeIssuanceRequestorHtml\(correctNagaPlaceLinesHtml\(sanitizeRichHtml\(stripRedundantSheetFooterHtml\(stripRedundantSheetHeaderHtml\(narrativeRaw, sheetTitle\), sheetTitle\)\)\)\);/,
+    /const narrativeHtml = withFactsCaption\(emphasizeIssuanceRequestorHtml\(blankUnnamedIssuanceRequestor\(correctNagaPlaceLinesHtml\(sanitizeRichHtml\(/,
     'the rich narrative stopped rendering its stored html',
+  );
+  assert.match(
+    LEAF,
+    /stripRedundantSheetFooterHtml\(stripRedundantSheetHeaderHtml\(narrativeRaw, sheetTitle\), sheetTitle\)/,
+    'the redundant header/footer strips left the rich narrative path',
   );
   assert.match(
     LEAF,

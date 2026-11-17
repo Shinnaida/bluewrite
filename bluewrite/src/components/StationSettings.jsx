@@ -67,7 +67,6 @@ const SECTIONS = [
   { id: 'letterhead', label: 'Report letterhead' },
   { id: 'contact', label: 'Sign-off' },
   { id: 'types', label: 'Incident types' },
-  { id: 'personnel', label: 'Signing personnel' },
 ];
 
 export default function StationSettings({ notify, onConnError, onSaved, onOpenUsers }) {
@@ -132,10 +131,9 @@ export default function StationSettings({ notify, onConnError, onSaved, onOpenUs
   const [savedTypes, setSavedTypes] = useState(null);
 
   const [saving, setSaving] = useState(null); // 'header' | 'contact' | 'style' | 'doc' | 'types' | null
-  // Toolbar state for the two searchable lists below. Display-only: neither
+  // Toolbar state for the searchable list below. Display-only: it never
   // changes what would be saved, only which rows are on screen.
   const [typeQuery, setTypeQuery] = useState('');
-  const [personQuery, setPersonQuery] = useState('');
   // Which settings section is on screen — one at a time, like the register's
   // own shelves (Draft / filed): the three blocks are views of one page, not
   // one long scroll. Unsaved edits live in the form state above, so switching
@@ -1003,75 +1001,6 @@ export default function StationSettings({ notify, onConnError, onSaved, onOpenUs
         </section>
         )}
 
-        {/* ================= 3. THE PERSONNEL (read-only) ================= */}
-        {section === 'personnel' && (
-        <section className="st-block" id="st-personnel" aria-labelledby="st-personnel-h" role="tabpanel">
-          <div className="st-block-head">
-            <span className="st-step" aria-hidden="true">4</span>
-            <h2 id="st-personnel-h">Signing personnel</h2>
-            <p className="st-lead">
-              Who may be named as investigator-on-case or “Noted by”. This list is not
-              stored here: it is every active Officer and Admin account, so it is
-              changed by making or deactivating an account, not by editing a setting.
-            </p>
-          </div>
-
-          <div className="st-tools">
-            <label className="st-search">
-              <span className="sr-only">Search personnel</span>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" />
-              </svg>
-              <input
-                type="search"
-                value={personQuery}
-                onChange={(e) => setPersonQuery(e.target.value)}
-                placeholder={`Search ${personnel.length} ${personnel.length === 1 ? 'person' : 'people'}…`}
-                autoComplete="off"
-              />
-            </label>
-            {onOpenUsers && (
-              <button type="button" className="st-toolbtn is-primary" onClick={() => onOpenUsers()}>
-                Open User Management
-              </button>
-            )}
-          </div>
-
-          {personnel.length === 0 ? (
-            <p className="st-count">
-              <strong>0</strong> active people may be named on a report.
-              {' '}
-              <span className="st-quiet">Only active Officers and Admins may be named.</span>
-            </p>
-          ) : (
-            <ul className="st-person">
-              {personnel
-                .filter((p) => {
-                  const q = personQuery.trim().toLowerCase();
-                  if (!q) return true;
-                  return [p.full_name, p.badge_number, p.role].some((v) => String(v ?? '').toLowerCase().includes(q));
-                })
-                .map((p) => (
-                  <li key={p.id}>
-                    <span className="st-person__face" aria-hidden="true">
-                      {String(p.full_name || '?').trim().charAt(0).toUpperCase()}
-                    </span>
-                    <span className="st-person__who">
-                      <strong>{p.full_name}</strong>
-                      <span>Badge {p.badge_number}</span>
-                    </span>
-                    <span className={`st-role st-role--${String(p.role || '').toLowerCase()}`}>{p.role}</span>
-                  </li>
-                ))}
-            </ul>
-          )}
-          {personQuery.trim() !== '' && personnel.length > 0 && personnel.every((p) =>
-            ![p.full_name, p.badge_number, p.role].some((v) => String(v ?? '').toLowerCase().includes(personQuery.trim().toLowerCase()))) && (
-            <p className="st-quiet" role="status">Nobody matches “{personQuery.trim()}”.</p>
-          )}
-        </section>
-        )}
       </div>
       {floats}
     </div>

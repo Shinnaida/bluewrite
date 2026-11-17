@@ -1,0 +1,97 @@
+# ============================================================================
+#  BlueWrite — Apache configuration TEMPLATE (station server, port 8099).
+#
+#  THIS FILE IS THE SOURCE. scripts\watch-servers.ps1 fills in the @@NAME@@
+#  placeholders from what is installed and writes storage\apache\bluewrite-httpd.conf
+#  on every start. Edit this file; the generated copy is overwritten.
+#
+#    @@SERVER_ROOT@@         the Apache folder               (bin\httpd.exe's parent)
+#    @@PHP_DIR@@             the PHP folder Apache can load (has php*apache2_4.dll)
+#    @@REPO_ROOT@@           this checkout
+#    PHP_LOADFILE_BLOCK      LoadFile lines, one per dependency DLL that exists
+#                            (spelled without @@…@@ so this header cannot be
+#                             substituted into a real directive)
+#
+#  WHY RENDERED AT ALL: Laragon's folders carry versions in their names, and a
+#  config with those typed in stops working the day either is upgraded — reading
+#  as "BlueWrite is down" rather than "a folder was renamed". Nothing in this file
+#  names a version, so an upgrade is picked up on the next start.
+#
+#  The rest of the reasoning — why Apache and not `php -S`, why PHP-FPM cannot be
+#  used on Windows, why the port stays 8099 — lives in docs\LAN_SETUP.md §2, once,
+#  where a person reads it before changing this.
+# ============================================================================
+
+ServerRoot "@@SERVER_ROOT@@"
+
+Listen 0.0.0.0:8099
+ServerName localhost:8099
+
+# Its own pid file, because Laragon's Apache (another site, port 80) shares the
+# default one under the Apache folder.
+PidFile "@@REPO_ROOT@@/storage/logs/httpd.pid"
+
+# ---- Modules ---------------------------------------------------------------
+LoadModule authn_core_module modules/mod_authn_core.so
+LoadModule authz_core_module modules/mod_authz_core.so
+LoadModule authz_host_module modules/mod_authz_host.so
+LoadModule dir_module modules/mod_dir.so
+LoadModule mime_module modules/mod_mime.so
+LoadModule log_config_module modules/mod_log_config.so
+LoadModule setenvif_module modules/mod_setenvif.so
+LoadModule rewrite_module modules/mod_rewrite.so
+
+# ---- The one setting that is not a default: one thread per request ---------
+# mpm_winnt is compiled in (`httpd -l` lists mpm_winnt.c), so there is no
+# LoadModule line for it. ThreadsPerChild IS the concurrency — 16 requests
+# answered at once, which is what removed the queue two workstations hit on
+# `php -S`. Everything else in this file is Apache's default on purpose:
+# Timeout, KeepAlive, KeepAliveTimeout, MaxKeepAliveRequests, DirectoryIndex and
+# Options were all restating it.
+ThreadsPerChild 16
+
+# ---- PHP: mod_php on the thread-safe build ---------------------------------
+# LoadFile comes FIRST and is not decoration. php8apache2_4.dll needs php8ts.dll,
+# and php_curl.dll needs libssh2/nghttp2/libsodium/brotli. Windows looks for a
+# dependency beside the EXECUTABLE (apache\bin) and on PATH — never beside the
+# DLL that needs it — and PHP is not on PATH here. `php -S` got this for free
+# because php.exe lives in that folder; under Apache, without these lines, curl
+# silently fails to load and the AI, news and OCR controllers go with it.
+@@PHP_LOADFILE_BLOCK@@
+LoadModule php_module "@@PHP_DIR@@/php8apache2_4.dll"
+PHPIniDir "@@PHP_DIR@@"
+
+# Sessions in a folder of their own: ISOLATION, not a measured speedup — moving
+# them changed nothing reliable (24-63 ms either way). It keeps BlueWrite's
+# sign-in state in one findable, git-ignored place. php_admin_value so a page
+# cannot loosen it.
+php_admin_value session.save_path "@@REPO_ROOT@@/storage/sessions"
+
+<FilesMatch "\.php$">
+    SetHandler application/x-httpd-php
+</FilesMatch>
+
+# ---- Logging ---------------------------------------------------------------
+ErrorLog "@@REPO_ROOT@@/storage/logs/apache-error.log"
+LogLevel warn
+LogFormat "%h %l %u %t \"%r\" %>s %b" common
+CustomLog "@@REPO_ROOT@@/storage/logs/apache-access.log" common
+
+# ---- Document root ---------------------------------------------------------
+# public/ is the deployed app and the API shim (api.php -> ../api/index.php).
+# AllowOverride All is what lets public/.htaccess do the routing.
+DocumentRoot "@@REPO_ROOT@@/public"
+
+<Directory "@@REPO_ROOT@@/public">
+    AllowOverride All
+    # LAN-only, as a second lock behind the firewall rule.
+    Require ip 127.0.0.1 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+</Directory>
+
+# Nothing outside the document root is served, whatever a URL asks for.
+<Directory />
+    AllowOverride None
+    Require all denied
+</Directory>
+
+ServerSignature Off

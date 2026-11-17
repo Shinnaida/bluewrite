@@ -69,10 +69,17 @@ export default function ReportPrint({
   // Phase 6 Stage 4 (D2) — the translation's review record, for the appendix.
   const [verifications, setVerifications] = useState([]);
   const [verificationStatus, setVerificationStatus] = useState(null);
-  // Owner request: viewing a draft and the finalize review draw whole — no
-  // typing animation. A page that types itself in reads as a load fault on a
-  // record the officer only opened to read, and the finalize review must show
-  // the exact sheet that will be filed the moment it opens.
+  // Final-report typing: the finished sheet types itself in once per report
+  // (finalize review, sheet page, print preview) — the same top-to-bottom
+  // sequence as the AI draft. One-shot: true until the sheet reports back,
+  // then false so re-renders draw whole. The auto-print dialog never replays
+  // (it prints ~150ms after load — a mid-sequence print would be half-typed).
+  const [finalTyped, setFinalTyped] = useState(false);
+  const reportKey = report?.id ?? reportId ?? 'new';
+  useEffect(() => {
+    setFinalTyped(false);
+  }, [reportKey, variant]);
+  const canAnimateFinal = !(variant === 'overlay' && autoPrint);
 
   // The print body class belongs to the OVERLAY: print CSS hides `.shell`
   // wholesale while it is on, so a page variant wearing it would hide the very
@@ -217,9 +224,12 @@ export default function ReportPrint({
             // A freed letter prints its own text (never editable here, so
             // the body renders the override read-only); empty composes.
             letterHtml={report.letter_html || ''}
-            // The finished report draws whole on every view — viewing a draft
-            // or the finalize review never replays the typing sequence.
-            revealFinal={false}
+            // The final formal letter types itself in once (click skips,
+            // reduced-motion draws whole). Auto-print stays whole so the
+            // dialog prints the complete page.
+            revealKey={typeof reportKey === 'number' ? reportKey : 0}
+            revealFinal={canAnimateFinal && !finalTyped}
+            onRevealComplete={() => setFinalTyped(true)}
           />
 
       {/* Screen-only trail line — the paper stays exactly on template. */}

@@ -515,12 +515,13 @@ served from our origin.
 
 **A re-encode, not the uploaded bytes.** Even a real JPEG can carry a second
 payload in a comment segment, so an avatar is decoded and written back out as a
-plain 256×256 JPEG at quality 82. What lands in the folder is something the
+plain square JPEG at quality 88. What lands in the folder is something the
 server produced, not something a client sent.
 
 | Rule | Why |
 | --- | --- |
-| 256px square, centre-**cropped** | every face here is drawn in a circle; a stretched face is what makes an avatar look broken |
+| square, centre-**cropped**, up to **1024px** | every face here is drawn in a circle; a stretched face is what makes an avatar look broken |
+| **never larger than the source** | the dashboard paints a 1024×1440 ID-badge face from this square; a 256px copy was a 5.6× enlargement there, which is the soft "pixelated" badge an officer reports |
 | composited onto **white** | JPEG has no alpha, so a transparent PNG would otherwise come out as a black square |
 | ceiling **2 MB** | PHP's own `upload_max_filesize` on this deployment |
 | `u<id>-<unix seconds>.jpg` | identifies whose it is and when, without a lookup |
@@ -528,8 +529,9 @@ server produced, not something a client sent.
 **No rotation.** The `exif` extension is not installed here, so a photograph
 straight off a phone would be stored at whatever rotation its pixels are in. The
 **client re-encodes through a canvas first** (`src/lib/avatar.js`:
-`createImageBitmap` with `imageOrientation: 'from-image'`, centre-cropped, 512px,
-quality 0.9), and a browser applies EXIF orientation when it decodes — so the
+`createImageBitmap` with `imageOrientation: 'from-image'`, centre-cropped, 1280px,
+quality 0.92 with the high-quality resampler), and a browser applies EXIF
+orientation when it decodes — so the
 ordinary path arrives upright. A hand-rolled `curl` upload of a portrait phone
 photo would not, which is the honest limitation rather than something this
 pretends to handle.

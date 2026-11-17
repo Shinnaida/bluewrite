@@ -6,8 +6,11 @@ REM  BlueWrite — bring the local stack up.
 REM
 REM  THREE THINGS, THREE PORTS, and the app needs all of them:
 REM
-REM    * the API, `php -S 0.0.0.0:8099`  — the JSON front controller. It ALSO
-REM      serves the built app from public/, so http://127.0.0.1:8099/ is a
+REM    * the app + API, Apache on `0.0.0.0:8099` — configured by this repo's
+REM      template (scripts\apache\bluewrite-httpd.conf.template, rendered at start
+REM      against the installed Apache/PHP), NOT `php -S`. The built-in server
+REM      answers ONE request at a time, which made two workstations queue; Apache
+REM      answers each request on its own thread. http://127.0.0.1:8099/ is a
 REM      complete copy of BlueWrite on its own (no dev server involved).
 REM      ALL INTERFACES ON PURPOSE: the phone app reaches this port over the
 REM      station Wi-Fi (see docs\LAN_SETUP.md). Windows Firewall rule

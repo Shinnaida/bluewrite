@@ -1542,7 +1542,7 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
     }
 
     /** @return array<string,mixed> */
-    private static function responseSchema(): array
+    public static function responseSchema(): array
     {
         return [
             'type' => 'object',
@@ -1646,7 +1646,7 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
      *
      * @return array<int, array{ref:string,phrase:string,line?:string}>
      */
-    private static function normaliseSuspectPhrases(mixed $raw): array
+    public static function normaliseSuspectPhrases(mixed $raw): array
     {
         if (!is_array($raw)) {
             return [];
@@ -1694,7 +1694,7 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
         return mb_substr(trim($text), 0, 1200);
     }
 
-    private static function buildUserContent(array $masked, array $options): string
+    public static function buildUserContent(array $masked, array $options): string
     {
         $lines = [];
         $lines[] = 'INCIDENT TYPE: ' . ($masked['incident_type'] ?? '');
@@ -1991,7 +1991,7 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
         ];
     }
 
-    private static function fewShotBlock(string $incidentType): string
+    public static function fewShotBlock(string $incidentType): string
     {
         $file = dirname(__DIR__, 2) . '/resources/ai/narrative_few_shots.txt';
         if (!is_file($file)) {
@@ -2035,7 +2035,7 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
     }
 
     /** @return array<int, array{type:string,text:string,suggestion:string}> */
-    private static function normaliseSuggestions(mixed $raw): array
+    public static function normaliseSuggestions(mixed $raw): array
     {
         if (!is_array($raw)) {
             return [];
@@ -2145,7 +2145,7 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
     }
 
     /** @return array<int, array{description:string,severity:string}> */
-    private static function normaliseGaps(mixed $raw): array
+    public static function normaliseGaps(mixed $raw): array
     {
         if (!is_array($raw)) {
             return [];

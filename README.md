@@ -104,13 +104,17 @@ BlueWrite.bat` does the same thing from a console window.
 - `BlueWrite.exe --no-open` — start the servers without opening a browser
   (for a shortcut that runs at sign-in).
 - Other PCs on the same Wi-Fi need no install: they open
-  `http://<server-ip>:8099/` in a browser — see
+  `http://192.168.100.6:8099/` in a browser — see
   [`bluewrite/docs/LAN_SETUP.md`](bluewrite/docs/LAN_SETUP.md).
-  The server IP auto-syncs on every start: the watchdog detects the current
-  LAN IPv4 and rewrites `bluewrite/config/config.php` `base_url`, so a move
-  from `192.168.0.x` to `192.168.1.x` heals itself. `serve.cmd` and
-  `BlueWrite.exe` both print the address clients type
-  (e.g. `http://192.168.1.215:8099/`).
+  The app and API are served by **Apache + mod_php** on port 8099, from a config
+  the watchdog renders at start against the installed Apache and PHP
+  (`bluewrite/scripts/apache/bluewrite-httpd.conf.template` →
+  `storage/apache/bluewrite-httpd.conf`), so a Laragon or PHP upgrade needs no
+  edit. PHP's built-in server answers one request at a time, so it made two
+  workstations queue; Apache answers requests on separate threads.
+  This PC's address is now pinned static (`192.168.100.6`), so a bookmark keeps
+  working across reboots, and `config.php` `base_url` still follows the measured
+  address on every start in case the PC does move.
 - Uninstall / stop: double-click `Uninstall BlueWrite.bat`, or run
   `BlueWrite.exe --uninstall`. It removes the watchdog scheduled task,
   stops 8099 + 5180, and removes the `BlueWrite LAN 8099` firewall rule.

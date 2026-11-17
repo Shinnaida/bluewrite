@@ -63,15 +63,22 @@ export default function AppChrome({
   // set them, and it is the one menu entry that opens something.
   const [aboutOpen, setAboutOpen] = useState(false);
   const wrapRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
 
   // Close the profile menu on outside click or Escape.
+  // Escape also returns focus to the trigger so keyboard users land back
+  // where they opened the menu (WCAG 2.4.3 focus order).
   useEffect(() => {
     if (!menuOpen) return;
     const onDown = (e) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) setMenuOpen(false);
     };
     const onKey = (e) => {
-      if (e.key === 'Escape') setMenuOpen(false);
+      if (e.key === 'Escape') {
+        setMenuOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
@@ -80,6 +87,28 @@ export default function AppChrome({
       document.removeEventListener('keydown', onKey);
     };
   }, [menuOpen]);
+
+  // Focus the identity row on open, so screen-reader and keyboard users
+  // start inside the menu rather than stranded on the trigger behind it.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const first = menuRef.current?.querySelector('[role="menuitem"]');
+    first?.focus({ preventScroll: true });
+  }, [menuOpen]);
+
+  // Arrow-key travel between menu rows (Up/Down/Home/End), matching the
+  // native menu pattern without pulling in a menu library.
+  const onMenuKeyDown = (e) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+    const items = [...(menuRef.current?.querySelectorAll('[role="menuitem"]') ?? [])];
+    if (items.length === 0) return;
+    e.preventDefault();
+    const at = items.indexOf(document.activeElement);
+    if (e.key === 'Home') items[0]?.focus();
+    else if (e.key === 'End') items[items.length - 1]?.focus();
+    else if (e.key === 'ArrowDown') items[(at + 1 + items.length) % items.length]?.focus();
+    else items[(at - 1 + items.length) % items.length]?.focus();
+  };
 
   return (
     <div className={`ir-chrome ir-chrome--${variant}`}>
@@ -92,7 +121,14 @@ export default function AppChrome({
       {/* ---- Profile: identity + the single sign-out action ---- */}
       <div className="ir-profile-wrap" ref={wrapRef}>
         {menuOpen && (
-          <div className="ir-profile-menu" role="menu" aria-label="Account">
+          <div
+            className="ir-profile-menu"
+            role="menu"
+            aria-label={`Account — ${user.full_name}`}
+            id="account-menu"
+            ref={menuRef}
+            onKeyDown={onMenuKeyDown}
+          >
             {/* The identity row is the door to the Profile panel. It used to
                 be a static header — a name and a role, saying nothing you could
                 not already read in the bar behind it — which made the one thing
@@ -103,6 +139,7 @@ export default function AppChrome({
                 It closes the menu on the way: the panel is docked beside the
                 workspace, so leaving a menu open above it would put two
                 surfaces over the same click. */}
+            <p className="ir-profile-eyebrow">Signed in as</p>
             <button
               type="button"
               className="ir-profile-head ir-profile-head--link"
@@ -110,18 +147,25 @@ export default function AppChrome({
               onClick={() => {
                 setMenuOpen(false);
                 onOpenProfile();
+                triggerRef.current?.focus();
               }}
             >
-              <Avatar user={user} className="ir-profile-avatar" />
+              <span className="ir-profile-avatar-wrap"><Avatar user={user} className="ir-profile-avatar" /><span className="ir-profile-dot" aria-hidden="true" /></span>
               <span className="ir-profile-id">
-                <span className="ir-profile-name">{user.full_name}</span>
+                <span className="ir-profile-name-row">
+                  <span className="ir-profile-name">{user.full_name}</span>
+                  <span className="ir-profile-role">{user.role}</span>
+                </span>
                 <span className="ir-profile-meta">
-                  Badge {user.badge_number} · {user.role}
+                  Badge {user.badge_number} · @{user.username}
+                </span>
+                <span className="ir-profile-view">
+                  View profile &amp; preferences
+                  <svg className="ir-profile-head-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
                 </span>
               </span>
-              <svg className="ir-profile-head-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                <path d="m9 6 6 6-6 6" />
-              </svg>
             </button>
             <div className="ir-profile-sep" aria-hidden="true" />
 
@@ -139,12 +183,19 @@ export default function AppChrome({
                 click that opens this menu, so a number would read 30:00 every
                 time it was looked at. The RUNNING warning lives where it is
                 needed and can be seen — see Shell's idle banner. */}
-            <p className="ir-menu-note">
-              Signs out after {IDLE_LIMIT_MIN} minutes without activity. An open draft is
-              saved first.
-            </p>
+            <div className="ir-menu-note" role="note" aria-label="Session timeout">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3 2" />
+              </svg>
+              <span>
+                <strong>Auto sign-out · {IDLE_LIMIT_MIN} min</strong>
+                <span>Signs out after {IDLE_LIMIT_MIN} minutes without activity. An open draft is saved first.</span>
+              </span>
+            </div>
 
             <div className="ir-profile-sep" aria-hidden="true" />
+            <p className="ir-profile-eyebrow" aria-hidden="true">Resources</p>
             {/* The two entries below the fold answer questions rather than
                 set anything, so they sit with Log out instead: the fold is
                 for things the officer CHANGES. The key cap on this one is not
@@ -158,13 +209,16 @@ export default function AppChrome({
               onClick={() => {
                 setMenuOpen(false);
                 onShortcuts();
+                triggerRef.current?.focus();
               }}
             >
-              <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="2.5" y="6" width="19" height="12" rx="2" />
-                <path d="M6.5 10h.01M10.5 10h.01M14.5 10h.01M18 10h.01M7.5 14h9" />
-              </svg>
-              Keyboard shortcuts
+              <span className="ir-profile-item-icon" aria-hidden="true">
+                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="2.5" y="6" width="19" height="12" rx="2" />
+                  <path d="M6.5 10h.01M10.5 10h.01M14.5 10h.01M18 10h.01M7.5 14h9" />
+                </svg>
+              </span>
+              <span className="ir-profile-item-text">Keyboard shortcuts</span>
               <span className="ir-item-keys" aria-hidden="true">?</span>
             </button>
             <button
@@ -176,33 +230,41 @@ export default function AppChrome({
                 setAboutOpen(true);
               }}
             >
-              <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="12" r="9.5" />
-                <path d="M12 16.5v-5M12 7.8h.01" />
-              </svg>
-              About this system
+              <span className="ir-profile-item-icon" aria-hidden="true">
+                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9.5" />
+                  <path d="M12 16.5v-5M12 7.8h.01" />
+                </svg>
+              </span>
+              <span className="ir-profile-item-text">About this system</span>
             </button>
+            <div className="ir-profile-sep" aria-hidden="true" />
             <button
               type="button"
-              className="ir-profile-item"
+              className="ir-profile-item ir-profile-item--danger"
               role="menuitem"
               onClick={() => {
                 setMenuOpen(false);
                 onLogout();
+                triggerRef.current?.focus();
               }}
             >
-              <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-              </svg>
-              Log out
+              <span className="ir-profile-item-icon" aria-hidden="true">
+                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+                </svg>
+              </span>
+              <span className="ir-profile-item-text">Log out<span className="ir-profile-item-sub">Ends this session</span></span>
             </button>
           </div>
         )}
         <button
           type="button"
-          className="ir-profile-trigger"
+          ref={triggerRef}
+          className={`ir-profile-trigger${menuOpen ? ' is-open' : ''}`}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
+          aria-controls="account-menu"
           onClick={() => setMenuOpen((v) => !v)}
           title={`${user.full_name} — Badge ${user.badge_number} · ${user.role}`}
         >

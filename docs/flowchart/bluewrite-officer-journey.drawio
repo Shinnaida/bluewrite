@@ -1,0 +1,1250 @@
+<mxfile host="Electron" pages="13">
+  <diagram name="1 Signing in" id="off1">
+    <mxGraphModel dx="2000" dy="1230" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="A_title" locked="1" parent="1" style="text;html=1;align=center;fontSize=13;" value="&lt;b&gt;1 · Signing in&lt;/b&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;BlueWrite — what the officer does · page 1 of 13&lt;/font&gt;" vertex="1">
+          <mxGeometry height="44" width="767" x="30" y="8" as="geometry" />
+        </mxCell>
+        <mxCell id="A_start" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;strokeWidth=2;" value="START" vertex="1">
+          <mxGeometry height="56" width="200" x="313" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="A_input" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Enter username + password" vertex="1">
+          <mxGeometry height="72" width="300" x="263" y="156" as="geometry" />
+        </mxCell>
+        <mxCell id="A_check" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="System checks login" vertex="1">
+          <mxGeometry height="84" width="300" x="263" y="258" as="geometry" />
+        </mxCell>
+        <mxCell id="A_valid" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;" value="Is the login correct?" vertex="1">
+          <mxGeometry height="124" width="280" x="273" y="372" as="geometry" />
+        </mxCell>
+        <mxCell id="A_count" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Wrong again — 5 tries, then locked 15 min" vertex="1">
+          <mxGeometry height="84" width="220" x="582" y="392" as="geometry" />
+        </mxCell>
+        <mxCell id="A_locked" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Locked out?" vertex="1">
+          <mxGeometry height="124" width="220" x="582" y="500" as="geometry" />
+        </mxCell>
+        <mxCell id="A_help" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Request help from office" vertex="1">
+          <mxGeometry height="84" width="220" x="582" y="648" as="geometry" />
+        </mxCell>
+        <mxCell id="A_endpend" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" value="END" vertex="1">
+          <mxGeometry height="60" width="220" x="582" y="756" as="geometry" />
+        </mxCell>
+        <mxCell id="A_active" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Is the account still active?" vertex="1">
+          <mxGeometry height="124" width="280" x="273" y="526" as="geometry" />
+        </mxCell>
+        <mxCell id="A_ref" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Account blocked" vertex="1">
+          <mxGeometry height="84" width="220" x="25" y="546" as="geometry" />
+        </mxCell>
+        <mxCell id="A_endref" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" value="END" vertex="1">
+          <mxGeometry height="60" width="220" x="25" y="654" as="geometry" />
+        </mxCell>
+        <mxCell id="A_S2" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="S2: email code (next)" vertex="1">
+          <mxGeometry height="72" width="200" x="313" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="A_c1a" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="1" vertex="1">
+          <mxGeometry height="30" width="30" x="786" y="510" as="geometry" />
+        </mxCell>
+        <mxCell id="A_c1b" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="1" vertex="1">
+          <mxGeometry height="30" width="30" x="582" y="177" as="geometry" />
+        </mxCell>
+        <mxCell id="AE1" edge="1" locked="1" parent="1" source="A_start" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="A_input">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="AE2" edge="1" locked="1" parent="1" source="A_input" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="A_check">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="AE3" edge="1" locked="1" parent="1" source="A_check" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="A_valid">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="AE4" edge="1" locked="1" parent="1" source="A_valid" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="A_active" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="AE5" edge="1" locked="1" parent="1" source="A_valid" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="A_count" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="AE6" edge="1" locked="1" parent="1" source="A_count" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="A_locked">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="AE7" edge="1" locked="1" parent="1" source="A_locked" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="A_help" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="AE8" edge="1" locked="1" parent="1" source="A_locked" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="A_c1a" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="AE9" edge="1" locked="1" parent="1" source="A_c1b" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="A_input">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="AE10" edge="1" locked="1" parent="1" source="A_active" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="A_S2" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="AE11" edge="1" locked="1" parent="1" source="A_active" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="A_ref" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="AE12" edge="1" locked="1" parent="1" source="A_ref" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="A_endref">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="AE13" edge="1" locked="1" parent="1" source="A_help" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="A_endpend">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+              <mxCell id="legend1" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;fontSize=10;align=left;verticalAlign=middle;spacingLeft=8;spacingRight=8;" value="How to read this chart: oval = the start or the end · rectangle = a step · parallelogram = typing or a message&lt;br/&gt;diamond = a question — answer Yes or No · pentagon = a jump code to another page · numbered circle = a jump back to the same number on this page&lt;br/&gt;cylinder = the database (saved records) · DB pentagon = a database handoff to another page · DB1 circle = a jump to the database on this page" vertex="1"><mxGeometry height="88" width="736" x="40" y="856" as="geometry" /></mxCell>
+        <mxCell id="A_db" locked="1" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Database" vertex="1">
+          <mxGeometry height="88" width="170" x="45" y="256" as="geometry" />
+        </mxCell>
+        <mxCell id="A_db1a" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="DB1" vertex="1">
+          <mxGeometry height="30" width="30" x="677" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="A_db1b" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="DB1" vertex="1">
+          <mxGeometry height="30" width="30" x="110" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="A_DBE1" edge="1" locked="1" parent="1" source="A_check" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="A_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="A_DBE2" edge="1" locked="1" parent="1" source="A_count" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" target="A_db1a">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="A_DBE3" edge="1" locked="1" parent="1" source="A_db1b" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" target="A_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+</root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="2 The email code" id="off2">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="B_title" locked="1" parent="1" style="text;html=1;align=center;fontSize=13;" value="&lt;b&gt;2 · The email code&lt;/b&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;BlueWrite — what the officer does · page 2 of 13&lt;/font&gt;" vertex="1">
+          <mxGeometry height="44" width="767" x="30" y="8" as="geometry" />
+        </mxCell>
+        <mxCell id="B_S2" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="S2: continued from the login page" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="B_send" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Code sent to email (10 min)" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="162" as="geometry" />
+        </mxCell>
+        <mxCell id="B_enter" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Enter the 6 numbers" vertex="1">
+          <mxGeometry height="72" width="300" x="263" y="262" as="geometry" />
+        </mxCell>
+        <mxCell id="B_correct" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Is the code correct?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="358" as="geometry" />
+        </mxCell>
+        <mxCell id="B_count" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Wrong code — 5 tries, then locked" vertex="1">
+          <mxGeometry height="76" width="220" x="582" y="376" as="geometry" />
+        </mxCell>
+        <mxCell id="B_otplock" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Locked out?" vertex="1">
+          <mxGeometry height="112" width="220" x="582" y="476" as="geometry" />
+        </mxCell>
+        <mxCell id="B_session" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Signed in — you show online" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="B_A" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="A: Home screen (next)" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="B_I" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="I: backup code (next)" vertex="1">
+          <mxGeometry height="68" width="220" x="582" y="612" as="geometry" />
+        </mxCell>
+        <mxCell id="B_c2a" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="2" vertex="1">
+          <mxGeometry height="30" width="30" x="782" y="517" as="geometry" />
+        </mxCell>
+        <mxCell id="B_c2b" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="2" vertex="1">
+          <mxGeometry height="30" width="30" x="582" y="283" as="geometry" />
+        </mxCell>
+        <mxCell id="BE1" edge="1" locked="1" parent="1" source="B_S2" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="B_send">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="BE2" edge="1" locked="1" parent="1" source="B_send" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="B_enter">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="BE3" edge="1" locked="1" parent="1" source="B_enter" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="B_correct">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="BE4" edge="1" locked="1" parent="1" source="B_correct" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="B_session" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="BE5" edge="1" locked="1" parent="1" source="B_correct" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="B_count" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="BE6" edge="1" locked="1" parent="1" source="B_count" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="B_otplock">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="BE7" edge="1" locked="1" parent="1" source="B_otplock" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="B_I" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="BE8" edge="1" locked="1" parent="1" source="B_otplock" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;" target="B_c2a" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="BE9" edge="1" locked="1" parent="1" source="B_c2b" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;" target="B_enter">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="BE10" edge="1" locked="1" parent="1" source="B_session" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="B_A">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="B_resendq" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Code not arrived?" vertex="1">
+          <mxGeometry height="112" width="220" x="25" y="144" as="geometry" />
+        </mxCell>
+        <mxCell id="B_resend" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Wait 25 seconds, press Resend (old code dies)" vertex="1">
+          <mxGeometry height="76" width="220" x="25" y="358" as="geometry" />
+        </mxCell>
+        <mxCell id="BE19" edge="1" locked="1" parent="1" source="B_send" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fillColor=none;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="B_resendq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="BE20" edge="1" locked="1" parent="1" source="B_resendq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0;exitY=0.5;entryX=0;entryY=0.11;" target="B_enter" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="12" y="200" />
+              <mxPoint x="12" y="270" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="BE21" edge="1" locked="1" parent="1" source="B_resendq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="B_resend" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="BE22" edge="1" locked="1" parent="1" source="B_resend" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fillColor=none;exitX=1;exitY=0.5;entryX=0;entryY=0.63;" target="B_enter">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="254" y="318" />
+              <mxPoint x="254" y="307" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+              <mxCell id="B_db" locked="1" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Database" vertex="1">
+          <mxGeometry height="88" width="170" x="45" y="533" as="geometry" />
+        </mxCell>
+        <mxCell id="B_db1a" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="DB1" vertex="1">
+          <mxGeometry height="30" width="30" x="398" y="492" as="geometry" />
+        </mxCell>
+        <mxCell id="B_db1b" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="DB1" vertex="1">
+          <mxGeometry height="30" width="30" x="110" y="657" as="geometry" />
+        </mxCell>
+        <mxCell id="B_DBE1" edge="1" locked="1" parent="1" source="B_session" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="B_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="B_DBE2" edge="1" locked="1" parent="1" source="B_correct" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="B_db1a">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="B_DBE3" edge="1" locked="1" parent="1" source="B_db1b" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" target="B_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+</root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="3 The printed backup code" id="off2b">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="I_title" locked="1" parent="1" style="text;html=1;align=center;fontSize=13;" value="&lt;b&gt;3 · The printed backup code&lt;/b&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;BlueWrite — what the officer does · page 3 of 13&lt;/font&gt;" vertex="1">
+          <mxGeometry height="44" width="767" x="30" y="8" as="geometry" />
+        </mxCell>
+        <mxCell id="I_S2" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="S2: backup code, continued" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="I_rec" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Enter a printed backup code" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="162" as="geometry" />
+        </mxCell>
+        <mxCell id="I_recq" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Is the backup code correct?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="262" as="geometry" />
+        </mxCell>
+        <mxCell id="I_count" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Wrong code — 5 tries, then locked" vertex="1">
+          <mxGeometry height="76" width="220" x="582" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="I_lock" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Locked out?" vertex="1">
+          <mxGeometry height="112" width="220" x="582" y="376" as="geometry" />
+        </mxCell>
+        <mxCell id="I_c3a" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="3" vertex="1">
+          <mxGeometry height="30" width="30" x="782" y="417" as="geometry" />
+        </mxCell>
+        <mxCell id="I_c3b" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="3" vertex="1">
+          <mxGeometry height="30" width="30" x="592" y="185" as="geometry" />
+        </mxCell>
+        <mxCell id="I_help" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Request help from office" vertex="1">
+          <mxGeometry height="76" width="220" x="582" y="512" as="geometry" />
+        </mxCell>
+        <mxCell id="I_end" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;" value="END" vertex="1">
+          <mxGeometry height="56" width="220" x="582" y="608" as="geometry" />
+        </mxCell>
+        <mxCell id="I_session" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="Signed in — you show online" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="398" as="geometry" />
+        </mxCell>
+        <mxCell id="I_A" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="A: signed in — Home (next)" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="498" as="geometry" />
+        </mxCell>
+        <mxCell id="IE1" edge="1" locked="1" parent="1" source="I_S2" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="I_rec">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="IE2" edge="1" locked="1" parent="1" source="I_rec" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="I_recq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="IE3" edge="1" locked="1" parent="1" source="I_recq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="I_session" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="IE4" edge="1" locked="1" parent="1" source="I_recq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="I_count" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="IE5" edge="1" locked="1" parent="1" source="I_count" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="I_lock">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="IE6" edge="1" locked="1" parent="1" source="I_lock" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="I_help" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="IE7" edge="1" locked="1" parent="1" source="I_lock" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="I_c3a" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="IE8" edge="1" locked="1" parent="1" source="I_c3b" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="I_rec">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="IE9" edge="1" locked="1" parent="1" source="I_help" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="I_end">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="IE10" edge="1" locked="1" parent="1" source="I_session" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="I_A">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+              <mxCell id="I_db" locked="1" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Database" vertex="1">
+          <mxGeometry height="88" width="170" x="45" y="274" as="geometry" />
+        </mxCell>
+        <mxCell id="I_db1a" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="DB1" vertex="1">
+          <mxGeometry height="30" width="30" x="677" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="I_db1b" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="DB1" vertex="1">
+          <mxGeometry height="30" width="30" x="110" y="398" as="geometry" />
+        </mxCell>
+        <mxCell id="I_DBE1" edge="1" locked="1" parent="1" source="I_recq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="I_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="I_DBE2" edge="1" locked="1" parent="1" source="I_count" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" target="I_db1a">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="I_DBE3" edge="1" locked="1" parent="1" source="I_db1b" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" target="I_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+</root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="4 Your Home screen" id="off3">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="C_title" locked="1" parent="1" style="text;html=1;align=center;fontSize=13;fillColor=none;" value="&lt;b&gt;4 · Your Home screen&lt;/b&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;BlueWrite — what the officer does · page 4 of 13&lt;/font&gt;" vertex="1">
+          <mxGeometry height="44" width="767" x="30" y="8" as="geometry" />
+        </mxCell>
+        <mxCell id="C_A" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="A: continued after signing in" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="C_home" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Home: write or open reports" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="162" as="geometry" />
+        </mxCell>
+        <mxCell id="C_new" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Start a new report?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="262" as="geometry" />
+        </mxCell>
+        <mxCell id="C_B" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="B: writing (next)" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="398" as="geometry" />
+        </mxCell>
+        <mxCell id="C_list" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Open recent reports — drafts + finished" vertex="1">
+          <mxGeometry height="76" width="220" x="25" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="C_own" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Still unfinished?" vertex="1">
+          <mxGeometry height="112" width="220" x="25" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="C_B2" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="B: carry on writing" vertex="1">
+          <mxGeometry height="68" width="220" x="25" y="852" as="geometry" />
+        </mxCell>
+        <mxCell id="C_ro" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Read finished report (locked)" vertex="1">
+          <mxGeometry height="76" width="220" x="25" y="516" as="geometry" />
+        </mxCell>
+        <mxCell id="C_printq" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Do you want to print it?" vertex="1">
+          <mxGeometry height="112" width="220" x="25" y="616" as="geometry" />
+        </mxCell>
+        <mxCell id="C_print" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Print the report" vertex="1">
+          <mxGeometry height="76" width="220" x="25" y="752" as="geometry" />
+        </mxCell>
+        <mxCell id="C_c4a" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="4" vertex="1">
+          <mxGeometry height="30" width="30" x="782" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="C_c4b" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="4" vertex="1">
+          <mxGeometry height="30" width="30" x="582" y="185" as="geometry" />
+        </mxCell>
+        <mxCell id="CE1" edge="1" locked="1" parent="1" source="C_A" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="C_home">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CE2" edge="1" locked="1" parent="1" source="C_home" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="C_new">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CE3" edge="1" locked="1" parent="1" source="C_new" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="C_B" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CE4" edge="1" locked="1" parent="1" source="C_new" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fillColor=none;" target="C_list" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CE5" edge="1" locked="1" parent="1" source="C_list" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="C_own">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CE6" edge="1" locked="1" parent="1" source="C_own" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0;exitY=0.5;entryX=0;entryY=0.5;fillColor=none;" target="C_B2" value="Yes">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="12" y="436" />
+              <mxPoint x="12" y="886" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="CE7" edge="1" locked="1" parent="1" source="C_own" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="C_ro" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CE8" edge="1" locked="1" parent="1" source="C_ro" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="C_printq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CE9" edge="1" locked="1" parent="1" source="C_printq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="C_print" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CE10" edge="1" locked="1" parent="1" source="C_printq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=1;entryY=0.5;fillColor=none;" target="C_c4a" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="810" y="672" />
+              <mxPoint x="810" y="655" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="CE11" edge="1" locked="1" parent="1" source="C_print" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0.5;entryY=1;fillColor=none;" target="C_c4a">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="810" y="790" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="CE12" edge="1" locked="1" parent="1" source="C_c4b" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fillColor=none;" target="C_home">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="C_profq" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Open your profile?" vertex="1">
+          <mxGeometry height="112" width="220" x="582" y="262" as="geometry" />
+        </mxCell>
+        <mxCell id="C_E" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="E: your profile (next)" vertex="1">
+          <mxGeometry height="68" width="200" x="592" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="C_bellq" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Bell ringing?" vertex="1">
+          <mxGeometry height="112" width="220" x="582" y="492" as="geometry" />
+        </mxCell>
+        <mxCell id="C_bell" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Open the notice — filed, fixed, or returned" vertex="1">
+          <mxGeometry height="76" width="220" x="582" y="628" as="geometry" />
+        </mxCell>
+        <mxCell id="CE13" edge="1" locked="1" parent="1" source="C_home" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.3;entryX=0.5;entryY=0;fillColor=none;" target="C_profq">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="692" y="185" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="CE14" edge="1" locked="1" parent="1" source="C_profq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="C_E" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CE15" edge="1" locked="1" parent="1" source="C_profq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fillColor=none;" target="C_new" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CE20" edge="1" locked="1" parent="1" source="C_home" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fillColor=none;exitX=1;exitY=0.7;entryX=0.5;entryY=0;" target="C_bellq">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="692" y="215" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="CE21" edge="1" locked="1" parent="1" source="C_bellq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="C_bell" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CE22" edge="1" locked="1" parent="1" source="C_bellq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=1;exitY=0.5;entryX=0.5;entryY=0;" target="C_c4a" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CE23" edge="1" locked="1" parent="1" source="C_bell" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fillColor=none;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="C_own">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="520" y="666" />
+              <mxPoint x="520" y="436" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="C_archq" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Archive this draft?" vertex="1">
+          <mxGeometry height="112" width="220" x="582" y="800" as="geometry" />
+        </mxCell>
+        <mxCell id="C_J" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="J: archive? (next)" vertex="1">
+          <mxGeometry height="68" width="220" x="582" y="936" as="geometry" />
+        </mxCell>
+        <mxCell id="CE16" edge="1" locked="1" parent="1" source="C_list" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fillColor=none;exitX=0.5;exitY=0;entryX=0;entryY=0.5;" target="C_archq">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="135" y="150" />
+              <mxPoint x="570" y="150" />
+              <mxPoint x="570" y="856" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="CE18" edge="1" locked="1" parent="1" source="C_archq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="C_J" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CE17" edge="1" locked="1" parent="1" source="C_archq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0;exitY=0.714;entryX=1;entryY=0.5;" target="C_own" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="250" y="880" />
+              <mxPoint x="250" y="436" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+              <mxCell id="C_db" locked="1" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Database" vertex="1">
+          <mxGeometry height="64" width="160" x="612" y="724" as="geometry" />
+        </mxCell>
+        <mxCell id="C_DBE1" edge="1" locked="1" parent="1" source="C_bell" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="C_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+</root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="5 Your drafts — keep or archive" id="off3b">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="R_title" locked="1" parent="1" style="text;html=1;align=center;fontSize=13;fillColor=none;" value="&lt;b&gt;5 · Your drafts — keep or archive&lt;/b&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;BlueWrite — what the officer does · page 5 of 13&lt;/font&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;Pentagon letter = another page. Answer Yes or No.&lt;/font&gt;" vertex="1">
+          <mxGeometry height="44" width="767" x="30" y="8" as="geometry" />
+        </mxCell>
+        <mxCell id="R_A" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="A: archive?, continued" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="R_archdone" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Archived — the office can bring it back" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="162" as="geometry" />
+        </mxCell>
+        <mxCell id="R_end" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;fillColor=none;" value="END" vertex="1">
+          <mxGeometry height="56" width="200" x="313" y="262" as="geometry" />
+        </mxCell>
+        <mxCell id="RE1" edge="1" locked="1" parent="1" source="R_A" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="R_archdone">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="RE2" edge="1" locked="1" parent="1" source="R_archdone" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="R_end">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+              <mxCell id="R_db" locked="1" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Database" vertex="1">
+          <mxGeometry height="88" width="170" x="55" y="156" as="geometry" />
+        </mxCell>
+        <mxCell id="R_DBE1" edge="1" locked="1" parent="1" source="R_archdone" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="R_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+</root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="6 Writing the report (sheet sections)" id="off4">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="D_title" locked="1" parent="1" style="text;html=1;align=center;fontSize=13;fillColor=none;" value="&lt;b&gt;6 · Writing the report (sheet sections)&lt;/b&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;BlueWrite — what the officer does · page 6 of 13&lt;/font&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;Pentagon letter = another page. Answer Yes or No.&lt;/font&gt;" vertex="1">
+          <mxGeometry height="44" width="767" x="30" y="8" as="geometry" />
+        </mxCell>
+        <mxCell id="D_B" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="B: continued from Home" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="D_s1" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="1. Document reference — report date, blotter no. + date" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="162" as="geometry" />
+        </mxCell>
+        <mxCell id="D_s2" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="2. The incident — up to 4 types*, date*, time, place*, who + discovery" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="262" as="geometry" />
+        </mxCell>
+        <mxCell id="D_s3" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="3. Narrative — what happened* in your words + language" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="362" as="geometry" />
+        </mxCell>
+        <mxCell id="D_s4" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="4. Reporting party — name*, contact*, address (not you)" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="462" as="geometry" />
+        </mxCell>
+        <mxCell id="D_s5" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Missing *? Save draft — * only blocks filing" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="562" as="geometry" />
+        </mxCell>
+        <mxCell id="D_gen" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Draft it by computer?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="662" as="geometry" />
+        </mxCell>
+        <mxCell id="D_C" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="C: computer draft (next)" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="798" as="geometry" />
+        </mxCell>
+        <mxCell id="D_man" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Write it yourself" vertex="1">
+          <mxGeometry height="76" width="220" x="25" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="D_D" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="D: checking (next)" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="890" as="geometry" />
+        </mxCell>
+        <mxCell id="DE1" edge="1" locked="1" parent="1" source="D_B" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="D_s1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE2" edge="1" locked="1" parent="1" source="D_s1" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="D_s2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE3" edge="1" locked="1" parent="1" source="D_s2" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="D_s3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE4" edge="1" locked="1" parent="1" source="D_s3" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="D_s4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE5" edge="1" locked="1" parent="1" source="D_s4" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="D_s5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE6" edge="1" locked="1" parent="1" source="D_s5" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="D_gen">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE7" edge="1" locked="1" parent="1" source="D_gen" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="D_C" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE8" edge="1" locked="1" parent="1" source="D_gen" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fillColor=none;" target="D_man" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE9" edge="1" locked="1" parent="1" source="D_man" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0;entryY=0.5;fillColor=none;" target="D_D">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="135" y="924" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="D_cap" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Photograph the blotter page — computer reads the writing" vertex="1">
+          <mxGeometry height="76" width="220" x="582" y="362" as="geometry" />
+        </mxCell>
+        <mxCell id="D_capfix" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Check the text, fix mistakes, file it" vertex="1">
+          <mxGeometry height="76" width="220" x="582" y="462" as="geometry" />
+        </mxCell>
+        <mxCell id="D_termq" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Ask what a police word means?" vertex="1">
+          <mxGeometry height="112" width="220" x="582" y="544" as="geometry" />
+        </mxCell>
+        <mxCell id="D_term" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Ask the word — answered now (office can see it)" vertex="1">
+          <mxGeometry height="76" width="220" x="582" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="DE10" edge="1" locked="1" parent="1" source="D_s3" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fillColor=none;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="D_cap">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE11" edge="1" locked="1" parent="1" source="D_cap" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="D_capfix">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE12" edge="1" locked="1" parent="1" source="D_capfix" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fillColor=none;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="D_s4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE13" edge="1" locked="1" parent="1" source="D_s5" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fillColor=none;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="D_termq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE14" edge="1" locked="1" parent="1" source="D_termq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="D_term" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE15" edge="1" locked="1" parent="1" source="D_term" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fillColor=none;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="D_gen">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="DE16" edge="1" locked="1" parent="1" source="D_termq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0;exitY=0.5;entryX=1;entryY=0.34;" target="D_gen" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="572" y="600" />
+              <mxPoint x="572" y="700" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+              <mxCell id="D_db" locked="1" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Database" vertex="1">
+          <mxGeometry height="88" width="170" x="45" y="556" as="geometry" />
+        </mxCell>
+        <mxCell id="D_DBE1" edge="1" locked="1" parent="1" source="D_s5" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="D_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+</root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="7 The computer-written draft" id="off5">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="E_title" locked="1" parent="1" style="text;html=1;align=center;fontSize=13;fillColor=none;" value="&lt;b&gt;7 · The computer-written draft&lt;/b&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;BlueWrite — what the officer does · page 7 of 13&lt;/font&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;Pentagon letter = another page. Answer Yes or No.&lt;/font&gt;" vertex="1">
+          <mxGeometry height="44" width="767" x="30" y="8" as="geometry" />
+        </mxCell>
+        <mxCell id="E_C" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="C: continued from writing" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="E_health" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Helper working?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="162" as="geometry" />
+        </mxCell>
+        <mxCell id="E_man" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Helper off — write yourself" vertex="1">
+          <mxGeometry height="76" width="220" x="582" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="E_D1" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="D: checking (next)" vertex="1">
+          <mxGeometry height="68" width="220" x="582" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="E_gen" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Press the Write button" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="298" as="geometry" />
+        </mxCell>
+        <mxCell id="E_facts" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="All facts filled in?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="398" as="geometry" />
+        </mxCell>
+        <mxCell id="E_banner" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Notice lists missing items" vertex="1">
+          <mxGeometry height="76" width="220" x="582" y="416" as="geometry" />
+        </mxCell>
+        <mxCell id="E_B" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="B: fill in + retry" vertex="1">
+          <mxGeometry height="68" width="220" x="582" y="516" as="geometry" />
+        </mxCell>
+        <mxCell id="E_mask" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Computer writes first draft — read every line" vertex="1">
+          <mxGeometry height="76" width="330" x="243" y="534" as="geometry" />
+        </mxCell>
+        <mxCell id="E_types" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Draft appears on screen (edit freely)" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="634" as="geometry" />
+        </mxCell>
+        <mxCell id="E_accept" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Accept this draft?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="734" as="geometry" />
+        </mxCell>
+        <mxCell id="E_D2" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="D: checking (next)" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="870" as="geometry" />
+        </mxCell>
+        <mxCell id="E_K" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="K: shorter? (next)" vertex="1">
+          <mxGeometry height="68" width="220" x="582" y="734" as="geometry" />
+        </mxCell>
+        <mxCell id="EE1" edge="1" locked="1" parent="1" source="E_C" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="E_health">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EE2" edge="1" locked="1" parent="1" source="E_health" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="E_gen" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EE3" edge="1" locked="1" parent="1" source="E_health" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fillColor=none;" target="E_man" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EE4" edge="1" locked="1" parent="1" source="E_man" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="E_D1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EE5" edge="1" locked="1" parent="1" source="E_gen" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="E_facts">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EE6" edge="1" locked="1" parent="1" source="E_facts" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="E_mask" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EE7" edge="1" locked="1" parent="1" source="E_facts" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fillColor=none;" target="E_banner" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EE8" edge="1" locked="1" parent="1" source="E_banner" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="E_B">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EE9" edge="1" locked="1" parent="1" source="E_mask" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="E_types">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EE10" edge="1" locked="1" parent="1" source="E_types" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="E_accept">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EE11" edge="1" locked="1" parent="1" source="E_accept" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="E_D2" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="EE12" edge="1" locked="1" parent="1" source="E_accept" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fillColor=none;" target="E_K" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+              <mxCell id="E_db" locked="1" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Database" vertex="1">
+          <mxGeometry height="90" width="170" x="45" y="527" as="geometry" />
+        </mxCell>
+        <mxCell id="E_DBE1" edge="1" locked="1" parent="1" source="E_mask" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="E_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+</root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="8 The shorter version" id="off5b">
+    <mxGraphModel dx="860" dy="529" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="K_title" locked="1" parent="1" style="text;html=1;align=center;fontSize=13;fillColor=none;" value="&lt;b&gt;8 · The shorter version&lt;/b&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;BlueWrite — what the officer does · page 8 of 13&lt;/font&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;Pentagon letter = another page. Answer Yes or No.&lt;/font&gt;" vertex="1">
+          <mxGeometry height="44" width="767" x="30" y="8" as="geometry" />
+        </mxCell>
+        <mxCell id="K_C" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="C: draft ready, continued" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="K_tight" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Want it shorter?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="162" as="geometry" />
+        </mxCell>
+        <mxCell id="K_tighten" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Shorter version suggested" vertex="1">
+          <mxGeometry height="68" width="220" x="582" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="K_keep" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Keep shorter version?" vertex="1">
+          <mxGeometry height="112" width="220" x="582" y="272" as="geometry" />
+        </mxCell>
+        <mxCell id="K_D3" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="D: checking (next)" vertex="1">
+          <mxGeometry height="68" width="220" x="25" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="K_B2" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="B: write yourself" vertex="1">
+          <mxGeometry height="68" width="220" x="25" y="382" as="geometry" />
+        </mxCell>
+        <mxCell id="KE1" edge="1" locked="1" parent="1" source="K_C" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="K_tight">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KE2" edge="1" locked="1" parent="1" source="K_tight" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fillColor=none;" target="K_tighten" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KE3" edge="1" locked="1" parent="1" source="K_tight" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0;exitY=0.5;entryX=0.5;entryY=0;fillColor=none;" target="K_B2" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="135" y="218" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="KE4" edge="1" locked="1" parent="1" source="K_tighten" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="K_keep">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KE5" edge="1" locked="1" parent="1" source="K_keep" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fillColor=none;" target="K_D3" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KE6" edge="1" locked="1" parent="1" source="K_keep" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=1;fillColor=none;" target="K_B2" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="692" y="480" />
+              <mxPoint x="135" y="480" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="9 Checking, submitting, and after" id="off6">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="F_title" locked="1" parent="1" style="text;html=1;align=center;fontSize=13;fillColor=none;" value="&lt;b&gt;9 · Checking, submitting, and after&lt;/b&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;BlueWrite — what the officer does · page 9 of 13&lt;/font&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;Pentagon letter = another page. Answer Yes or No.&lt;/font&gt;" vertex="1">
+          <mxGeometry height="44" width="767" x="30" y="8" as="geometry" />
+        </mxCell>
+        <mxCell id="F_D" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="D: finished draft" vertex="1">
+          <mxGeometry height="64" width="200" x="313" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="F_save" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Saved by Save draft — and on exit" vertex="1">
+          <mxGeometry height="68" width="300" x="263" y="148" as="geometry" />
+        </mxCell>
+        <mxCell id="F_submit" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Press File report to file it" vertex="1">
+          <mxGeometry height="68" width="300" x="263" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="F_valid" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="All correct?" vertex="1">
+          <mxGeometry height="104" width="280" x="273" y="312" as="geometry" />
+        </mxCell>
+        <mxCell id="F_banner" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Notice lists missing items" vertex="1">
+          <mxGeometry height="68" width="220" x="582" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="F_B" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="B: fix + retry" vertex="1">
+          <mxGeometry height="64" width="220" x="582" y="418" as="geometry" />
+        </mxCell>
+        <mxCell id="F_sub" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="SUBMITTED + filed" vertex="1">
+          <mxGeometry height="68" width="300" x="263" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="F_ro" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Read-only now (can print)" vertex="1">
+          <mxGeometry height="68" width="300" x="263" y="512" as="geometry" />
+        </mxCell>
+        <mxCell id="F_printq" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Do you want to print it?" vertex="1">
+          <mxGeometry height="104" width="280" x="273" y="594" as="geometry" />
+        </mxCell>
+        <mxCell id="F_print" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Print official copy" vertex="1">
+          <mxGeometry height="68" width="300" x="263" y="712" as="geometry" />
+        </mxCell>
+        <mxCell id="F_wait" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Idle? Warning first, then sign-out (work is saved)" vertex="1">
+          <mxGeometry height="68" width="300" x="263" y="794" as="geometry" />
+        </mxCell>
+        <mxCell id="F_out" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Do you want to sign out?" vertex="1">
+          <mxGeometry height="104" width="280" x="273" y="876" as="geometry" />
+        </mxCell>
+        <mxCell id="F_end" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;fillColor=none;strokeWidth=2;" value="END" vertex="1">
+          <mxGeometry height="56" width="200" x="313" y="994" as="geometry" />
+        </mxCell>
+        <mxCell id="F_H" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="H: after filing (next)" vertex="1">
+          <mxGeometry height="68" width="220" x="582" y="890" as="geometry" />
+        </mxCell>
+        <mxCell id="FE1" edge="1" locked="1" parent="1" source="F_D" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="F_save">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FE2" edge="1" locked="1" parent="1" source="F_save" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="F_submit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FE3" edge="1" locked="1" parent="1" source="F_submit" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="F_valid">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FE4" edge="1" locked="1" parent="1" source="F_valid" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="F_sub" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FE5" edge="1" locked="1" parent="1" source="F_valid" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fillColor=none;" target="F_banner" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FE6" edge="1" locked="1" parent="1" source="F_banner" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="F_B">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FE7" edge="1" locked="1" parent="1" source="F_sub" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="F_ro">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FE8" edge="1" locked="1" parent="1" source="F_ro" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="F_printq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FE9" edge="1" locked="1" parent="1" source="F_printq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="F_print" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FE10" edge="1" locked="1" parent="1" source="F_printq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=1;entryY=0.5;fillColor=none;" target="F_wait" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="610" y="646" />
+              <mxPoint x="610" y="828" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="FE11" edge="1" locked="1" parent="1" source="F_print" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="F_wait">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FE12" edge="1" locked="1" parent="1" source="F_wait" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="F_out">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FE13" edge="1" locked="1" parent="1" source="F_out" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="F_end" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="FE14" edge="1" locked="1" parent="1" source="F_out" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fillColor=none;" target="F_H" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+              <mxCell id="F_db" locked="1" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Database" vertex="1">
+          <mxGeometry height="88" width="170" x="45" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="F_db1a" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="DB1" vertex="1">
+          <mxGeometry height="30" width="30" x="101" y="167" as="geometry" />
+        </mxCell>
+        <mxCell id="F_db1b" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="DB1" vertex="1">
+          <mxGeometry height="30" width="30" x="110" y="544" as="geometry" />
+        </mxCell>
+        <mxCell id="F_DB" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="DB: filed report (next)" vertex="1">
+          <mxGeometry height="68" width="200" x="592" y="500" as="geometry" />
+        </mxCell>
+        <mxCell id="F_DBE1" edge="1" locked="1" parent="1" source="F_sub" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="F_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="F_DBE2" edge="1" locked="1" parent="1" source="F_save" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="F_db1a">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="F_DBE3" edge="1" locked="1" parent="1" source="F_db1b" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" target="F_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="F_DBE4" edge="1" locked="1" parent="1" source="F_sub" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="F_DB">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+</root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="10 After filing" id="off6b">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="W_title" locked="1" parent="1" style="text;html=1;align=center;fontSize=13;fillColor=none;" value="&lt;b&gt;10 · After filing&lt;/b&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;BlueWrite — what the officer does · page 10 of 13&lt;/font&gt;" vertex="1">
+          <mxGeometry height="44" width="767" x="30" y="8" as="geometry" />
+        </mxCell>
+        <mxCell id="W_F" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="F: filed and locked" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="W_bell" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Bell ringing with news?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="262" as="geometry" />
+        </mxCell>
+        <mxCell id="W_still" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Still at the screen?" vertex="1">
+          <mxGeometry height="112" width="220" x="582" y="262" as="geometry" />
+        </mxCell>
+        <mxCell id="W_c6a" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="6" vertex="1">
+          <mxGeometry height="30" width="30" x="782" y="298" as="geometry" />
+        </mxCell>
+        <mxCell id="W_c6b" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="6" vertex="1">
+          <mxGeometry height="30" width="30" x="582" y="185" as="geometry" />
+        </mxCell>
+        <mxCell id="W_warn" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Warning first, then sign-out (work is saved)" vertex="1">
+          <mxGeometry height="76" width="220" x="582" y="398" as="geometry" />
+        </mxCell>
+        <mxCell id="W_endso" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;fillColor=none;strokeWidth=2;" value="END" vertex="1">
+          <mxGeometry height="56" width="220" x="582" y="498" as="geometry" />
+        </mxCell>
+        <mxCell id="W_dispute" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Dispute note about your report?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="398" as="geometry" />
+        </mxCell>
+        <mxCell id="W_office" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Ask the office — only an Admin can change a filed report" vertex="1">
+          <mxGeometry height="76" width="220" x="25" y="416" as="geometry" />
+        </mxCell>
+        <mxCell id="W_lock" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="FILED + locked (read-only, can print)" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="162" as="geometry" />
+        </mxCell>
+        <mxCell id="W_close" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="Close — carry on" vertex="1">
+          <mxGeometry height="68" width="300" x="263" y="534" as="geometry" />
+        </mxCell>
+        <mxCell id="W_A" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;strokeWidth=2;" value="A: back to Home" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="626" as="geometry" />
+        </mxCell>
+        <mxCell id="WE1" edge="1" locked="1" parent="1" source="W_F" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="W_lock">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WE3" edge="1" locked="1" parent="1" source="W_bell" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="W_dispute" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WE4" edge="1" locked="1" parent="1" source="W_bell" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fillColor=none;" target="W_still" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WE5" edge="1" locked="1" parent="1" source="W_still" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fillColor=none;" target="W_c6a" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WE6" edge="1" locked="1" parent="1" source="W_c6b" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fillColor=none;" target="W_bell">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WE7" edge="1" locked="1" parent="1" source="W_still" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="W_warn" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WE8" edge="1" locked="1" parent="1" source="W_warn" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="W_endso">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WE9" edge="1" locked="1" parent="1" source="W_dispute" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="W_office" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WE10" edge="1" locked="1" parent="1" source="W_dispute" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fillColor=none;" target="W_close" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WE11" edge="1" locked="1" parent="1" source="W_office" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="W_close">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WE12" edge="1" locked="1" parent="1" source="W_lock" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="W_bell">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="WE14" edge="1" locked="1" parent="1" source="W_close" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="W_A">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+              <mxCell id="W_DB" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="DB: filed report, continued" vertex="1">
+          <mxGeometry height="68" width="220" x="25" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="W_db" locked="1" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Database" vertex="1">
+          <mxGeometry height="88" width="170" x="45" y="168" as="geometry" />
+        </mxCell>
+        <mxCell id="W_DBE1" edge="1" locked="1" parent="1" source="W_DB" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="W_lock">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="W_DBE2" edge="1" locked="1" parent="1" source="W_lock" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="W_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+</root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="11 Your profile — you + your counts" id="off7">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="G_title" locked="1" parent="1" style="text;html=1;align=center;fontSize=13;fillColor=none;" value="&lt;b&gt;11 · Your profile — you + your counts&lt;/b&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;BlueWrite — what the officer does · page 11 of 13&lt;/font&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;Pentagon letter = another page. Answer Yes or No.&lt;/font&gt;" vertex="1">
+          <mxGeometry height="44" width="767" x="30" y="8" as="geometry" />
+        </mxCell>
+        <mxCell id="G_E" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="E: opened from Home" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="G_who" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="You: name, badge, role, Active chip, station, member since, last sign-in (office-set — nothing to change)" vertex="1">
+          <mxGeometry height="84" width="300" x="263" y="158" as="geometry" />
+        </mxCell>
+        <mxCell id="G_act" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Your counts: unfinished, finished, on record (heads see everyone&#39;s)" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="262" as="geometry" />
+        </mxCell>
+        <mxCell id="GE1" edge="1" locked="1" parent="1" source="G_E" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="G_who">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="GE2" edge="1" locked="1" parent="1" source="G_who" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="G_act">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="G_doneq" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Change anything here?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="G_close" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Close + carry on" vertex="1">
+          <mxGeometry height="76" width="220" x="25" y="398" as="geometry" />
+        </mxCell>
+        <mxCell id="G_A" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="A: back to Home" vertex="1">
+          <mxGeometry height="68" width="220" x="25" y="498" as="geometry" />
+        </mxCell>
+        <mxCell id="G_F" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="F: next page — photo + screen look" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="526" as="geometry" />
+        </mxCell>
+        <mxCell id="GE3" edge="1" locked="1" parent="1" source="G_act" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="G_doneq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="GE15" edge="1" locked="1" parent="1" source="G_doneq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fillColor=none;" target="G_close" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="GE16" edge="1" locked="1" parent="1" source="G_doneq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="G_F" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="GE17" edge="1" locked="1" parent="1" source="G_close" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="G_A">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+              <mxCell id="G_db" locked="1" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Database" vertex="1">
+          <mxGeometry height="88" width="170" x="591" y="156" as="geometry" />
+        </mxCell>
+        <mxCell id="G_DBE1" edge="1" locked="1" parent="1" source="G_who" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="G_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+</root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="12 Your profile — photo + screen look" id="off8">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="H_title" locked="1" parent="1" style="text;html=1;align=center;fontSize=13;" value="&lt;b&gt;12 · Your profile — photo + screen look&lt;/b&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;BlueWrite — what the officer does · page 12 of 13&lt;/font&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;Pentagon letter = another page. Answer Yes or No.&lt;/font&gt;" vertex="1">
+          <mxGeometry height="44" width="767" x="30" y="8" as="geometry" />
+        </mxCell>
+        <mxCell id="H_F" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="F: photo + screen look" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="H_photo" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Your photo — colleagues see it beside your name" vertex="1">
+          <mxGeometry height="84" width="300" x="263" y="162" as="geometry" />
+        </mxCell>
+        <mxCell id="H_photoq" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Change your photo?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="H_pick" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Pick a file, use the camera — or remove it to show initials" vertex="1">
+          <mxGeometry height="84" width="300" x="263" y="406" as="geometry" />
+        </mxCell>
+        <mxCell id="H_saved" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Saved — colleagues see the new photo" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="514" as="geometry" />
+        </mxCell>
+        <mxCell id="H_pref" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Screen look (this device only): form layout, light or dark, wider or tighter rows" vertex="1">
+          <mxGeometry height="84" width="300" x="263" y="614" as="geometry" />
+        </mxCell>
+        <mxCell id="H_G" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="G: next page — safety + password" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="722" as="geometry" />
+        </mxCell>
+        <mxCell id="HE1" edge="1" locked="1" parent="1" source="H_F" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="H_photo">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="HE2" edge="1" locked="1" parent="1" source="H_photo" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="H_photoq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="HE3" edge="1" locked="1" parent="1" source="H_photoq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="H_pick" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="HE4" edge="1" locked="1" parent="1" source="H_photoq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=1;entryY=0.5;fillColor=none;" target="H_pref" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="810" y="326" />
+              <mxPoint x="810" y="656" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="HE5" edge="1" locked="1" parent="1" source="H_pick" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="H_saved">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="HE6" edge="1" locked="1" parent="1" source="H_saved" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="H_pref">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="HE7" edge="1" locked="1" parent="1" source="H_pref" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="H_G">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+              <mxCell id="H_db" locked="1" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Database" vertex="1">
+          <mxGeometry height="88" width="170" x="45" y="508" as="geometry" />
+        </mxCell>
+        <mxCell id="H_DBE1" edge="1" locked="1" parent="1" source="H_saved" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="H_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+</root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="13 Your profile — safety + password" id="off9">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="J_title" locked="1" parent="1" style="text;html=1;align=center;fontSize=13;" value="&lt;b&gt;13 · Your profile — safety + password&lt;/b&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;BlueWrite — what the officer does · page 13 of 13&lt;/font&gt;&lt;br/&gt;&lt;font size=&quot;1&quot;&gt;Pentagon letter = another page. Answer Yes or No.&lt;/font&gt;" vertex="1">
+          <mxGeometry height="44" width="767" x="30" y="8" as="geometry" />
+        </mxCell>
+        <mxCell id="J_G" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="G: safety + password" vertex="1">
+          <mxGeometry height="68" width="200" x="313" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="J_mfa" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Two-step stays on: codes go to your office email, spare printed codes as backup" vertex="1">
+          <mxGeometry height="84" width="300" x="263" y="162" as="geometry" />
+        </mxCell>
+        <mxCell id="J_helpq" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Need the office to change something you cannot?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="J_req" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Send a request: what you need + short note (recorded)" vertex="1">
+          <mxGeometry height="76" width="220" x="582" y="288" as="geometry" />
+        </mxCell>
+        <mxCell id="J_pwq" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Change password?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="J_close" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Close + carry on" vertex="1">
+          <mxGeometry height="76" width="220" x="25" y="398" as="geometry" />
+        </mxCell>
+        <mxCell id="J_A" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="A: back to Home" vertex="1">
+          <mxGeometry height="68" width="220" x="25" y="498" as="geometry" />
+        </mxCell>
+        <mxCell id="J_pwform" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Old password + new one twice" vertex="1">
+          <mxGeometry height="76" width="300" x="263" y="526" as="geometry" />
+        </mxCell>
+        <mxCell id="J_okq" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Password accepted?" vertex="1">
+          <mxGeometry height="112" width="280" x="273" y="626" as="geometry" />
+        </mxCell>
+        <mxCell id="J_fix" locked="1" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Fix error + retry" vertex="1">
+          <mxGeometry height="76" width="220" x="582" y="644" as="geometry" />
+        </mxCell>
+        <mxCell id="J_out" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fillColor=none;" value="Saved — signed out here, sign in again" vertex="1">
+          <mxGeometry height="76" width="280" x="273" y="762" as="geometry" />
+        </mxCell>
+        <mxCell id="J_END" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;fillColor=none;" value="END" vertex="1">
+          <mxGeometry height="60" width="200" x="313" y="862" as="geometry" />
+        </mxCell>
+        <mxCell id="JE1" edge="1" locked="1" parent="1" source="J_G" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="J_mfa">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JE2" edge="1" locked="1" parent="1" source="J_mfa" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="J_helpq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JE3" edge="1" locked="1" parent="1" source="J_helpq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="J_pwq" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JE4" edge="1" locked="1" parent="1" source="J_helpq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fillColor=none;" target="J_req" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JE5" edge="1" locked="1" parent="1" source="J_req" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=1;entryY=0.5;fillColor=none;" target="J_pwq">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="692" y="446" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="JE6" edge="1" locked="1" parent="1" source="J_pwq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fillColor=none;" target="J_close" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JE7" edge="1" locked="1" parent="1" source="J_pwq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="J_pwform" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JE8" edge="1" locked="1" parent="1" source="J_close" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="J_A">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JE9" edge="1" locked="1" parent="1" source="J_pwform" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="J_okq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JE10" edge="1" locked="1" parent="1" source="J_okq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="J_out" value="Yes">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JE11" edge="1" locked="1" parent="1" source="J_okq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fillColor=none;" target="J_fix" value="No">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JE12" edge="1" locked="1" parent="1" source="J_fix" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=1;entryY=0.5;fillColor=none;" target="J_pwform">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="810" y="682" />
+              <mxPoint x="810" y="564" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="JE13" edge="1" locked="1" parent="1" source="J_out" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fillColor=none;" target="J_END">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+              <mxCell id="J_db" locked="1" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Database" vertex="1">
+          <mxGeometry height="90" width="180" x="592" y="431" as="geometry" />
+        </mxCell>
+        <mxCell id="J_db1a" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="DB1" vertex="1">
+          <mxGeometry height="30" width="30" x="677" y="386" as="geometry" />
+        </mxCell>
+        <mxCell id="J_db1b" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;" value="DB1" vertex="1">
+          <mxGeometry height="30" width="30" x="667" y="527" as="geometry" />
+        </mxCell>
+        <mxCell id="J_DBE1" edge="1" locked="1" parent="1" source="J_pwq" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="J_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="J_DBE2" edge="1" locked="1" parent="1" source="J_req" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="J_db1a">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="J_DBE3" edge="1" locked="1" parent="1" source="J_db1b" style="endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" target="J_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+</root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -195,13 +195,30 @@ test('the reveal types the final format, not a raw blob', () => {
   assert.match(LEAF, /splitHtmlLines,/, 'the sheet no longer splits the finished letter');
   assert.match(LEAF, /const blocks = splitHtmlLines\(narrativeHtml\);/, 'the reveal stopped reading the finished letter');
   assert.match(LEAF, /dangerouslySetInnerHTML=\{\{ __html: finished \}\}/, 'finished lines no longer draw formatted');
-  assert.match(LEAF, /richTextToPlain\(blocks\[current\]\.html\)/, 'the current line stopped typing as plain words');
+  // The current line types its FINAL html prefix (tags intact), so bolds
+  // and spacing read as the finished report mid-sequence — never a plain
+  // blob that restyles at the end.
+  assert.match(LEAF, /revealHtmlPrefix\(blocks\[current\]\.html, shownInBlock\)/, 'the current line stopped typing its final html');
   // Slot discipline: completed lines advance the shared cursor, the current
   // line slices through it, future lines advance after — one 6s pace.
   assert.match(LEAF, /slotAcc \+= b\.text\.length;/, 'a line stopped registering its text with the cursor');
-  // A pending draft still owns the words: the plain fallback and the data
-  // selection stay exactly as they were.
-  assert.match(LEAF, /return val\(narrativeText\);/, 'the plain narrative stopped typing whole');
+  // A plain narrative types the same way, and its caption is placed above the
+  // account: the labeled rows type first, then the caption, then the account —
+  // one cursor across all three, in document order.
+  assert.match(LEAF, /function placePlainFactsCaption\(text\)/, 'the plain narrative lost its caption placement');
+  assert.match(LEAF, /return val\(plainFacts\.lead\)/, 'the plain narrative\u2019s labeled rows do not type before the caption');
+  assert.match(LEAF, /return val\(plainFacts\.rest\)/, 'the plain narrative\u2019s account does not type after the caption');
+  assert.match(LEAF, /const plainFacts = placePlainFactsCaption\(narrativeText\);/, 'the plain narrative is no longer split for its caption');
+  // The row/caption boundary is the same test both halves use.
+  assert.match(LEAF, /const NARRATIVE_LABEL_LINE = /, 'the labeled-row test is gone');
+  // Findings type the same way: the reveal splits the SAME sanitized html
+  // the finished section draws, so bold/italic survive mid-sequence and the
+  // typing converges on the final report instead of a plain blob.
+  assert.match(
+    LEAF,
+    /const blocks = splitHtmlLines\(sanitizeRichHtml\(findingsHtml\)\);/,
+    'the findings reveal stopped reading the finished section',
+  );
 });
 
 test('the slim bar portals the letter onto the paper, under the narrative', () => {
@@ -694,9 +711,19 @@ test('the static lines type too — letterhead, labels, headings, signatures', (
   assert.match(LEAF, /CL\('head agency', head\.agency\)/, 'the agency line does not type');
   assert.match(LEAF, /CL\('title', "POLICE REPORT"\)/, 'the title does not type');
   assert.match(LEAF, /\{CL\(`label \$\{entry\.label\}`, labelCase\(entry\.label\)\)\}/, 'fact labels do not type');
-  // Owner request (2026-11-02): the heading over the narrative was removed,
-  // so the account reads on its own on every incident's sheet.
-  assert.doesNotMatch(LEAF, /FACTS OF THE CASE/, 'the narrative heading is back on the sheet');
+  // Owner request (2026-11-16): the heading over the narrative is back, worded
+  // FACTS only — never "FACTS OF THE CASE". A rich (arranged) letter carries
+  // labeled header rows of its own, so its caption is inserted directly above
+  // the account instead of at the top of the whole block.
+  assert.match(LEAF, /CL\('facts head', "FACTS:"\)/, 'the narrative has no FACTS heading');
+  assert.doesNotMatch(LEAF, /FACTS OF THE CASE/, 'the long heading is back on the sheet');
+  assert.match(LEAF, /function withFactsCaption\(html\)/, 'the caption placement helper is gone');
+  assert.match(LEAF, /const at = labels > 0 && lead < blocks\.length \? lead : 0;/, 'the caption is no longer placed above the account');
+  assert.match(LEAF, /const narrativeHtml = withFactsCaption\(/, 'the narrative html no longer carries its caption');
+  assert.match(LEAF, /<strong>FACTS:<\/strong><br><br>/, 'the caption no longer prints on its own line with one line of spacing');
+  // A requestor the record never names prints as a blank, not as a role
+  // dressed up to look like a person who asked for the copy.
+  assert.match(LEAF, /blankUnnamedIssuanceRequestor\(/, 'the issuance line no longer blanks an unnamed requestor');
   assert.match(LEAF, /CL\('noted label',/, 'the noted-by label does not type');
   // Read-only stays read-only: the editor renders only under `editable`.
   // The read path still prints the officer's typed line, though — the stored

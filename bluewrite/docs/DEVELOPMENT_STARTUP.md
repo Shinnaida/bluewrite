@@ -59,6 +59,13 @@ cd bluewrite
 `vite.config.js` proxies `/api` → `http://localhost:8099`, so this port is
 not optional.
 
+> **The station server does not run this command.** It serves the same port with
+> Apache + mod_php, from `storage/apache/bluewrite-httpd.conf` — generated at start
+> from `scripts/apache/bluewrite-httpd.conf.template` against the installed
+> Apache/PHP, so a version bump needs no edit — because `php -S` answers one
+> request at a time and two workstations would queue behind each other. The built-in server above is for a solo smoke test only — the Vite
+> proxy, the firewall rule and `base_url` all point at 8099 either way.
+
 Verify:
 
 ```bash

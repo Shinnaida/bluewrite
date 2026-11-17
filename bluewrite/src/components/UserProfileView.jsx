@@ -66,7 +66,55 @@ const ACTION_LABEL = {
   'report.finalize': 'Report finalized',
   'report.archive': 'Report archived',
   'report.restore': 'Report restored',
+  'report.print': 'Opened the print view',
+  'report.export': 'Exported reports',
+  'report.capture_add': 'Photo filed against a report',
+  'report.capture_review': 'Reviewed a filed photo',
+  'report.verification': 'Verified a translated report',
+  // The assistant's own working, in the order an officer meets it: classify
+  // the type, arrange the narrative, tighten the wording, generate a draft.
+  // The drawer and the account page would otherwise print these as codes —
+  // exactly the raw `ai.arrange` rows that made the gap visible.
+  'ai.classify': 'Classified the incident type',
+  'ai.classify.details': 'Classified the incident details',
+  'ai.arrange': 'Arranged the narrative',
+  'ai.enhance': 'Enhanced the narrative',
+  'ai.narrative.generate': 'Generated a draft narrative',
+  'ai.narrative.tighten': 'Tightened the narrative',
   'ai.terminology.ask': 'Asked the terminology chatbot',
+  'ocr.read': 'Read text from a photo',
+  // Station identity: letterhead, seals, header. Rare, and worth naming.
+  'station.update': 'Updated station settings',
+  'station.seal_set': 'Set a station seal',
+  'station.seal_clear': 'Cleared a station seal',
+  // Devices: a trusted workstation issued or revoked.
+  'device.issue': 'Trusted this device',
+  'device.revoke': 'Revoked a trusted device',
+  // The second factor's full vocabulary, so the trail never prints `mfa.*`
+  // raw on a screen about signing in.
+  'login.password_ok': 'Password accepted — code required',
+  'mfa.enrolled': 'Enrolled the second factor',
+  'mfa.setup_started': 'Started second-factor setup',
+  'mfa.verified': 'Verified the second factor',
+  'mfa.verify_failed': 'Second-factor code refused',
+  'mfa.locked': 'Second factor locked',
+  'mfa.code_replayed': 'Reused sign-in code rejected',
+  'mfa.code_resent': 'Requested a new sign-in code',
+  'mfa.code_expired': 'Sign-in code expired',
+  'mfa.code_missing': 'No sign-in code outstanding',
+  'mfa.stage_stale': 'Stale sign-in step restarted',
+  'mfa.completed_inactive': 'Sign-in blocked — account inactive',
+  'mfa.recovery_used': 'Used a recovery code',
+  'mfa.recovery_failed': 'Recovery code refused',
+  'mfa.recovery_regenerated': 'Recovery codes reissued',
+  'mfa.recovery_regen_failed': 'Recovery codes could not be issued',
+  'mfa.no_email': 'No email address for the code',
+  'mfa.mail_unavailable': 'Mailer not configured',
+  'mfa.mail_failed': 'Sign-in code could not be sent',
+  'mfa.break_glass': 'Break-glass recovery used',    // Help asked for, and help closed.
+    'account.request_submitted': 'Requested account recovery',
+    'account.request_handled': 'Handled a recovery request',
+    'account.request_unmatched': 'Recovery attempt for an unknown account',
 };
 
 /** The sentence for one audit entry. The code itself when nothing here knows it. */

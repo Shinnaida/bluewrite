@@ -698,7 +698,13 @@ export default function Shell({
           />
         )}
         {view.kind === 'audits' && isAdmin && (
-          <Audits notify={notify} onConnError={reportConn} />
+          <Audits
+            notify={notify}
+            onConnError={reportConn}
+            // A report named by the trail opens the same way the bell opens one:
+            // the screen asks, Shell owns the route.
+            onOpenReport={(reportId) => setView({ kind: 'report', id: reportId })}
+          />
         )}
         {view.kind === 'users' && isAdmin && <Users key={view.userId ?? 'all'} notify={notify} onConnError={reportConn} initialUserId={view.userId ?? null} />}
         {view.kind === 'station' && isAdmin && (

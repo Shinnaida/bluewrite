@@ -46,7 +46,7 @@ test('the trend head carries the key and the range, and nothing else', () => {
   // the head's `aside` rather than the only thing there.
   assert.match(
     component,
-    /aside=\{\s*<>[\s\S]{0,400}?<ChartKey byType=\{chartTypes\} \/>/,
+    /aside=\{\s*<>[\s\S]{0,400}?<ChartKey byType=\{chartTypes\} unit=\{chartBucket\} \/>/,
     'the trend panel’s head no longer carries the colour key',
   );
   assert.match(
@@ -54,7 +54,7 @@ test('the trend head carries the key and the range, and nothing else', () => {
     /aside=\{\s*<>[\s\S]{0,600}?<RangeSelect preset=\{preset\} onPick=\{applyPreset\} \/>/,
     'the trend panel’s head no longer carries the range it reads',
   );
-  assert.match(component, /function ChartKey\(\{ byType \}\) \{[\s\S]*?<PanelInfo/);
+  assert.match(component, /function ChartKey\(\{ byType, unit = 'day' \}\) \{[\s\S]*?<PanelInfo/);
 });
 
 test('the key says what the stacking means, in its own words', () => {
@@ -67,8 +67,12 @@ test('the key says what the stacking means, in its own words', () => {
   assert.match(body, /stack from the bottom up/);
   // The number beside each name is a count in this range, not a share.
   assert.match(body, /how many reports of that type were filed in this range/);
-  // …and the hint names the input the drawing hides: the right button.
-  assert.match(body, /Right-click a day/);
+  // …and the hint names the input the drawing hides: the right button. The unit is
+  // substituted into that sentence (a day, a week, a month — see the note above
+  // ChartKey) rather than the sentence being written for days only, because a
+  // month column described as “this day” is a claim a reader would act on.
+  assert.match(body, /Right-click a \$\{one\}/);
+  assert.match(body, /const one = bucketNoun\(unit, 1\)/);
   // An empty range draws no control at all rather than one that opens nothing.
   assert.match(body, /if \(!byType\.length\) return null;/);
 });
@@ -112,7 +116,7 @@ test('the control is one disclosure, and its card id is unique per panel', () =>
   assert.ok(component.includes("if (e.key === 'Escape') setOpen(false)"));
   assert.ok(component.includes("document.addEventListener('mousedown', onDown)"));
   // A control that opens an empty card is worse than no control.
-  assert.match(component, /function ChartKey\(\{ byType \}\) \{\n\s+\/\/[\s\S]*?if \(!byType\.length\) return null;/);
+  assert.match(component, /function ChartKey\(\{ byType, unit = 'day' \}\) \{\n\s+\/\/[\s\S]*?if \(!byType\.length\) return null;/);
 });
 
 test('the panel head holds the aside and the control on one line', () => {

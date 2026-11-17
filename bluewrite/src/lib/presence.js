@@ -111,6 +111,69 @@ export function onDutyLabel(user, elapsedSeconds = 0) {
   return since ? `signed in ${since}` : '';
 }
 
+/**
+ * How often the live screens re-read the presence snapshot.
+ *
+ * Five seconds: fast enough that a pen badge appears while the typing is
+ * still happening, slow enough that the tick stays the cheapest read in the
+ * app (one indexed range plus the latch join — no counts, no day maps, no
+ * photographs). The thirty-second /users read remains the backstop that
+ * carries names, roles and faces, and any id the snapshot shows that the
+ * rows do not have triggers it at once.
+ */
+export const SNAPSHOT_MS = 5000;
+
+/**
+ * How often an open composer re-stamps its composing latch.
+ *
+ * Five seconds against the server's fifteen-second window (see
+ * ReportsController::COMPOSING_WINDOW): two lost requests on a busy LAN do
+ * not blink the badge off and on mid-sentence, and a closed tab stops showing
+ * within a breath. Best-effort and silent, like the message-typing ping — a
+ * signal that failed to send is not a fact anybody needs told.
+ */
+export const COMPOSING_PING_MS = 5000;
+
+/**
+ * Fold a presence snapshot into full rows, without re-reading them.
+ *
+ * `rows` are the /users rows on screen; `online` is what GET
+ * /presence/snapshot just answered ([{id, composing_report_id}]). Only the live
+ * flag moves — composing — while names, roles and faces stay exactly as the
+ * last full read left them, so a live tick can never clobber an optimistic
+ * update sitting in a row. Returns
+ * the merged rows, whether any flag actually changed (so a tick with no news
+ * skips its render), and whether the snapshot names an id the rows have never
+ * seen (so the caller re-reads /users instead of drawing a badge on a
+ * stranger).
+ */
+export function applySnapshot(rows, online) {
+  const list = Array.isArray(rows) ? rows : [];
+  const live = new Map();
+  for (const entry of Array.isArray(online) ? online : []) {
+    const id = Number(entry?.id);
+    if (Number.isFinite(id) && id > 0) live.set(id, entry);
+  }
+  let changed = false;
+  const merged = list.map((row) => {
+    const entry = live.get(Number(row?.id));
+    const raw = entry?.composing_report_id;
+    const composing = raw === null || raw === undefined ? null : Number(raw);
+    const next = Number.isFinite(composing) && composing > 0 ? composing : null;
+    if ((row?.composing_report_id ?? null) === next) return row;
+    changed = true;
+    return { ...row, composing_report_id: next };
+  });
+  let hasNew = false;
+  for (const id of live.keys()) {
+    if (!list.some((row) => Number(row?.id) === id)) {
+      hasNew = true;
+      break;
+    }
+  }
+  return { rows: merged, changed, hasNew };
+}
+
 /** Whether this roster entry is the session's own account. */
 export function isSelf(user, me) {
   return Number(user?.id) > 0 && Number(user?.id) === Number(me?.id);

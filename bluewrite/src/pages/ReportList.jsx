@@ -33,7 +33,8 @@ import ReportTypeIcon from '../components/reports/ReportTypeIcon.jsx';
 // folder mark (with its PDF tag riding it, so the card still names itself a
 // PDF file), the number and status, then the facts in labelled columns (date
 // and time, location, recorded by) — with Edit and the More pill at the row's
-// end.
+// end, except on an admin's live rows, which carry neither (see rowMeta in
+// Reports.jsx: an administrator reads the register and acts from the sheet).
 //
 // THE TYPE LEADS THE ROW, AS A COLOURED PILL (owner request, 2026-10-08). The
 // owner sent the reference's card for this list — an incident type drawn as a
@@ -287,38 +288,42 @@ function ReportRow({ report, meta, flash, onOpen, onEdit, onMenu, officer = fals
 
       {/* The actions sit inside the row's right-hand end (see
           .report-row__actions): Edit for the officer's own drafts, and the
-          More pill — the ⋮ menu, renamed for the row's formal dress. */}
-      <span className="report-row__actions">
-        {meta.canEdit && (
-          <button
-            type="button"
-            className="report-row__edit"
-            aria-label={draftEditLabel(report.id)}
-            title="Edit this draft"
-            onClick={() => onEdit?.(report)}
-          >
-            <RowMark name="pencil" size={15} />
-            <span>Edit</span>
-          </button>
-        )}
-        {meta.hasMenu && (
-          <button
-            type="button"
-            className="report-row__menu"
-            aria-label={`Actions for report ${num}`}
-            aria-haspopup="menu"
-            title="Report actions"
-            onClick={(e) => {
-              const box = e.currentTarget.getBoundingClientRect();
-              openMenu({ x: box.left, y: box.bottom }, e.currentTarget, true);
-            }}
-          >
-            <RowMark name="dots" size={15} stroke={2.6} />
-            <span>More</span>
-            <RowMark name="chevron" size={12} className="report-row__menu-caret" />
-          </button>
-        )}
-      </span>
+          More pill — the ⋮ menu, renamed for the row's formal dress. An admin's
+          live rows carry neither (see rowMeta), so the span itself stays home
+          rather than standing empty at the row's end. */}
+      {(meta.canEdit || meta.hasMenu) && (
+        <span className="report-row__actions">
+          {meta.canEdit && (
+            <button
+              type="button"
+              className="report-row__edit"
+              aria-label={draftEditLabel(report.id)}
+              title="Edit this draft"
+              onClick={() => onEdit?.(report)}
+            >
+              <RowMark name="pencil" size={15} />
+              <span>Edit</span>
+            </button>
+          )}
+          {meta.hasMenu && (
+            <button
+              type="button"
+              className="report-row__menu"
+              aria-label={`Actions for report ${num}`}
+              aria-haspopup="menu"
+              title="Report actions"
+              onClick={(e) => {
+                const box = e.currentTarget.getBoundingClientRect();
+                openMenu({ x: box.left, y: box.bottom }, e.currentTarget, true);
+              }}
+            >
+              <RowMark name="dots" size={15} stroke={2.6} />
+              <span>More</span>
+              <RowMark name="chevron" size={12} className="report-row__menu-caret" />
+            </button>
+          )}
+        </span>
+      )}
     </li>
   );
 }

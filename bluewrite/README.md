@@ -199,22 +199,27 @@ own session-scoped business.
 
 ## LAN deployment (station server)
 
-1. Give the server a **static IP** (e.g. `192.168.1.10`). Station PCs browse to
-   `http://192.168.1.10/` — no `.test` domain, no `localhost` anywhere.
-2. Apache vhost example:
+1. Give the server a **static IP** (this server: `192.168.100.6`). Station PCs
+   browse to `http://192.168.100.6:8099/` — no `.test` domain, no `localhost`
+   anywhere.
+2. Serve it with **Apache + mod_php**, not `php -S`. The configuration is a
+   template in the repo (`scripts/apache/bluewrite-httpd.conf.template`) that the
+   watchdog renders into `storage/apache/bluewrite-httpd.conf` against whatever
+   Apache and PHP are installed — so a Laragon or PHP upgrade needs no edit, and
+   there is no vhost to write by hand. Re-render at any time with
+   `watch-servers.ps1 -RenderConfig`.
 
-   ```apache
-   <VirtualHost *:80>
-       DocumentRoot "C:/bluewrite/public"
-       <Directory "C:/bluewrite/public">
-           AllowOverride All
-           Require local
-           Require ip 192.168.1
-       </Directory>
-   </VirtualHost>
-   ```
+   It listens on `0.0.0.0:8099`, uses `mpm_winnt` with `ThreadsPerChild 16`, and
+   keeps the app LAN-only in one line —
+   `Require ip 127.0.0.1 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16`.
+   `scripts\serve.cmd` and the watchdog start it; see
+   [`docs/LAN_SETUP.md`](docs/LAN_SETUP.md) §2.
 
-   `Require local` + `Require ip 192.168.1` keeps the app LAN-only.
+   **Why not PHP-FPM:** PHP ships no `php-fpm.exe` for Windows (FPM is
+   POSIX-only) and this Apache has no `mod_fcgid`. mod_php is the concurrent
+   setup on Windows. One PHP built-in server is not: it answers a single request
+   at a time, so two workstations queue behind each other (12 × 200 ms measured
+   2,638 ms on `php -S` against 577 ms on Apache).
 3. MySQL daily backup (Windows Task Scheduler):
 
    ```bat

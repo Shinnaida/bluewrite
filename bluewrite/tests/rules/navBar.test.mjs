@@ -271,7 +271,7 @@ test('the two chromes render: one nav per role, and one account chrome between t
     'Dashboard',
     'All Reports',
     'User Management',
-    'Audit Trail',
+    'Activity Logs',
     'Station Settings',
   ]) {
     assert.ok(rail.includes(`${label}</button>`), `the rail lost ${label}`);

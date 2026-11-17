@@ -1,0 +1,144 @@
+<mxfile host="app.diagrams.net" pages="2">
+  <diagram name="R1" id="workflow-hipo-r1">
+    <mxGraphModel dx="1423" dy="855" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="R1_start" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;fillColor=none;" value="Start" vertex="1">
+          <mxGeometry height="56" width="200" x="313" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="R1_reported" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Incident / Complaint&lt;br&gt;is Reported" vertex="1">
+          <mxGeometry height="56" width="300" x="263" y="114" as="geometry" />
+        </mxCell>
+        <mxCell id="R1_desk" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Desk Officer&lt;br&gt;Receives the Report" vertex="1">
+          <mxGeometry height="56" width="300" x="263" y="198" as="geometry" />
+        </mxCell>
+        <mxCell id="R1_logbook" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Write the blotter entry&lt;br&gt;in the log book" vertex="1">
+          <mxGeometry height="70" width="300" x="263" y="282" as="geometry" />
+        </mxCell>
+        <mxCell id="R1_find" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Find a similar incident&lt;br&gt;format file on the PC" vertex="1">
+          <mxGeometry height="70" width="300" x="263" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="R1_word" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Open Microsoft Word&lt;br&gt;and duplicate the similar file" vertex="1">
+          <mxGeometry height="56" width="300" x="263" y="478" as="geometry" />
+        </mxCell>
+        <mxCell id="R1_encode" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Create a new report,&lt;br&gt;edit and encode&lt;br&gt;the log-book text" vertex="1">
+          <mxGeometry height="70" width="300" x="263" y="562" as="geometry" />
+        </mxCell>
+        <mxCell id="R1_review" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Review Report for&lt;br&gt;Completeness and&lt;br&gt;Accuracy" vertex="1">
+          <mxGeometry height="70" width="300" x="263" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="R1_q" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Report&lt;br&gt;complete &amp;&lt;br&gt;correct?" vertex="1">
+          <mxGeometry height="112" width="123" x="351.5" y="758" as="geometry" />
+        </mxCell>
+        <mxCell id="R1_revise" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Revise or Add Missing&lt;br&gt;Information" vertex="1">
+          <mxGeometry height="60" width="220" x="540" y="784" as="geometry" />
+        </mxCell>
+        <mxCell id="R1_next" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="1" vertex="1">
+          <mxGeometry height="40" width="47" x="389.5" y="898" as="geometry" />
+        </mxCell>
+        <mxCell id="R1E1" edge="1" locked="1" parent="1" source="R1_start" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R1_reported">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R1E2" edge="1" locked="1" parent="1" source="R1_reported" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R1_desk">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R1E3" edge="1" locked="1" parent="1" source="R1_desk" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R1_logbook">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R1E4" edge="1" locked="1" parent="1" source="R1_logbook" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R1_find">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R1E5" edge="1" locked="1" parent="1" source="R1_find" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R1_word">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R1E6" edge="1" locked="1" parent="1" source="R1_word" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R1_encode">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R1E7" edge="1" locked="1" parent="1" source="R1_encode" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R1_review">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R1E8" edge="1" locked="1" parent="1" source="R1_review" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R1_q">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R1E9" edge="1" locked="1" parent="1" source="R1_q" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" value="No" target="R1_revise">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R1E10" edge="1" locked="1" parent="1" source="R1_q" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" value="Yes" target="R1_next">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R1E11" edge="1" locked="1" parent="1" source="R1_revise" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=0;entryX=1;entryY=0.5;" target="R1_review">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="R2" id="workflow-hipo-r2">
+    <mxGraphModel dx="1423" dy="855" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="816" pageHeight="1056" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="R2_prev" locked="1" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="1" vertex="1">
+          <mxGeometry height="40" width="47" x="389.5" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="R2_submit" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Submit Report to&lt;br&gt;Supervisor /&lt;br&gt;Reviewing Officer" vertex="1">
+          <mxGeometry height="70" width="300" x="263" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="R2_super" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Supervisor Reviews&lt;br&gt;and Validates the&lt;br&gt;Report" vertex="1">
+          <mxGeometry height="70" width="300" x="263" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="R2_q" locked="1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Report&lt;br&gt;approved?" vertex="1">
+          <mxGeometry height="100" width="123" x="351.5" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="R2_correct" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Return Report for&lt;br&gt;Correction" vertex="1">
+          <mxGeometry height="70" width="200" x="40" y="325" as="geometry" />
+        </mxCell>
+        <mxCell id="R2_revise" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Revise Report" vertex="1">
+          <mxGeometry height="70" width="200" x="40" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="R2_final" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Finalize Incident&lt;br&gt;Report" vertex="1">
+          <mxGeometry height="70" width="300" x="263" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="R2_print" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="Print and Sign Report" vertex="1">
+          <mxGeometry height="60" width="300" x="263" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="R2_file" locked="1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;strokeWidth=2;fillColor=none;" value="File / Store Report in&lt;br&gt;Records" vertex="1">
+          <mxGeometry height="70" width="300" x="263" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="R2_end" locked="1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;strokeWidth=2;fillColor=none;" value="End" vertex="1">
+          <mxGeometry height="56" width="200" x="313" y="730" as="geometry" />
+        </mxCell>
+        <mxCell id="R2E1" edge="1" locked="1" parent="1" source="R2_prev" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R2_submit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R2E2" edge="1" locked="1" parent="1" source="R2_submit" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R2_super">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R2E3" edge="1" locked="1" parent="1" source="R2_super" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R2_q">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R2E4" edge="1" locked="1" parent="1" source="R2_q" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" value="No" target="R2_correct">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R2E5" edge="1" locked="1" parent="1" source="R2_correct" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R2_revise">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R2E6" edge="1" locked="1" parent="1" source="R2_revise" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0;exitY=0.5;entryX=0;entryY=0.5;" target="R2_super">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R2E7" edge="1" locked="1" parent="1" source="R2_q" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" value="Yes" target="R2_final">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R2E8" edge="1" locked="1" parent="1" source="R2_final" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R2_print">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R2E9" edge="1" locked="1" parent="1" source="R2_print" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R2_file">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="R2E10" edge="1" locked="1" parent="1" source="R2_file" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="R2_end">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

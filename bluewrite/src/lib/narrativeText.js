@@ -288,7 +288,9 @@ export function emphasizeIssuanceRequestorHtml(html) {
   if (src === '' || !/upon the request of/i.test(src)) return src;
   return src.replace(ISSUANCE_HTML, (match, pre, openQ, name, closeQ, post) => {
     const clean = String(name ?? '').trim();
-    if (clean === '' || /<|>|&lt;|&gt;/.test(clean)) return match;
+    // A blank is ink, not a name: it prints as its underscores, never
+    // dressed as if someone had requested the copy.
+    if (clean === '' || /^_+$/.test(clean) || /<|>|&lt;|&gt;/.test(clean)) return match;
     const upper = clean.replace(/&(?:#\d+|#x[0-9a-fA-F]+|[a-zA-Z]+);|[^&]+/g, (chunk) =>
       chunk.startsWith('&') ? chunk : chunk.toUpperCase(),
     );
@@ -296,6 +298,40 @@ export function emphasizeIssuanceRequestorHtml(html) {
     const close = closeQ !== '' ? closeQ : (openQ !== '' ? '"' : '');
     return `${pre}${open}<b><u>${upper}</u></b>${close}${post}`;
   });
+}
+
+// A requestor slot filled with a ROLE, not a person (owner request,
+// 2026-11-16): the AI has closed reports with "This certification is issued
+// upon the request of the complainant …" — the sheet then dresses the role as
+// if the complainant had personally requested the copy. A role, the formatter's
+// "name of who requested" stand-in, and the officer's own office are not names;
+// none of them may stand in the slot. The paper prints the blank the formatter
+// stamps (closingLines.js CLOSING_BLANK — underscores, so the line still reads
+// as ink and the officer can type the name over it).
+const ROLE_REQUESTOR = String.raw`(?:the\s+)?(?:complainant|victim|reporting\s+(?:person|party)|requesting\s+(?:party|person)|request(?:er|or)|respondent|suspect|caller|undersigned|officer|name\s+of\s+(?:who\s+requested|request(?:er|or)))`;
+const ISSUANCE_ROLE = new RegExp(
+  String.raw`(upon\s+the\s+request\s+of\s*)(["“”']?)(${ROLE_REQUESTOR})(["“”']?)(\s+for\s+what\s*ever\s+legal\s+purposes?)`,
+  'gi',
+);
+const REQUESTOR_BLANK = '____';
+
+/**
+ * Leave the issuance line's requestor blank when no person is named: a role
+ * ("the complainant", "the victim", …) or the formatter's placeholder is
+ * replaced with the blank, quotes included. A real name — the officer's or
+ * anyone else's — is left exactly as written. Runs on plain text and on
+ * sanitized html alike: the role run is words and spaces, so it can never
+ * span a tag.
+ *
+ * @param {unknown} text narrative plain text or html
+ * @returns {string}
+ */
+export function blankUnnamedIssuanceRequestor(text) {
+  const src = String(text ?? '');
+  if (!/upon\s+the\s+request\s+of/i.test(src)) return src;
+  return src.replace(ISSUANCE_ROLE, (_match, pre, _openQ, _role, _closeQ, post) =>
+    `${pre}${REQUESTOR_BLANK}${post}`,
+  );
 }
 
 /**
@@ -339,4 +375,68 @@ export function splitHtmlLines(html) {
     }
   }
   return blocks.filter((b) => b.html !== '');
+}
+
+/**
+ * Reveal prefix of formatter-style html: the first `n` text characters with
+ * every tag intact, so the typing animation shows the FINAL formatting
+ * (bolds, spacing, line breaks) while it types instead of a plain blob that
+ * swaps format at the end. Tags copy verbatim and cost nothing; one entity
+ * (`&nbsp;`, `&amp;`, …) counts as one typed character; open inline tags are
+ * closed at the cut so the partial html stays valid. Lossless at the end:
+ * `revealHtmlPrefix(html, Infinity)` returns the input byte for byte.
+ *
+ * @param {unknown} html
+ * @param {unknown} count text characters to reveal
+ * @returns {string}
+ */
+export function revealHtmlPrefix(html, count) {
+  const src = String(html ?? '');
+  let n = Number(count);
+  if (!Number.isFinite(n)) return src;
+  n = Math.max(0, Math.floor(n));
+  if (n === 0 || src === '') return '';
+  let out = '';
+  let shown = 0;
+  const open = [];
+  let i = 0;
+  while (i < src.length && shown < n) {
+    const ch = src[i];
+    if (ch === '<') {
+      const close = src.indexOf('>', i + 1);
+      if (close === -1) break;
+      const tag = src.slice(i, close + 1);
+      out += tag;
+      const m = /^<\/?\s*([a-zA-Z0-9]+)/.exec(tag);
+      const name = m ? m[1].toLowerCase() : '';
+      const isClose = /^<\//.test(tag);
+      const isVoid = /\/\s*>$/.test(tag) || name === 'br' || name === 'hr' || name === 'img';
+      if (name && !isVoid) {
+        if (isClose) {
+          const at = open.lastIndexOf(name);
+          if (at !== -1) open.splice(at, 1);
+        } else {
+          open.push(name);
+        }
+      }
+      i = close + 1;
+    } else if (ch === '&') {
+      const semi = src.indexOf(';', i + 1);
+      if (semi !== -1 && semi - i <= 10) {
+        out += src.slice(i, semi + 1);
+        shown += 1;
+        i = semi + 1;
+      } else {
+        out += ch;
+        shown += 1;
+        i += 1;
+      }
+    } else {
+      out += ch;
+      shown += 1;
+      i += 1;
+    }
+  }
+  for (let k = open.length - 1; k >= 0; k -= 1) out += `</${open[k]}>`;
+  return out;
 }

@@ -222,4 +222,59 @@ final class PresenceController
                 : max(0, (int) $row['login_age_seconds']),
         ];
     }
+
+    /**
+     * The live snapshot: every connected account, and nothing else.
+     *
+     * GET /presence/snapshot — [{id, composing_report_id}] for the accounts
+     * inside the window, polled every few seconds by the screens that draw
+     * "who is here right now" (Connected now, the directory) so a pen badge
+     * can appear while the typing is still happening. One indexed range read
+     * plus the latch join — deliberately NOT the /users read, which carries
+     * counts, day maps and photographs a live tick must not pay for. Names,
+     * roles and faces still come from /users, which re-reads on its own
+     * cadence and whenever this snapshot shows an id it has never seen.
+     */
+    public function snapshot(): void
+    {
+        Auth::requireUser();
+        $pdo = Database::pdo();
+        $window = self::ONLINE_WINDOW_SECONDS;
+
+        $rows = $pdo->query(
+            "SELECT u.id
+               FROM users u
+              WHERE u.status = 'active'
+                AND u.last_seen_at IS NOT NULL
+                AND u.last_seen_at >= NOW() - INTERVAL {$window} SECOND
+              ORDER BY u.full_name"
+        )->fetchAll();
+
+        // The latch separately, in its own guard: a station that has not run
+        // migration 030 yet gets a snapshot with no composing flags instead
+        // of a 500 with no snapshot at all.
+        $composing = [];
+        try {
+            $latch = ReportsController::COMPOSING_WINDOW;
+            $cw = $pdo->query(
+                'SELECT user_id, report_id FROM report_composing
+                  WHERE updated_at >= NOW() - INTERVAL ' . $latch . ' SECOND'
+            )->fetchAll();
+            foreach ($cw as $w) {
+                $composing[(int) $w['user_id']] = (int) $w['report_id'];
+            }
+        } catch (\Throwable $e) {
+            error_log('composing latch unreadable, live flags unknown: ' . $e->getMessage());
+        }
+
+        $online = array_map(static function (array $row) use ($composing): array {
+            $id = (int) $row['id'];
+            return [
+                'id' => $id,
+                'composing_report_id' => $composing[$id] ?? null,
+            ];
+        }, $rows);
+
+        Response::json(200, ['online' => $online]);
+    }
 }

@@ -494,6 +494,38 @@ test('the draft Edit affordance says what it will do, and that it asks first', (
   assert.match(list, /meta\.canEdit && \(/);
 });
 
+test('an admin’s live rows are bare: no Edit, no More', () => {
+  // The LIVE register (pages/, where all Oct 25-26 work landed — the
+  // components/ twin is stale and keeps the old rule, pinned above).
+  const live = readFileSync(new URL('../../src/pages/Reports.jsx', import.meta.url), 'utf8');
+  const liveList = readFileSync(new URL('../../src/pages/ReportList.jsx', import.meta.url), 'utf8');
+
+  // Officers keep everything they had: a draft of their own still offers Edit,
+  // every live row still offers More — the bare rule is the admin's alone.
+  assert.match(
+    live,
+    /canEdit:\s*!showArchived &&\s*statusBucket\(r\.status\) === 'draft' &&\s*user\.role !== 'Admin' &&\s*Number\(r\.created_by\) === Number\(user\.id\),/,
+  );
+  // …and the archive keeps its admin menu, because restoring lives nowhere
+  // else: the menu answers to the archive, not to the role.
+  assert.match(live, /hasMenu: showArchived \? user\.role === 'Admin' : user\.role !== 'Admin',/);
+  assert.match(live, /canRestore: showArchived && user\.role === 'Admin'/);
+  // The span itself stays home on a bare row rather than standing empty at the
+  // row's end — an absolutely-positioned nothing is still a nothing in the tree.
+  assert.match(liveList, /\{\(meta\.canEdit \|\| meta\.hasMenu\) && \(/);
+
+  // …and the card spreads into the room the buttons leave: the paper reserves
+  // the actions' end width only while the row carries actions, so a bare
+  // admin row runs its facts edge to edge instead of stopping short for
+  // buttons that are not there. Below the breakpoint the actions dock at the
+  // row's foot, so no end reserve is owed at any width there.
+  assert.match(styles, /\.reports-register \.file-card__paper \{[\s\S]*?padding: 0\.5rem 1rem;/);
+  assert.match(
+    styles,
+    /@media \(min-width: 1201px\) \{[\s\S]*?\.reports-register \.file-card__paper:has\(\.report-row__actions\) \{[\s\S]*?padding-right: 11\.5rem;/,
+  );
+});
+
 // ---------------------------------------------------------------------------
 // The markup and the stylesheet
 // ---------------------------------------------------------------------------

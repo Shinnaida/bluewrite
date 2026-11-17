@@ -467,3 +467,981 @@
 .conn-hub__link { stroke-width: 1.5; opacity: 0.35; }
 .conn-hub__link.is-admin { stroke: #2563eb; }
 .conn-hub__link.is-officer { stroke: #c98a00; }
+
+/* ---- Live wire: what moves on the drawing ------------------------------------
+   Two motions, one shared 2.4-second clock (the same clock the status dots
+   blink on), both on the cheap properties only — transform and opacity — so
+   the drawing never janks while the directory polls under it. The references:
+   staggered sonar pings that dissipate before they vanish (CodeFronts), and a
+   radar whose rings, sweep and blips share one duration (CSS Radar).
+   The drawing is decorative either way — the `aria-label` on the svg names who
+   is on, so a still frame loses nothing. */
+/* PACKETS ON THE STRINGS: a bead of role ink rides each link from the desk
+   into the server on a CSS offset-path drawn from the link's own endpoints —
+   no SMIL, so the reduced-motion rule below stills it with everything else.
+   It surfaces at the workstation, holds, and dissolves into the hub; the
+   negative delays scatter the beads around the clock from the first paint. */
+.conn-hub__packet {
+  fill: #64748b;
+  opacity: 0;
+  animation: conn-hub-packet 2.4s linear infinite;
+}
+.conn-hub__packet.is-admin {
+  fill: #2563eb;
+  filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.9));
+}
+.conn-hub__packet.is-officer {
+  fill: #c98a00;
+  filter: drop-shadow(0 0 3px rgba(201, 138, 0, 0.8));
+}
+@keyframes conn-hub-packet {
+  0% { offset-distance: 0%; opacity: 0; }
+  12% { opacity: 0.95; }
+  82% { opacity: 0.95; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+/* THE SERVER'S HEARTBEAT: one ping swells from the hub to the first ring and
+   dissolves there on a double-length lap, so it never races the packets. */
+.conn-hub__ping {
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 1.5;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: conn-hub-ping 4.8s ease-out infinite;
+}
+@keyframes conn-hub-ping {
+  0% { transform: scale(0.85); opacity: 0; }
+  15% { opacity: 0.45; }
+  70% { opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* A still packet would park a bead on a desk, so stillness also means
+     hidden: the strings and the hub carry the drawing on their own. */
+  .conn-hub__packet, .conn-hub__ping { animation: none; opacity: 0; }
+}
+
+/* ---- Writing: the desk that is composing --------------------------------------
+   A navy pen bubble pinned to the monitor's corner, ringed by an amber ping on
+   the same clock family as the heartbeat (a quicker lap, so work reads as
+   busier than idling). The halo joins in with the shared blink rather than a
+   new colour, so the role ink it wears is never covered up. */
+.conn-hub__node.is-writing .conn-hub__node-halo {
+  opacity: 0.8;
+  animation: conn-hub-blink 1.6s ease-in-out infinite;
+}
+.conn-hub__write-bubble { fill: #0f2447; stroke: #ffffff; stroke-width: 1.5; }
+.conn-hub__write-pen path {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.conn-hub__write-ping {
+  fill: none;
+  stroke: #f59e0b;
+  stroke-width: 1.5;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: conn-hub-write-ping 1.6s ease-out infinite;
+}
+@keyframes conn-hub-write-ping {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+/* The roster answers the badge: the pill turns amber and hurries its dot while
+   the trail says this desk is composing. */
+.conn-hub__seen.is-writing { background: #fef3c7; color: #92400e; }
+.conn-hub__seen.is-writing .conn-hub__seen-dot { background: #f59e0b; animation-duration: 1.2s; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* The badge stays — it is information, not motion — while its ping and the
+     halo's hurry go quiet with everything else. */
+  .conn-hub__write-ping, .conn-hub__node.is-writing .conn-hub__node-halo { animation: none; }
+  .conn-hub__write-ping { opacity: 0; }
+}
+
+/* ---- The open desk: every workstation is a door ------------------------------
+   Nodes and roster rows are controls, not pictures: the pointer says so, and
+   the keyboard gets a halo that thickens on focus plus the same door. The
+   selected desk holds its emphasis so the open drawer is visibly attached to
+   the circle it came from. */
+.conn-hub__node[role="button"],
+.conn-hub__person[role="button"] { cursor: pointer; }
+.conn-hub__node[role="button"]:focus-visible { outline: 2px solid var(--cyan); outline-offset: 6px; }
+.conn-hub__node[role="button"]:focus-visible .conn-hub__node-halo,
+.conn-hub__node.is-selected .conn-hub__node-halo {
+  stroke-width: 2.5;
+  opacity: 0.9;
+}
+.conn-hub__person[role="button"]:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.conn-hub__person[aria-pressed="true"] { border-color: var(--cyan); }
+
+/* ---- The live desk drawer ----------------------------------------------------
+   Fixed to the viewport's right edge: the board stays visible beside it, so the
+   drawer reads as "this circle, closer" rather than as a new page. Non-modal
+   on purpose — no trap, no backdrop — with Escape and a labelled close button
+   as the two ways out, and the heading taking focus on open. */
+.conn-hub__live {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(24rem, 94vw);
+  padding: 1rem 1.1rem 1.1rem;
+  background: #f2f7ff;
+  border-left: 1px solid #d7e3f8;
+  box-shadow: -24px 0 48px -24px rgba(15, 36, 71, 0.35);
+  color: #0f2447;
+  overflow-y: auto;
+  animation: conn-hub-live-in 180ms ease-out;
+}
+@keyframes conn-hub-live-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.conn-hub__live-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.conn-hub__live-who { min-width: 0; flex: 1 1 auto; }
+.conn-hub__live-who h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.conn-hub__live-who h3:focus { outline: none; }
+.conn-hub__live-who p { margin: 0.2rem 0 0; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; font-size: 0.78rem; color: #5b6b85; }
+.conn-hub__live-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 1px solid #d7e3f8;
+  background: #fff;
+  color: #0f2447;
+  cursor: pointer;
+}
+.conn-hub__live-close:hover { border-color: var(--cyan); color: var(--cyan); }
+.conn-hub__live-close:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.conn-hub__live-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #15803d;
+}
+.conn-hub__live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: conn-hub-blink 1.6s ease-in-out infinite;
+}
+.conn-hub__live-now p { margin: 0; font-size: 0.85rem; line-height: 1.45; }
+.conn-hub__live-composing {
+  padding: 0.5rem 0.65rem;
+  border-radius: 10px;
+  background: #fef3c7;
+  border: 1px solid #f5c04a;
+  color: #92400e;
+}
+.conn-hub__live-idle { color: #5b6b85; }
+.conn-hub__live-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5b6b85;
+}
+.conn-hub__live-events { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.4rem; }
+.conn-hub__live-event {
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 18px -16px rgba(15, 36, 71, 0.5);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.conn-hub__live-what { font-weight: 700; }
+.conn-hub__live-where { color: #5b6b85; }
+.conn-hub__live-when { display: block; color: #5b6b85; font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.conn-hub__live-detail { display: block; color: #334155; font-size: 0.75rem; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.conn-hub__live-empty { margin: 0; font-size: 0.85rem; color: #5b6b85; }
+/* The typing pulse: an amber dot that hurries while the latch is fresh — the
+   drawer twin of the pen badge on the board. Stillness (reduced motion) keeps
+   the words, which carry the fact on their own. */
+.conn-hub__live-typing {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 0.45rem;
+  border-radius: 50%;
+  background: #f59e0b;
+  vertical-align: baseline;
+  animation: conn-hub-blink 1.2s ease-in-out infinite;
+}
+.conn-hub__live-report { display: flex; flex-direction: column; gap: 0.35rem; }
+.conn-hub__live-report-meta { margin: 0; font-size: 0.78rem; color: #5b6b85; }
+.conn-hub__live-report-meta strong { color: #0f2447; text-transform: capitalize; }
+.conn-hub__live-excerpt {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid #f5c04a;
+  border-radius: 0 10px 10px 0;
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #334155;
+  white-space: pre-wrap;
+}
+.conn-hub__live-updated,
+.conn-hub__live-beat {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #5b6b85;
+  font-variant-numeric: tabular-nums;
+}
+.conn-hub__live-note {
+  margin: auto 0 0;
+  padding-top: 0.6rem;
+  border-top: 1px dashed #c4d3ec;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: #5b6b85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conn-hub__live { animation: none; }
+  .conn-hub__live-dot, .conn-hub__live-typing { animation: none; }
+}
+
+/* ---- UI PASS: the board reads as an instrument, the drawer as a dossier --------
+   The drawing keeps its geometry (tests count its chips by class, and the node
+   layout is stable by id) — everything below is surface: deeper panel light,
+   legible labels, cards with weight, a drawer with a header worth its fixed
+   position and a timeline instead of a stack of slips. */
+
+/* PANEL: a touch more sky at the top, a firmer edge, a heavier shadow so the
+   board sits above the directory table instead of beside it. */
+.conn-hub {
+  border-color: rgba(255, 255, 255, 0.95);
+  background:
+    repeating-radial-gradient(circle at 50% 40%, transparent 0 46px, rgba(37, 99, 235, 0.07) 46px 47px),
+    radial-gradient(65% 55% at 50% 0%, rgba(147, 184, 232, 0.5), rgba(147, 184, 232, 0) 70%),
+    radial-gradient(40% 30% at 85% 100%, rgba(245, 179, 1, 0.10), rgba(245, 179, 1, 0) 70%),
+    linear-gradient(168deg, #d3e4ff 0%, #e6f0ff 45%, #f4f8ff 100%);
+  box-shadow: 0 30px 55px -28px rgba(15, 36, 71, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.conn-hub__head h2 { font-size: 1.5rem; letter-spacing: -0.02em; }
+.conn-hub__sub { color: #4b617f; }
+.conn-hub__count {
+  padding: 0.45rem 0.9rem;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 22px -12px rgba(15, 36, 71, 0.5), inset 0 1px 0 #fff;
+}
+
+/* LEGEND as quiet chips rather than bare words. */
+.conn-hub__legend li {
+  padding: 0.2rem 0.6rem 0.2rem 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+}
+.conn-hub__swatch { box-shadow: inset 0 0 0 1px rgba(15, 36, 71, 0.15); }
+
+/* RADAR: brighter floor rings and labels that survive the lines behind them —
+   a paper halo painted under each glyph (paint-order), so a first name over a
+   ring or a string is still read at a glance. */
+.conn-hub__ring { stroke: #5f92ee; }
+.conn-hub__node text {
+  paint-order: stroke;
+  stroke: rgba(244, 248, 255, 0.85);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.conn-hub__node .conn-hub__label { font-weight: 600; fill: #43586f; }
+.conn-hub__node.is-selected .conn-hub__node-halo {
+  stroke: var(--cyan);
+  stroke-width: 3;
+  opacity: 1;
+  filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.8));
+}
+.conn-hub__person[aria-pressed="true"] {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px var(--cyan), 0 16px 30px -20px rgba(15, 36, 71, 0.55);
+}
+
+/* ROSTER CARDS: a hairline of role ink down the left edge, avatars ringed in
+   paper, and a firmer hover — the card that opens a drawer should feel like
+   it. The writing desk keeps its amber pill; the card itself stays calm so
+   the pill keeps meaning something. */
+.conn-hub__person {
+  position: relative;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.78));
+  overflow: hidden;
+}
+.conn-hub__person::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #94a3b8;
+  opacity: 0.7;
+}
+.conn-hub__person:has(.conn-hub__avatar.is-admin)::before { background: #2563eb; opacity: 1; }
+.conn-hub__person:has(.conn-hub__avatar.is-officer)::before { background: #f5b301; opacity: 1; }
+.conn-hub__avatar {
+  box-shadow: 0 0 0 2px #fff, 0 4px 10px -4px rgba(15, 36, 71, 0.5);
+}
+.conn-hub__person:hover {
+  transform: translateY(-2px);
+  border-color: #fff;
+  box-shadow: 0 18px 32px -20px rgba(15, 36, 71, 0.6), inset 0 1px 0 #fff;
+}
+.conn-hub__name { font-size: 0.9rem; }
+.conn-hub__seen { box-shadow: inset 0 0 0 1px rgba(21, 128, 61, 0.18); }
+
+/* ---- DRAWER as a dossier ------------------------------------------------------
+   A header with a real avatar and a role chip, a live strip, a composing card
+   with weight, a report card with meta chips and an excerpt, and the trail as
+   a TIMELINE — one rail, inked dots per action family — instead of loose
+   slips. The note stays last, smaller, as the honest footnote it is. */
+.conn-hub__live {
+  width: min(26rem, 94vw);
+  gap: 0.7rem;
+  padding: 1.1rem 1.15rem 1.2rem;
+  background: linear-gradient(180deg, #eef4ff 0%, #f6f9ff 30%, #f2f7ff 100%);
+  border-left: 1px solid #c9dcf7;
+  box-shadow: -32px 0 60px -24px rgba(15, 36, 71, 0.45);
+}
+.conn-hub__live-head {
+  padding: 0.7rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.75));
+  box-shadow: 0 16px 30px -22px rgba(15, 36, 71, 0.5), inset 0 1px 0 #fff;
+}
+.conn-hub__live-head .conn-hub__avatar {
+  width: 44px;
+  height: 44px;
+  font-size: 0.95rem;
+  box-shadow: 0 0 0 2px #fff, 0 6px 14px -6px rgba(15, 36, 71, 0.55);
+}
+.conn-hub__live-who h3 { font-size: 1.12rem; }
+.conn-hub__live-role {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.14rem 0.55rem;
+  border-radius: 999px;
+  background: #e4edfd;
+  color: #1d4ed8;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.conn-hub__live-role.is-officer { background: #fdf0cd; color: #92600a; }
+.conn-hub__live-live {
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  border-radius: 10px;
+  background: #e6f9ee;
+  border: 1px solid #bfe8cf;
+  color: #14703c;
+}
+.conn-hub__live-composing {
+  padding: 0.6rem 0.7rem;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fef6dd, #fdeec3);
+  border: 1px solid #f0bd45;
+  box-shadow: 0 12px 24px -18px rgba(146, 64, 14, 0.6), inset 0 1px 0 #fff;
+  font-weight: 600;
+}
+.conn-hub__live-report {
+  padding: 0.65rem 0.7rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 14px 28px -22px rgba(15, 36, 71, 0.5), inset 0 1px 0 #fff;
+  gap: 0.45rem;
+}
+.conn-hub__live-report-meta strong {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: #0f2447;
+  color: #fff;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.conn-hub__live-excerpt {
+  border-left-color: #2563eb;
+  background: #f4f8ff;
+  border-radius: 0 10px 10px 0;
+  box-shadow: inset 0 0 0 1px #e2ecfd;
+  color: #26374d;
+}
+.conn-hub__live-sub {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #43586f;
+}
+.conn-hub__live-total {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: #0f2447;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+/* The timeline: one rail down the left, a dot per event inked by its family —
+   violet for the assistant, blue for report acts, green for sessions, amber
+   for account changes — so the eye sorts the trail before reading a word. */
+.conn-hub__live-events { gap: 0.15rem; }
+.conn-hub__live-event {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.55rem 0.65rem 0.55rem 0.35rem;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+.conn-hub__live-rail { position: relative; flex: 0 0 12px; }
+.conn-hub__live-rail::before {
+  content: '';
+  position: absolute;
+  top: 16px;
+  bottom: -8px;
+  left: 5px;
+  width: 2px;
+  border-radius: 2px;
+  background: #d5e2f6;
+}
+.conn-hub__live-event:last-child .conn-hub__live-rail::before { display: none; }
+.conn-hub__live-rail::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  box-shadow: 0 0 0 3px #e9f1fd;
+}
+.conn-hub__live-event.is-ai .conn-hub__live-rail::after { background: #8b5cf6; box-shadow: 0 0 0 3px #e7e1fd; }
+.conn-hub__live-event.is-report .conn-hub__live-rail::after { background: #2563eb; box-shadow: 0 0 0 3px #d9e7fd; }
+.conn-hub__live-event.is-session .conn-hub__live-rail::after { background: #22c55e; box-shadow: 0 0 0 3px #d3f2df; }
+.conn-hub__live-event.is-account .conn-hub__live-rail::after { background: #f59e0b; box-shadow: 0 0 0 3px #fbeecd; }
+.conn-hub__live-body { min-width: 0; flex: 1 1 auto; }
+.conn-hub__live-what { font-size: 0.83rem; }
+.conn-hub__live-empty {
+  padding: 0.6rem 0.7rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px dashed #c4d3ec;
+}
+
+/* ===========================================================================
+   PASS THREE — the drawer as a field dossier (redesign, 2026-11-16)
+
+   The drawer is the one surface here an administrator reads for longer than a
+   glance: it says who a colleague is, whether they are at a desk, and what the
+   trail has recorded them doing. So it is built like a dossier rather than a
+   popover — a header plate with the account's role as its spine, a signal strip,
+   ONE card for the current state, and the trail as a timeline with a labelled
+   count and a hairline that closes the heading.
+
+   THESE RULES OVERRIDE THE TWO EARLIER PASSES rather than replacing them, so the
+   classes the component and the tests share (__live-role, __live-total,
+   __live-rail and the trailKind families) keep their geometry and only their
+   surface changes. Read with the block above, not instead of it.
+   =========================================================================== */
+.conn-hub__live {
+  /* One curve for the drawer: the slide, the close button's turn and the row
+     hover all settle with the same weight. */
+  --hub-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  width: min(27rem, 96vw);
+  gap: 0.8rem;
+  padding: 1.15rem 1.2rem 1.25rem;
+  /* Two quiet washes over the panel's blue: a cool light at the head where the
+     dossier is, a warm one at the foot where the note is. */
+  background:
+    radial-gradient(120% 42% at 0% 0%, rgba(37, 99, 235, 0.10), transparent 64%),
+    radial-gradient(90% 34% at 100% 100%, rgba(245, 179, 1, 0.09), transparent 62%),
+    linear-gradient(180deg, #f8fbff 0%, #f2f7ff 52%, #edf3fc 100%);
+  border-left: 1px solid #cfe0f7;
+  box-shadow:
+    -40px 0 80px -42px rgba(15, 36, 71, 0.55),
+    inset 1px 0 0 rgba(255, 255, 255, 0.9);
+  animation: conn-hub-live-in 420ms var(--hub-ease);
+  scrollbar-width: thin;
+  scrollbar-color: #c3d6f0 transparent;
+}
+/* THE PANEL SCROLLS; IT DOES NOT SQUEEZE. This is a fixed-height flex column
+   (`top: 0; bottom: 0`), and a flex child shrinks by default — so with ten trail
+   rows in it the header plate and every card were being compressed to make the
+   content fit: the head lost its eyebrow and role row, and the drawer never grew
+   a scrollbar. Every child keeps its own height and the panel scrolls instead. */
+.conn-hub__live > * { flex: 0 0 auto; }
+.conn-hub__live::-webkit-scrollbar { width: 10px; }
+.conn-hub__live::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: #c3d6f0;
+  background-clip: content-box;
+}
+
+/* ---- The header plate ---- */
+.conn-hub__live-head {
+  position: relative;
+  gap: 0.8rem;
+  padding: 0.9rem 0.85rem 0.9rem 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f6faff 100%);
+  box-shadow:
+    0 20px 36px -28px rgba(15, 36, 71, 0.55),
+    inset 0 1px 0 #fff;
+  overflow: hidden;
+}
+/* THE ROLE AS THE PLATE'S SPINE: a 4px edge in the account's own ink, so the
+   header is identifiable before a word of it is read. The same three inks the
+   drawing uses — Admin blue, Officer gold, neutral grey for anything else. */
+.conn-hub__live-head::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: #2563eb;
+}
+.conn-hub__live-head:has(.conn-hub__avatar.is-officer)::before { background: #f5b301; }
+.conn-hub__live-head:has(.conn-hub__avatar:not(.is-admin):not(.is-officer))::before { background: #94a3b8; }
+.conn-hub__live-eyebrow {
+  display: block;
+  margin: 0 0 0.2rem;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #5f718b;
+}
+.conn-hub__live-who h3 {
+  font-size: 1.16rem;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+.conn-hub__live-who p { margin-top: 0.32rem; gap: 0.4rem; }
+.conn-hub__live-role {
+  padding: 0.16rem 0.52rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  background: #e8f0fe;
+  color: #1d4ed8;
+  box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.16);
+}
+.conn-hub__live-role.is-officer {
+  background: #fdf3d6;
+  color: #8a5a06;
+  box-shadow: inset 0 0 0 1px rgba(138, 90, 6, 0.2);
+}
+/* The presence pill, quiet enough to sit beside a role chip: a green wash, a
+   hairline, and the one dot that blinks. */
+.conn-hub__live-head .conn-hub__seen {
+  background: #ecfdf3;
+  color: #12693a;
+  box-shadow: inset 0 0 0 1px rgba(18, 105, 58, 0.16);
+}
+.conn-hub__live-head .conn-hub__seen .conn-hub__seen-dot {
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14);
+}
+.conn-hub__live-head .conn-hub__seen.is-writing {
+  background: #fdf3d6;
+  color: #8a5a06;
+  box-shadow: inset 0 0 0 1px rgba(138, 90, 6, 0.2);
+}
+.conn-hub__live-head .conn-hub__avatar {
+  width: 46px;
+  height: 46px;
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 0 4px rgba(37, 99, 235, 0.2),
+    0 12px 22px -12px rgba(15, 36, 71, 0.6);
+}
+.conn-hub__live-head .conn-hub__avatar.is-officer {
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 0 4px rgba(245, 179, 1, 0.3),
+    0 12px 22px -12px rgba(146, 96, 10, 0.55);
+}
+.conn-hub__live-close {
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 1px solid #e2ebf9;
+  background: rgba(255, 255, 255, 0.85);
+  color: #4d5f7c;
+  transition:
+    color 0.4s var(--hub-ease),
+    border-color 0.4s var(--hub-ease),
+    background 0.4s var(--hub-ease),
+    transform 0.55s var(--hub-ease);
+}
+.conn-hub__live-close:hover {
+  color: #0f2447;
+  border-color: #b9cdea;
+  background: #fff;
+  transform: rotate(90deg);
+}
+
+/* ---- The signal strip ---- */
+.conn-hub__live-live {
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 12px;
+  border: 1px solid #c9ecda;
+  background: linear-gradient(180deg, #effbf5, #e7f8ef);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #12693a;
+}
+.conn-hub__live-dot {
+  width: 7px;
+  height: 7px;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
+}
+
+/* ---- What the desk is doing right now, as ONE card ---- */
+.conn-hub__live-now {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.8rem 0.85rem;
+  border-radius: 14px;
+  border: 1px solid #dfe8f7;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: inset 0 1px 0 #fff;
+}
+/* WHEN THE DESK IS COMPOSING, THE CARD STANDS ASIDE: the amber alert and the
+   report card are already boxes, and a third box around them read as nesting for
+   its own sake. The idle card is the one that needs a surface, because it holds a
+   sentence and a stamp rather than a card of their own. */
+.conn-hub__live-now:has(.conn-hub__live-composing) {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  gap: 0.5rem;
+}
+.conn-hub__live-idle { color: #4e6180; font-size: 0.84rem; }
+.conn-hub__live-beat {
+  margin: 0;
+  font-size: 0.63rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5f718b;
+  font-variant-numeric: tabular-nums;
+}
+.conn-hub__live-composing {
+  padding: 0.7rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid #eec25a;
+  background: linear-gradient(180deg, #fff8e8, #fdefcd);
+  box-shadow:
+    0 14px 26px -22px rgba(146, 64, 14, 0.65),
+    inset 0 1px 0 #fff;
+  color: #7a4f04;
+  font-size: 0.84rem;
+}
+.conn-hub__live-composing strong { color: #5f3d02; }
+.conn-hub__live-report {
+  border-radius: 13px;
+  border: 1px solid #e3ecfa;
+  background: #ffffff;
+  box-shadow:
+    0 16px 30px -26px rgba(15, 36, 71, 0.5),
+    inset 0 1px 0 #fff;
+}
+.conn-hub__live-report-meta { font-size: 0.76rem; }
+.conn-hub__live-excerpt {
+  background: #f6faff;
+  border-left-color: #2563eb;
+}
+.conn-hub__live-updated {
+  margin-top: 0.15rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  color: #5f718b;
+}
+
+/* ---- Recent activity: a heading that closes with a rule, then the timeline -- */
+.conn-hub__live-sub {
+  margin: 0.4rem 0 0;
+  font-size: 0.58rem;
+  letter-spacing: 0.2em;
+  color: #5b6b85;
+}
+.conn-hub__live-sub::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg, #d7e3f6 0%, rgba(215, 227, 246, 0) 100%);
+}
+.conn-hub__live-total {
+  min-width: 1.35rem;
+  height: 1.35rem;
+  font-size: 0.64rem;
+  background: #0f2447;
+}
+.conn-hub__live-events { gap: 0.1rem; }
+.conn-hub__live-event {
+  padding: 0.6rem 0.6rem 0.6rem 0.35rem;
+  border-radius: 10px;
+  transition: background 0.4s var(--hub-ease);
+  animation: conn-hub-row-in 0.55s var(--hub-ease) both;
+}
+/* The trail arrives, it does not appear: eight rows, thirty milliseconds apart. */
+.conn-hub__live-event:nth-child(1) { animation-delay: 0.02s; }
+.conn-hub__live-event:nth-child(2) { animation-delay: 0.05s; }
+.conn-hub__live-event:nth-child(3) { animation-delay: 0.08s; }
+.conn-hub__live-event:nth-child(4) { animation-delay: 0.11s; }
+.conn-hub__live-event:nth-child(5) { animation-delay: 0.14s; }
+.conn-hub__live-event:nth-child(6) { animation-delay: 0.17s; }
+.conn-hub__live-event:nth-child(7) { animation-delay: 0.2s; }
+.conn-hub__live-event:nth-child(8) { animation-delay: 0.23s; }
+@keyframes conn-hub-row-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (hover: hover) {
+  .conn-hub__live-event:hover { background: rgba(37, 99, 235, 0.045); }
+}
+/* The rail is one hairline with a ringed dot per entry, white ringed so the
+   family ink stays the only colour on the row. */
+.conn-hub__live-rail::before {
+  top: 15px;
+  bottom: -7px;
+  left: 5px;
+  width: 1.5px;
+  background: linear-gradient(180deg, #d3e1f5, #e6eefb);
+}
+.conn-hub__live-rail::after {
+  top: 4px;
+  left: 1.5px;
+  width: 8px;
+  height: 8px;
+  box-shadow:
+    0 0 0 3px #fff,
+    inset 0 0 0 1px rgba(15, 36, 71, 0.12);
+}
+.conn-hub__live-what {
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: #14263f;
+}
+.conn-hub__live-where { color: #7b8aa3; font-size: 0.78rem; }
+.conn-hub__live-when {
+  margin-top: 0.14rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.07em;
+  color: #8796ae;
+  font-variant-numeric: tabular-nums;
+}
+.conn-hub__live-detail {
+  margin-top: 0.2rem;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: #4e6180;
+}
+.conn-hub__live-empty {
+  padding: 0.75rem 0.8rem;
+  border-radius: 12px;
+  border: 1px dashed #cfdff5;
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+  color: #5b6b85;
+}
+
+/* ---- The footnote: what "live" does and does not mean ---- */
+.conn-hub__live-note {
+  margin: auto 0 0;
+  padding: 0.75rem 0.1rem 0;
+  border-top: 1px solid #dbe6f6;
+  font-size: 0.67rem;
+  line-height: 1.55;
+  color: #5f718b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conn-hub__live,
+  .conn-hub__live-event { animation: none; }
+  .conn-hub__live-close,
+  .conn-hub__live-event { transition: none; }
+}
+
+/* ===========================================================================
+   PASS FOUR — the trail as a ledger (redesign, 2026-11-16)
+
+   The list was a stack of one sentence shape: title, entity, stamp, note — each
+   on its own line, all the same weight, the date repeated on every row. A ledger
+   is read differently. The DAY is a heading rather than a column; the action is
+   the line; the record it touched is a chip beside it; the clock sits where the
+   eye can run down the edge of the panel. And the family's ink moves off a dot
+   and onto the glyph itself, so a session is a door, a report is a page, an
+   account is a person and the assistant is a spark before a word is read.
+   =========================================================================== */
+.conn-hub__live-groups { display: flex; flex-direction: column; gap: 0.15rem; }
+.conn-hub__live-group + .conn-hub__live-group { margin-top: 0.45rem; }
+/* A day heading, closed by the same fading rule the section heading above uses,
+   so the ledger's two levels of heading read as one system. */
+.conn-hub__live-day {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #5f718b;
+}
+.conn-hub__live-group:first-child .conn-hub__live-day { margin-top: 0; }
+.conn-hub__live-day::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg, #dbe6f6 0%, rgba(219, 230, 246, 0) 100%);
+}
+
+/* THE RAIL, re-cut for a glyph. The lane is 26px wide so the 22px mark has air
+   either side, and the connective hairline starts UNDER the mark rather than
+   running through it — a thread between entries, not a strike-through. */
+.conn-hub__live-event { align-items: flex-start; }
+.conn-hub__live-rail {
+  flex: 0 0 26px;
+  display: grid;
+  place-items: center;
+}
+.conn-hub__live-rail::before {
+  top: 25px;
+  bottom: -13px;
+  left: 50%;
+  width: 1.5px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #c9d9ef, #e2ebf9);
+}
+/* The old family dot is retired: the chip below carries the ink now. */
+.conn-hub__live-rail::after { display: none; }
+.conn-hub__live-tag {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: #eef4ff;
+  color: #2563eb;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.95),
+    inset 0 0 0 1px rgba(15, 36, 71, 0.06);
+}
+.conn-hub__live-tag.is-session { background: #e6f8ee; color: #15803d; }
+.conn-hub__live-tag.is-report { background: #e8f0fe; color: #1d4ed8; }
+.conn-hub__live-tag.is-account { background: #fdf3d6; color: #8a5a06; }
+.conn-hub__live-tag.is-ai { background: #efe9fd; color: #6d28d9; }
+
+/* THE ROW: one line of facts, the clock pushed to the far edge, and the detail
+   below it only when the trail has one. The title's own line is what the eye
+   checks first, so the stamp never competes with it. */
+.conn-hub__live-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.conn-hub__live-what {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #14263f;
+}
+.conn-hub__live-where {
+  padding: 0.04rem 0.36rem;
+  border-radius: 6px;
+  background: #f2f6fc;
+  color: #5b6b85;
+  font-size: 0.64rem;
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
+  box-shadow: inset 0 0 0 1px #e5edf9;
+}
+.conn-hub__live-when {
+  margin-left: auto;
+  margin-top: 0;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  color: #5f718b;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.conn-hub__live-detail {
+  margin-top: 0.18rem;
+  font-size: 0.73rem;
+  line-height: 1.45;
+  color: #55688a;
+}
+/* The newest entry is the one being read first: a faint blue wash, and a halo
+   on its chip. A wash rather than a border, so the newest row still looks like a
+   row rather than a card. */
+.conn-hub__live-event.is-latest {
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.07), rgba(37, 99, 235, 0) 72%);
+}
+.conn-hub__live-event.is-latest .conn-hub__live-tag {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 3px rgba(37, 99, 235, 0.18),
+    inset 0 0 0 1px rgba(15, 36, 71, 0.05);
+}
+/* The closing entry of a day keeps its thread: the ledger ends on the heading of
+   the next day, not on a line running into nowhere. */
+.conn-hub__live-group:last-child .conn-hub__live-event:last-child .conn-hub__live-rail::before {
+  display: none;
+}

@@ -46,7 +46,7 @@ final class NarrativeService
             );
         }
 
-        return new GeminiNarrativeProvider(
+        $gemini = new GeminiNarrativeProvider(
             $key,
             (string) ($g['model'] ?? 'gemini-3.6-flash'),
             (int) ($g['timeout_seconds'] ?? 20),
@@ -56,6 +56,41 @@ final class NarrativeService
             // deliberation from eating the JSON answer (provider constant docs).
             (string) ($g['thinking_level'] ?? 'low'),
         );
+
+        // Gemini is the only provider: no fallback chain to build.
+        return $gemini;
+    }
+
+    /**
+     * Whether the Gemini provider can answer: the manual-mode banner and the
+     * dashboard's AI tile ask this question.
+     */
+    public static function hasProviderKey(): bool
+    {
+        return self::providerKeys() !== [];
+    }
+
+    /**
+     * The model behind the AI reading (Gemini is the only provider).
+     *
+     * @return string[]
+     */
+    public static function configuredModels(): array
+    {
+        $cfg = self::aiConfig();
+        $g = $cfg['gemini'] ?? [];
+        return [
+            (string) ($g['model'] ?? 'gemini-3.6-flash'),
+        ];
+    }
+
+    /** @return string[] the keys of every provider that could answer */
+    private static function providerKeys(): array
+    {
+        $cfg = self::aiConfig();
+        $g = $cfg['gemini'] ?? [];
+        $keys = [(string) (getenv('GEMINI_API_KEY') ?: ($g['api_key'] ?? ''))];
+        return array_values(array_filter($keys, static fn (string $k): bool => $k !== ''));
     }
 
     /** Project root for the cache state file / prompt files. */

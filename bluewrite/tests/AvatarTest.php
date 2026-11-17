@@ -22,16 +22,21 @@ use RuntimeException;
  *     folder the server can serve, so this test sends text with a PNG's name and
  *     a PNG's declared type.
  *   - WHAT IS STORED IS WHAT WE WROTE, not what was sent: an 800x600 photograph
- *     is centre-cropped and re-encoded to 256x256, which is asserted by decoding
- *     the bytes the API serves back rather than by trusting the upload response.
+ *     is centre-cropped and re-encoded to a 600x600 square, which is asserted by
+ *     decoding the bytes the API serves back rather than by trusting the upload
+ *     response. The stored edge is a CEILING (AvatarPhoto::EDGE): it is never an
+ *     enlargement, because upscaling adds bytes and no detail.
  *   - THE URL IS A CACHE KEY. The version in it has to change when the photo
  *     does, or an officer who re-uploads keeps seeing yesterday's face wherever
  *     the browser or the LAN proxy cached it.
  */
 final class AvatarTest extends BaseApiTestCase
 {
-    /** The stored edge AvatarPhoto normalises to. */
-    private const EDGE = 256;
+    /**
+     * The stored edge AvatarPhoto normalises to — read from the class that owns it,
+     * the same way the browser-side rule reads it, so the pipeline cannot drift.
+     */
+    private const EDGE = \App\Core\AvatarPhoto::EDGE;
 
     /**
      * The stored avatars are FILES, so the per-test database reset does not clean
@@ -86,8 +91,11 @@ final class AvatarTest extends BaseApiTestCase
         $this->assertSame("\xFF\xD8", substr($served['bytes'], 0, 2), 'a real JPEG, whatever was uploaded');
         $size = getimagesizefromstring($served['bytes']);
         $this->assertIsArray($size);
-        $this->assertSame(self::EDGE, $size[0]);
-        $this->assertSame(self::EDGE, $size[1]);
+        // 600, not EDGE: the crop's own short side is below the ceiling, and a
+        // 600px square must not be blown up to a soft 1024 just to match a number.
+        $expected = min(self::EDGE, 600);
+        $this->assertSame($expected, $size[0]);
+        $this->assertSame($expected, $size[1]);
 
         // The served bytes are NOT the uploaded bytes: this is a re-encode.
         $this->assertNotSame($this->jpegBytes(800, 600), $served['bytes']);
@@ -230,8 +238,9 @@ final class AvatarTest extends BaseApiTestCase
         $this->assertSame("\xFF\xD8", substr($served['bytes'], 0, 2));
         $size = getimagesizefromstring($served['bytes']);
         $this->assertIsArray($size);
-        $this->assertSame(self::EDGE, $size[0]);
-        $this->assertSame(self::EDGE, $size[1]);
+        $expected = min(self::EDGE, 480);
+        $this->assertSame($expected, $size[0]);
+        $this->assertSame($expected, $size[1]);
 
         // The row that was written is the OFFICER's, and nobody else's.
         $row = $this->db()->query(

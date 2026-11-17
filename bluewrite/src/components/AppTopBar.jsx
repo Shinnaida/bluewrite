@@ -160,7 +160,7 @@ export const ADMIN_LINKS = [
   { kind: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
   { kind: 'table', label: 'All Reports', icon: 'register' },
   { kind: 'users', label: 'User Management', icon: 'users' },
-  { kind: 'audits', label: 'Audit Trail', icon: 'audits' },
+  { kind: 'audits', label: 'Activity Logs', icon: 'audits' },
   // Station settings sits last because it is the rarer visit: an admin changes
   // the letterhead or the type list when the station changes, not weekly.
   { kind: 'station', label: 'Station Settings', icon: 'settings' },

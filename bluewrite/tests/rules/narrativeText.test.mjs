@@ -15,6 +15,8 @@ import {
   stripRedundantSheetHeaderHtml,
   stripRedundantSheetFooter,
   stripRedundantSheetFooterHtml,
+  revealHtmlPrefix,
+  blankUnnamedIssuanceRequestor,
 } from '../../src/lib/narrativeText.js';
 
 test('a leading "Blotter Entry No. …" restatement is removed', () => {
@@ -55,6 +57,48 @@ test('whitespace and empty input are handled', () => {
   assert.equal(stripLeadingBlotterRestatement(null), '');
   assert.equal(stripLeadingBlotterRestatement(undefined), '');
   assert.equal(stripLeadingBlotterRestatement('   '), '   ');
+});
+
+// Owner request (2026-11-16): the issuance line names a PERSON or it prints a
+// blank. A role is not a requestor; the AI filling that slot with "the
+// complainant" made the sheet state a request nobody made.
+test('a role in the requestor slot prints as the blank', () => {
+  const line =
+    'This certification is issued upon the request of the complainant for whatever legal purposes it may serve.';
+  assert.equal(
+    blankUnnamedIssuanceRequestor(line),
+    'This certification is issued upon the request of ____ for whatever legal purposes it may serve.',
+  );
+});
+
+test('the dressed role, a quoted role and the formatter placeholder all blank', () => {
+  const html =
+    '<p>Facts: x.</p><p>This certification is issued upon the request of THE COMPLAINANT for whatever legal purposes it may serve.</p>';
+  assert.equal(
+    blankUnnamedIssuanceRequestor(html),
+    '<p>Facts: x.</p><p>This certification is issued upon the request of ____ for whatever legal purposes it may serve.</p>',
+  );
+  assert.equal(
+    blankUnnamedIssuanceRequestor(
+      'This certification is issued upon the request of "the victim" for what ever legal purposes it may serve.',
+    ),
+    'This certification is issued upon the request of ____ for what ever legal purposes it may serve.',
+  );
+  assert.equal(
+    blankUnnamedIssuanceRequestor(
+      'This certification is issued upon the request of "name of who requested" for whatever legal purposes it may serve.',
+    ),
+    'This certification is issued upon the request of ____ for whatever legal purposes it may serve.',
+  );
+});
+
+test('a named requestor is left exactly as written', () => {
+  const line =
+    'This certification is issued upon the request of "I Love You" for what ever legal purposes it may serve.';
+  assert.equal(blankUnnamedIssuanceRequestor(line), line);
+  const plain =
+    'This certification is issued upon the request of Mark Anthony Reyes for whatever legal purposes it may serve.';
+  assert.equal(blankUnnamedIssuanceRequestor(plain), plain);
 });
 
 // ---- Redundant sheet header (owner request, 2026-11-02) --------------------
@@ -195,4 +239,18 @@ test('the formatter HTML corrects only the labeled place value', () => {
     correctNagaPlaceLinesHtml('<p>PLACE OF INCIDENT: CANGIMUNDONG</p>'),
     '<p>PLACE OF INCIDENT: Cansimundong</p>',
   );
+});
+
+test('the typing reveal keeps tags intact, so bolds and spacing type as final', () => {
+  const html = '<p>At <b>08:40 AM</b> the  officer&nbsp;left.</p>';
+  // Zero shows nothing; a partial keeps the bold open and closes it.
+  assert.equal(revealHtmlPrefix(html, 0), '');
+  assert.equal(revealHtmlPrefix(html, 3), '<p>At </p>');
+  assert.equal(revealHtmlPrefix(html, 4), '<p>At <b>0</b></p>');
+  assert.equal(revealHtmlPrefix(html, 6), '<p>At <b>08:</b></p>');
+  // Entities count as one typed character and survive verbatim.
+  assert.ok(revealHtmlPrefix(html, 30).includes('&nbsp;'));
+  // The full reveal is the input byte for byte — typing converges exactly.
+  assert.equal(revealHtmlPrefix(html, 10_000), html);
+  assert.equal(revealHtmlPrefix(html, Infinity), html);
 });

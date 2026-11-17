@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="halfY" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE45C"/>
+      <stop offset="1" stop-color="#F2B705"/>
+    </linearGradient>
+    <linearGradient id="halfB" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5B8CFF"/>
+      <stop offset="1" stop-color="#173FAE"/>
+    </linearGradient>
+    <linearGradient id="nibG" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.55" stop-color="#F2F6FD"/>
+      <stop offset="1" stop-color="#C9D8F2"/>
+    </linearGradient>
+    <linearGradient id="holdG" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3E74FF"/>
+      <stop offset="1" stop-color="#122E8A"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="shieldClip">
+      <path d="M112,56 H400 Q416,56 416,72 V236 C416,336 344,398 256,456 C168,398 96,336 96,236 V72 Q96,56 112,56 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- backdrop -->
+  <rect width="512" height="512" fill="#0B0B10"/>
+
+  <!-- shield halves -->
+  <g clip-path="url(#shieldClip)">
+    <rect x="96" y="56" width="160" height="400" fill="url(#halfY)"/>
+    <rect x="256" y="56" width="160" height="400" fill="url(#halfB)"/>
+    <!-- top sheen -->
+    <ellipse cx="256" cy="96" rx="190" ry="86" fill="url(#gloss)" opacity="0.55"/>
+    <!-- diagonal gloss streak -->
+    <path d="M96,300 L416,120 L416,168 L96,348 Z" fill="#FFFFFF" opacity="0.16"/>
+    <path d="M96,372 L416,192 L416,206 L96,386 Z" fill="#FFFFFF" opacity="0.22"/>
+  </g>
+
+  <!-- seam + outline -->
+  <line x1="256" y1="56" x2="256" y2="440" stroke="#0B1530" stroke-width="7"/>
+  <path d="M112,56 H400 Q416,56 416,72 V236 C416,336 344,398 256,456 C168,398 96,336 96,236 V72 Q96,56 112,56 Z"
+        fill="none" stroke="#0B1530" stroke-width="14" stroke-linejoin="round"/>
+
+  <!-- nib, pointing up-right -->
+  <g transform="rotate(45 256 252)">
+    <!-- holder -->
+    <rect x="226" y="318" width="60" height="34" rx="7" fill="url(#holdG)" stroke="#0B1530" stroke-width="7"/>
+    <rect x="226" y="318" width="60" height="12" rx="6" fill="#FFFFFF" opacity="0.28"/>
+    <!-- nib body -->
+    <path d="M256,128
+             C276,162 296,196 296,244
+             L286,318 L226,318 L216,244
+             C216,196 236,162 256,128 Z"
+          fill="url(#nibG)" stroke="#0B1530" stroke-width="7" stroke-linejoin="round"/>
+    <!-- breather hole + slit -->
+    <circle cx="256" cy="238" r="11" fill="#0B1530"/>
+    <line x1="256" y1="227" x2="256" y2="146" stroke="#0B1530" stroke-width="7" stroke-linecap="round"/>
+    <!-- nib gloss -->
+    <path d="M240,168 C232,190 228,212 228,236 L238,236 C238,212 241,190 247,170 Z" fill="#FFFFFF" opacity="0.8"/>
+  </g>
+</svg>

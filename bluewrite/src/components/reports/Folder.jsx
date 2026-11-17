@@ -73,7 +73,7 @@ export default function Folder({
                 type="button"
                 role="listitem"
                 className="rb-folder-item"
-                onClick={() => onItemClick?.(item, index)}
+                onClick={(e) => onItemClick?.(item, index, e)}
                 title={item.badge ? `${item.badge} — ${name} (click to view the photo)` : `${name} (click to view the photo)`}
               >
                 {item.badge && <span className="rb-folder-badge">{item.badge}</span>}

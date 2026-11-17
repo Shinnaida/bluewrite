@@ -30,6 +30,11 @@ if errorlevel 1 (
 )
 
 echo [bluewrite] stopping the API on 8099 and dev server on 5180 ...
+rem Apache (the API host since the two-workstation change) is its own parent/child
+rem pair and the parent respawns a child it loses, so it is stopped BY ITS
+rem COMMAND LINE first — matched on this repo's config path, never "all httpd",
+rem which would also stop a Laragon Apache serving somebody else's site.
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process -Filter \"Name = 'httpd.exe'\" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*bluewrite-httpd.conf*' } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop; Write-Host ('[bluewrite] stopped httpd pid {0}' -f $_.ProcessId) } catch { Write-Host ('[bluewrite] could not stop httpd pid {0}' -f $_.ProcessId) } }"
 powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$ports = @(8099,5180); foreach ($p in $ports) { $c = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c) { try { $proc = Get-Process -Id $c.OwningProcess -ErrorAction Stop; Stop-Process -Id $c.OwningProcess -Force -ErrorAction Stop; Write-Host ('[bluewrite] port {0}: stopped {1} (pid {2})' -f $p, $proc.ProcessName, $c.OwningProcess) } catch { Write-Host ('[bluewrite] port {0}: found pid {1} but could not stop it' -f $p, $c.OwningProcess) } } else { Write-Host ('[bluewrite] port {0}: not listening, nothing to stop' -f $p) } }"
 if errorlevel 1 echo [bluewrite] port check had warnings - see above.
 
