@@ -35,7 +35,7 @@ test('attributes, scripts, styles and comments never reach the record', () => {
   assert.equal(sanitizeRichHtml('<script>alert(1)</script>'), 'alert(1)');
   assert.equal(sanitizeRichHtml('<style>p{color:red}</style>'), 'p{color:red}');
   assert.equal(sanitizeRichHtml('a<!-- hidden -->b'), 'ab');
-  assert.equal(sanitizeRichHtml('<div><span>words stay</span></div>'), '<div>words stay</div>');
+  assert.equal(sanitizeRichHtml('<div><span>words stay</span></div>'), '<div><span>words stay</span></div>');
   assert.equal(sanitizeRichHtml('<a href="http://x">link words stay</a>'), 'link words stay');
 });
 
@@ -65,8 +65,43 @@ test('only a strict text-align survives, normalized onto p and div', () => {
   assert.equal(sanitizeRichHtml('<p style="color: red">x</p>'), '<p>x</p>');
   assert.equal(sanitizeRichHtml('<p align="justify middle">x</p>'), '<p>x</p>');
   assert.equal(sanitizeRichHtml('<b style="text-align:center">x</b>'), '<b>x</b>');
-  assert.equal(sanitizeRichHtml('<span style="text-align:center">x</span>'), 'x');
+  assert.equal(sanitizeRichHtml('<span style="text-align:center">x</span>'), '<span>x</span>');
   assert.equal(sanitizeRichHtml('<font face="arial">x</font>'), 'x');
+});
+
+test('font size and line spacing survive as the allowlisted utility classes', () => {
+  // Owner request, 2026-11-17: the strip's two pickers write classes, never
+  // styles, and only the values styles.css defines are kept on either side
+  // of the wire (PROSE_CLASS here, PROSE_CLASS in RichText.php).
+  assert.equal(sanitizeRichHtml('<span class="lh-s-14">big</span>'), '<span class="lh-s-14">big</span>');
+  assert.equal(sanitizeRichHtml('<p class="lh-lh-150">x</p>'), '<p class="lh-lh-150">x</p>');
+  assert.equal(sanitizeRichHtml('<p class="lh-lh-300">x</p>'), '<p class="lh-lh-300">x</p>');
+  assert.equal(
+    sanitizeRichHtml('<p class="lh-lh-200" align="center">x</p>'),
+    '<p class="lh-lh-200" align="center">x</p>',
+  );
+  // Anything outside the closed set is dropped; the words stay.
+  assert.equal(sanitizeRichHtml('<span class="lh-s-99 evil">x</span>'), '<span>x</span>');
+  assert.equal(sanitizeRichHtml('<span style="font-size:99pt">x</span>'), '<span>x</span>');
+});
+
+test('a typed size and spacing survive as two strict inline properties', () => {
+  // Owner request, 2026-11-17: the boxes are free-entry, so any 8–72 px size
+  // and any 1.0–3.0 spacing must round-trip — and nothing else may ride in
+  // with them (PROSE_SIZE / PROSE_SPACING here, mirrored in RichText.php).
+  assert.equal(sanitizeRichHtml('<span style="font-size:13.5px">x</span>'), '<span style="font-size:13.5px">x</span>');
+  assert.equal(sanitizeRichHtml('<p style="line-height:1.75">x</p>'), '<p style="line-height:1.75">x</p>');
+  assert.equal(sanitizeRichHtml('<p style="FONT-SIZE: 14px">x</p>'), '<p style="font-size:14px">x</p>');
+  // Only the two properties: a colour or a margin beside them is dropped.
+  assert.equal(
+    sanitizeRichHtml('<p style="font-size:14px; color:red; margin:2cm">x</p>'),
+    '<p style="font-size:14px">x</p>',
+  );
+  // Out of range is out: 7 px, 200 px and 9.0 are not Word values here.
+  assert.equal(sanitizeRichHtml('<span style="font-size:7px">x</span>'), '<span>x</span>');
+  assert.equal(sanitizeRichHtml('<span style="font-size:200px">x</span>'), '<span>x</span>');
+  assert.equal(sanitizeRichHtml('<p style="line-height:9">x</p>'), '<p>x</p>');
+  assert.equal(sanitizeRichHtml('<p style="line-height:1.5; font-size:12px" align="center">x</p>'), '<p style="font-size:12px;line-height:1.5" align="center">x</p>');
 });
 
 test('stray angle brackets and ampersands degrade to text, never markup', () => {

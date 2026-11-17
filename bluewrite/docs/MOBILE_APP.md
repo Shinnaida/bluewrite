@@ -1,5 +1,10 @@
 # Blotter capture on a phone — setup and use
 
+> Every phone-side failure we have actually hit (empty read, filing that never
+> reaches Phone files, the type-cast crash, build/ADB quirks on this Windows
+> PC, the abandoned ML Kit experiment) is written up with its fix in
+> [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md).
+
 One job: photograph the written blotter, read it through the portal's own
 OCR, and file photo plus reviewed text into a Write Report draft as a
 PROPOSAL — never a write. Checking happens on the portal, where each

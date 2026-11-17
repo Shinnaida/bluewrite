@@ -46,6 +46,21 @@ const TITLE_NEVER = [
   /for what.?ever/i,
   /^(recorded|reported|requested|requestor|purpose)\b/i,
   /blotter/i,
+  // A money row is arithmetic, not a charge (owner request, 2026-11-17):
+  // "TOTAL, - - - - 460,120.00" off a stolen-items list was handed to the
+  // paper as the incident's title.
+  /^(?:grand\s+|sub-?)?(?:total|sum|amount|balance|subtotal)\b/i,
+  // …and a line that is nothing but a figure and punctuation carries no name.
+  /^(?:[\d\s.,\-–—_=]+|[A-Z]{2,}[\s.,\-–—_=]*\d[\d\s.,\-–—_=]*)$/i,
+
+  // A SECTION heading is not the incident's title (owner request, 2026-11-17):
+  // an arranged or generated page already carries the paper's own blocks
+  // ("ACTION TAKEN /", "NOTABLE FINDINGS", "STATUS") above the narrative, and
+  // the finished sheet was handing one of them back as the quoted title — the
+  // page then read as the ARRANGEMENT of the record instead of the report the
+  // officer had just watched arrive.
+  /^(?:final\s+|notable\s+|possible\s+|noted\s+)?(?:action\s*taken|dispositions?|status|findings?|remarks?|investigation|recommendations?|evidence|witness(?:es)?|injuries|parties(?:\s+involved)?|vehicles?\s+involved)\b/i,
+
   /\bV\d+\b.*(plate| or | cr )|plate.*( or | cr )/i,
 ];
 
@@ -128,8 +143,15 @@ export function detectIncidentTitle(text) {
     if (matchLabelLine(raw) !== null) continue;
     if (line.length < 8 || line.length > 120) continue;
     if (line.split(/\s+/).length < 2) continue;
+    // Words, not spaces: a money row splits into "TOTAL," and a run of
+    // dashes and a figure, and that is not a name for an incident.
+    if ((line.match(/[A-Za-z][A-Za-z'’.\-]*/g) ?? []).length < 2) continue;
     if (/[a-z]/.test(line)) continue; // prose is never a title
+
     if (/[.?!]$/.test(line)) continue; // sentences end; headings do not
+    // A trailing separator says its value follows: "ACTION TAKEN /" heads a
+    // block, it does not name the incident (owner request, 2026-11-17).
+    if (/[:/|]\s*$/.test(line)) continue;
     if (looksLikeTimeOrDate(line)) continue;
     if (/^V\d+\b/i.test(line)) continue; // a vehicle row, not a charge
     if (/\b(PLATE|OR|CR|LICEN[CS]E)\b/.test(line) && /\d/.test(line)) continue;
@@ -152,7 +174,10 @@ export function detectIncidentTitle(text) {
 // never be folded into the section above it. Only a KNOWN incident word
 // qualifies, so an ordinary uppercase word in the body is never promoted.
 const SINGLE_WORD_TITLES = new Set([
-  'theft', 'robbery', 'arson', 'homicide', 'murder', 'rape', 'estafa', 'fraud',
+  // 'burglary' joined the list with the compound-title fix (2026-11-17): the
+  // burglary report's own heading is "BURGLARY/THEFT", and without the word
+  // the compound could not be recognised as a charge at all.
+  'theft', 'robbery', 'burglary', 'arson', 'homicide', 'murder', 'rape', 'estafa', 'fraud',
   'kidnapping', 'carnapping', 'gambling', 'trespassing', 'abduction',
   'hijacking', 'swindling', 'extortion', 'smuggling', 'poaching', 'bribery',
   'cyberlibel', 'libel', 'slander', 'prostitution', 'vagrancy',
@@ -161,13 +186,28 @@ const SINGLE_WORD_TITLES = new Set([
 function singleWordTitle(lines) {
   for (const raw of lines) {
     const line = raw.trim().replace(/^["'\u201C\u201D]+|["'\u201C\u201D]+$/g, '').trim();
-    if (line === '' || !SINGLE_WORD_TITLES.has(line.toLowerCase())) continue;
-    if (line !== line.toUpperCase()) continue; // a heading shouts; prose does not
+    if (line === '') continue;
     if (matchLabelLine(raw) !== null) continue;
-    return line;
+    // A COMPOUND of known incident words is still one charge (owner
+    // request, 2026-11-17): the blotter book writes "BURGLARY/THEFT" when
+    // one entry covers both, and it used to be skipped for not being a
+    // single word — which is how a TOTAL row became the title instead. It
+    // does not have to shout either: an arranged page sentence-cases its own
+    // heading ("Burglary/Theft"), and the sheet must print that charge as the
+    // title rather than fall through to a section heading below it.
+    const parts = line.split(/\s*[\/&]\s*/).filter(Boolean);
+    if (
+      parts.length > 1
+      && parts.every((part) => SINGLE_WORD_TITLES.has(part.toLowerCase().replace(/[^a-z]/g, '')))
+    ) {
+      return line;
+    }
+    if (line !== line.toUpperCase()) continue; // a heading shouts; prose does not
+    if (SINGLE_WORD_TITLES.has(line.toLowerCase())) return line;
   }
   return '';
 }
+
 
 // A title the OCR wrapped is still ONE heading: "RECKLESS IMPRUDENCE
 // RESULTING TO DAMAGE TO PROPERTY" + "AND PHYSICAL INJURY" is the same charge,
@@ -207,6 +247,12 @@ const KNOWN_LABELS = new Set([
   'time/date of incident',
   'date and time',
   'date and time of incident',
+  // The sheet prints this spelling of the heading (sheetFacts.js: "Date &
+  // Time of Incident"), so the reader must know it as the same field —
+  // otherwise a page written that way reads as prose and the enhance audit
+  // sees a necessary label vanish that never did.
+  'date & time',
+  'date & time of incident',
   'date of incident',
   'time of incident',
   't/d',
@@ -406,23 +452,116 @@ export function extractFieldLabels(text) {
 }
 
 /**
+ * The labels the enhance audit still enforces, by canonical field name (see
+ * unsupportedFieldLabels).
+ *
+ * The page carries two kinds of label: the DOCUMENT'S OWN parts — the place,
+ * the date and time, the facts, the findings, the action taken and the
+ * recorded/requested closings — and the per-type DETAIL rows the sheet
+ * derives from the report's type fields (Weapon Used, Manner of Taking, CCTV
+ * Available, Estimated Value, Vehicle rows, Medical Treatment …).
+ *
+ * The detail rows used to be enforced too, and they only hindered (owner
+ * request, 2026-11-17): a copy-edit that words "Weapon Used: None / bare
+ * hands" as prose, or folds an "Estimated Value" row into its sentence, got
+ * the WHOLE enhancement thrown away with "did not keep the report's own
+ * field labels" — the officer lost perfectly good wording over a field that
+ * page never needed. Those fields are still ON the page and still editable;
+ * they simply no longer decide whether the wording is kept.
+ *
+ * Every other line stays protected by the line-by-line wording gate, which
+ * keeps the officer's own line wherever a label changes.
+ */
+export const NECESSARY_FIELD_LABELS = new Set([
+  'place',
+  'date and time',
+  'facts',
+  'findings',
+  'action taken',
+  'recorded by',
+  'requested by',
+]);
+
+// Every spelling of a necessary label, so a copy-edit that writes "T/D of
+// Incident" where the page says "Date & Time of Incident" is still the same
+// field. A label that is not in this map has no necessary counterpart and is
+// left out of that comparison entirely.
+const FIELD_LABEL_ALIASES = new Map([
+  ['place', 'place'],
+  ['place of incident', 'place'],
+  ['place of occurrence', 'place'],
+  ['location', 'place'],
+  ['incident location', 'place'],
+  ['date & time of incident', 'date and time'],
+  ['date & time', 'date and time'],
+  ['time and date', 'date and time'],
+  ['time and date of incident', 'date and time'],
+  ['date and time', 'date and time'],
+  ['date and time of incident', 'date and time'],
+  ['time/date', 'date and time'],
+  ['time/date of incident', 'date and time'],
+  ['date of incident', 'date and time'],
+  ['time of incident', 'date and time'],
+  ['t/d', 'date and time'],
+  ['td', 'date and time'],
+  ['t/d of incident', 'date and time'],
+  ['td of incident', 'date and time'],
+  ['date reported', 'date and time'],
+  ['time reported', 'date and time'],
+  ['facts', 'facts'],
+  ['facts of the case', 'facts'],
+  ['statement', 'facts'],
+  ['statement of facts', 'facts'],
+  ['narrative', 'facts'],
+  ['narrative/facts', 'facts'],
+  ['notable findings', 'findings'],
+  ['findings', 'findings'],
+  ['action taken', 'action taken'],
+  ['action taken / status', 'action taken'],
+  ['status', 'action taken'],
+  ['disposition', 'action taken'],
+  ['recorded by', 'recorded by'],
+  ['reported by', 'recorded by'],
+  ['requested by', 'requested by'],
+  ['requestor', 'requested by'],
+  ['requested from', 'requested by'],
+]);
+
+/**
  * Compare an enhanced answer's field labels with the source's. The two modes
  * may never add a label the source did not carry, and Enhance Wording must not
  * silently drop one either — either answer is a document the officer did not
  * write, so the caller discards it instead of presenting it.
  *
+ * `necessaryOnly` compares the NECESSARY labels above and nothing else
+ * (owner request, 2026-11-17 — the per-type detail rows only hindered). The
+ * default stays the full comparison, which the rule tests pin.
+ *
  * @param {string} enhancedText the model's enhanced report
  * @param {string} sourceText the officer's own report
+ * @param {{necessaryOnly?: boolean}} [options] compare only the document's
+ *   own parts, by canonical name
  * @returns {{invented:string[], missing:string[]}} normalised label names
  */
-export function unsupportedFieldLabels(enhancedText, sourceText) {
-  const source = new Set(extractFieldLabels(sourceText));
-  const enhanced = new Set(extractFieldLabels(enhancedText));
+export function unsupportedFieldLabels(enhancedText, sourceText, { necessaryOnly = false } = {}) {
+  const labelsOf = (text) => {
+    const labels = extractFieldLabels(text);
+    if (!necessaryOnly) return new Set(labels);
+    return new Set(
+      labels
+        .map((label) => FIELD_LABEL_ALIASES.get(label) ?? null)
+        .filter((canon) => canon !== null && NECESSARY_FIELD_LABELS.has(canon)),
+    );
+  };
+  const source = labelsOf(sourceText);
+  const enhanced = labelsOf(enhancedText);
   return {
     invented: [...enhanced].filter((label) => !source.has(label)),
     missing: [...source].filter((label) => !enhanced.has(label)),
   };
 }
+
+
 
 const plainWords = (value) =>
   String(value ?? '').toLowerCase().replace(/\s+/g, ' ').trim();

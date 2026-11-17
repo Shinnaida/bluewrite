@@ -109,7 +109,12 @@ export default function PhoneArrivalWatcher({ user, openReportId = null, onOpenR
             if (thumb) URL.revokeObjectURL(thumb);
             return;
           }
-          setArrival({ id, thumb });
+          // A second filing replaces the first banner: release the photo the
+          // outgoing one was showing, or the blob outlives its card.
+          setArrival((prev) => {
+            if (prev?.thumb && prev.thumb !== thumb) URL.revokeObjectURL(prev.thumb);
+            return { id, thumb };
+          });
           return;
         }
       }

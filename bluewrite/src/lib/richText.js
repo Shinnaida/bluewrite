@@ -25,12 +25,55 @@
 //                       which is what decides the sheet's render path (html
 //                       as-is vs the cased plain-text flow).
 
-const ALLOWED_TAGS = new Set(['b', 'i', 'u', 'strong', 'em', 'ul', 'ol', 'li', 'p', 'br', 'div']);
+const ALLOWED_TAGS = new Set(['b', 'i', 'u', 'strong', 'em', 'ul', 'ol', 'li', 'span', 'p', 'br', 'div']);
 
 // Alignment is the one attribute that survives — strictly text-align with a
 // Word value, on a block, normalized to align="…". Anything else (colors,
 // fonts, margins, classes) is still dropped with the attribute.
 const ALIGN_VALUES = new Set(['left', 'center', 'right', 'justify']);
+
+// Font size and line spacing (owner request, 2026-11-17) travel as CLASSES,
+// the same mechanism the letterhead's per-word ink uses — never as styles —
+// so the record still carries no arbitrary CSS. The allowlist below and the
+// CSS utility classes in styles.css are one closed set: a value here has a
+// rule there, and nothing else survives. Mirrored in RichText.php.
+const PROSE_CLASS =
+  /^lh-(?:s-(?:10|11|12|13|14|15|16|18|20|22)|lh-(?:100|115|150|200|250|300))$/;
+
+// The strip's two pickers are free-entry (owner request, 2026-11-17): an
+// officer may type any size from 8 to 72 px and any spacing from 1.0 to 3.0,
+// not just the presets. Those travel as two STRICT inline properties — values
+// are validated against a fixed shape and a range here, so the record still
+// carries no arbitrary CSS (no colours, fonts, margins, urls, expressions).
+const PROSE_SIZE = /^(?:[89]|[1-6]\d|7[0-2])(?:\.\d)?px$/;
+const PROSE_SPACING = /^(?:[12](?:\.\d{1,2})?|3(?:\.0{1,2})?)$/;
+
+function styleOf(token) {
+  const m = /\bstyle\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(token);
+  if (!m) return '';
+  const raw = String(m[2] ?? m[3] ?? m[4] ?? '');
+  const kept = [];
+  const size = /\bfont-size\s*:\s*([^;]+)/i.exec(raw);
+  if (size) {
+    const v = String(size[1]).trim().toLowerCase().replace(/\s+/g, '');
+    if (PROSE_SIZE.test(v)) kept.push(`font-size:${v}`);
+  }
+  const line = /\bline-height\s*:\s*([^;]+)/i.exec(raw);
+  if (line) {
+    const v = String(line[1]).trim().toLowerCase().replace(/\s+/g, '');
+    if (PROSE_SPACING.test(v)) kept.push(`line-height:${v}`);
+  }
+  return kept.join(';');
+}
+
+function proseClassOf(token) {
+  const m = /\bclass\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(token);
+  if (!m) return null;
+  const raw = String(m[2] ?? m[3] ?? m[4] ?? '').trim();
+  if (raw === '') return null;
+  const kept = raw.split(/\s+/).filter((c) => PROSE_CLASS.test(c));
+  return kept.length === 0 ? null : [...new Set(kept)].join(' ');
+}
 
 function alignOf(token) {
   const m = /\btext-align\s*:\s*([a-zA-Z]+)/i.exec(token)
@@ -86,8 +129,10 @@ export function sanitizeRichHtml(html) {
       out += `</${name}>`;
       continue;
     }
+    const cls = proseClassOf(token);
+    const style = styleOf(token);
     const align = (name === 'p' || name === 'div') ? alignOf(token) : null;
-    out += align ? `<${name} align="${align}">` : `<${name}>`;
+    out += `<${name}${cls ? ` class="${cls}"` : ''}${style ? ` style="${style}"` : ''}${align ? ` align="${align}"` : ''}>`;
   }
   out += escapeText(src.slice(last));
   return out;

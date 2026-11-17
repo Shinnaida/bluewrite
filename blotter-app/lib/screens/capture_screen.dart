@@ -161,6 +161,31 @@ class _CaptureScreenState extends State<CaptureScreen> {
     }
   }
 
+  /// The viewfinder, edge to edge.
+  ///
+  /// CameraPreview wraps itself in an AspectRatio, so in a space whose shape
+  /// differs from the sensor's it fits inside and leaves dark bands down the
+  /// left and right (owner report, 2026-11-17). BoxFit.cover scales it to
+  /// fill instead and ClipRect trims the overflow, so the preview reaches
+  /// both edges and nothing is left to look like a border.
+  Widget _viewfinder(CameraController c) {
+    final preview = c.value.previewSize;
+    if (preview == null) return CameraPreview(c);
+    return ClipRect(
+      child: SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            // previewSize arrives in the sensor's landscape orientation.
+            width: preview.height,
+            height: preview.width,
+            child: CameraPreview(c),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Long edge to 1600px, JPEG quality 85: the shape POST /ocr/read accepts,
   /// at a tenth of a full-resolution upload.
   Uint8List _downscale(Uint8List raw) {
@@ -251,36 +276,11 @@ class _CaptureScreenState extends State<CaptureScreen> {
           }
           return Column(
             children: [
-              // The viewfinder: the live page under an evidence frame that
-              // shows where the page edges should sit.
-              Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CameraPreview(_controller!),
-                    const CustomPaint(painter: _PageFramePainter()),
-                    Positioned(
-                      top: 14,
-                      left: 0,
-                      right: 0,
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.55),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'Fit the page inside the corners',
-                            style: TextStyle(color: paper, fontSize: 12),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              // The viewfinder: the live page and nothing drawn over it.
+              // The page-edge guide and its "fit the page inside the frame"
+              // pill were removed on request (owner, 2026-11-17): the overlay
+              // sat on top of the sheet the officer is framing.
+              Expanded(child: _viewfinder(_controller!)),
               // The capture desk: one instruction, one shutter, nothing
               // else competing for the thumb.
               Container(
@@ -290,12 +290,6 @@ class _CaptureScreenState extends State<CaptureScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Text(
-                      'Captured pages live in the tray — open Photos to check them, add more, or review.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: paper, height: 1.5),
-                    ),
-                    const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       crossAxisAlignment: CrossAxisAlignment.end,
@@ -348,46 +342,6 @@ class _CaptureScreenState extends State<CaptureScreen> {
       ),
     );
   }
-}
-
-/// The evidence frame drawn over the viewfinder: gold corners the officer
-/// fits the page inside, plus a faint hairline suggesting the page edges.
-/// Painted, not widgeted, so it never shifts the preview by a pixel.
-class _PageFramePainter extends CustomPainter {
-  const _PageFramePainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const inset = 26.0;
-    const arm = 44.0;
-    final frame = Rect.fromLTWH(
-        inset, inset, size.width - inset * 2, size.height - inset * 2);
-    final hair = Paint()
-      ..color = Colors.white.withValues(alpha: 0.14)
-      ..strokeWidth = 1;
-    canvas.drawRect(frame, hair);
-    final gold = Paint()
-      ..color = const Color(0xFFC9A227)
-      ..strokeWidth = 3.5
-      ..strokeCap = StrokeCap.round;
-    // Each corner is one L drawn as a single path.
-    canvas.drawPath(_corner(frame.topLeft, 1, 1, arm), gold);
-    canvas.drawPath(_corner(Offset(frame.right, frame.top), -1, 1, arm), gold);
-    canvas.drawPath(
-        _corner(Offset(frame.left, frame.bottom), 1, -1, arm), gold);
-    canvas.drawPath(
-        _corner(Offset(frame.right, frame.bottom), -1, -1, arm), gold);
-  }
-
-  Path _corner(Offset at, double dx, double dy, double arm) {
-    return Path()
-      ..moveTo(at.dx + dx * arm, at.dy)
-      ..lineTo(at.dx, at.dy)
-      ..lineTo(at.dx, at.dy + dy * arm);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// One big round shutter: a gold ring around a paper disc with the camera

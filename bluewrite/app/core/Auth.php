@@ -170,7 +170,18 @@ final class Auth
             return;
         }
         if (!Csrf::validateHeader()) {
-            Response::json(419, ['error' => 'Security token missing or expired. Reload the page and try again.']);
+            // A CODE AS WELL AS A STATUS, because the status is not reliable on
+            // every server this ships to: Apache 2.4 + mod_php rewrites an
+            // unknown 419 to 500 before the browser sees it (measured on the
+            // station: a bare http_response_code(419) answers 500, while 422
+            // passes through untouched). The client cannot tell a CSRF refusal
+            // from a genuine server fault by status alone, so it would dead-end
+            // the officer with "reload the page" on something it could have
+            // recovered from. `code` is the decision it can actually make.
+            Response::json(419, [
+                'error' => 'Security token missing or expired. Reload the page and try again.',
+                'code' => 'csrf_missing',
+            ]);
         }
     }
 }

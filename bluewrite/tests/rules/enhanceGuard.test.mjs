@@ -41,15 +41,39 @@ test('a safe police-register rewording is accepted and the layout stays the sour
   assert.equal(r.text.split('\n').length, SOURCE.split('\n').length);
 });
 
-test('an invented extra sentence line rejects the whole answer', () => {
+test('an invented extra sentence line is dropped, never passed on (2026-11-17)', () => {
+  // It used to discard the WHOLE answer, so one invented sentence cost the
+  // officer every good rewording in the same answer. The layout is the
+  // report's, so the extra line simply never reaches the paper.
   const answer = SOURCE.replace(
     'Recorded by: PO1 Ana Lim',
     'The suspect was later arrested at his residence.\nRecorded by: PO1 Ana Lim',
   );
   const r = guardEnhancedWording(answer, SOURCE);
-  assert.equal(r.rejected, true);
+  assert.equal(r.rejected, false);
   assert.equal(r.text, SOURCE);
+  assert.ok(!r.text.includes('later arrested'), 'the invented sentence reached the paper');
 });
+
+test('an answer that rejoins a hard-wrapped line is kept, not discarded (2026-11-17)', () => {
+  // The burglary report in the screenshot: the Victim line wraps onto
+  // "Degollacion", the answer rejoins it, and the count gate used to throw the
+  // whole enhancement away over that one line.
+  const src = [
+    "Victim: Quirante Construction, represented by Warehouse Manager Mark Anthony Caballero",
+    "Degollacion",
+    "Suspect: One unidentified male",
+  ].join('\n');
+  const answer = [
+    "Victim: Quirante Construction, represented by Warehouse Manager Mark Anthony Caballero Degollacion",
+    "Suspect: One unidentified male",
+  ].join('\n');
+  const r = guardEnhancedWording(answer, src);
+  assert.equal(r.rejected, false, 'the rejoined line discarded the whole answer');
+  assert.ok(r.text.includes('Caballero Degollacion'), 'the rejoined wording was lost');
+  assert.ok(!/\nDegollacion/.test(r.text), 'the wrapped fragment was printed twice');
+});
+
 
 test('a changed plate, time or number keeps the officer\'s own line', () => {
   const plate = guardEnhancedWording(SOURCE.replace('ABC 1234', 'ABC 1243'), SOURCE);

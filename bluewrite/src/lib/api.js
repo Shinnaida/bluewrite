@@ -110,6 +110,73 @@ export function getCsrfToken() {
   return csrfToken;
 }
 
+/**
+ * A CSRF refusal, whichever way it arrived.
+ *
+ * The gate answers 419 (app/core/Auth.php), but THIS APACHE BUILD CANNOT SEND
+ * ONE: mod_php's 419 is rewritten to 500 before it leaves the server (measured
+ * on the station — PHP 8.3 / Apache 2.4.68, where a bare
+ * `http_response_code(419)` answers 500 and 422 passes through untouched). So
+ * the status alone cannot be trusted, and the refusal is recognised by the
+ * machine-readable `code` the gate sends beside its sentence.
+ */
+function isCsrfRefusal(err) {
+  return err?.status === 419 || err?.code === 'csrf_missing';
+}
+
+let csrfRefresh = null;
+
+/**
+ * Re-read this browser's CSRF token, and keep it.
+ *
+ * WHY ANY RECOVERY EXISTS. The token is a module variable filled when the app
+ * loads. A long-lived tab, a session that a reload or another sign-in replaced,
+ * or a POST that fires before the first read has answered, therefore sends a
+ * stale or missing header — and the gate refuses a write the officer did ask
+ * for. Reloading the page for that throws away the screen they were working on;
+ * asking for the live token and repeating the request once is the same recovery
+ * with none of the loss.
+ *
+ * TWO ROUTES, because there are two kinds of session. /me answers for a
+ * SIGNED-IN one; a sign-in that is only half done — password proved, code still
+ * owed — holds no account, so /me answers 401, and /mfa/status is the route that
+ * speaks for it (a GET, registered before the auth gate, handing back the token
+ * for whatever session the browser really holds). Without that second ask the
+ * code screen could not recover at all: six correct digits went out with a stale
+ * header, the gate refused them, and the only thing the officer was told was to
+ * reload (owner report, 2026-11-17). With it, the same one-retry rule below
+ * covers the code they typed, a resent code, and a recovery code alike.
+ *
+ * Never throws. A refresh that cannot happen (offline, no session at all)
+ * returns null, and the caller keeps its own error — which is the honest answer:
+ * reload, and sign in again if that does not help.
+ */
+export function refreshCsrfToken() {
+  if (csrfRefresh) return csrfRefresh;
+  csrfRefresh = (async () => {
+    for (const path of ['/me', '/mfa/status']) {
+      try {
+        const res = await fetchWithTimeout(`${API}${path}`, {
+          credentials: 'same-origin',
+          headers: { [TAB_HEADER]: currentTabId() },
+        });
+        if (!res.ok) continue;
+        const data = await res.json().catch(() => null);
+        const token = typeof data?.csrf_token === 'string' ? data.csrf_token : '';
+        if (!token) continue;
+        csrfToken = token;
+        return token;
+      } catch {
+        // Offline, or this route would not answer: try the other one.
+      }
+    }
+    return null;
+  })().finally(() => {
+    csrfRefresh = null;
+  });
+  return csrfRefresh;
+}
+
 // --- Session mismatch -----------------------------------------------------
 // ONE listener for the two answers that mean "the workspace is holding an
 // account the server is no longer answering as": a 401 (this tab's account is
@@ -179,26 +246,41 @@ export async function api(path, { method = 'GET', body, keepalive = false } = {}
     headers['X-CSRF-Token'] = csrfToken;
   }
 
-  let res;
-  try {
-    res = await fetchWithTimeout(`${API}${path}`, {
-      method,
-      credentials: 'same-origin',
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-      // `keepalive` lets a request outlive the document that fired it, which is
-      // the only way a save triggered by a closing tab reaches the server — an
-      // ordinary fetch is cancelled with the page (see ReportEditor's exit
-      // flush). Browsers cap a keepalive body at 64 KB; a draft is a few KB, and
-      // an over-cap request fails the same silent, best-effort way as an offline
-      // one, with the sessionStorage mirror still holding the text.
-      keepalive,
-    });
-  } catch (err) {
-    throw offlineError(err);
+  // ONE RETRY, AND ONLY FOR A STALE TOKEN. A write the gate refused for its
+  // CSRF header is a write the officer meant; the token is re-read and the
+  // request repeated exactly once, so a second refusal (a session that is
+  // genuinely gone) still reaches the caller as the error it is.
+  for (let attempt = 0; ; attempt += 1) {
+    let res;
+    try {
+      res = await fetchWithTimeout(`${API}${path}`, {
+        method,
+        credentials: 'same-origin',
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        // `keepalive` lets a request outlive the document that fired it, which is
+        // the only way a save triggered by a closing tab reaches the server — an
+        // ordinary fetch is cancelled with the page (see ReportEditor's exit
+        // flush). Browsers cap a keepalive body at 64 KB; a draft is a few KB, and
+        // an over-cap request fails the same silent, best-effort way as an offline
+        // one, with the sessionStorage mirror still holding the text.
+        keepalive,
+      });
+    } catch (err) {
+      throw offlineError(err);
+    }
+    try {
+      return await readResponse(res);
+    } catch (err) {
+      const retryable = attempt === 0
+        && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
+        && isCsrfRefusal(err);
+      if (!retryable) throw err;
+      const token = await refreshCsrfToken();
+      if (!token) throw err;
+      headers['X-CSRF-Token'] = token;
+    }
   }
-
-  return readResponse(res);
 }
 
 /**
@@ -220,19 +302,31 @@ export async function apiUpload(path, formData, { method = 'POST' } = {}) {
   const headers = { [TAB_HEADER]: currentTabId() };
   if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
 
-  let res;
-  try {
-    res = await fetchWithTimeout(`${API}${path}`, {
-      method,
-      credentials: 'same-origin',
-      headers,
-      body: formData,
-    });
-  } catch (err) {
-    throw offlineError(err);
+  // Same one-retry rule as `api`: an upload refused only for its CSRF header is
+  // repeated once with a live token, so a replaced session costs a photo upload
+  // nothing but the round trip.
+  for (let attempt = 0; ; attempt += 1) {
+    let res;
+    try {
+      res = await fetchWithTimeout(`${API}${path}`, {
+        method,
+        credentials: 'same-origin',
+        headers,
+        body: formData,
+      });
+    } catch (err) {
+      throw offlineError(err);
+    }
+    try {
+      return await readResponse(res);
+    } catch (err) {
+      const retryable = attempt === 0 && isCsrfRefusal(err);
+      if (!retryable) throw err;
+      const token = await refreshCsrfToken();
+      if (!token) throw err;
+      headers['X-CSRF-Token'] = token;
+    }
   }
-
-  return readResponse(res);
 }
 
 /**

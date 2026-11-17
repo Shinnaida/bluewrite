@@ -13,10 +13,10 @@ import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react'
 import { apiBlobUrl } from '../../lib/api.js';
 import { recognizeBlotterImage } from '../../lib/ocrBlotter.js';
 import { recognizeWithFallback } from '../../lib/ocrOnline.js';
-import { cleanBlotterTranscription, formatBlotterCertification } from '../../lib/blotterText.js';
+import { cleanBlotterTranscription } from '../../lib/blotterText.js';
 
 const BlotterCapture = forwardRef(function BlotterCapture(
-  { onInsert = null, onClose = null, disabled = false, defaultRecordedBy = '', defaultRequestedBy = '' },
+  { onInsert = null, onClose = null, disabled = false },
   ref,
 ) {
   const inputRef = useRef(null);
@@ -24,8 +24,6 @@ const BlotterCapture = forwardRef(function BlotterCapture(
   // error (reason + Close). Nothing reaches the report before Insert: a
   // handwriting read is a proposal, never a write.
   const [phase, setPhase] = useState('idle');
-  const [recordedByName, setRecordedByName] = useState('');
-  const [requestedByName, setRequestedByName] = useState('');
   const [progress, setProgress] = useState(0);
   const [reviewText, setReviewText] = useState('');
   const [photoUrl, setPhotoUrl] = useState(null);
@@ -36,6 +34,11 @@ const BlotterCapture = forwardRef(function BlotterCapture(
   // the bytes are in flight must revoke the late URL, never draw it.
   const reviewSeq = useRef(0);
 
+  // How long the finished bar stays on the button before the review opens
+  // (see readPhoto): long enough for 100% to be seen, short enough not to feel
+  // like a wait of its own.
+  const READ_DONE_HOLD_MS = 450;
+
   const pick = () => {
     if (disabled || phase === 'reading') return;
     setError('');
@@ -44,6 +47,7 @@ const BlotterCapture = forwardRef(function BlotterCapture(
 
   const readPhoto = async (file) => {
     if (!file) return;
+    const seq = (reviewSeq.current += 1);
     // The proofing desk shows the photo beside its reading, so the officer
     // corrects against the source — the old URL is released first. Created
     // outside the updater: updaters may run twice, and a URL made inside
@@ -70,10 +74,17 @@ const BlotterCapture = forwardRef(function BlotterCapture(
         setPhase('error');
         return;
       }
+      // THE FULL BAR IS SEEN (owner report, 2026-11-17: "it didnt reach to
+      // 100"): the last progress report and the swap to the review landed in
+      // the same React frame, so the button went from ~95% straight to the
+      // review dialog and 100% never painted. Hold the finished bar for a beat
+      // — the read IS done, the officer just gets to watch it finish — unless a
+      // close or a newer photo has superseded this read meanwhile.
+      setProgress(100);
+      await new Promise((resolve) => setTimeout(resolve, READ_DONE_HOLD_MS));
+      if (reviewSeq.current !== seq) return;
       setReviewText(cleaned);
       setEngineLabel('Print');
-      setRecordedByName(String(defaultRecordedBy ?? ''));
-      setRequestedByName(String(defaultRequestedBy ?? ''));
       setPhase('review');
     } catch (err) {
       setError((err && err.message) || 'Reading the photo failed — the narrative was not changed.');
@@ -131,8 +142,6 @@ const BlotterCapture = forwardRef(function BlotterCapture(
     setReviewText(cleaned);
     const eng = String(cap.engine || '').trim();
     setEngineLabel(eng !== '' ? eng : 'Phone');
-    setRecordedByName(String(defaultRecordedBy ?? ''));
-    setRequestedByName(String(defaultRequestedBy ?? ''));
     setPhase('review');
     if (cap.photoUrl) {
       apiBlobUrl(cap.photoUrl)
@@ -163,19 +172,7 @@ const BlotterCapture = forwardRef(function BlotterCapture(
       return null;
     });
     setReviewText('');
-    setRecordedByName('');
-    setRequestedByName('');
     setError('');
-  };
-
-  // Certification format (owner request): shape the reviewed text into the
-  // finished blotter certification — RECORDED BY before REMARKS plus the
-  // closing issuance line — without touching the wording itself. Idempotent,
-  // so pressing it twice changes nothing the second time.
-  const applyCertificationFormat = () => {
-    setReviewText((prev) =>
-      formatBlotterCertification(prev, { recordedBy: recordedByName, requestedBy: requestedByName }),
-    );
   };
 
   const insert = () => {
@@ -192,13 +189,36 @@ const BlotterCapture = forwardRef(function BlotterCapture(
     <>
       <button
         type="button"
-        className="rt-tool primary"
+        className={`rt-tool primary${busy ? ' rt-tool--busy' : ''}`}
         onClick={pick}
         disabled={disabled || busy}
         title="Upload a photo of the written blotter — the text is recognized on this computer and you review it before it lands in the narrative."
-        aria-label="Upload blotter photo"
+        aria-label={busy ? `Reading the blotter photo — ${progress}%` : 'Upload blotter photo'}
       >
-        {busy ? `Reading… ${progress}%` : 'Upload'}
+        {busy ? (
+          <span className="rt-tool-busy">
+            <span className="rt-tool-busy__word">Reading…</span>
+            <span className="rt-tool-busy__pct">{progress}%</span>
+          </span>
+        ) : 'Upload'}
+        {/* THE READ'S OWN PROGRESS BAR (owner request, 2026-11-17): the press
+            becomes "Reading… n%", and a thin bar along the button's foot fills
+            with the read — the wait is watched, not guessed from a number. It
+            rides INSIDE the button, so the toolbar never shifts, and while no
+            figure has arrived yet (the online read reports none) the bar sweeps
+            instead of sitting empty at 0%. */}
+        {busy && (
+          <span
+            className={`rt-tool-meter${progress > 0 ? '' : ' rt-tool-meter--indeterminate'}`}
+            aria-hidden="true"
+          >
+            <span className="rt-tool-meter__track" />
+            <span
+              className="rt-tool-meter__fill"
+              style={progress > 0 ? { width: `${progress}%` } : undefined}
+            />
+          </span>
+        )}
       </button>
       {/*
         The input is real and out of the tab order; the button above is what
@@ -246,36 +266,6 @@ const BlotterCapture = forwardRef(function BlotterCapture(
                     aria-label="Recognized blotter text"
                     rows={10}
                   />
-                </div>
-                <div className="blotter-cert-fields">
-                  <div className="ir-field">
-                    <label htmlFor="blotter-recorded-by">Recorded by</label>
-                    <input
-                      id="blotter-recorded-by"
-                      autoComplete="off"
-                      placeholder="e.g. PSSg Caballero J."
-                      value={recordedByName}
-                      onChange={(e) => setRecordedByName(e.target.value)}
-                    />
-                  </div>
-                  <div className="ir-field">
-                    <label htmlFor="blotter-requested-by">Requested by</label>
-                    <input
-                      id="blotter-requested-by"
-                      autoComplete="off"
-                      placeholder="name of who requested"
-                      value={requestedByName}
-                      onChange={(e) => setRequestedByName(e.target.value)}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={applyCertificationFormat}
-                    disabled={reviewText.trim() === ''}
-                    title="Insert the RECORDED BY line and the closing issuance line without changing the wording."
-                  >
-                    Apply certification format
-                  </button>
                 </div>
               </>
             ) : (

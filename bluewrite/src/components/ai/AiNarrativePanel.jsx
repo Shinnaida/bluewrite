@@ -83,6 +83,7 @@ import {
   stripAddedFieldRows,
   unsupportedFieldLabels,
 } from '../../lib/reportFormat.js';
+
 import { guardEnhancedWording } from '../../lib/enhanceGuard.js';
 import { useRotatingStatus, holdVerifyPhase, VERIFY_PHRASE, THINKING_PHRASES } from '../../lib/useRotatingStatus.js';
 // Phase 6 Stage 4/5 — the language vocabulary all comes from the registry
@@ -1541,7 +1542,13 @@ export default function AiNarrativePanel({
       }
       // A label the source never carried, or one the answer dropped, makes the
       // answer a different document — discard it rather than present it.
-      const labelAudit = unsupportedFieldLabels(enhanced, sourceText);
+      // Compare the DOCUMENT'S OWN parts only (necessaryOnly): the per-type
+      // detail rows on the page (Weapon Used, Manner of Taking, Estimated Value
+      // …) are the fields that only hindered — a copy-edit wording or folding
+      // one of them used to discard the whole answer. They stay on the page;
+      // they just no longer decide whether the wording is kept.
+      const labelAudit = unsupportedFieldLabels(enhanced, sourceText, { necessaryOnly: true });
+
       if (labelAudit.invented.length > 0 || labelAudit.missing.length > 0) {
         throw new Error('The enhanced wording did not keep the report\'s own field labels, so it was discarded. Your report is unchanged.');
       }
@@ -2072,6 +2079,13 @@ export default function AiNarrativePanel({
       return stored;
     }
   })();
+  // Only the two legally required closing lines keep a warning (owner
+  // request, 2026-11-17): a certification with no "Recorded by" or no
+  // "Requested by" must not go out, so those stay as red Missing-line cards
+  // while every other gap advisory was removed from this panel.
+  const closingGaps = gapList.filter(
+    (g) => g?.description === RECORDED_BY_GAP || g?.description === REQUESTED_BY_GAP,
+  );
   // THE PROPOSAL THE PAGE DRAWS, read from the live draft (see `sheeted`). The
   // shape is ReportSheetBody's own: `scope: 'generate'` overlays all three parts
   // of a draft, `scope: 'tighten'` overlays the narrative alone and leaves the
@@ -2697,7 +2711,9 @@ export default function AiNarrativePanel({
   };
   const satisfiedDiscard = () => {
     if (!confirmDiscardDraft()) return;
-    onRestoreProvisional?.();
+    // `keepEditable`: the restored words come back typable, not on the clean
+    // View (owner request, 2026-11-17).
+    onRestoreProvisional?.({ keepEditable: true });
     setProvisionalState('idle');
     setSatisfiedSaved(false);
     setSatisfiedLeaving(false);
@@ -3713,7 +3729,7 @@ export default function AiNarrativePanel({
                           ) : (
                             <button type="button" onClick={() => setShowFeedback((v) => !v)}>Regenerate…</button>
                           )}
-                          {sheetProvisional && (<button type="button" onClick={() => { if (!confirmDiscardDraft()) return; onRestoreProvisional?.(); setProvisionalState('idle'); setDraft(null); setMode('ready'); setCompletionFills([]); closePanel(); }} title="Removes the draft from the paper and brings back your words.">Discard draft</button>)}
+                          {sheetProvisional && (<button type="button" onClick={() => { if (!confirmDiscardDraft()) return; onRestoreProvisional?.({ keepEditable: true }); setProvisionalState('idle'); setDraft(null); setMode('ready'); setCompletionFills([]); closePanel(); }} title="Removes the draft from the paper and brings back your words.">Discard draft</button>)}
                           <button type="button" onClick={closePanel}>Close</button>
                         </>
                       )}
@@ -3779,7 +3795,7 @@ export default function AiNarrativePanel({
                         )}
                       </div>
                     )}
-                    {!revealing && (draft.suggestions.length > 0 || gapList.length > 0 || (draft.addedContentWarnings?.length ?? 0) > 0 || (draft.redundancy?.length ?? 0) > 0 || (draft.narrativeRepetition?.length ?? 0) > 0) && (
+                    {!revealing && (draft.suggestions.length > 0 || closingGaps.length > 0 || (draft.addedContentWarnings?.length ?? 0) > 0 || (draft.redundancy?.length ?? 0) > 0 || (draft.narrativeRepetition?.length ?? 0) > 0) && (
                       <div className="ai-advice ai-advice-fade">
                         {draft.suggestions.length > 0 && (
                           <>
@@ -3794,35 +3810,35 @@ export default function AiNarrativePanel({
                             </ul>
                           </>
                         )}
-                        {gapList.length > 0 && (
-                          <section className="gap-panel" aria-label="Possible gaps">
+                        {/* The closing lines and nothing else: red, tappable,
+                            and the only gap advisory left on the panel. A
+                            tap stamps the line (with its ____ blank) onto the
+                            paper; the input under it types the name in. */}
+                        {closingGaps.length > 0 && (
+                          <section className="gap-panel" aria-label="Missing closing line">
                             <div className="gap-panel__head">
                               <div className="gap-panel__titles">
-                                <h4>Possible gaps <span className="gap-panel__tag">advisory</span></h4>
-                                <p className="gap-panel__hint">Tap a card to stamp its line onto the paper — blanks (____) are yours to fill.</p>
+                                <h4>Missing closing line</h4>
                               </div>
-                              <span className="gap-panel__count" title={`${gapList.length} to review`} aria-label={`${gapList.length} gaps to review`}>{gapList.length}</span>
                             </div>
                             {gapNote && (<p className="gap-note-ok" role="status"><span aria-hidden="true">✓</span> {gapNote}</p>)}
                             <ul className="gap-list">
-                              {gapList.map((g, i) => {
-                                const tone = g.severity === 'error' ? 'error' : g.severity === 'warning' ? 'warning' : 'info';
-                                const sev = tone === 'error' ? 'Missing line' : tone === 'warning' ? 'Worth a look' : 'Note';
-                                const closingKind = g.description === RECORDED_BY_GAP ? 'recorded' : g.description === REQUESTED_BY_GAP ? 'requested' : null;
+                              {closingGaps.map((g, i) => {
+                                const closingKind = g.description === RECORDED_BY_GAP ? 'recorded' : 'requested';
                                 const parts = splitGapText(g.description);
-                                const stamped = closingKind && gapStamped[closingKind];
+                                const stamped = gapStamped[closingKind];
                                 return (
                                   <li key={i}>
                                     <button
                                       type="button"
-                                      className={`gap-link gap-link--${tone}${stamped ? ' is-stamped' : ''}`}
+                                      className={`gap-link gap-link--error${stamped ? ' is-stamped' : ''}`}
                                       onClick={() => applyGapOnPaper(g)}
                                       title="Put this on the paper for fast editing"
                                     >
                                       <span className="gap-link__body">
                                         <span className="gap-link__top">
-                                          <strong className="gap-link__title">{parts.title ?? sev}</strong>
-                                          <span className={`gap-link__sev gap-link__sev--${tone}`}>{sev}</span>
+                                          <strong className="gap-link__title">{parts.title ?? 'Missing line'}</strong>
+                                          <span className="gap-link__sev gap-link__sev--error">Missing line</span>
                                         </span>
                                         <span className="gap-link__text">{parts.detail}</span>
                                         {parts.example && (
@@ -3833,7 +3849,7 @@ export default function AiNarrativePanel({
                                         </span>
                                       </span>
                                     </button>
-                                    {closingKind && gapStamped[closingKind] && (
+                                    {stamped && (
                                       <label className="gap-name-row">
                                         <span className="gap-name-label">{closingKind === 'recorded' ? 'Officer name' : 'Requestor name'}</span>
                                         <input

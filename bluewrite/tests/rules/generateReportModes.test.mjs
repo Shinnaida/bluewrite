@@ -485,7 +485,44 @@ test('a different incident receives its own title from its own source', () => {
   assert.ok(!html.includes('RECKLESS IMPRUDENCE'), 'the reference title leaked into another report');
 });
 
+test('a money row is not an incident title, and a slash compound is (2026-11-17)', () => {
+  // The burglary report: the stolen-items list ends in a TOTAL row, and the
+  // page was printed with "TOTAL, - - - - 460,120.00" as its title.
+  assert.equal(detectIncidentTitle('TOTAL, - - - - 460,120.00'), '');
+  assert.equal(detectIncidentTitle('TOTAL AMOUNT - 460,120.00'), '');
+  const src = [
+    '"BURGLARY/THEFT"',
+    '',
+    'Place: Quirante Construction Yard Warehouse, Soton, Pangdan, City of Naga, Cebu',
+    'Stolen Items:',
+    '1.) 128m of THHN wire 200mm -284, 370.00',
+    'TOTAL, - - - - 460,120.00',
+  ].join(LF);
+  assert.equal(detectIncidentTitle(src), 'BURGLARY/THEFT', 'the charge did not win over the money row');
+});
+
+test('a section heading is never the incident title (2026-11-17)', () => {
+  // The generated/arranged page carries the paper's own blocks, and the
+  // finished sheet was quoting "ACTION TAKEN /" as the report's title once the
+  // reveal ended — the page then read as the arrangement of the record instead
+  // of the report the officer had watched arrive.
+  const src = [
+    'Burglary/Theft',
+    '',
+    'On the afternoon of July 31, 2026, the warehouse manager noticed a significant shortage of the aforementioned electrical wires.',
+    '',
+    'ACTION TAKEN /',
+    '',
+    'Investigation is ongoing to identify the unidentified male.',
+  ].join(LF);
+  assert.equal(detectIncidentTitle(src), 'Burglary/Theft', 'the section heading won over the charge');
+  assert.equal(detectIncidentTitle('ACTION TAKEN /' + LF + LF + 'Investigation is ongoing.'), '');
+  assert.equal(detectIncidentTitle('NOTABLE FINDINGS' + LF + LF + '1. Wires were cut.'), '');
+  assert.equal(detectIncidentTitle('STATUS: FOR FILING'), '');
+});
+
 test('vehicle rows, back-rider lines, times and certifications are not titles', () => {
+
   assert.equal(detectIncidentTitle('V1 YAMAHA NMAX WITH PLATE 0718SR.'), '');
   assert.equal(detectIncidentTitle('BACKRIDER VILMA SANORIA CANQUE'), '');
   assert.equal(detectIncidentTitle('MORE OR LESS 8:40 AM'), '');

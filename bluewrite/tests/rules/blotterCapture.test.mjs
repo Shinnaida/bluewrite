@@ -242,6 +242,16 @@ test('a blotter photo can be dropped onto the narrative', () => {
   assert.match(SRC, /onDropPhoto=\{\(file\) => blotterRef\.current\?\.dropFile\?\.\(file\)\}/, 'a drop never reaches the capture');
 });
 
+test('a finished read shows 100% before the review opens', () => {
+  // Owner report (2026-11-17: "it didnt reach to 100"): the final progress
+  // report and the swap to the review dialog landed in the same React frame, so
+  // the button jumped from ~95% straight to the review and 100% never painted.
+  // The finished bar is held for a beat first — and the hold is stranded by a
+  // close or a newer photo, so no late review can open over a closed dialog.
+  assert.match(COMP, /setProgress\(100\);\s*\n\s*await new Promise\(/, 'the finished bar never paints');
+  assert.match(COMP, /if \(reviewSeq\.current !== seq\) return;/, 'a closed dialog still opens the late review');
+});
+
 test('the online reader is tried first, the local engines carry every miss', () => {
   // Owner request: Gemini vision reads first on the station's own key, then
   // imagetotext.info when keyed; anything short of usable text falls back to
@@ -255,10 +265,21 @@ test('the online reader is tried first, the local engines carry every miss', () 
   assert.match(ONLINE, /catch \{\s*\n\s*return null;\s*\n\s*\}/, 'an unreachable online reader fails the capture instead of falling back');
   assert.match(
     ONLINE,
-    /const online = await readOnlinePhoto\(file\);\s*\n\s*if \(online !== null\) return online;/,
+    /const online = await readOnlinePhoto\(file, report\);\s*\n\s*if \(online !== null\) \{/,
     'the online read is not tried before the local engines',
   );
-  assert.match(ONLINE, /await localRecognize\(file, onProgress\)/, 'a local fallback never runs');
+  assert.match(ONLINE, /await localRecognize\(file, \(m\) => \{/, 'a local fallback never runs');
+  // PROGRESS (owner report, 2026-11-17: "its always at 0 until it finishes").
+  // The percent was reported by the local engines only, and they run only on an
+  // online miss — so a normal read showed 0 and then done. The file read is now
+  // measured, the reader's own think-time is a capped estimate, and the number
+  // is monotonic across both readers: it can never rewind, and only the text
+  // actually arriving reports 100.
+  assert.match(ONLINE, /reader\.onprogress/, 'the photo read reports no progress');
+  assert.match(ONLINE, /setInterval\(/, 'the reader wait reports no progress');
+  assert.match(ONLINE, /clearInterval\(ticker\)/, 'the wait keeps ticking after the answer');
+  assert.match(ONLINE, /const WAIT_MAX = 95;/, 'the estimate may claim the read is finished before it is');
+  assert.match(ONLINE, /if \(next <= shown\) return;/, 'the reading percent can run backwards');
   // The engine name rides back from the server, so the receipt can say
   // which reader actually read — never invented client-side.
   assert.match(ONLINE, /out\.engine/, 'the engine name never reaches the client');
@@ -378,18 +399,17 @@ test('certification format degrades gracefully without REMARKS or names', () => 
   );
 });
 
-test('the review dialog offers the certification format, prefilled from the officer', () => {
-  // One explicit press shapes the reviewed text; nothing auto-formats.
-  assert.match(COMP, /formatBlotterCertification/, 'the dialog never formats the reviewed text');
-  assert.match(COMP, /Apply certification format/, 'the format press is missing from the review');
-  assert.match(COMP, /blotter-recorded-by/, 'the recorded-by field is missing');
-  assert.match(COMP, /blotter-requested-by/, 'the requested-by field is missing');
-  assert.match(COMP, /defaultRecordedBy/, 'the officer name never prefills the recorded-by field');
-  // Insert still carries only the reviewed text — formatting is a press, not a write.
+test('the review dialog carries no certification format (owner request, 2026-11-17)', () => {
+  // The Recorded by / Requested by fields and the "Apply certification format"
+  // press came off the review by request: the dialog is a reading gate again —
+  // photo beside the reading, correct it, Insert the reviewed text.
+  assert.doesNotMatch(COMP, /Apply certification format/, 'the format press is back on the review');
+  assert.doesNotMatch(COMP, /formatBlotterCertification/, 'the dialog still formats the reviewed text');
+  assert.doesNotMatch(COMP, /blotter-recorded-by/, 'the recorded-by field is back on the review');
+  assert.doesNotMatch(COMP, /blotter-requested-by/, 'the requested-by field is back on the review');
+  assert.doesNotMatch(COMP, /defaultRecordedBy/, 'the dialog asks for an officer name again');
+  // Insert still carries the reviewed text, and nothing else.
   assert.match(COMP, /onInsert/, 'Insert is gone from the review');
-  // The form prefills recorded-by from the logged-in officer.
-  const SRC = readFileSync(new URL('../../src/pages/Reports.jsx', import.meta.url), 'utf8');
-  assert.match(SRC, /defaultRecordedBy/, 'the form never hands the officer name to the capture');
 });
 
 test('certification format adds recorded-by and the issuance line, wording untouched', () => {
@@ -445,18 +465,4 @@ test('certification format degrades gracefully without REMARKS or names', () => 
     formatBlotterCertification('LINE ONE   ' + CR + NL + CR + NL + CR + NL + 'LINE TWO  ', {}),
     'LINE ONE' + NL + NL + 'LINE TWO' + NL + NL + 'RECORDED BY :' + NL + NL + 'This certification is issued upon the request of "name of who requested" for what ever legal purposes it may serve.',
   );
-});
-
-test('the review dialog offers the certification format, prefilled from the officer', () => {
-  // One explicit press shapes the reviewed text; nothing auto-formats.
-  assert.match(COMP, /formatBlotterCertification/, 'the dialog never formats the reviewed text');
-  assert.match(COMP, /Apply certification format/, 'the format press is missing from the review');
-  assert.match(COMP, /blotter-recorded-by/, 'the recorded-by field is missing');
-  assert.match(COMP, /blotter-requested-by/, 'the requested-by field is missing');
-  assert.match(COMP, /defaultRecordedBy/, 'the officer name never prefills the recorded-by field');
-  // Insert still carries only the reviewed text — formatting is a press, not a write.
-  assert.match(COMP, /onInsert/, 'Insert is gone from the review');
-  // The form prefills recorded-by from the logged-in officer.
-  const SRC = readFileSync(new URL('../../src/pages/Reports.jsx', import.meta.url), 'utf8');
-  assert.match(SRC, /defaultRecordedBy/, 'the form never hands the officer name to the capture');
 });

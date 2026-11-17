@@ -13,6 +13,21 @@ import 'blotter_text.dart';
 /// Mirrors the web's src/lib/classifyFill.js empty-only rules for a NEW
 /// draft (every field starts empty on the phone).
 
+/// One response map, whatever shape the server answered in.
+///
+/// These used to be `as Map?` casts. A group key that comes back as a LIST —
+/// or any field the model answered differently — threw inside the cast and
+/// took the whole filing down with it (owner report, 2026-11-17:
+/// "type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>?'").
+/// A read is best-effort, so a shape we did not expect contributes nothing
+/// instead of failing the draft.
+Map<String, dynamic> _mapOf(dynamic value) {
+  if (value is Map) {
+    return value.map((k, v) => MapEntry(k.toString(), v));
+  }
+  return const <String, dynamic>{};
+}
+
 String? _closestType(String candidate, List<String> types) {
   final want = candidate.trim().toLowerCase();
   if (want.isEmpty || types.isEmpty) return null;
@@ -34,7 +49,7 @@ Map<String, dynamic> blotterFilingFields({
   required String fallbackType,
   required String typedLocation,
 }) {
-  final fields = (read?['fields'] as Map?) ?? const {};
+  final fields = _mapOf(read?['fields']);
   String str(dynamic v) => (v ?? '').toString().trim();
   final filled = <String>[];
 
@@ -76,13 +91,13 @@ Map<String, dynamic> blotterFilingFields({
   // Type-specific scalars/groups the details read returned (second half of
   // the web's readAccountForForm). Passed through — the portal validates.
   final ts = <String, dynamic>{};
-  final details = (read?['details'] as Map?) ?? const {};
-  final dFields = (details['fields'] as Map?) ?? const {};
+  final details = _mapOf(read?['details']);
+  final dFields = _mapOf(details['fields']);
   for (final e in dFields.entries) {
     final v = (e.value ?? '').toString().trim();
     if (v.isNotEmpty) ts[e.key.toString()] = v;
   }
-  final dGroups = (details['groups'] as Map?) ?? const {};
+  final dGroups = _mapOf(details['groups']);
   for (final e in dGroups.entries) {
     if (e.value is List && (e.value as List).isNotEmpty)
       ts[e.key.toString()] = e.value;

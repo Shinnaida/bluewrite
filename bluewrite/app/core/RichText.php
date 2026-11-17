@@ -15,8 +15,22 @@ namespace App\Core;
  */
 final class RichText
 {
-    /** Tags the record may keep. Attributes never survive (see sanitize()). */
-    private const ALLOWED = ['b', 'i', 'u', 'strong', 'em', 'ul', 'ol', 'li', 'p', 'br'];
+    /** Tags the record may keep. Attributes never survive (see sanitize()),
+     *  except the two formatting utilities in PROSE_CLASS. */
+    private const ALLOWED = ['b', 'i', 'u', 'strong', 'em', 'ul', 'ol', 'li', 'span', 'p', 'br'];
+
+    /** Font size and line spacing (owner request, 2026-11-17) — the same
+     *  class-based utilities as the letterhead ink, so the record carries no
+     *  arbitrary CSS. Mirrors PROSE_CLASS in src/lib/richText.js: a value
+     *  here has a rule in styles.css, and nothing else survives. */
+    private const PROSE_CLASS =
+        '/^lh-(?:s-(?:10|11|12|13|14|15|16|18|20|22)|lh-(?:100|115|150|200|250|300))$/';
+
+    /** The strip's free-entry size and spacing (owner request, 2026-11-17):
+     *  any 8–72 px and 1.0–3.0, carried as two STRICT inline properties and
+     *  nothing else. Mirrors PROSE_SIZE / PROSE_SPACING in src/lib/richText.js. */
+    private const PROSE_SIZE = '/^(?:[89]|[1-6]\d|7[0-2])(?:\.\d)?px$/i';
+    private const PROSE_SPACING = '/^(?:[12](?:\.\d{1,2})?|3(?:\.0{1,2})?)$/';
 
     /**
      * Allowlisted HTML. Unknown tags are unwrapped (their words kept),
@@ -52,7 +66,44 @@ final class RichText
                     $out .= '<br>';
                     continue;
                 }
-                $out .= str_starts_with($token, '</') ? "</{$name}>" : "<{$name}>";
+                if (str_starts_with($token, '</')) {
+                    $out .= "</{$name}>";
+                    continue;
+                }
+                $attrs = '';
+                if (preg_match('/\\bclass\\s*=\\s*("([^"]*)"|\'([^\']*)\'|([^\\s>]+))/i', $token, $cm) === 1) {
+                    $raw = trim((string) ($cm[2] ?? ($cm[3] ?? ($cm[4] ?? ''))));
+                    $kept = [];
+                    foreach (preg_split('/\\s+/', $raw) ?: [] as $one) {
+                        if ($one !== '' && preg_match(self::PROSE_CLASS, $one) === 1 && !in_array($one, $kept, true)) {
+                            $kept[] = $one;
+                        }
+                    }
+                    if ($kept !== []) {
+                        $attrs .= ' class="' . implode(' ', $kept) . '"';
+                    }
+                }
+                $style = '';
+                if (preg_match('/\\bstyle\\s*=\\s*("([^"]*)"|\'([^\']*)\'|([^\\s>]+))/i', $token, $sm) === 1) {
+                    $raw = (string) ($sm[2] ?? ($sm[3] ?? ($sm[4] ?? '')));
+                    $keptStyle = [];
+                    if (preg_match('/\\bfont-size\\s*:\s*([^;]+)/i', $raw, $zm) === 1) {
+                        $v = strtolower((string) preg_replace('/\\s+/', '', trim($zm[1])));
+                        if (preg_match(self::PROSE_SIZE, $v) === 1) {
+                            $keptStyle[] = 'font-size:' . $v;
+                        }
+                    }
+                    if (preg_match('/\\bline-height\\s*:\s*([^;]+)/i', $raw, $lm) === 1) {
+                        $v = (string) preg_replace('/\\s+/', '', trim($lm[1]));
+                        if (preg_match(self::PROSE_SPACING, $v) === 1) {
+                            $keptStyle[] = 'line-height:' . $v;
+                        }
+                    }
+                    if ($keptStyle !== []) {
+                        $style = ' style="' . implode(';', $keptStyle) . '"';
+                    }
+                }
+                $out .= "<{$name}{$attrs}{$style}>";
             }
         }
         $out .= self::escapeText(substr($src, $offset));

@@ -540,18 +540,35 @@ function Get-LanIp {
 function Sync-BaseUrl {
   $config = Join-Path $root 'config/config.php'
   if (-not (Test-Path $config)) { return }
+  # A config.php that is not itself readable is not something to rewrite. A
+  # healthy one is about 2 KB; anything in megabytes is already damaged, and
+  # writing over it again is how damage becomes loss. (It happened — see the
+  # UTF8 note below — so the guard is here now.)
+  $size = (Get-Item $config).Length
+  if ($size -gt 1048576) {
+    Write-Note ('lan  config.php is {0} bytes - NOT rewriting it (a healthy one is ~2 KB). Restore it from a backup or docs\DEVELOPMENT_STARTUP.md.' -f $size)
+    return
+  }
   $port = $ApiPort[0]
   $ip = Get-LanIp
   if (-not $ip) { return }
   $want = ('http://{0}:{1}' -f $ip, $port)
-  try { $text = Get-Content -Path $config -Raw -ErrorAction Stop }
+  # UTF8 ON BOTH SIDES, for the same reason Write-ApacheConfig says so: PowerShell
+  # 5.1's default for Get-Content is the ANSI codepage, so reading this UTF-8 file
+  # that way and writing it back as UTF-8 re-encodes every non-ASCII character —
+  # a round trip that GROWS the file. Run on each IP change, that turned this 2 KB
+  # config into 200 MB in a day until PHP could no longer parse it and the whole
+  # API answered nothing ("Can't reach the BlueWrite server" in the portal). The
+  # explicit read and the explicit write below are the fix.
+  $utf8 = New-Object System.Text.UTF8Encoding($false)
+  try { $text = Get-Content -Path $config -Raw -Encoding UTF8 -ErrorAction Stop }
   catch { return }
   if ($text -match "'base_url'\s*=>\s*'([^']*)'") {
     $have = $Matches[1]
     if ($have -ne $want) {
       $updated = $text -replace "'base_url'\s*=>\s*'[^']*'", ("'base_url' => '{0}'" -f $want)
       try {
-        [System.IO.File]::WriteAllText($config, $updated)
+        [System.IO.File]::WriteAllText($config, $updated, $utf8)
         Write-Note ('lan  base_url {0} -> {1} (server IP changed)' -f $have, $want)
       } catch {}
     }

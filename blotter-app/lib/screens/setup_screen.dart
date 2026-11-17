@@ -66,6 +66,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
 
   Future<void> _connected(String base) async {
     await _store.saveBaseUrl(base);
+    await ServerDiscovery.rememberStation(base);
     if (!mounted) return;
     widget.onConnected(base);
   }

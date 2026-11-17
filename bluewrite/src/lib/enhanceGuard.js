@@ -7,9 +7,13 @@
 // on the client, after the answer arrives and before anything reaches the paper.
 //
 // How it works, line by line:
-//   1. The answer must have the SAME number of non-blank lines as the source.
-//      Anything else means the model added, merged, split or dropped a part, so
-//      the whole answer is discarded (`rejected`).
+//   1. The answer's lines are PAIRED with the source's (by field label first,
+//      then by wording overlap). Equal counts pair line for line; a different
+//      count is reconciled rather than thrown away (owner request, 2026-11-17):
+//      a source line with no counterpart keeps the officer's own words, an
+//      answer line with none is an addition that is dropped, and only an answer
+//      that matches nothing at all is discarded (`rejected`).
+
 //   2. The layout always comes from the SOURCE (its blank lines, its order).
 //   3. For each line, the model's version is accepted only if it changes the
 //      WORDING and nothing else. Otherwise the officer's own line is kept.
@@ -141,9 +145,77 @@ function verdict(sourceLine, modelLine, ctx) {
   return null;
 }
 
+// ---- pairing the answer to the report -------------------------------------
+// A line of the answer belongs to a line of the report when it opens with the
+// same field label, or when their wording overlaps enough to be the same
+// sentence. Labels decide first: "Recorded by: …" always pairs with the
+// report's own recorded-by line, whatever the answer did to its wording.
+function linePairScore(sourceLine, modelLine) {
+  const a = labelOf(sourceLine);
+  const b = labelOf(modelLine);
+  if (a !== null && a === b) return 30;
+  const sourceWords = wordsOf(sourceLine);
+  const modelWords = new Set(wordsOf(modelLine));
+  if (sourceWords.length === 0 || modelWords.size === 0) return 0;
+  const common = sourceWords.filter((word) => modelWords.has(word)).length;
+  const ratio = common / Math.max(sourceWords.length, modelWords.size);
+  if (ratio >= 0.6) return 20;
+  if (ratio >= 0.35) return 10;
+  return 0;
+}
+
+// Best-total pairing, as an ordinary alignment table: every source line takes
+// at most one answer line and the order is kept, so the answer is read as the
+// report with edits rather than as a new document.
+function alignAnswerLines(sourceLines, modelLines) {
+  const n = sourceLines.length;
+  const m = modelLines.length;
+  const score = (i, j) => linePairScore(sourceLines[i], modelLines[j]);
+  const table = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+  for (let i = n - 1; i >= 0; i -= 1) {
+    for (let j = m - 1; j >= 0; j -= 1) {
+      const s = score(i, j);
+      table[i][j] = Math.max(
+        table[i + 1][j],
+        table[i][j + 1],
+        s > 0 ? s + table[i + 1][j + 1] : 0,
+      );
+    }
+  }
+  const pairs = new Map();
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    const s = score(i, j);
+    if (s > 0 && table[i][j] === s + table[i + 1][j + 1]) {
+      pairs.set(i, j);
+      i += 1;
+      j += 1;
+    } else if (table[i][j] === table[i + 1][j]) {
+      i += 1;
+    } else {
+      j += 1;
+    }
+  }
+  return pairs;
+}
+
+// A source line whose every word already sits inside ONE answer line was
+// MERGED into it, not dropped — a hard-wrapped name the answer rejoined.
+// Keeping such a line would print the fragment twice, so it steps aside.
+function mergedIntoOneLine(sourceLine, modelLines) {
+  const words = wordsOf(sourceLine);
+  if (words.length === 0) return true;
+  return modelLines.some((candidate) => {
+    const asked = new Set(wordsOf(candidate));
+    return words.every((word) => asked.has(word));
+  });
+}
+
 /**
  * @param {string} enhancedText the model's answer
  * @param {string} sourceText the arranged report the model was asked to copy-edit
+
  * @returns {{
  *   text: string,            // the report to show: source layout + safe wording only
  *   rejected: boolean,       // true when the answer's layout differed (text === source)
@@ -162,26 +234,60 @@ export function guardEnhancedWording(enhancedText, sourceText) {
   if (sourceRaw === '') {
     return { text: '', rejected: true, reason: 'empty source', changedLines: 0, keptLines: [] };
   }
-  if (modelNonBlank.length !== srcIdx.length) {
+  if (modelNonBlank.length === 0) {
     return {
       text: sourceRaw,
       rejected: true,
-      reason: `the answer had ${modelNonBlank.length} lines where the report has ${srcIdx.length}`,
+      reason: 'the answer carried no text',
       changedLines: 0,
       keptLines: [],
     };
   }
 
+
   const ctx = {
     sourceFlat: flat(sourceRaw.replace(/₱/g, 'PHP ')),
     sourceWords: new Set(wordsOf(sourceRaw)),
   };
+  const sourceRows = srcIdx.map((lineNo) => srcLines[lineNo].trim());
+  const pairs = new Map();
+  if (modelNonBlank.length === sourceRows.length) {
+    // The prompt's own contract: same lines, same order, wording only.
+    sourceRows.forEach((_, k) => pairs.set(k, k));
+  } else {
+    for (const [k, j] of alignAnswerLines(sourceRows, modelNonBlank)) pairs.set(k, j);
+  }
+  if (sourceRows.length > 1 && pairs.size === 0) {
+    return {
+      text: sourceRaw,
+      rejected: true,
+      reason: 'the answer did not match the report\'s own lines',
+      changedLines: 0,
+      keptLines: [],
+    };
+  }
+
   const out = srcLines.slice();
+  const dropped = new Set();
   const keptLines = [];
   let changedLines = 0;
+
   srcIdx.forEach((lineNo, k) => {
     const sourceLine = srcLines[lineNo];
-    const modelLine = modelNonBlank[k];
+    const paired = pairs.get(k);
+    if (paired === undefined) {
+      // No counterpart: the officer's line stands, unless the answer absorbed
+      // it into a line of its own. A LABEL line never steps aside — the
+      // layout is the officer's even when the answer folded its value in.
+      if (labelOf(sourceLine) === null && mergedIntoOneLine(sourceLine, modelNonBlank)) {
+        dropped.add(lineNo);
+        return;
+      }
+
+      keptLines.push({ index: lineNo, reason: 'unmatched' });
+      return;
+    }
+    const modelLine = modelNonBlank[paired];
     if (modelLine.trim() === sourceLine.trim()) return;
     const why = verdict(sourceLine.trim(), modelLine, ctx);
     if (why) {
@@ -193,5 +299,8 @@ export function guardEnhancedWording(enhancedText, sourceText) {
     out[lineNo] = indent + modelLine;
     changedLines += 1;
   });
-  return { text: out.join('\n'), rejected: false, reason: null, changedLines, keptLines };
+  const text = out.filter((_, index) => !dropped.has(index)).join('\n');
+  return { text, rejected: false, reason: null, changedLines, keptLines };
+
+
 }

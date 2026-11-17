@@ -79,21 +79,76 @@ function personInitials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 /**
- * Status pill baked into the card artwork (bottom-right, on the card), so it
+ * Presence pill baked into the card artwork (bottom-right, on the card), so it
  * swings, flips and drags WITH the badge instead of floating over it.
+ *
+ * Owner request, 2026-11-17: the photo front said only "Active" — it named the
+ * state but not the person, and the face is the one side with no name printed
+ * on it. So the pill now carries the DOT (green active, amber just-away, grey
+ * offline) and, when it is given a name, the officer's NAME beside it. The
+ * word is gone: the dot wears the state, the name says who.
+ *
+ * `name` is omitted on faces that already print the name (the initials
+ * fallback and the back), which then get a dot-only pill.
  */
-function drawStatusPill(ctx, W, H, presence) {
+function drawStatusPill(ctx, W, H, presence, name = '') {
   const dot = presence.state === 'active' ? '#22c55e' : presence.state === 'away' ? '#f59e0b' : '#94a3b8';
+  const label = String(name ?? '').trim();
   ctx.save();
-  ctx.font = '800 46px system-ui, sans-serif';
-  const tw = ctx.measureText(presence.label).width;
-  const dotR = 20;
-  const padX = 34;
-  const gap = 18;
-  const pillW = padX * 2 + dotR * 2 + gap + tw;
-  const pillH = 104;
-  const x = W - 44 - pillW;
-  const y = H - 44 - pillH;
+  // The badge is drawn at 1024px and shown at ~200px, so every art px is worth
+  // about a fifth of a screen px: a 46px name landed at ~9px on the card and
+  // could not be read. The name now starts at 88px (~17px on screen) and WRAPS
+  // onto a second line instead of shrinking away — a two-line plate reads far
+  // bigger than a one-line plate squeezed to fit, and no name is clipped.
+  const dotR = label === '' ? 28 : 24;
+  const padX = label === '' ? 30 : 36;
+  const gap = 20;
+  const maxW = W - 36 * 2;
+  const maxTextW = maxW - (padX * 2 + dotR * 2 + gap);
+  const measure = (text, px) => {
+    ctx.font = `800 ${px}px system-ui, sans-serif`;
+    return ctx.measureText(text).width;
+  };
+  const wrapAt = (text, px) => {
+    const lines = [];
+    let line = '';
+    String(text).split(/\s+/).filter(Boolean).forEach((word) => {
+      const next = line === '' ? word : `${line} ${word}`;
+      if (line === '' || measure(next, px) <= maxTextW) {
+        line = next;
+      } else {
+        lines.push(line);
+        line = word;
+      }
+    });
+    if (line !== '') lines.push(line);
+    return lines;
+  };
+  let fontSize = 0;
+  let lines = [];
+  if (label !== '') {
+    for (let px = 88; px >= 56; px -= 2) {
+      const candidate = wrapAt(label, px);
+      if (candidate.length <= 2 && candidate.every((l) => measure(l, px) <= maxTextW)) {
+        fontSize = px;
+        lines = candidate;
+        break;
+      }
+      if (px === 56) {
+        fontSize = 56;
+        lines = wrapAt(label, 56).slice(0, 2);
+      }
+    }
+  }
+  const lineStep = Math.round(fontSize * 1.16);
+  const textH = lines.length === 0 ? 0 : lines.length * lineStep - (lineStep - fontSize);
+  const textW = lines.reduce((m, l) => Math.max(m, measure(l, fontSize)), 0);
+  const pillH = label === '' ? 92 : Math.max(112, textH + 44);
+  const pillW = label === ''
+    ? padX * 2 + dotR * 2
+    : Math.min(maxW, padX * 2 + dotR * 2 + gap + textW);
+  const x = W - 36 - pillW;
+  const y = H - 36 - pillH;
   ctx.shadowColor = 'rgba(11, 37, 69, 0.35)';
   ctx.shadowBlur = 24;
   ctx.shadowOffsetY = 8;
@@ -109,10 +164,22 @@ function drawStatusPill(ctx, W, H, presence) {
   ctx.beginPath();
   ctx.arc(x + padX + dotR, y + pillH / 2, dotR, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#0b2545';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(presence.label, x + padX + dotR * 2 + gap, y + pillH / 2 + 2);
+  if (label !== '') {
+    const textX = x + padX + dotR * 2 + gap;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(textX, y, Math.max(0, pillW - (padX * 2 + dotR * 2 + gap)), pillH);
+    ctx.clip();
+    ctx.fillStyle = '#0b2545';
+    ctx.font = `800 ${fontSize}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    const startY = y + (pillH - textH) / 2;
+    lines.forEach((line, i) => {
+      ctx.fillText(line, textX, startY + i * lineStep);
+    });
+    ctx.restore();
+  }
   ctx.restore();
 }
 /** Photo front with the status pill printed on it: cover-fit portrait, pill
@@ -132,7 +199,7 @@ function drawStatusPill(ctx, W, H, presence) {
  * fallback stays PNG (see personIdFallbackFront) — flat ink and small text are what
  * PNG is actually good at.
  */
-function paintIdPhotoFront(img, presence) {
+function paintIdPhotoFront(img, presence, name = '') {
   try {
     const W = 1024;
     const H = 1440;
@@ -147,7 +214,7 @@ function paintIdPhotoFront(img, presence) {
     const w = img.width * s;
     const h = img.height * s;
     ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
-    drawStatusPill(ctx, W, H, presence);
+    drawStatusPill(ctx, W, H, presence, name);
     return canvas.toDataURL('image/jpeg', 0.92);
   } catch {
     return undefined;
@@ -1863,7 +1930,7 @@ export default function Dashboard({
           faceBlobs.current[person.id] = blobUrl;
           const img = await loadPhotoImage(blobUrl);
           if (cancelled || !live.current) continue;
-          const front = (img && paintIdPhotoFront(img, p)) || personIdFallbackFront(person, p);
+          const front = (img && paintIdPhotoFront(img, p, person.full_name)) || personIdFallbackFront(person, p);
           setIdFaces((prev) => ({
             ...prev,
             [person.id]: { front, back: prev[person.id]?.back ?? personIdBackImage(person, p) },

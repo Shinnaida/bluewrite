@@ -58,6 +58,10 @@ class _GateState extends State<_Gate> {
       setState(() => _route = 'setup');
       return;
     }
+    // Point the phone's Wi-Fi watch at the station before anything else: it
+    // is what opens this app by itself next time the Wi-Fi comes up.
+    await ServerDiscovery.rememberStation(await _store.baseUrl());
+    if (!mounted) return;
     final hasPin = await _store.hasPin();
     if (!mounted) return;
     setState(() => _route = hasPin ? 'pin' : 'setup');
@@ -106,6 +110,8 @@ class _GateState extends State<_Gate> {
       return;
     }
     if (found != baseUrl) await _store.saveBaseUrl(found);
+    await ServerDiscovery.rememberStation(found);
+    if (!mounted) return;
     navigator.pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (_) =>

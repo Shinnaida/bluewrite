@@ -715,6 +715,12 @@ export default function Login({ onLogin, boot, notice = null }) {
       // The sign-in id goes with the code, so an answer can tell this screen from
       // one left over from an earlier sign-in — and refuse it as that rather than
       // as a wrong code.
+      // A STALE CSRF TOKEN NO LONGER NEEDS A COPY OF THE RECOVERY HERE.
+      // lib/api.js re-reads this browser's token — from /me, or from /mfa/status
+      // for a sign-in that is only half done — and repeats a refused write once.
+      // Keeping the rule in that one place is what gives the resend button and
+      // the recovery-code form the same recovery this screen used to have alone;
+      // a second copy here would be a second place for it to drift from.
       const res = await api('/mfa/verify', {
         method: 'POST',
         body: { code: typed, sign_in_id: signInId },

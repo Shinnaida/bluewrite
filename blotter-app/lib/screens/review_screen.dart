@@ -46,13 +46,14 @@ class ReviewScreen extends StatefulWidget {
 
 class _ReviewScreenState extends State<ReviewScreen> {
   final _text = TextEditingController();
-  final _location = TextEditingController();
   final _recordedBy = TextEditingController();
   final _requestedBy = TextEditingController();
   bool _reading = true;
   bool _sending = false;
   String? _engine;
   String? _error;
+  // Set when the draft filed but a photo would not attach.
+  String? _photoNote;
 
   List<String> get _pageUrls =>
       widget.pages?.map((p) => p.dataUrl).toList() ?? [widget.dataUrl];
@@ -72,7 +73,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
   @override
   void dispose() {
     _text.dispose();
-    _location.dispose();
     _recordedBy.dispose();
     _requestedBy.dispose();
     super.dispose();
@@ -126,26 +126,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
     }
   }
 
-  void _applyCertification() {
-    // Shapes the reviewed text without rewording; re-running changes nothing.
-    setState(() {
-      _text.text = formatBlotterCertification(
-        _text.text,
-        recordedBy: _recordedBy.text,
-        requestedBy: _requestedBy.text,
-      );
-    });
-  }
-
   Future<void> _send() async {
     var text = _text.text.trim();
     if (text.isEmpty) {
       setState(() => _error =
           'There is no text to file. Type the account or retake the photo.');
-      return;
-    }
-    if (_location.text.trim().isEmpty) {
-      setState(() => _error = 'Name the place of the incident before filing.');
       return;
     }
     setState(() {
@@ -169,7 +154,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
           read: read,
           stationTypes: stationTypes,
           fallbackType: _defaultType ?? 'Other Incident',
-          typedLocation: _location.text,
+          typedLocation: '',
         );
         final probeType = (probe['incident_type'] ?? '').toString();
         if (probeType.isNotEmpty) {
@@ -184,10 +169,16 @@ class _ReviewScreenState extends State<ReviewScreen> {
             ? stationTypes
             : [(_defaultType ?? 'Other Incident').trim()],
         fallbackType: _defaultType ?? 'Other Incident',
-        typedLocation: _location.text,
+        typedLocation: '',
       );
+      // The place is NOT filled in here (owner, 2026-11-17): it is settled in
+      // the portal's Write Report sheet. The reading's own location is passed
+      // through when the blotter states one; otherwise the draft carries a
+      // visible placeholder — the portal refuses a report with no place at
+      // all, and losing the whole filing (and its photo) over that is worse
+      // than a field the officer types on the web.
       var location = (filing['location'] ?? '').toString().trim();
-      if (location.isEmpty) location = _location.text.trim();
+      if (location.isEmpty) location = 'To be identified';
       // The lately format: shape the reviewed text with RECORDED BY plus
       // the closing issuance line, without rewording anything.
       text = blotterFilingText(
@@ -228,15 +219,32 @@ class _ReviewScreenState extends State<ReviewScreen> {
         draft['action_taken'] = filing['action_taken'];
       }
       final id = await widget.client.createDraft(widget.bearer, draft);
+      // The draft is on the portal now. A photo that will not attach must
+      // not read as "the filing failed", and must never lose the draft.
+      String? photoNote;
       for (final bytes in _pageBytes) {
-        await widget.client
-            .uploadCapture(widget.bearer, id, bytes, text, _engine);
+        try {
+          await widget.client
+              .uploadCapture(widget.bearer, id, bytes, text, _engine);
+        } on PortalError catch (e) {
+          photoNote = e.message;
+          break;
+        }
       }
       if (!mounted) return;
-      setState(() => _sentDraftId = id);
+      setState(() {
+        _sentDraftId = id;
+        _photoNote = photoNote;
+      });
     } on PortalError catch (e) {
       if (!mounted) return;
       setState(() => _error = e.message);
+    } catch (e) {
+      // Anything the portal did not answer cleanly (a shape the parser did
+      // not expect, a dropped connection mid-file): say so on the screen.
+      // Silence here looked like a dead button (owner report, 2026-11-17).
+      if (!mounted) return;
+      setState(() => _error = 'Could not file the draft. $e');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -290,6 +298,15 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: _paper, height: 1.5),
               ),
+              if (_photoNote != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'The photo could not be attached: $_photoNote',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: Color(0xFFE8A0A0), fontSize: 12, height: 1.4),
+                ),
+              ],
               const SizedBox(height: 24),
               FilledButton(
                 style: FilledButton.styleFrom(
@@ -400,22 +417,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: _gold,
-                      side: BorderSide(color: _gold.withValues(alpha: 0.6)),
-                    ),
-                    onPressed:
-                        _text.text.trim().isEmpty ? null : _applyCertification,
-                    child: const Text('Apply certification format'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _location,
-                    style: const TextStyle(color: _paper),
-                    decoration: _deskField('Place of incident'),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),

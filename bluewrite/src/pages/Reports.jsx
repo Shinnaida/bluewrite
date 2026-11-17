@@ -3821,7 +3821,15 @@ export function ReportEditor({
   // what makes this safe to call before every new run: with nothing
   // provisionally applied it is a no-op. Returns the restored values present,
   // so the run reads them synchronously.
-  function restoreProvisionalSnapshot() {
+  //
+  // `keepEditable` is passed by the Discard paths only (owner request,
+  // 2026-11-17): Discard brings the officer's own words back, and those words
+  // have to be typable the moment they land — the paper used to come back on
+  // the clean View, which hides the narrative field behind the letter, so the
+  // only way to correct what Discard had just restored was to hunt for Edit
+  // report. A rewind before a new run passes nothing: that paper is about to
+  // be replaced by the run's arrival anyway.
+  function restoreProvisionalSnapshot(opts = {}) {
     // Never touch a finalized report: Discard restores the officer's own
     // draft words only, and a locked record is not rewound by any path.
     if (String(draftRef.current?.status ?? draft?.status ?? '') === 'finalized') return {};
@@ -3849,9 +3857,11 @@ export function ReportEditor({
     if (aiUndo.action_taken !== null) restored.actionTaken = aiUndo.action_taken;
     revertAiField('findings');
     revertAiField('action_taken');
-    // Discarding (or closing) a provisional arrival returns the paper to the
-    // officer's own words, so the clean View comes back with it.
-    setLetterEdit(false);
+    // Discarding a provisional arrival returns the paper to the officer's own
+    // words READY TO TYPE — the raw form, exactly like a phone-source draft
+    // landing on it (see the load read). Only the pre-run rewind asks for the
+    // clean View, which is what its own call passes nothing for.
+    setLetterEdit(Boolean(opts?.keepEditable));
     return restored;
   }
 
@@ -5535,7 +5545,6 @@ export function ReportEditor({
                   <BlotterCapture
                     ref={blotterRef}
                     disabled={!canEdit}
-                    defaultRecordedBy={user?.full_name || ''}
                     onInsert={(text) => {
                       const pending = pendingCaptureRef.current;
                       if (pending && pending.text) {

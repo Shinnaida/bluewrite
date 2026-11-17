@@ -38,9 +38,28 @@ class PortalClient {
     return h;
   }
 
+  // TWO COOKIES CAN ARRIVE IN ONE STRING, and only the last one is live.
+  //
+  // `package:http` joins repeated Set-Cookie headers with ", ", and a session
+  // REGENERATION sends exactly two: the id being retired and the id taking its
+  // place (PHP writes the outgoing one first). Splitting at the first ';' kept
+  // the RETIRED id — the server no longer knew it, minted a fresh session for
+  // the next request, and the code screen was refused as "Security token
+  // missing or expired" on every try (owner report, 2026-11-17). A browser is
+  // untroubled by this because it stores both and keeps the last; this client
+  // has to say so itself.
+  //
+  // The cookie's own `expires=Thu, 01 Jan …` carries a comma, so the pieces are
+  // only used as a place to look for the session pair, never as cookies.
   void _keepCookies(http.BaseResponse res) {
     final set = res.headers['set-cookie'];
-    if (set != null && set.isNotEmpty) _cookie = set.split(';').first;
+    if (set == null || set.isEmpty) return;
+    String? live;
+    for (final piece in set.split(',')) {
+      final pair = piece.split(';').first.trim();
+      if (pair.startsWith('BLUEWRITE_SESS=')) live = pair;
+    }
+    if (live != null) _cookie = live;
   }
 
   /// The portal answers, and speaks our API. Anything else — wrong IP, the

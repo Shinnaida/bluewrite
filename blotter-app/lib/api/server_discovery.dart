@@ -109,6 +109,21 @@ class ServerDiscovery {
     return null;
   }
 
+  /// Tell the phone's own Wi-Fi watch where the station lives, so it can
+  /// open this app when the phone joins that Wi-Fi — while the app is closed,
+  /// which Dart cannot see on its own (see StationWatcher.kt). The address is
+  /// the one discovery settled on; anything else is a stale knock.
+  static Future<void> rememberStation(String? baseUrl) async {
+    final base = (baseUrl ?? '').trim();
+    if (base.isEmpty) return;
+    try {
+      await _networkChannel.invokeMethod('saveStation', {'url': base});
+    } catch (_) {
+      // Not Android, or a build without the native side: discovery itself is
+      // untouched, the app simply does not open by itself there.
+    }
+  }
+
   /// Stored address first (works from anywhere reachable), then the LAN
   /// scan (works with no typing on the station Wi-Fi). Null only when both
   /// miss — that is when the setup screen offers the manual address.
