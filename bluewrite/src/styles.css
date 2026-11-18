@@ -5305,6 +5305,98 @@ body.profile-panel-open {
 }
 .ai-advice ul { margin: 0; padding-left: 1.1rem; font-size: 0.84rem; }
 .ai-advice li { margin-bottom: 0.4rem; }
+/* WHAT ENHANCE CHANGED (owner request, 2026-11-18: "make this presentable").
+   One card per kind — Spelling, Grammar, Punctuation, Police terms — and one
+   row per correction, old word struck, new word bold, so the list scans as a
+   table of fixes instead of a run of quoted pairs in a paragraph. */
+.wd-panel h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.2rem;
+}
+.wd-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.3rem;
+  height: 1.3rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(143, 163, 200, 0.18);
+  color: var(--steel, #8fa3c8);
+  font-family: var(--font-hud, monospace);
+  font-size: 0.68rem;
+  letter-spacing: 0;
+}
+.wd-panel .field-hint { margin: 0 0 0.5rem; font-size: 0.78rem; }
+.wd-groups { display: grid; gap: 0.4rem; }
+.wd-group {
+  padding: 0.45rem 0.55rem 0.4rem;
+  border: 1px solid rgba(143, 163, 200, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.wd-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+.wd-group-name {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--steel, #8fa3c8);
+}
+.wd-group-count { font-size: 0.7rem; color: var(--steel, #8fa3c8); opacity: 0.75; }
+.wd-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.wd-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+.wd-from {
+  color: var(--steel, #8fa3c8);
+  text-decoration: line-through;
+  text-decoration-color: rgba(179, 38, 30, 0.6);
+}
+.wd-arrow { color: var(--steel, #8fa3c8); opacity: 0.65; font-size: 0.72rem; }
+.wd-to { font-weight: 600; }
+.wd-tag {
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--steel, #8fa3c8);
+  opacity: 0.85;
+}
+.wd-more { font-size: 0.74rem; color: var(--steel, #8fa3c8); opacity: 0.8; }
+/* "+N more" unfolds the rest of the group in place (owner request,
+   2026-11-18); the same control then reads "Show less". */
+.wd-more-btn {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.wd-more-btn:hover { opacity: 1; color: var(--text, #e8eefc); }
 .gap-warning { color: var(--amber, #f59e0b); }
 .gap-error { color: var(--red-text, #B3261E); font-weight: 600; }
 .gap-info { color: var(--steel, #8fa3c8); }
@@ -7310,6 +7402,40 @@ button.dash-kpi--link:focus-visible {
    pass preserves newlines, and this renders them — words read formally,
    layout stays exactly as written. */
 .pr-narrative-text { white-space: pre-line; }
+
+/* THE OFFICER'S OWN SPACING PRINTS (owner request, 2026-11-18: "show in print
+   the changes in spacing I made in here"). The letter's editor is `pre-wrap`,
+   so the indentation typed into a letter is plain space characters; the drawn
+   letter (`.pr-letter-html`) had no rule of its own and inherited `normal`,
+   which collapses every run of them — the block read flush left on paper no
+   matter how it was set. `pre-wrap` keeps the runs, the line breaks and the
+   hanging indents exactly as typed, on the desk and in print alike. The
+   sanitizer drops the whitespace that sits BETWEEN blocks, so no stray blank
+   line rides in with it (see sanitizeLetterHtml). */
+.pr-letter-html { white-space: pre-wrap; }
+/* NO PARAGRAPH AIR, SINGLE SPACING (owner request, 2026-11-18: "in this part can
+   you remove the space after/before paragraph, and make the spacing only 1").
+   The letter's block of labelled lines — Place, Time/Date, Date of Discovery,
+   Victim, Suspect, Stolen Items with its rows and TOTAL — read as one stack:
+   the browser's default 1em above and below every <p> opened a gap between
+   each line, so the block spread down the page. Every paragraph, list and
+   wrapper in the letter now carries no margin and single line spacing, so the
+   stack keeps only its own line breaks. Print inherits both (it states no
+   margin of its own here). */
+.pr-letter-html {
+  line-height: 1;
+}
+.pr-letter-html p,
+.pr-letter-html div,
+.pr-letter-html ul,
+.pr-letter-html ol,
+.pr-letter-html li,
+.pr-letter-html h1,
+.pr-letter-html h2,
+.pr-letter-html h3 {
+  margin: 0;
+  line-height: 1;
+}
 .pr-cert-issuance { text-indent: 0.4in; text-align: left; margin: 0.5rem 0; overflow-wrap: anywhere; }
 
 /* ---- Stolen/Damaged Items block (deep indent, regular-weight TOTAL,
@@ -7880,6 +8006,16 @@ button.dash-kpi--link:focus-visible {
   cursor: pointer;
 }
 .rt-combo__item:hover { background: #eef3fb; }
+/* Word's Change Case button (owner request, 2026-11-18): a tool-height plate
+   reading "Aa" with a caret, and the five-command menu under it. */
+.rt-combo--case { align-self: center; }
+.rt-combo--case .rt-case {
+  height: 1.95rem;
+  padding: 0 0.45rem;
+  font-weight: 600;
+}
+.rt-case__caret { margin-left: 0.15rem; font-size: 0.72em; opacity: 0.75; }
+.rt-case__menu { min-width: 10.5rem; }
 .rt-select:hover { border-color: #8a8886; }
 .rt-select:focus-visible { outline: 2px solid #1F5FD0; outline-offset: 1px; }
 .rt-select:disabled { opacity: 0.5; cursor: default; }
@@ -8435,11 +8571,24 @@ select.pr-edit--inline { padding-right: 0.1rem; }
 @media print {
   /* The station's paper, stated to the print engine, so a report is laid out on
      SHORT BOND (8.5 × 11 in / Letter) rather than on whatever the workstation's
-     default happened to be. One-inch station margins are stated on @page: the
-     sheet's own padding is removed in print (below), so the page reads its margins there. */
+     default happened to be. The margins are stated on @page — the sheet's own
+     padding is removed in print (below), so the page reads its margins here.
+
+     UNEVEN ON PURPOSE (owner request, 2026-11-18: "0.5 inch top, 1 inch left,
+     0.5 inch right"): half an inch at the top and right, a full inch on the
+     left for the file's binding edge, and half an inch at the foot to match the
+     top. That leaves the letter 7in of measure — 8.5in of paper less the two
+     margins — and 10in of height. */
   @page {
     size: letter;
-    margin: 1in;
+    /* THE MARGINS BELONG TO THE PAGE BOX (owner request, 2026-11-18: top 0.5in,
+       right 0.7in, bottom 0.5in, left 1in). They are stated HERE, on @page, not
+       as padding on the sheet: `@page` margins repeat on EVERY leaf of a
+       multi-page document, while an element's padding is only drawn on its first
+       and last fragments — so a report that ran past one page printed its second
+       sheet with the text running to the paper's edges, which is what "the margin
+       did not reach the paper" looked like. Measure: 8.5 − 1 − 0.7 = 6.8in. */
+    margin: 0.5in 0.7in 0.5in 1in;
   }
 
   /* The sheet is portaled to document.body (body.print-sheet-open is set
@@ -8478,6 +8627,9 @@ select.pr-edit--inline { padding-right: 0.1rem; }
   .print-sheet {
     box-shadow: none;
     max-width: none;
+    /* No inch of its own: the margins are the page box's (see @page above), so
+       they hold on every leaf. A padding here would double the margins on the
+       first page and vanish on the rest. */
     padding: 0;
     /* The paper is ALREADY Letter in print, so the screen's 11in floor would
        only invite a rounding blank second page when the content lands near the
@@ -8512,17 +8664,72 @@ select.pr-edit--inline { padding-right: 0.1rem; }
   .print-sheet .pr-narrative { margin: 0.45rem 0; }
   .print-sheet .pr-section { margin: 0.4rem 0; }
   .print-sheet .pr-entry { margin-top: 0.1rem; margin-bottom: 0.1rem; }
-  .print-sheet .pr-footer-block { margin-top: 0.6rem; }
+  /* THE SIGN-OFF IS ON THE PAPER (owner request, 2026-11-18: "add this in the
+     footer of the first page in print" — the block reads "Noted by:" with the
+     noting official's name under it). The desk hides this block
+     (`.ir-sheet-letter .pr-footer-block`), and that hide was still winning
+     when the sheet printed from Write Report: the printout came out with no
+     Noted-by line at all. Print always draws it, in the station's own format
+     (label on its line, the name beneath, shut to the right), and never splits
+     it across a break. */
+  /* THE SPACER IS A DESK MEASUREMENT (owner request, 2026-11-18: "it is still in
+     the second page"). `.pr-fill` is the slack the desk measured to fill the
+     SCREEN leaf — an 11in sheet with a 1in station margin. On paper the leaf is
+     10in and the margin is on @page, so that slack overfilled the page and
+     pushed the first thing after it — the sign-off — onto a second sheet. Print
+     needs no spacer: the ink decides, and hiding it keeps the Noted-by block on
+     the page the account ends on. */
+  .print-sheet .pr-fill { display: none; }
+
+  .print-sheet .pr-footer-block {
+    display: flex;
+    margin-top: 0.6rem;
+    break-inside: avoid;
+  }
   .print-sheet .pr-noted { margin-top: 0.35rem; }
   /* The long poles set tighter leading: body ink is single-spaced on the
      official page, and the org block drops a step with it. */
   .print-sheet .pr-org { font-size: 9pt; line-height: 1.25; }
   .print-sheet .pr-contact { font-size: 8pt; }
+  /* THE LETTERHEAD IS THE TOP THREE INCHES (owner request, 2026-11-18: "put this
+     to the most top, only let this occupy 3 inch in the top"). The band — the
+     two seals and the office block, then the NCPS row and the date — is fixed at
+     3in from the very top of the paper: the header half takes 2.6in and the
+     code/date row the remaining 0.4in, so the account always begins exactly 3in
+     down, whatever the heading's own line count. The paper has no padding of
+     its own in print (@page states the margins), so nothing stands above it. */
+
   .print-sheet .pr-facts,
   .print-sheet .pr-narrative,
   .print-sheet .pr-entry,
   .print-sheet .pr-recorded,
   .print-sheet .pr-noted { line-height: 1.3; }
+  /* THE ACCOUNT PRINTS AT 11pt (owner request, 2026-11-18: "make font 11" — the
+     salutation, the certification, the incident type, the labelled facts, the
+     stolen items, FACTS, NOTABLE FINDINGS, ACTION TAKEN / STATUS, and Recorded
+     by / IOC). The sheet's own 9.9pt is the desk's reading size; on paper every
+     word of the account is set at 11pt. Only the account is scaled: the
+     letterhead keeps its step and the title keeps its own size. */
+  .print-sheet,
+  .print-sheet .pr-letter-html,
+  .print-sheet .pr-facts,
+  .print-sheet .pr-narrative,
+  .print-sheet .pr-section,
+  .print-sheet .pr-entry,
+  .print-sheet .pr-recorded,
+  .print-sheet .pr-letter-html p,
+  .print-sheet .pr-letter-html div,
+  .print-sheet .pr-letter-html li,
+  .print-sheet .pr-letter-html ul,
+  .print-sheet .pr-letter-html ol,
+  .print-sheet .pr-letter-html span { font-size: 11pt; }
+  /* THE PAPER WEARS THE SHEET'S OWN TYPE (owner request, 2026-11-18: "what it
+     looks like here is what it should look like in the print"). The account was
+     pinned to 12pt in print, which made the printed page a size larger than the
+     sheet the officer typed on — same words, different-looking document. Print
+     now states no size of its own for the account: every size, margin and
+     leading comes from the same sheet rules the desk draws, so the page reads
+     exactly as it does on screen. */
 }
 
 /* Screen: the portaled sheet sits above everything, including the AI panel */

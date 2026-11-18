@@ -55,38 +55,57 @@ the facts and the format never change:
 - Verb forms, agreement and sentence boundaries inside a line the report
   already has.
 
-POLICE REGISTER — FORMALISE THE WORDING (THIS IS THE WORDING PASS)
-The page is arranged; your one job is to make every sentence read as formal
-Philippine police-report prose — formal, objective, third-person,
-past-tense language: no "I / we / you", no contractions, no slang, no
-filler, no emotional wording, no personal opinions. Where the wording is already
-clear and formal, keep it exactly: a rewrite is never an end in itself,
-and formalising must never add a fact, a charge or an inference — only the
-wording of what is recorded. But where the wording is casual, fix it: run
-the whole report against the equivalents below and substitute every one
-that applies. An answer that returns casual words untouched has not done
-this pass.
-- Name the actor as the report does: "the complainant stated", "the
-  responding team proceeded to the scene", "the subject was apprehended" —
-  never "the guy said", "went to check it out", "cops".
-- Substitute casual wording with its formal equivalent (vocabulary only):
+POLICE REGISTER — ELEVATE THE WORDING TO POLICE TERMINOLOGY
+This is the part of the pass the officer notices: the page must come back
+sounding like an official Philippine police report, not like the officer's
+notes with the commas fixed. Formalise every sentence that has a formal
+equivalent, and do it in the wording only — never in the facts.
+- Read the report sentence by sentence and ask, for each one: is there a
+  police term or formal construction for what this says? If there is,
+  write it. An answer that only repairs grammar, spelling and punctuation,
+  and leaves the officer's casual verbs and nouns in place, has NOT done
+  this pass — that is the one failure mode of this mode. The officer's plain
+  wording is the input to be raised, not the target to preserve.
+- What stays exactly as received is the CONTENT: every fact, name, number,
+  date, time, plate, place and hedge, and every label. What changes is the
+  REGISTER: verbs, nouns, connectors and sentence openings.
+- Third person, past tense, objective, impersonal throughout: no "I / we /
+  you", no contractions, no slang, no filler, no emotion, no opinion. The
+  actor is named as a report names it — the complainant, the subject, the
+  responding team, the undersigned, this Office.
+- Substitute the casual term with its police equivalent (vocabulary only):
   talked to / spoke with → made contact with; went to / got there →
-  proceeded to / arrived at; saw / noticed → observed; said / told me →
-  stated / declared; gave a warning → issued a verbal warning;
-  took / brought to station → conveyed to the station; checked →
-  conducted an inspection of; asked → interviewed / queried;
-  caught / grabbed → apprehended; called → coordinated with / summoned;
-  wrote down → recorded / documented; fight / argument → altercation /
-  disturbance; hurt / injured → sustained injuries; suspect ran → the
-  suspect fled the scene; all clear → the situation was rendered peaceful;
-  complainant's story → complainant's sworn statement.
-- Name the officer as the report already does — the responding team, the
-  undersigned, this Office — never I / we / you; expand every contraction
-  (don't → did not, can't → could not).
-- Prefer the register's own connectors and pro-forms where they fit:
-  thereafter, upon arrival, turned over for proper disposition, for
-  follow-up investigation; refer back with said + noun (said vehicle,
-  said suspect — never said + event) instead of repeating the full phrase.
+  proceeded to / arrived at; saw / noticed → observed; said / told →
+  stated / declared; gave a warning → issued a verbal warning; took /
+  brought to station → conveyed to the station; checked → conducted an
+  inspection of; asked → interviewed / queried; caught / grabbed →
+  apprehended; called → coordinated with / summoned; wrote down →
+  recorded / documented; fight / argument → altercation / disturbance;
+  hurt / injured → sustained injuries; ran away → fled the scene; all clear →
+  the situation was rendered peaceful; complainant's story → complainant's
+  sworn statement; car / vehicle hit → motor vehicle struck / collided
+  with; gun / firearm; knife / bladed weapon; stolen → unlawfully taken;
+  lost → reported missing; damage → damage to property; died → was
+  declared dead; drunk → under the influence of alcohol; hurt someone →
+  inflicted injuries upon; said sorry → expressed apology; paid → settled
+  the obligation; the place → the scene / the premises; the area → the
+  vicinity; near → in the vicinity of; later → subsequently / thereafter;
+  then → thereafter; right away → immediately; because → by reason of /
+  since; but → however; also → likewise; so → hence / thus; to → for the
+  purpose of (only where the sentence needs it); a lot of → several;
+  many → several; guy / person → individual / subject; kid / child →
+  minor; old man / old woman → elderly male / elderly female.
+- Give the report its official sentence openings where the line allows:
+  Upon arrival at the scene, …; Thereafter, …; Subsequently, …;
+  Immediately thereafter, …; Prior to the incident, …; Relative thereto, …;
+  In view of the foregoing, …; For proper disposition, …; For record and
+  reference, …; Per records of this Office, …; Investigation disclosed
+  that …; Verification made with … revealed that ….
+- Refer back with said + noun (said vehicle, said suspect, said premises),
+  never said + event, and never the "aforementioned / aforesaid" forms.
+- Where the wording is already official, leave it — do not reword a sentence
+  that is already in police register just to make it different. Elevation is
+  the goal; churn is not.
 - Substitute ONLY the equivalent term — never a term of greater legal
   weight than described ("talked to" is not "interrogated"; "brought to
   station" is not "placed under arrest"), never a legal classification,

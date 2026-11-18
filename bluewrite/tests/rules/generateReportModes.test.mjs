@@ -114,7 +114,8 @@ test('one account reader serves both Generate paths, arrange builds via the lib'
   assert.ok(PANEL.includes('await runAccountRead(accountText, { arrangeOnly: true })'), 'arrange must pass arrangeOnly');
   assert.ok(REPORTS.includes('arrangeOnly'), 'sheet read must know arrangeOnly');
   assert.ok(REPORTS.includes("if (afterFirst.incident_type && !arrangeOnly)"), 'arrange must skip type-details');
-  assert.ok(PANEL.includes('setDraft(withSheetCompletion(buildArrangeDraft({ accountText, notableFindings: runFindings, actionTaken: runActionTaken })))'), 'arrange must build via the lib');
+  assert.ok(PANEL.includes('setDraft(withSheetCompletion(buildArrangeDraft({'), 'arrange must build via the lib');
+  assert.ok(PANEL.includes('keepCasing: arrangedByModel,'), 'the model\'s own arrangement keeps its capitalisation');
   // Sheet theft completion (owner request): both sheet drafts run the audit —
   // fills from the officer's own words, gaps as advisories.
   assert.ok(PANEL.includes('withSheetCompletion(buildEnhancedDraft('), 'enhance skips the completion audit');
@@ -645,7 +646,7 @@ test('arrange sentence-cases every all-caps narrative without correcting its wor
   // on the next line (owner request, 2026-11-02).
   assert.ok(
     arranged.narrative.includes(
-      '<b>Facts:</b><br>\u2003\u2003Investigation revealed that both vehicle were traveling in opposite direction.',
+      '<b>FACTS:</b><br>\u2003\u2003Investigation revealed that both vehicle were traveling in opposite direction.',
     ),
     'the FACTS narrative was not sentence-cased or does not follow its label',
   );
@@ -774,8 +775,8 @@ test('enhance keeps the source order and breaks instead of rearranging', () => {
   // Arrange still owns the standard order and rhythm.
   const arranged = formatIncidentReportHtml(src, { sentenceCase: true });
   const bt = (s) => arranged.indexOf(s);
-  assert.ok(bt('Place:') < bt('Facts:'), 'arrange lost the standard order');
-  assert.ok(bt('Facts:') < bt('Remarks:'), 'arrange lost the standard order');
+  assert.ok(bt('Place:') < bt('FACTS:'), 'arrange lost the standard order');
+  assert.ok(bt('FACTS:') < bt('Remarks:'), 'arrange lost the standard order');
   assert.ok(arranged.includes('<p><br></p>'), 'arrange lost its breathing room');
 });
 
@@ -792,7 +793,7 @@ test('a slash-compound label opens its known section, never prose', () => {
     'Investigation revealed that the complainant reported that her wallet containing cash amounting to php 5,000.00 was missing from her bag inside a small store.',
   ].join(LF);
   const html = formatIncidentReportHtml(src, { sentenceCase: true });
-  assert.ok(html.includes('<b>Facts:</b>'), 'the compound label did not open Facts: ' + html);
+  assert.ok(html.includes('<b>FACTS:</b>'), 'the compound label did not open Facts: ' + html);
   assert.ok(!html.includes('Narrative/facts'), 'the compound label leaked through as prose');
   // A compound of two real sections stays prose: it must not fold under one.
   const both = formatIncidentReportHtml('Victim/Suspect: Ana Lopez / Juan Dela Cruz');
@@ -801,7 +802,7 @@ test('a slash-compound label opens its known section, never prose', () => {
   // rule would file it as an unknown section after the closings — the Facts
   // check runs first, so the shouting heading still opens Facts.
   const shout = formatIncidentReportHtml('NARRATIVE / FACTS:\n\nINVESTIGATION REVEALED THAT A HILUX AND A MIRAGE COLLIDED ON THE HIGHWAY AND THREE PERSONS DIED WHILE TWO OTHERS WERE HURT AND ALL WERE BROUGHT TO THE HOSPITAL FOR TREATMENT AT ONCE.', { sentenceCase: true });
-  assert.ok(shout.includes('<b>Facts:</b>'), 'the shouting compound did not open Facts: ' + shout);
+  assert.ok(shout.includes('<b>FACTS:</b>'), 'the shouting compound did not open Facts: ' + shout);
   assert.ok(!/Narrative\/facts/i.test(reportHtmlToPlain(shout)), 'the compound leaked through as prose');
 });
 
@@ -814,7 +815,7 @@ test('a front-loaded Remarks still closes the report', () => {
   assert.ok(prose.length >= 200, 'fixture too thin to exercise the split');
   const src = ['"THEFT"', '', 'Remarks: Incident recorded and under investigation.', '', 'Narrative/facts:', prose].join(LF);
   const html = formatIncidentReportHtml(src, { sentenceCase: true });
-  const factsAt = html.indexOf('<b>Facts:</b>');
+  const factsAt = html.indexOf('<b>FACTS:</b>');
   const remarksAt = html.indexOf('<b>Remarks:</b>');
   assert.ok(factsAt !== -1 && remarksAt !== -1, 'both parts must print: ' + html);
   assert.ok(factsAt < remarksAt, 'Remarks still opens the body: ' + html);
@@ -834,7 +835,7 @@ test('a front-loaded Remarks still closes the report', () => {
   );
   // ...but a wrapped closing line (unfinished sentence) keeps its own tail.
   const wrapped = formatIncidentReportHtml('Remarks: Incident recorded and referred\nfor further investigation at length ' + longTail, { sentenceCase: true });
-  assert.ok(!reportHtmlToPlain(wrapped).includes('Facts:'), 'a wrapped closing was torn apart');
+  assert.ok(!reportHtmlToPlain(wrapped).includes('FACTS:'), 'a wrapped closing was torn apart');
 });
 
 test('a one-line paste with no breaks arranges like its spaced twin', () => {
@@ -854,7 +855,7 @@ test('a one-line paste with no breaks arranges like its spaced twin', () => {
   const plain = reportHtmlToPlain(html);
   assert.ok(!html.includes('**'), 'markdown vestige leaked onto the paper');
   assert.ok(html.includes('<b>PHYSICAL INJURY RESULTING FROM A ROAD ALTERCATION</b>'), 'the one-line title was lost: ' + html.slice(0, 120));
-  const heads = ['<b>Place:', '<b>Time/Date:', '<b>Persons involved:', '<b>Complainant:', '<b>Respondent:', '<b>Facts:', '<b>Remarks:', '<b>Recorded by:'];
+  const heads = ['<b>Place:', '<b>Time/Date:', '<b>Persons involved:', '<b>Complainant:', '<b>Respondent:', '<b>FACTS:', '<b>Remarks:', '<b>Recorded by:'];
   const at = heads.map((h) => html.indexOf(h));
   assert.ok(at.every((p) => p !== -1), 'a section went missing: ' + JSON.stringify(at));
   assert.ok(at.every((p, i) => i === 0 || p > at[i - 1]), 'the one-liner lost the station order');
@@ -990,7 +991,7 @@ test('arrange sentence-cases mixed-case source without flattening correct words'
   });
   assert.ok(
     mixed.narrative.includes(
-      '<b>Facts:</b><br>\u2003\u2003The complainant reported that his wallet was missing.<br>\u2003\u2003He said the wallet was last seen at the market.',
+      '<b>FACTS:</b><br>\u2003\u2003The complainant reported that his wallet was missing.<br>\u2003\u2003He said the wallet was last seen at the market.',
     ),
     'mixed-case source was not brought to consistent sentence case',
   );
@@ -1016,7 +1017,7 @@ test('arrange handles a non-vehicular report and keeps incomplete identifiers', 
     ].join(LF),
   });
   assert.ok(
-    lost.narrative.includes('<b>Facts:</b><br>\u2003\u2003The complainant reported that his wallet went missing while buying goods.'),
+    lost.narrative.includes('<b>FACTS:</b><br>\u2003\u2003The complainant reported that his wallet went missing while buying goods.'),
     'the lost-property narrative was not sentence-cased',
   );
   assert.ok(lost.narrative.includes('<b>Remarks:</b> None'), 'existing remarks were not kept');
@@ -1051,14 +1052,14 @@ test('arrange writes every bold field label in sentence case, not all caps', () 
     '<b>Place:</b> Cangi Mundong, Inoburan, City of Naga',
     '<b>Time/Date:</b> More or less 8:40 AM of October 20, 2026',
     '<b>Vehicles involved:</b></p><p>',
-    '<b>Facts:</b><br>\u2003\u2003The vehicles collided.',
+    '<b>FACTS:</b><br>\u2003\u2003The vehicles collided.',
     '<b>Remarks:</b> Both parties amicably settled the incident',
     '<b>Recorded by:</b> Honey',
     '<b>Purpose:</b> Record',
   ]) {
     assert.ok(arranged.narrative.includes(bit), 'label not spelled as the sheet writes it: ' + bit);
   }
-  for (const shout of ['<b>FACTS', '<b>T/D', '<b>PLACE', '<b>REMARKS', '<b>RECORDED']) {
+  for (const shout of ['<b>T/D', '<b>PLACE', '<b>REMARKS', '<b>RECORDED']) {
     assert.ok(!arranged.narrative.includes(shout), 'an all-caps label survived: ' + shout);
   }
 });
@@ -1202,7 +1203,16 @@ test('enhance is a copy-edit of the ALREADY-ARRANGED report, never a rearrangeme
   // The register is applied actively, not optionally: casual words the list
   // covers are corrected, and an untouched answer has not done the pass.
   assert.match(prompt, /leaving casual wording in place is the failure mode/);
-  assert.match(prompt, /An answer that returns casual words untouched has not done/);
+  // Owner request (2026-11-19): "make the Gemini use police terminologies to
+  // elevate the report". The pass is an ELEVATION, not a proofread: a grammar-
+  // only answer is named as a failure, the register is mandatory, and the
+  // official sentence openings are spelled out for the model.
+  assert.match(prompt, /ELEVATE THE WORDING TO POLICE TERMINOLOGY/);
+  assert.match(prompt, /has NOT done\s+this pass/);
+  assert.match(prompt, /is the input to be raised, not the target to preserve/);
+  assert.match(prompt, /Upon arrival at the scene/);
+  assert.match(prompt, /Investigation disclosed/);
+  assert.match(prompt, /Elevation is\s+the goal; churn is not/);
   // Grammar + professional terminology (owner request): the pass holds past
   // tense, agreement and sentence health to a checklist — not a passing
   // mention — and the register keeps growing from the glossary: the sworn
@@ -1211,8 +1221,8 @@ test('enhance is a copy-edit of the ALREADY-ARRANGED report, never a rearrangeme
   assert.match(prompt, /consistent past tense/);
   assert.match(prompt, /no contractions/);
   assert.match(prompt, /sworn statement/);
-  assert.match(prompt, /the responding team, the\s*\n?undersigned, this Office/);
-  assert.match(prompt, /thereafter, upon arrival/);
+  assert.match(prompt, /responding team, the\s+undersigned, this Office/);
+  assert.match(prompt, /Thereafter, …; Subsequently/);
 
   // Spacing is analysed in Enhance too: the arranged page may still carry a
   // wrapped line, so the model reads every break as continuation data or a
@@ -1241,7 +1251,7 @@ test('enhance is a copy-edit of the ALREADY-ARRANGED report, never a rearrangeme
   assert.match(prompt, /split\s+run-on\s+sentences/);
   assert.match(prompt, /leave every sentence properly punctuated/);
   assert.match(prompt, /each\s+repeated value is written the same way/);
-  assert.match(prompt, /no emotional wording, no personal opinions/);
+  assert.match(prompt, /no filler, no emotion, no opinion/);
   assert.match(prompt, /Strip slang, emotional wording and personal opinions/);
   assert.match(prompt, /the same headings, the same labels/);
   assert.match(prompt, /including Filipino and Cebuano place\s+names/);
@@ -1320,4 +1330,24 @@ test('letterHtmlToAccountText keeps the account and drops the middle chrome', ()
     '',
     'chrome-only ink must fall back to the field',
   );
+});
+
+test('an assigned title is never changed to the folder the report falls under (2026-11-19)', () => {
+  // The officer wrote the charge as the blotter book words it ("BURGLARY/THEFT")
+  // and assigned the type it falls under ("Burglary / Theft"). A wording pass
+  // returns the page with the heading rewritten as the type's own label, and the
+  // sheet printed "BURGLARY / THEFT" instead of the assigned charge. Generation
+  // must put the officer's title back.
+  const source = ['BURGLARY/THEFT', '', 'Place: Soton, Pangan', 'Time/Date: Around 1:00 A.M., July 29, 2026'].join(LF);
+  const answer = ['Burglary / Theft', '', 'Place: Soton, Pangan', 'Time/Date: Around 1:00 A.M., July 29, 2026'].join(LF);
+
+  const enhanced = buildEnhancedDraft({ enhancedText: answer, sourceText: source });
+  const shownEnhanced = letterHtmlToAccountText(enhanced.narrative);
+  assert.ok(shownEnhanced.includes('BURGLARY/THEFT'), 'the assigned title was replaced by the folder label');
+  assert.equal(shownEnhanced.includes('Burglary / Theft'), false, 'the folder label reached the enhanced sheet');
+
+  const arranged = buildArrangeDraft({ accountText: answer, titleSource: source });
+  const shownArranged = letterHtmlToAccountText(arranged.narrative);
+  assert.ok(shownArranged.includes('BURGLARY/THEFT'), 'arranging changed the assigned title');
+  assert.equal(shownArranged.includes('Burglary / Theft'), false, 'the folder label reached the arranged sheet');
 });

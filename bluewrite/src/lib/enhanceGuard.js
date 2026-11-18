@@ -95,6 +95,20 @@ const NEGATION = /\b(?:no|not|never|none|nobody|without|cannot|neither|nor)\b|n'
 // stand in for a date, time or place that must be written out in full.
 const PRO_FORM = /\b(?:aforementioned|aforesaid|above-?mentioned|afore-?stated)\b/i;
 
+// ---- acts of authority ----------------------------------------------------
+// An act of authority the officer never recorded is a NEW CLAIM, not a change
+// of register (owner request, 2026-11-19: the register whitelist must never
+// weaken the guard into accepting "was arrested" for "went home"). Arrest,
+// apprehension, confiscation, seizure, impounding, detention: each one adds a
+// legal consequence to the page, so the model may only write it where the line
+// already records that act — in its own words ("caught" → "apprehended",
+// "took" → nothing: taking is not seizing) or already in police terms.
+const AUTHORITY_ACT =
+  /\b(?:arrest(?:ed|ing|s)?|apprehend(?:ed|ing|s)?|confiscat(?:ed|ing|es|ion)?|seiz(?:ed|ing|es|ure)|impound(?:ed|ing|s)?|detain(?:ed|ing|s)?|custody|inquest|nabbed)\b/i;
+// The officer's own words that license the authority term on their line.
+const AUTHORITY_LICENCE =
+  /\b(?:arrest\w*|apprehend\w*|caught|catch|grabbed|grab|confiscat\w*|seiz\w*|impound\w*|detain\w*|custody|nabbed|nab)\b/i;
+
 // A capital the model added mid-sentence to an ordinary word the officer wrote
 // in lower case ("heated argument" -> "Heated Argument"). Names and codes are
 // already covered; this is the stray Title Case that reads as emphasis.
@@ -115,9 +129,57 @@ function addsStrayCapitals(sourceLine, modelLine) {
 
 const labelOf = (line) => extractFieldLabels(line)[0] ?? null;
 
-// How many words of the line are NEW (absent from the whole source).
+// Approved register vocabulary (owner request, 2026-11-19: "make the Gemini use
+// police terminologies to elevate the report"). Elevating a line to police
+// register legitimately introduces words the officer never wrote — "proceeded",
+// "observed", "thereafter" — and counting them as new content made the guard
+// throw the whole line away as a rewrite, so the officer saw grammar fixes but
+// no register. These words are style, not fact: they are not counted against a
+// line's rewrite budget. Words that imply an act of authority (seized,
+// confiscated, arrested) are deliberately NOT here — inserting those is a new
+// claim, not a register change.
+const REGISTER_WORDS = new Set([
+  'proceeded', 'proceed', 'arrived', 'arrival', 'observed', 'observe',
+  'stated', 'declared', 'conveyed', 'convey', 'coordinated', 'summoned',
+  'interviewed', 'queried', 'documented', 'recorded', 'recovered',
+  'altercation', 'disturbance', 'sustained', 'sustain', 'peaceful', 'rendered',
+  'thereafter', 'subsequently', 'immediately', 'prior', 'relative', 'thereto',
+  'foregoing', 'herein', 'therein', 'whereof', 'likewise', 'however', 'hence',
+  'thus', 'since', 'reason', 'purpose', 'disposition', 'premises', 'vicinity',
+  'scene', 'incident', 'investigation', 'verification', 'disclosed', 'revealed',
+  'individual', 'individuals', 'minor', 'elderly', 'male', 'female',
+  'responding', 'team', 'undersigned', 'office', 'personnel', 'subject', 'said',
+  'motor', 'vehicle', 'struck', 'collided', 'collision', 'firearm', 'bladed',
+  'weapon', 'unlawfully', 'missing', 'alcohol', 'influence', 'expressed',
+  'settled', 'obligation', 'inflicted', 'reference', 'record', 'proper',
+  'collide', 'situation', 'injuries', 'injury', 'inspection', 'conduct',
+  'contact', 'proceeding', 'proceedings', 'investigate', 'verify', 'ascertain',
+  'thereof', 'whereby', 'upon', 'arrive', 'render', 'thence', 'thereupon',
+]);
+
+// Function words decide nothing: a longer formal sentence carries more "that",
+// "and" and "which" than the officer's note did, and those are neither new
+// content nor evidence of register.
+const NEUTRAL_WORD = new Set([
+  'the', 'and', 'but', 'for', 'with', 'that', 'this', 'these', 'those', 'was',
+  'were', 'been', 'being', 'his', 'her', 'their', 'its', 'from', 'into', 'upon',
+  'then', 'than', 'also', 'all', 'any', 'had', 'has', 'have', 'did', 'does',
+  'will', 'would', 'could', 'should', 'who', 'whom', 'which', 'what', 'when',
+  'where', 'while', 'after', 'before', 'during', 'per', 'same', 'there', 'here',
+]);
+const isNeutralWord = (word) => NEUTRAL_WORD.has(word) || String(word).length <= 2;
+
+const isRegisterWord = (word) => {
+  const w = String(word).toLowerCase().replace(/'s$/, '');
+  if (REGISTER_WORDS.has(w)) return true;
+  const stem = w.replace(/(?:ed|ing|ly|s|es)$/, '');
+  return stem !== w && REGISTER_WORDS.has(stem);
+};
+
+// How many words of the line are NEW (absent from the whole source) and are not
+// approved register vocabulary.
 function newWordCount(line, sourceWordSet) {
-  return wordsOf(line).filter((w) => !sourceWordSet.has(w)).length;
+  return wordsOf(line).filter((w) => !sourceWordSet.has(w) && !isRegisterWord(w)).length;
 }
 
 /**
@@ -125,19 +187,36 @@ function newWordCount(line, sourceWordSet) {
  * short reason the officer's own line is kept instead.
  */
 function verdict(sourceLine, modelLine, ctx) {
+  const sourceWordSet = ctx.sourceWords;
   if (labelOf(sourceLine) !== labelOf(modelLine)) return 'label';
   if (!sameList(digitTokens(sourceLine), digitTokens(modelLine))) return 'number';
   if (inventsCode(modelLine, ctx.sourceFlat)) return 'code';
   if (inventsName(modelLine, ctx.sourceWords)) return 'name';
   if (PRO_FORM.test(modelLine) && !PRO_FORM.test(sourceLine)) return 'pro-form';
   if (addsStrayCapitals(sourceLine, modelLine)) return 'casing';
+  if (
+    AUTHORITY_ACT.test(modelLine) &&
+    !AUTHORITY_ACT.test(sourceLine) &&
+    !AUTHORITY_LICENCE.test(sourceLine)
+  ) {
+    return 'authority';
+  }
   if (HEDGE.test(sourceLine) && !HEDGE.test(modelLine)) return 'hedge';
   if (HEDGE.test(modelLine) && !HEDGE.test(sourceLine)) return 'hedge';
   if (APPROX.test(sourceLine) && !APPROX.test(modelLine)) return 'approximation';
   if (NEGATION.test(sourceLine) !== NEGATION.test(modelLine)) return 'negation';
   const a = sourceLine.length;
   const b = modelLine.length;
-  if (a >= 24 && (b > a * 1.7 || b < a * 0.5)) return 'length';
+  // A line that only GAINS register vocabulary is longer by design ("the car
+  // hit him" → "the motor vehicle struck the individual"), so the ceiling gives
+  // way when every added word is approved register; a line that gains ordinary
+  // new wording is still a rewrite (owner request, 2026-11-19).
+  const addedWords = wordsOf(modelLine).filter((w) => !sourceWordSet.has(w));
+  const gainsOnlyRegister =
+    addedWords.length > 0 &&
+    addedWords.filter((w) => !isNeutralWord(w)).every(isRegisterWord);
+  const ceiling = gainsOnlyRegister ? 2.2 : 1.7;
+  if (a >= 24 && (b > a * ceiling || b < a * 0.5)) return 'length';
   const srcWordCount = wordsOf(sourceLine).length;
   if (srcWordCount >= 4 && newWordCount(modelLine, ctx.sourceWords) > Math.max(6, srcWordCount * 0.6)) {
     return 'rewrite';

@@ -20,7 +20,12 @@ import {
   detectIncidentTitle,
   formatIncidentReportHtml,
   reportHtmlToPlain,
+  scrubReportText,
+  stripStrayBracketLines,
+  stripStrayBraceHtml,
 } from '../../src/lib/reportFormat.js';
+import { sanitizeLetterHtml } from '../../src/lib/richText.js';
+import { reportTitle } from '../../src/lib/sheetFacts.js';
 
 const LF = String.fromCharCode(10);
 const lines = (...parts) => parts.join(LF);
@@ -240,7 +245,7 @@ test('the facts content opens indented', () => {
   );
   assert.ok(
     formatIncidentReportHtml(TRAFFIC, { sentenceCase: true }).includes(
-      '<b>Facts:</b><br>\u2003\u2003Investigation revealed',
+      '<b>FACTS:</b><br>\u2003\u2003Investigation revealed',
     ),
     'arranged facts content not indented after its label',
   );
@@ -317,4 +322,130 @@ test('a wrap ending in an abbreviation period rejoins its continuation (Brgy.)',
     'the Brgy. continuation opened a line of its own: ' + JSON.stringify(plain),
   );
   assert.deepEqual(words(plain), words(source), 'the join added, dropped or reworded a word');
+});
+
+test('a lone brace is dropped, never printed as a line of the report (2026-11-19)', () => {
+  // "why did you put '}' in every report": the sheet printed a bare "}" under
+  // the title. No blotter line is a lone brace — it is the tail of a wrapper an
+  // answer or a paste left behind — so the formatter drops it on the way in,
+  // while lines that carry words, figures or a dash ruler stay exactly as they
+  // are.
+  const src = lines(
+    '{',
+    'BURGLARY/THEFT',
+    '}',
+    'Place: Soton, Pangan, City of Naga, Cebu',
+    'Time/Date: Around 1:00 A.M., July 29, 2026',
+  );
+  assert.equal(stripStrayBracketLines(src).includes('{'), false, 'an opening brace survived');
+  assert.equal(stripStrayBracketLines(src).includes('}'), false, 'a closing brace survived');
+
+  const html = formatIncidentReportHtml(src, { sentenceCase: true });
+  assert.equal(html.includes('>}<'), false, 'the brace reached the sheet html');
+  assert.ok(html.includes('Soton'), 'the report\u2019s own words were lost with the brace');
+  assert.ok(html.includes('BURGLARY/THEFT'), 'the title was lost with the brace');
+
+  const kept = lines('Place: Naga', '- - - - -', 'TOTAL, - - - 460,120.00');
+  assert.equal(stripStrayBracketLines(kept), kept, 'a real report line was mistaken for a stray brace');
+});
+
+test('a stored page stops printing its brace too (2026-11-19)', () => {
+  // The sheet renders the stored html, so the rule is applied there as well:
+  // a brace alone between breaks or in its own paragraph goes, while a brace
+  // inside real text is left alone.
+  const page = '<p>Place: Naga</p><br>}<br><p>Time/Date: 1:00 A.M.</p>';
+  const cleaned = stripStrayBraceHtml(page);
+  assert.equal(cleaned.includes('>}<'), false, 'the stored brace still prints');
+  assert.ok(cleaned.includes('Place: Naga') && cleaned.includes('1:00 A.M.'), 'the page lost its own words');
+  // Braces are never part of a report, so even one inside words goes — the
+  // words themselves stay (owner decision, 2026-11-19: "if you cant remove
+  // hide it" — every brace is removed).
+  assert.equal(stripStrayBraceHtml('<p>x = {a}</p>'), '<p>x = a</p>');
+});
+
+test('the stored letter stops printing its brace too (2026-11-19)', () => {
+  // The canvases draw `letter_html` through sanitizeLetterHtml, so a page saved
+  // before the formatter learned the rule still printed its brace under the
+  // title. Every shape an answer can leave is covered — a block, a bolded
+  // brace, a brace between two breaks, and one opening the page — while a brace
+  // inside real text is untouched.
+  const shapes = [
+    '<p>}</p><p>Place: Naga</p>',
+    '<p><strong>}</strong></p><p>Place: Naga</p>',
+    '<p>Time/Date: 1:00</p><br>}<br><p>Place: Naga</p>',
+    '}<br><p>Place: Naga</p>',
+  ];
+  for (const html of shapes) {
+    const cleaned = sanitizeLetterHtml(html);
+    assert.equal(cleaned.includes('}'), false, `the brace survived: ${html}`);
+    assert.ok(cleaned.includes('Place: Naga') || cleaned.includes('1:00'), `the page lost its words: ${html}`);
+  }
+  assert.equal(sanitizeLetterHtml('<p>x = {a}</p>'), '<p>x = a</p>', 'braces inside words are removed, the words stay');
+});
+
+test('a brace that opens a paragraph line goes too (2026-11-19)', () => {
+  // The shape the sheet actually held: the brace is not its own block and has
+  // no <br> after it — it is the first line INSIDE the paragraph, and the letter
+  // draws `pre-wrap`, so "}\nPlace: …" painted as its own line. A block/break
+  // strip alone never saw it; the paragraph opening is a boundary as well.
+  const html = '<p>}\nPlace: Brgy. Langtad, City of Naga, Cebu</p>';
+  const cleaned = sanitizeLetterHtml(html);
+  assert.equal(cleaned.includes('}'), false, 'the leading brace survived');
+  assert.ok(cleaned.includes('Place: Brgy. Langtad'), 'the page lost its own words');
+  assert.equal(sanitizeLetterHtml('<p>{a} = x</p>'), '<p>a = x</p>', 'braces inside words are removed, the words stay');
+});
+
+test('the sheet title never prints a brace (2026-11-19)', () => {
+  // A title is words. When a stored title carries a wrapper's tail on its own
+  // line, the quotes close after the words, not around a "}".
+  assert.equal(
+    reportTitle({ narrative: 'ILLEGAL POSSESSION OF DANGEROUS DRUGS\n}', incident_type: 'Drugs' }, {}),
+    'ILLEGAL POSSESSION OF DANGEROUS DRUGS',
+  );
+  assert.equal(reportTitle({ incident_type: '}' }, {}), '', 'a brace-only title reached the quotes');
+  assert.equal(reportTitle({ incident_type: 'Burglary / Theft' }, { offense_caption: 'BURGLARY/THEFT' }), 'BURGLARY/THEFT');
+});
+
+test('a brace above a quoted title line goes too (2026-11-19)', () => {
+  // The shape the sheet actually carried: the brace is the first line of the
+  // paragraph and the line under it opens with a QUOTE ("\u201CILLEGAL POSSESSION
+  // \u2026\u201D"), not a tag or a break — the older rule only accepted a break/tag
+  // after the brace, so this one survived every previous pass. "Not a word
+  // character" covers it without touching braces that sit inside text.
+  const html = '<p>}\n"ILLEGAL POSSESSION OF DANGEROUS DRUGS"\nPlace: Brgy. Langtad, City of Naga, Cebu</p>';
+  const cleaned = sanitizeLetterHtml(html);
+  assert.equal(cleaned.includes('}'), false, 'the brace above the quoted title survived');
+  assert.ok(cleaned.includes('"ILLEGAL POSSESSION OF DANGEROUS DRUGS"'), 'the title line was lost');
+  assert.ok(cleaned.includes('Place: Brgy. Langtad'), 'the page lost its own words');
+
+  const plain = stripStrayBracketLines('}\n"ILLEGAL POSSESSION OF DANGEROUS DRUGS"\nPlace: Naga');
+  assert.equal(plain.startsWith('"ILLEGAL'), true, 'the plain text kept the brace');
+
+  // Braces that belong to the text stay.
+  assert.equal(sanitizeLetterHtml('<p>{a} and {b}</p>'), '<p>a and b</p>', 'braces inside words are removed, the words stay');
+});
+
+test('every report the server returns is scrubbed of a lone brace (2026-11-19)', () => {
+  // Last line of defence: the scrubber runs at the API boundary, so a brace in a
+  // stored narrative, a stored letter or a model's answer is gone before ANY
+  // component can draw it — including the surfaces that build their own markup
+  // or type the raw value.
+  const answer = {
+    report: {
+      id: 7,
+      narrative: '}\n"ILLEGAL POSSESSION OF DANGEROUS DRUGS"\nPlace: Naga',
+      letter_html: '<p>}</p><p>Place: Naga</p>',
+    },
+    items: [{ narrative: '}\nText' }],
+  };
+  const scrubbed = scrubReportText(answer);
+  assert.equal(scrubbed.report.narrative.includes('}'), false);
+  assert.ok(scrubbed.report.narrative.includes('"ILLEGAL POSSESSION OF DANGEROUS DRUGS"'));
+  assert.equal(scrubbed.report.letter_html.includes('}'), false);
+  assert.equal(scrubbed.items[0].narrative, 'Text');
+  assert.equal(scrubbed.report.id, 7, 'non-text values are untouched');
+  // A bare answer string is report text too.
+  assert.equal(scrubReportText({ report: '}\n"TITLE"\nPlace: Naga' }).report, '"TITLE"\nPlace: Naga');
+  // Braces that belong to the text stay.
+  assert.equal(scrubReportText({ narrative: 'x = {a}' }).narrative, 'x = a', 'braces are removed, the words stay');
 });

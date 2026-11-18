@@ -24,7 +24,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { sanitizeRichHtml } from '../../lib/richText.js';
-import { registerSheetEditor, unregisterSheetEditor } from '../../lib/sheetTools.js';
+import { getSheetToolTarget, registerSheetEditor, unregisterSheetEditor } from '../../lib/sheetTools.js';
+import { CASE_OPTIONS, changeCaseInRange } from '../../lib/changeCase.js';
 
 function exec(command) {
   try {
@@ -39,12 +40,15 @@ function exec(command) {
 // .lh-s-* / .lh-lh-* rules in styles.css) — never inline styles — so what
 // this strip applies is exactly what a save keeps.
 // Free-entry boxes, Word's own behaviour (owner request, 2026-11-17): the
-// officer types ANY size from 8 to 72 and ANY spacing from 1.0 to 3.0, and the
+// officer types ANY size from 8 to 72 and ANY spacing from 0.3 to 3.0, and the
 // caret offers the same presets Word does. What is typed is validated by the
 // record's allowlist (PROSE_SIZE / PROSE_SPACING in lib/richText.js), so an
 // out-of-range value is ignored rather than baked into the page.
 const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
-const LINE_SPACINGS = ['1.0', '1.15', '1.5', '2.0', '2.5', '3.0'];
+// The caret's presets, tightest first: 0.3 / 0.5 / 0.8 are the tighter-than-
+// single settings the strip offers now (owner request, 2026-11-18), then
+// Word's own single-and-up ladder.
+const LINE_SPACINGS = ['0.3', '0.5', '0.8', '1.0', '1.15', '1.5', '2.0', '2.5', '3.0'];
 const DEFAULT_SIZE = '11';
 const DEFAULT_SPACING = '1.5';
 const BLOCK_TAGS = new Set(['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'BLOCKQUOTE']);
@@ -86,11 +90,21 @@ export default function RichTextArea({
   // Enter or blur lands, so a typed 13.5 is as valid as a preset.
   const [sizeText, setSizeText] = useState(DEFAULT_SIZE);
   const [spacingText, setSpacingText] = useState(DEFAULT_SPACING);
-  const [menu, setMenu] = useState(null); // 'size' | 'spacing' | null
+  const [menu, setMenu] = useState(null); // 'size' | 'spacing' | 'case' | null
   // A <select> takes focus and with it the selection the command needs: the
   // range is remembered on mousedown (before focus moves) and restored
   // before the command runs — the same trick the buttons' onMouseDown plays.
   const savedRange = useRef(null);
+  // One apply at a time: focusing the text (to style it) blurs the number box,
+  // and its blur handler must not run the same command a second time on a
+  // range that has moved on.
+  const applying = useRef(false);
+  // Whether the spacing box holds a value the officer typed but has not
+  // landed yet: a blur with nothing changed must leave the page alone.
+  const spacingDirty = useRef(false);
+  // The exact html this editor last handed the parent. It is already on
+  // screen, so the sync effect below must not write it again.
+  const lastEmitted = useRef(null);
   const html = String(value ?? '');
 
   // Drag-and-drop photo (owner request): a blotter photo dropped onto the
@@ -150,6 +164,13 @@ export default function RichTextArea({
     const el = boxRef.current;
     if (!el) return;
     if (document.activeElement === el) return;
+    // Our own save is ALREADY the page: the browser's serialization of it (a
+    // style written `line-height:1.5` reads back `line-height: 1.5;`) differs
+    // from the sanitized string by spacing alone, and rewriting it swaps every
+    // node — taking with it the range remembered when a toolbar box took the
+    // focus. That is how a custom line spacing lost the highlight and then
+    // found no paragraphs to style (owner request, 2026-11-18).
+    if (lastEmitted.current !== null && html === lastEmitted.current) return;
     const next = sanitize(html);
     if (el.innerHTML !== next) el.innerHTML = next;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,7 +179,9 @@ export default function RichTextArea({
   const emit = () => {
     const el = boxRef.current;
     if (!el) return;
-    onChange?.(sanitize(el.innerHTML));
+    const next = sanitize(el.innerHTML);
+    lastEmitted.current = next;
+    onChange?.(next);
   };
 
   // A menu closes on any press outside its combo — but not on the press that
@@ -186,22 +209,32 @@ export default function RichTextArea({
     const sel = window.getSelection();
     const el = boxRef.current;
     if (!sel || sel.rangeCount === 0 || !el || !el.contains(sel.anchorNode)) return;
-    savedRange.current = sel.getRangeAt(0).cloneRange();
+    const range = sel.getRangeAt(0);
+    // A toolbar box taking focus leaves a COLLAPSED caret behind, and that
+    // caret is not a selection: it must never replace the words the officer
+    // highlighted (owner request, 2026-11-18 — typing a custom line spacing
+    // used to drop the highlight, so the value had nothing to style).
+    if (range.collapsed && savedRange.current && !savedRange.current.collapsed) return;
+    savedRange.current = range.cloneRange();
+  };
+  /** Put the remembered range back on screen, without touching focus. */
+  const reselect = () => {
+    const r = savedRange.current;
+    const sel = window.getSelection();
+    if (!r || !sel) return;
+    if (!r.startContainer.isConnected) return; // the words were replaced
+    sel.removeAllRanges();
+    try {
+      sel.addRange(r);
+    } catch {
+      // A range whose words were replaced by an outside write is gone.
+    }
   };
   const restoreSelection = () => {
     const el = boxRef.current;
     if (!el) return;
     el.focus();
-    const r = savedRange.current;
-    const sel = window.getSelection();
-    if (!r || !sel) return;
-    sel.removeAllRanges();
-    try {
-      sel.addRange(r);
-    } catch {
-      // A range whose words were replaced by an outside write is gone; the
-      // command then applies where the caret is, never a crash.
-    }
+    reselect();
   };
   const blockOf = (node, root) => {
     let n = node && node.nodeType === 1 ? node : node && node.parentElement;
@@ -211,19 +244,29 @@ export default function RichTextArea({
     }
     return null;
   };
+  // Every paragraph a range touches — read from the RANGE, not from the live
+  // selection, so a command still styles what the officer highlighted while
+  // the number box owns the focus.
+  const blocksInRange = (el, range) => {
+    const out = new Set();
+    if (!el || !range) return [];
+    try {
+      const start = blockOf(range.startContainer, el);
+      const end = blockOf(range.endContainer, el);
+      if (start) out.add(start);
+      if (end) out.add(end);
+      [...el.children].forEach((child) => {
+        if (range.intersectsNode(child)) out.add(blockOf(child, el) || child);
+      });
+    } catch {
+      return []; // a range whose nodes are gone styles nothing, never throws
+    }
+    return [...out];
+  };
   const blocksForSelection = (el) => {
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return [];
-    const range = sel.getRangeAt(0);
-    const out = new Set();
-    const start = blockOf(range.startContainer, el);
-    const end = blockOf(range.endContainer, el);
-    if (start) out.add(start);
-    if (end) out.add(end);
-    [...el.children].forEach((child) => {
-      if (range.intersectsNode(child)) out.add(blockOf(child, el) || child);
-    });
-    return [...out];
+    if (!sel || sel.rangeCount === 0) return blocksInRange(el, savedRange.current);
+    return blocksInRange(el, sel.getRangeAt(0));
   };
   // Size: the browser's own wrap does the hard part (partial selections,
   // nested bold/italic), then its <font size> marker becomes a span carrying
@@ -277,28 +320,48 @@ export default function RichTextArea({
   // Spacing: the paragraph is the unit, Word's own behaviour. Bare words
   // directly in the box (the first line of a fresh editor) are wrapped first
   // so the value has a block to live on and survives the save.
-  const applyLineSpacing = (raw) => {
+  // `focus` is true when the officer pressed Enter or picked a preset — the
+  // page then takes the caret back with the words still highlighted, the way
+  // Word does. It is false on blur (they clicked somewhere else), where the
+  // value still lands but the caret is not yanked back out of their click.
+  const applyLineSpacing = (raw, { focus = true } = {}) => {
     const el = boxRef.current;
-    if (!el || disabled) return;
+    if (!el || disabled || applying.current) return;
     const n = Number(String(raw ?? '').replace(/[^\d.]/g, ''));
-    restoreSelection();
     if (!Number.isFinite(n) || n <= 0) {
       setSpacingText(DEFAULT_SPACING);
       return;
     }
-    const lh = Math.min(3, Math.max(1, Math.round(n * 100) / 100));
-    let blocks = blocksForSelection(el);
-    if (blocks.length === 0) {
-      const div = document.createElement('div');
-      while (el.firstChild) div.appendChild(el.firstChild);
-      el.appendChild(div);
-      blocks = [div];
+    // 0.3 is the tightest the strip offers (owner request, 2026-11-18, with
+    // 0.5 and 0.8 beside it); anything under it is not spacing. The record's
+    // allowlist states the same floor, so what lands here is what a save keeps.
+    const lh = Math.min(3, Math.max(0.3, Math.round(n * 100) / 100));
+    applying.current = true;
+    try {
+      if (focus) restoreSelection();
+      let blocks = blocksInRange(el, savedRange.current ?? null);
+      if (blocks.length === 0) blocks = blocksForSelection(el);
+      if (blocks.length === 0) {
+        // Nothing selected and the text has its paragraphs already: the box
+        // styles the officer's selection, never the whole page by accident.
+        if ([...el.children].some((c) => BLOCK_TAGS.has(c.tagName))) return;
+        const div = document.createElement('div');
+        while (el.firstChild) div.appendChild(el.firstChild);
+        el.appendChild(div);
+        blocks = [div];
+      }
+      blocks.forEach((b) => {
+        b.style.lineHeight = String(lh);
+      });
+      setSpacingText(String(lh));
+      spacingDirty.current = false;
+      emit();
+      // The words stay selected after the value lands: the highlight is the
+      // officer's, and re-applying another size must not mean re-selecting.
+      if (focus) reselect();
+    } finally {
+      applying.current = false;
     }
-    blocks.forEach((b) => {
-      b.style.lineHeight = String(lh);
-    });
-    setSpacingText(String(lh));
-    emit();
   };
   const pickSize = (value) => {
     setMenu(null);
@@ -306,7 +369,58 @@ export default function RichTextArea({
   };
   const pickSpacing = (value) => {
     setMenu(null);
-    applyLineSpacing(String(value));
+    applyLineSpacing(String(value), { focus: true });
+  };
+  // Word's Change Case (owner request, 2026-11-18): the selected words are
+  // converted in place, node by node, so the emphasis inside the selection
+  // survives and only the letters change. The caret stays on the same words,
+  // ready for a second pass (UPPERCASE then tOGGLE cASE, as in Word).
+  const applyChangeCase = (mode) => {
+    const el = boxRef.current;
+    if (disabled || applying.current) return;
+    // A sheet paragraph is being edited right under this strip: the words the
+    // officer selected live there, not in this box, so the one Aa serves both
+    // (owner request, 2026-11-18: no second Change Case row on the sheet).
+    const sheet = getSheetToolTarget();
+    const live = window.getSelection();
+    const liveRange = live && live.rangeCount > 0 ? live.getRangeAt(0) : null;
+    if (sheet && liveRange && sheet.el.contains(liveRange.startContainer)) {
+      applying.current = true;
+      try {
+        const next = changeCaseInRange(sheet.el, liveRange, mode);
+        if (!next) return;
+        live.removeAllRanges();
+        live.addRange(next);
+        sheet.emit?.();
+      } finally {
+        applying.current = false;
+      }
+      return;
+    }
+    if (!el) return;
+    const remembered = savedRange.current;
+    const range = remembered && remembered.startContainer.isConnected
+      ? remembered
+      : (live && live.rangeCount > 0 && el.contains(live.getRangeAt(0).startContainer) ? live.getRangeAt(0) : null);
+    if (!range || !el.contains(range.startContainer)) return;
+    applying.current = true;
+    try {
+      const next = changeCaseInRange(el, range, mode);
+      if (!next) return;
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(next);
+        savedRange.current = next.cloneRange();
+      }
+      emit();
+    } finally {
+      applying.current = false;
+    }
+  };
+  const pickCase = (mode) => {
+    setMenu(null);
+    applyChangeCase(mode);
   };
 
   // Word parity on the keyboard (owner request): Ctrl+B/I/U style the
@@ -390,18 +504,24 @@ export default function RichTextArea({
         <input
           className="rt-combo__input"
           aria-label="Line spacing"
-          title="Line spacing — type any 1.0 to 3.0"
+          title="Line spacing — type any 0.3 to 3.0"
           inputMode="decimal"
           value={spacingText}
           disabled={disabled}
           onMouseDown={rememberSelection}
           onFocus={rememberSelection}
-          onChange={(e) => setSpacingText(e.target.value.replace(/[^\d.]/g, ''))}
-          onBlur={() => applyLineSpacing(spacingText)}
+          onChange={(e) => {
+            setSpacingText(e.target.value.replace(/[^\d.]/g, ''));
+            spacingDirty.current = true;
+          }}
+          onBlur={() => {
+            if (!spacingDirty.current) return;
+            applyLineSpacing(spacingText, { focus: false });
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
-              applyLineSpacing(spacingText);
+              applyLineSpacing(spacingText, { focus: true });
             }
             if (e.key === 'Escape') setMenu(null);
           }}
@@ -433,6 +553,42 @@ export default function RichTextArea({
                 }}
               >
                 {v}
+              </button>
+            ))}
+          </div>
+        )}
+      </span>
+      <span className="rt-combo rt-combo--case">
+        <button
+          type="button"
+          className="rt-tool rt-case"
+          title="Change case"
+          aria-label="Change case"
+          aria-haspopup="true"
+          aria-expanded={menu === 'case'}
+          disabled={disabled}
+          onMouseDown={(e) => {
+            e.preventDefault(); // the press must not take the selection
+            rememberSelection();
+            setMenu(menu === 'case' ? null : 'case');
+          }}
+        >
+          Aa<span className="rt-case__caret" aria-hidden="true">&nbsp;▾</span>
+        </button>
+        {menu === 'case' && (
+          <div className="rt-combo__menu rt-case__menu" role="menu" aria-label="Change case">
+            {CASE_OPTIONS.map(([text, mode]) => (
+              <button
+                type="button"
+                key={mode}
+                role="menuitem"
+                className="rt-combo__item"
+                onMouseDown={(e) => {
+                  e.preventDefault(); // the menu must not take the selection
+                  pickCase(mode);
+                }}
+              >
+                {text}
               </button>
             ))}
           </div>

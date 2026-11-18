@@ -121,6 +121,39 @@ test('re-runs re-point the mid-run guard at the rewound account (paper must chan
   }
 });
 
+test('the mid-run guard reads the REWOUND paper, not the ink read before it (2026-11-19)', () => {
+  // "you put in what I changed but not in the sheet": beginFreshRun rewinds the
+  // paper to the snapshotted ink while this component still holds the pre-rewind
+  // letter_html, so the arrival guard compared two different pages, read the
+  // difference as a mid-run edit, and held the draft as a proposal over an
+  // unchanged sheet — the changes card listed wording the paper never showed.
+  // The baseline has to be the paper the restore actually put back.
+  const src = code(PANEL);
+  const at = src.indexOf('const enhanceReport');
+  const body = src.slice(at, src.indexOf('presentDraftResult()', at));
+  assert.match(
+    body,
+    /const rewoundPaper = letterHtmlToAccountText\(String\(restoredRun\.letterHtml \?\? ''\)\)/,
+    'the enhance run still baselines the guard on the pre-rewind page',
+  );
+  assert.match(
+    body,
+    /pressAccountRef\.current = rewoundPaper !== '' \? rewoundPaper : accountText;/,
+    'the guard baseline is not the rewound paper',
+  );
+
+  // And the restore must hand that ink back, or the run has nothing to read.
+  const reports = readFileSync(new URL('../../src/pages/Reports.jsx', import.meta.url), 'utf8');
+  const restoreAt = reports.indexOf('function restoreProvisionalSnapshot');
+  assert.notEqual(restoreAt, -1, 'the Discard path is gone');
+  const restoreBody = reports.slice(restoreAt, reports.indexOf('function keepProvisionalApply', restoreAt));
+  assert.match(
+    restoreBody,
+    /restored\.letterHtml = String\(narrativeUndo\.letterHtml \?\? ''\);/,
+    'the restore no longer reports the ink it put back on the paper',
+  );
+});
+
 test('Enhance again freezes the current edited page during the run (no original flash)', () => {
   const src = code(PANEL);
   const at = src.indexOf('const enhanceReport');

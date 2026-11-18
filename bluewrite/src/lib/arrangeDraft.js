@@ -9,7 +9,7 @@
 // shouted account reads formally while its words, spelling, grammar,
 // punctuation and identifiers stay exactly as the officer wrote them. Enhance
 // Wording keeps its own answer's casing.
-import { extractFieldLabels, formatIncidentReportHtml, reflowWrappedLines, reportHtmlToPlain } from './reportFormat.js';
+import { detectIncidentTitle, extractFieldLabels, formatIncidentReportHtml, reflowWrappedLines, reportHtmlToPlain, stripStrayBracketLines } from './reportFormat.js';
 
 const BS = String.fromCharCode(92);
 const LF = String.fromCharCode(10);
@@ -21,12 +21,18 @@ const TRIPLE = new RegExp(BS + 'n{3,}', 'g');
 // lines, then reflow phone hard wraps - the officer's words and order are
 // otherwise untouched.
 export function cleanAccountText(text) {
-  const collapsed = String(text == null ? '' : text)
-    .replace(/\r\n?/g, LF)
-    .replace(WS_NL, LF)
-    .replace(SP_TAB, ' ')
-    .replace(TRIPLE, LF + LF)
-    .trim();
+  // A LONE BRACE IS NEVER PART OF A REPORT (owner report, 2026-11-19: a "}"
+  // printed under the title on every generated sheet). An answer or a paste can
+  // leave the tail of a wrapper behind on its own line; it carries no words, so
+  // it is dropped before the text is arranged or enhanced.
+  const collapsed = stripStrayBracketLines(
+    String(text == null ? '' : text)
+      .replace(/\r\n?/g, LF)
+      .replace(WS_NL, LF)
+      .replace(SP_TAB, ' ')
+      .replace(TRIPLE, LF + LF)
+      .trim(),
+  );
   if (collapsed === '') return '';
   // A phone paste wraps every ~40 characters with a hard break and no blank
   // line: that break is spacing, not a paragraph, so it rejoins with a space
@@ -135,12 +141,27 @@ export function letterHtmlToAccountText(html) {
 // through unchanged, no suggestions or gaps.
 // arranged:true marks the provenance; the panel renders it as a visible
 // receipt line (see ai-arranged-note), so the flag always has a reader.
-export function buildArrangeDraft({ accountText, notableFindings = '', actionTaken = '' }) {
+export function buildArrangeDraft({ accountText, titleSource = '', notableFindings = '', actionTaken = '', keepCasing = false }) {
   const cleaned = cleanAccountText(accountText);
   const findingsText = String(notableFindings == null ? '' : notableFindings);
   const statusText = String(actionTaken == null ? '' : actionTaken);
   return {
-    narrative: formatIncidentReportHtml(cleaned, { sentenceCase: true }),
+    // The model's own arrangement keeps ITS capitalisation (owner request,
+    // 2026-11-18): the arrange prompt already forbids recasing — "copy every
+    // word exactly as spelled and capitalized in the source" — so running this
+    // side's sentence-case pass over the answer can only damage what the
+    // source carried. That pass is what turned "Around 1:00 A.M." into
+    // "a.M.". Only a LOCAL fallback arrangement (the model was unavailable,
+    // so the raw account was never read by it) still reads formally through
+    // sentence case.
+    // The title the officer already assigned stays the report's title, even
+    // when the arrangement rewrote the heading in the incident type's own
+    // words (owner request, 2026-11-19). `titleSource` is the officer's account
+    // before the model touched it.
+    narrative: formatIncidentReportHtml(cleaned, {
+      sentenceCase: !keepCasing,
+      titleOverride: detectIncidentTitle(String(titleSource ?? '') || accountText),
+    }),
     suggestions: [],
     possibleGaps: [],
     notableFindings: findingsText.split(LF).map((s) => s.trim()).filter(Boolean),
@@ -176,6 +197,10 @@ export function buildEnhancedDraft({ enhancedText, sourceText }) {
   const html = formatIncidentReportHtml(cleaned, {
     allowedLabels: extractFieldLabels(source),
     preserveLayout: true,
+    // The title the page already carried is the report's title, whatever words
+    // the wording pass put in its place (owner request, 2026-11-19: an assigned
+    // title is never changed to the incident type's folder name).
+    titleOverride: detectIncidentTitle(source),
   });
   return {
     narrative: html,

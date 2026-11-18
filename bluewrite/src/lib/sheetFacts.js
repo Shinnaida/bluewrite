@@ -118,11 +118,23 @@ export function properNounsFor(report = {}, ts = {}) {
  * @returns {string}
  */
 export function reportTitle(report = {}, ts = {}) {
-  const caption = N(ts?.offense_caption);
+  // A title is words. A brace that arrived with the stored value (a wrapper's
+  // tail on its own line) is dropped rather than printed under the quotes
+  // (owner report, 2026-11-19).
+  const cleanTitle = (value) =>
+    String(value ?? '')
+      .split(/\n/)
+      .map((line) => line.trim())
+      .filter((line) => line !== '' && !/^[{}[\]()<>"'`\\|]+$/.test(line))
+      .join(' ')
+      // No braces in a report title either (owner decision, 2026-11-19).
+      .replace(/[{}]/g, '')
+      .trim();
+  const caption = cleanTitle(N(ts?.offense_caption));
   if (caption !== '') return caption;
-  const stated = detectIncidentTitle(richTextToPlain(report?.narrative ?? ''));
+  const stated = cleanTitle(detectIncidentTitle(richTextToPlain(report?.narrative ?? '')));
   if (stated !== '') return stated;
-  return N(report?.incident_type);
+  return cleanTitle(N(report?.incident_type));
 }
 
 // “P8,500.00” if the stored value is a bare number; leave typed text alone.

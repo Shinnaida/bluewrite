@@ -85,6 +85,18 @@ export function extractClosingValues(html) {
 }
 
 const RECORDED_LINE = (name) => `<p><b>Recorded by:</b> ${name}</p>`;
+// A closing line is rewritten IN PLACE wherever it sits — a <p> from the
+// stamp, a <div> or a bare line from the officer's own letter — and only the
+// words after the label are replaced. The old pattern demanded `<b>Recorded
+// by:</b>` followed by `</p>`, and when the line's block was anything else the
+// replace missed and the caller's fallback APPENDED another line — so typing
+// "PSMS JAKE" into the officer-name box left "Recorded by: PSMS" and
+// "Recorded by: PSMS JAKE" stacked under the first (owner report,
+// 2026-11-18: "every time I space it will duplicate").
+const RECORDED_IN_PLACE =
+  /(<(?:b|strong)>\s*Recorded by:\s*<\/(?:b|strong)>)([\s\S]*?)(?=<\/(?:p|div|li|h[1-6]|td)>|<br\s*\/?>|$)/i;
+const REQUEST_IN_PLACE =
+  /(request of\s*)([\s\S]*?)(?=\s+for whatever legal)/i;
 const ISSUANCE_LINE = (name) =>
   `<p>This certification is issued upon the request of ${name} for whatever legal purposes it may serve.</p>`;
 
@@ -139,19 +151,26 @@ export function fillClosingLine(html, kind, name) {
   // Replacement functions (not strings) so a typed `$` in a name cannot
   // read as a replacement pattern.
   if (kind === 'recorded') {
-    if (!hasRecordedBy(src)) return insertRecordedLine(src, RECORDED_LINE(value));
-    const next = src.replace(
-      /(<b>\s*Recorded by:\s*<\/b>\s*)([^<]*)(<\/p>)/i,
-      (_m, p1, _p2, p3) => `${p1}${value}${p3}`,
-    );
-    return next === src ? `${src}${RECORDED_LINE(value)}` : next;
+    const m = RECORDED_IN_PLACE.exec(src);
+    if (m) {
+      const at = m.index + m[1].length;
+      // One space after the label, whatever the source happened to hold — the
+      // value is replaced whole, never appended beside the old one.
+      return `${src.slice(0, at)} ${value}${src.slice(at + m[2].length)}`;
+    }
+    // A "Recorded by:" line in some shape this rule cannot rewrite (an
+    // unwrapped line, a label split across tags) is LEFT ALONE. Appending
+    // would put a second, third and fourth line on the paper.
+    if (/recorded\s+by\s*:/i.test(stripTags(src))) return src;
+    return insertRecordedLine(src, RECORDED_LINE(value));
   }
-  if (!hasRequestedBy(src)) return `${src}${ISSUANCE_LINE(value)}`;
-  const next = src.replace(
-    /(request of\s*)([^<]*?)(\s+for whatever legal)/i,
-    (_m, p1, _p2, p3) => `${p1}${value}${p3}`,
-  );
-  return next === src ? `${src}${ISSUANCE_LINE(value)}` : next;
+  const m = REQUEST_IN_PLACE.exec(src);
+  if (m) {
+    const at = m.index + m[1].length;
+    return `${src.slice(0, at)}${value}${src.slice(at + m[2].length)}`;
+  }
+  if (/issued\s+upon\s+the\s+request\s+of|requested\s+by\s*:/i.test(stripTags(src))) return src;
+  return `${src}${ISSUANCE_LINE(value)}`;
 }
 
 /**

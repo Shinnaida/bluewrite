@@ -27,10 +27,12 @@ final class RichText
         '/^lh-(?:s-(?:10|11|12|13|14|15|16|18|20|22)|lh-(?:100|115|150|200|250|300))$/';
 
     /** The strip's free-entry size and spacing (owner request, 2026-11-17):
-     *  any 8–72 px and 1.0–3.0, carried as two STRICT inline properties and
-     *  nothing else. Mirrors PROSE_SIZE / PROSE_SPACING in src/lib/richText.js. */
+     *  any 8–72 px and 0.3–3.0, carried as two STRICT inline properties and
+     *  nothing else. Mirrors PROSE_SIZE / PROSE_SPACING in src/lib/richText.js;
+     *  the spacing floor is 0.3 (owner request, 2026-11-18: 0.3, 0.5 and 0.8
+     *  are now offered beside Word's own 1.0-and-up ladder). */
     private const PROSE_SIZE = '/^(?:[89]|[1-6]\d|7[0-2])(?:\.\d)?px$/i';
-    private const PROSE_SPACING = '/^(?:[12](?:\.\d{1,2})?|3(?:\.0{1,2})?)$/';
+    private const PROSE_SPACING = '/^(?:0\.[3-9]\d?|[12](?:\.\d{1,2})?|3(?:\.0{1,2})?)$/';
 
     /**
      * Allowlisted HTML. Unknown tags are unwrapped (their words kept),
@@ -182,7 +184,13 @@ final class RichText
             }
         }
         $out .= self::escapeText(substr($src, $offset));
-        return $out;
+        // Whitespace BETWEEN blocks is never ink, and the letter draws
+        // `pre-wrap` so an officer's typed indentation survives (see
+        // `.pr-letter-html` in styles.css). A newline sitting between two block
+        // tags would paint as a blank line there, so it is dropped once, here —
+        // spaces INSIDE a block are the officer's and stay. Mirrors
+        // sanitizeLetterHtml in src/lib/richText.js.
+        return (string) preg_replace('/(<\\/(?:p|div|li|ul|ol|h[1-3])>|<br>)[ \\t]*\\R[ \\t\\n]*(?=<)/i', '$1', $out);
     }
 
     /**

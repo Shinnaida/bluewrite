@@ -163,3 +163,87 @@ test('"aforementioned" and stray Title Case the officer never wrote keep the sou
   assert.equal(caps.keptLines[0].reason, 'casing');
   assert.ok(caps.text.includes('heated argument'));
 });
+
+// ---- register vocabulary (owner request, 2026-11-19) -----------------------
+// Enhance Wording now demands police terminology ("make the Gemini use police
+// terminologies to elevate the report"), and the guard carries an approved
+// REGISTER_WORDS whitelist so an elevated line is ACCEPTED instead of being
+// thrown away as a rewrite or as invented content. These tests hold the
+// whitelist to both halves of its promise: register vocabulary gets through,
+// and everything that is a fact, a name, a number or a new claim still does
+// not. Without them the whitelist could widen until the guard waved anything
+// through and no other test would notice.
+
+const OFFICER_LINE = [
+  'Facts:',
+  'The complainant said he saw the two vehicles bump each other. He went to check it out. Nobody was hurt.',
+].join('\n');
+
+// The same account raised to police register: stated/observed/collide,
+// thereafter, proceeding to the scene, rendered peaceful, sustained injuries —
+// every added word is register vocabulary, and the line is materially longer.
+const ELEVATED_LINE = [
+  'Facts:',
+  'The complainant stated that he observed the two vehicles collide. Thereafter, the responding team proceeded to the scene and the situation was rendered peaceful; nobody sustained injuries.',
+].join('\n');
+
+test('a line elevated to police terminology is accepted, not kept as a rewrite (2026-11-19)', () => {
+  const r = guardEnhancedWording(ELEVATED_LINE, OFFICER_LINE);
+  assert.equal(r.rejected, false);
+  assert.deepEqual(r.keptLines, [], `elevation was refused: ${JSON.stringify(r.keptLines)}`);
+  assert.equal(r.changedLines, 1);
+  assert.ok(r.text.includes('proceeded to the scene'), 'the elevated wording never reached the paper');
+  assert.ok(r.text.includes('Nobody was hurt') === false, 'the officer\'s casual line was left in place');
+});
+
+test('the register whitelist still refuses an invented name or a changed number (2026-11-19)', () => {
+  const named = guardEnhancedWording(
+    ELEVATED_LINE.replace('nobody sustained injuries', 'nobody sustained injuries, per Mark Santos'),
+    OFFICER_LINE,
+  );
+  assert.equal(named.changedLines, 0);
+  assert.equal(named.keptLines[0].reason, 'name');
+  assert.ok(named.text.includes('Nobody was hurt'), 'the officer\'s own line must stand');
+
+  const numbered = guardEnhancedWording(SOURCE.replace('ABC 1234', 'ABC 9999'), SOURCE);
+  assert.equal(numbered.changedLines, 0);
+  assert.equal(numbered.keptLines[0].reason, 'number');
+  assert.ok(numbered.text.includes('ABC 1234'));
+});
+
+test('an inserted act of authority is refused; the officer\'s own act may be raised (2026-11-19)', () => {
+  // A suspect who went home was not arrested. Register vocabulary is style;
+  // this is a new claim, and the whitelist must never smuggle it in.
+  const arrested = guardEnhancedWording(
+    'Facts:\nThe suspect was arrested after the altercation.',
+    'Facts:\nThe suspect went home after the argument.',
+  );
+  assert.equal(arrested.changedLines, 0);
+  assert.equal(arrested.keptLines[0].reason, 'authority');
+  assert.ok(arrested.text.includes('went home'));
+
+  // A knife left on a table was not confiscated.
+  const confiscated = guardEnhancedWording(
+    'Facts:\nThe man left the bladed weapon on the table; the same was confiscated.',
+    'Facts:\nThe man left the knife on the table.',
+  );
+  assert.equal(confiscated.changedLines, 0);
+  assert.equal(confiscated.keptLines[0].reason, 'authority');
+  assert.ok(confiscated.text.includes('left the knife'));
+
+  // But the pass may still name an act the line already records: "caught" is
+  // the officer's own word for it, and "arrested" is already on the page.
+  const licensed = guardEnhancedWording(
+    'Facts:\nThe suspect was apprehended by the responding team.',
+    'Facts:\nThe suspect was caught by the responding team.',
+  );
+  assert.equal(licensed.changedLines, 1);
+  assert.deepEqual(licensed.keptLines, []);
+
+  const alreadySaid = guardEnhancedWording(
+    'Facts:\nThe suspect was arrested at the scene.',
+    'Facts:\nThe suspect was arrested at the scene of the incident.',
+  );
+  assert.equal(alreadySaid.changedLines, 1);
+  assert.deepEqual(alreadySaid.keptLines, []);
+});

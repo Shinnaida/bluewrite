@@ -261,6 +261,10 @@ const KNOWN_LABELS = new Set([
   'td of incident',
   'date reported',
   'time reported',
+  // The scanned blotter sheet's own "Date of Discovery" row (sheetFacts.js
+  // prints it on Theft and Burglary pages). Without it the row read as prose
+  // and glued itself to the Time/Date value above it.
+  'date of discovery',
   'incident type',
   'type of incident',
   'nature of incident',
@@ -293,6 +297,10 @@ const KNOWN_LABELS = new Set([
   'items involved',
   'property involved',
   'properties involved',
+  // The numbered items block: its heading opens a block of data rows, and its
+  // rows must never fold into the sentence above them.
+  'stolen items',
+  'items taken',
   'injuries',
   'injuries sustained',
   'findings',
@@ -302,6 +310,8 @@ const KNOWN_LABELS = new Set([
   'disposition',
   'recommendation',
   'investigating officer',
+  // The blotter's closing IOC row sits under RECORDED BY.
+  'ioc',
   'blotter entry',
   'blotter reference',
   'subject',
@@ -350,16 +360,34 @@ const INLINE_LABEL_RE = (() => {
   // The certification closing is prose, not a label, but it is still a
   // boundary: without its own break it stays glued to the remarks tail and
   // never takes its closing place (or its dressed requestor name).
+  // The match must open a line or follow whitespace, and the line start is a
+  // boundary too (owner request, 2026-11-18): "Date & Time of Incident:" opens
+  // a line, and the old lookbehind skipped it there — the scan then matched its
+  // own tail ("Time of Incident") and left "Date &" glued to the Place value,
+  // which is the blotter page that printed "… Cebu Date &" / "Time/Date: …".
+  // The alternation is longest-first, so at every position the FULL label wins
+  // over a shorter one inside it ("NOTABLE FINDINGS" over "Findings").
   return new RegExp(
-    `(?<=\\S)[ \\t]*\\b(?:(${labels.join('|')})\\b\\s*:|(this\\s+certification\\s+is\\s+issued)\\b)`,
-    'gi',
+    `(^|[ \\t]+)(?:(${labels.join('|')})\\b\\s*:|(this\\s+certification\\s+is\\s+issued)\\b)`,
+    'gim',
   );
 })();
 
 function segmentInlineLabels(text) {
-  return String(text ?? '')
-    .replace(/\*\*/g, '')
-    .replace(INLINE_LABEL_RE, (_, label, issuance) => (issuance ? `\n${issuance}` : `\n${label}:`));
+  const source = String(text ?? '').replace(/\*\*/g, '');
+  return source.replace(INLINE_LABEL_RE, (match, lead, label, issuance, offset, whole) => {
+    // A label already opening its line keeps its indentation and gains no
+    // break; one found mid-line opens a line of its own, and the space before
+    // it becomes that break instead of a trailing space.
+    const before = whole.slice(0, offset);
+    // A slash compound is ONE heading: "ACTION TAKEN / STATUS:" is the label,
+    // so its tail is never read as a label of its own (which split the heading
+    // from its own paragraph and left "Action taken /" stranded above it).
+    if (/\/\s*$/.test(before)) return match;
+    const opensLine = /(?:^|\n)[ \t]*$/.test(before);
+    const body = issuance ? issuance : `${label}:`;
+    return opensLine ? `${lead}${body}` : `\n${body}`;
+  });
 }
 
 /**
@@ -778,19 +806,94 @@ function isLabelCandidate(raw) {
  * `... upon the request of "<b><u>I LOVE YOU</u></b>" for what ever ...`.
  * Every other word keeps its wording (and Arrange Only's capitalisation).
  */
-export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceCase = false, preserveLayout = false } = {}) {
+// A LONE BRACE IS NEVER A LINE OF A REPORT (owner report, 2026-11-19: a "}"
+// printed under the title on every generated sheet). Nothing in a blotter is
+// written as a bare "}" — it is the tail of a wrapper an answer or a paste left
+// behind — so a line that is nothing but brackets/quotes is dropped instead of
+// being laid out as part of the account. Lines that carry words, figures or any
+// other punctuation are untouched.
+const STRAY_BRACKET_LINE = /^[{}[\]()<>"'`\\|]+$/;
+
+export function stripStrayBracketLines(text) {
+  return String(text ?? '')
+    .split('\n')
+    .filter((line) => !STRAY_BRACKET_LINE.test(line.trim()))
+    .join('\n')
+    // NO BRACES IN A POLICE REPORT (owner report, 2026-11-19): a blotter line
+    // never uses them, and one glued to another line survived every shape rule,
+    // so the characters are dropped outright rather than matched by shape.
+    .replace(/[{}]/g, '');
+}
+
+// THE LAST LINE OF DEFENCE (owner report, 2026-11-19: "where did you apply if
+// you cant remove hide it"). Every report the app receives is scrubbed on the
+// way in: a lone brace in a narrative, a stored letter, or a model's answer is
+// removed before any component, preview or typing pass can draw it — including
+// the surfaces that build their own markup from the raw value. Only report text
+// keys are touched, only strings, and only a brace that stands alone on a line.
+const REPORT_TEXT_KEYS = new Set(['narrative', 'letter_html', 'report']);
+
+export function scrubReportText(value, depth = 0) {
+  if (value == null || typeof value !== 'object' || depth > 6) return value;
+  if (Array.isArray(value)) return value.map((item) => scrubReportText(item, depth + 1));
+  let changed = false;
+  const out = {};
+  for (const [key, inner] of Object.entries(value)) {
+    if (typeof inner === 'string' && REPORT_TEXT_KEYS.has(key)) {
+      const cleaned = stripStrayBraceHtml(stripStrayBracketLines(inner));
+      out[key] = cleaned;
+      if (cleaned !== inner) changed = true;
+    } else {
+      out[key] = scrubReportText(inner, depth + 1);
+      if (out[key] !== inner) changed = true;
+    }
+  }
+  return changed ? out : value;
+}
+
+// The same rule for a page already stored as html: a brace alone in its own
+// paragraph or between two breaks is removed, so a report saved before the
+// formatter learned the rule stops printing it too.
+export function stripStrayBraceHtml(html) {
+  const LONE = '(?:<(?:strong|b|em|i|span)\\b[^>]*>\\s*[{}]\\s*<\\/(?:strong|b|em|i|span)>|[{}])';
+  return String(html ?? '')
+    // A whole block that holds nothing but a brace (with breaks around it).
+    .replace(new RegExp('<(p|div|li)\\b[^>]*>\\s*(?:<br\\s*\\/?>\\s*)*' + LONE + '\\s*(?:<br\\s*\\/?>)?\\s*<\\/\\1>', 'gi'), '')
+    // A brace alone on its line: between breaks, opening the page, or alone in
+    // a block followed by a newline or a tag.
+    .replace(new RegExp('(<br\\s*\\/?>|^|\\n|<(?:p|div|li)\\b[^>]*>)\\s*' + LONE + '[ \\t]*(?:\\r?\\n)?(?![A-Za-z0-9])', 'gi'), (whole, lead) =>
+      (lead && lead !== whole ? lead : ''))
+    // ...and any brace still in the text goes with them (owner report,
+    // 2026-11-19): the shape rules above catch a lone line, this catches a brace
+    // glued to words or quotes that they cannot see.
+    .replace(/[{}]/g, '');
+}
+
+// The line that states `stated` becomes `title`, in place: the same heading,
+// the same position, the officer's own words.
+function replaceTitleLine(text, stated, title) {
+  const clean = (line) => line.trim().replace(/^["'\u201C\u201D]+|["'\u201C\u201D]+$/g, '').trim();
+  return String(text ?? '')
+    .split('\n')
+    .map((line) => (clean(line) === stated ? title : line))
+    .join('\n');
+}
+
+export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceCase = false, preserveLayout = false, titleOverride = '' } = {}) {
   // Spacing-independent first: a one-line paste segments on its labels before
   // anything else reads lines, so the title, the sections and the order never
   // depend on breaks the officer happened to type. A phone paste with hard
   // wraps reflows next, so wrapped sentences read as one line like any other
   // report even when the source spaced them as fragments.
-  const raw = reflowWrappedLines(segmentInlineLabels(String(text ?? '').replace(/\r\n?/g, '\n'))).trim();
+  const raw = stripStrayBracketLines(
+    reflowWrappedLines(segmentInlineLabels(stripStrayBracketLines(String(text ?? '').replace(/\r\n?/g, '\n')))),
+  ).trim();
   if (raw === '') return '';
   // A "Requested by: NAME" line names who asked for the copy (owner
   // request): the report closes with the certification issuance naming them.
   // An issuance line the source already carries always wins; a placeholder
   // name is not a requestor, so nothing is appended for one.
-  const withIssuance = appendRequestedByIssuance(raw);
+  let withIssuance = appendRequestedByIssuance(raw);
 
   const allowed = Array.isArray(allowedLabels)
     ? new Set(allowedLabels.map(normalizeLabel))
@@ -800,7 +903,20 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
   // the report's entry timestamp, and removed from its original position. No
   // `INCIDENT TITLE:` label is ever added; a source that states none still
   // gets none.
-  const title = detectIncidentTitle(withIssuance);
+  //
+  // THE ASSIGNED TITLE WINS (owner request, 2026-11-19: "when there is already
+  // assigned here, don't change it ... don't change it to the folder where it
+  // falls"). A wording pass returns the page with the title rewritten in its
+  // own words — often the incident type's folder label — and that rewrite was
+  // accepted, so the printed charge changed under the officer. `titleOverride`
+  // is the title the page ALREADY carried; when the text being formatted says
+  // something else, the officer's own words are put back in its place.
+  const detectedTitle = detectIncidentTitle(withIssuance);
+  const assignedTitle = String(titleOverride ?? '').trim();
+  const title = assignedTitle !== '' ? assignedTitle : detectedTitle;
+  if (title !== detectedTitle && detectedTitle !== '') {
+    withIssuance = replaceTitleLine(withIssuance, detectedTitle, title);
+  }
   const sections = splitReportSections(withIssuance, title);
   if (title !== '') sections.push({ rank: 15, order: -1, title: true, lines: [] });
 
@@ -873,7 +989,11 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
     // licence and address details print with the vehicle they describe, and
     // the facts read as flowing prose, never as loose fragments. Section
     // boundaries are already decided, so no part can glue onto another one.
-    const lines = joinSectionContinuations(section.lines, section.rank === 40);
+    const lines = joinSectionContinuations(
+      section.lines,
+      section.rank === 40,
+      section.rank === 55,
+    );
     // Sentence-case state travels through the section: a line that continues
     // the previous sentence stays lower-case, a new sentence or paragraph
     // starts with a capital. A blank line starts a new paragraph.
@@ -888,7 +1008,12 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
       if (line.trim() === '') {
         state.start = true;
         return '';
-      }        return formatLine(line, allowed, section.rank === 40, { sentenceCase, state, facts: opensFacts });
+      }        return formatLine(line, allowed, section.rank === 40, {
+          sentenceCase,
+          state,
+          facts: opensFacts,
+          items: section.rank === 55,
+        });
     });
     // A single space after the VEHICLES INVOLVED heading (owner request): a
     // bare label stands on its own paragraph, and the V1:/V2: rows open the
@@ -922,7 +1047,19 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
     const next = parts[i + 1];
     const closingPair =
       part.rank === 80 && next.rank === 90 && isRecordedPart(part.html) && isIssuancePart(next.html);
-    if ((part.rank === 30 || next.rank === 60 || next.rank === 70 || part.rank === 80) && !closingPair) out.push(SEP);
+    // The breathing space sits after the incident's dates AS A PAIR: when a
+    // "Date of Discovery" row follows the Time/Date line, the blank line
+    // belongs under THE ROW THAT ENDS THE PAIR, not between them (owner
+    // request, 2026-11-18).
+    const closesDates = part.rank === 30 && next.rank !== 31;
+    // Recorded by and the IOC row under it are one closing block: no blank
+    // line between them.
+    const beforeIoc = part.rank === 80 && next.rank === 82;
+    // ACTION TAKEN / STATUS is its own block on the paper: one blank line
+    // above it and one below, like the findings and the closing rows.
+    const actionBlock =
+      part.rank === 75 || next.rank === 75;
+    if ((closesDates || part.rank === 31 || next.rank === 60 || next.rank === 70 || actionBlock || (part.rank === 80 && !beforeIoc)) && !closingPair) out.push(SEP);
   });
   return out.join('');
 }
@@ -931,12 +1068,20 @@ export function formatIncidentReportHtml(text, { allowedLabels = null, sentenceC
 // order; the formatter never adds a part, it only places the parts present.
 const SECTION_RANKS = [
   [/^(place|place of incident|place of occurrence|location|incident location)$/, 20],
-  [/^(t\/d|td|time\/date|t\/d of incident|td of incident|time\/date of incident|time and date|time and date of incident|date and time|date and time of incident|date of incident|time of incident|date reported|time reported)$/, 30],
+  [/^(t\/d|td|time\/date|t\/d of incident|td of incident|time\/date of incident|time and date|time and date of incident|date & time|date & time of incident|date and time|date and time of incident|date of incident|time of incident|date reported|time reported)$/, 30],
+  // "Date of Discovery" follows the incident's own Time/Date, as on the
+  // blotter sheet it was read from.
+  [/^(date of discovery|date discovered|discovery date)$/, 31],
   [/^(vehicles? involved|vehicle)$/, 40],
   [/^(persons? involved|persons? of interest|victim|victims|suspect|suspects|respondent|respondents|complainant|complainants|witness|witnesses|backrider|driver|owner)$/, 50],
+  // The numbered items block closes the parties: Victim, Suspect, then what
+  // was taken, exactly as the sheet lists them.
+  [/^(stolen items|items taken)$/, 55],
   [/^(facts|facts of the case|statement|statement of facts|narrative)$/, 60],
   [/^(remarks?|findings|notable findings)$/, 70],
+  [/^(action taken|action taken\/status|status|disposition|recommendation)$/, 75],
   [/^(recorded by|reported by|requested by|requestor|investigating officer|purpose)$/, 80],
+  [/^(ioc)$/, 82],
 ];
 
 function sectionRank(hit) {
@@ -1126,6 +1271,10 @@ function splitReportSections(raw, title) {
         tail.push(ln);
       }
       while (tail.length > 0 && tail[tail.length - 1].trim() === '') tail.pop();
+      // A list under the heading is the heading's own block, not a narrative
+      // that moved: "NOTABLE FINDINGS:" keeps its bullets (owner request,
+      // 2026-11-18) — pulling them out printed them above their own heading.
+      if (/^\s*[-•*]\s/.test(tail[0] ?? '')) continue;
       if (tail.join(' ').replace(/\s+/g, ' ').trim().length < 200) continue;
       headEnd = gapAt;
     } else {
@@ -1135,6 +1284,7 @@ function splitReportSections(raw, title) {
       if (rest.length === 0) continue;
       if (!/[.!?]["'”’)]*\s*$/.test(section.lines[firstIdx].trim())) continue;
       if (!/^[A-Z]/.test(rest[0].trim())) continue;
+      if (/^\s*[-•*]\s/.test(rest[0].trim())) continue;
       if (rest.join(' ').replace(/\s+/g, ' ').trim().length < 500) continue;
       tail = rest;
       headEnd = firstIdx + 1;
@@ -1158,6 +1308,9 @@ function joinVehicleContinuations(lines) {
   return joinSectionContinuations(lines, true);
 }
 
+// A numbered item row ("1.) 128m of THHN wire 200mm") or the list's TOTAL line.
+const ITEM_ROW = /^\s*(?:\d+\s*[.)]+\s|(?:grand\s+|sub-?)?total\b)/i;
+
 /**
  * Join wrapped continuations inside one already-split section.
  *
@@ -1172,14 +1325,23 @@ function joinVehicleContinuations(lines) {
  * @param {boolean} vehicles whether this is the vehicles section
  * @returns {string[]}
  */
-function joinSectionContinuations(lines, vehicles = false) {
+function joinSectionContinuations(lines, vehicles = false, items = false) {
   const out = [];
   for (const line of lines) {
     const text = String(line ?? '');
     const prev = out.length > 0 ? out[out.length - 1] : '';
+    const prevHit = matchLabelLine(prev);
+    // A bare label heads what follows it: nothing rejoins onto "Stolen Items:"
+    // or "ACTION TAKEN / STATUS:", or the heading swallows its own block.
+    const prevBareLabel = prevHit !== null && prevHit.rest.trim() === '';
+    // An items block is a list of ROWS, not a paragraph: "2.) …" opens a new
+    // row and "TOTAL, - - - -" closes the list, so neither joins the row above.
+    const rowOpens = items && (ITEM_ROW.test(text) || ITEM_ROW.test(prev));
     const continues =
       prev.trim() !== '' &&
       text.trim() !== '' &&
+      !prevBareLabel &&
+      !rowOpens &&
       (!vehicles || !/^\s*V\d+\b/i.test(text)) &&
       !endsSentence(prev);
     if (continues) {
@@ -1245,7 +1407,7 @@ function appendRequestedByIssuance(text) {
 // A Time/Date line's own labels (the rank-30 set in SECTION_RANKS): only
 // these lines spell their numeric date in words.
 const TD_LABEL =
-  /^(t\/d|td|time\/date|t\/d of incident|td of incident|time\/date of incident|time and date|time and date of incident|date and time|date and time of incident|date of incident|time of incident|date reported|time reported)$/;
+  /^(t\/d|td|time\/date|t\/d of incident|td of incident|time\/date of incident|time and date|time and date of incident|date & time|date & time of incident|date and time|date and time of incident|date of incident|time of incident|date reported|time reported)$/;
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -1294,10 +1456,16 @@ function separateRunOnTokens(text) {
     .replace(/(\d)(DRIVEN|OWNED|VALID|LICEN[CS]E|RESIDENT|PLATE)\b/g, '$1 $2');
 }
 
-function formatLine(line, allowed, vehicles = false, { sentenceCase = false, state = null, facts = false } = {}) {
+function formatLine(line, allowed, vehicles = false, { sentenceCase = false, state = null, facts = false, items = false } = {}) {
   const original = String(line ?? '').replace(/[ \t]+$/, '');
   const hit = matchLabelLine(original);
   if (hit === null) {
+    // An item row is a record of what was taken, not a sentence (owner request,
+    // 2026-11-18): "1.) 128m of THHN wire 200mm -284, 370.00" and "TOTAL,
+    // - - - - 460,120.00" print exactly as the officer wrote them. Sentence
+    // case has no business rewriting a wire gauge or a total's own capitals,
+    // and the block's rows must not be indented like a facts paragraph.
+    if (items) return escapeHtml(original);
     // The issuance line's requestor name is paper ink (see above): bold,
     // ALL CAPS and underlined, wording around it untouched.
     const issuance = formatIssuanceRequestor(original, { sentenceCase, state });
@@ -1355,7 +1523,8 @@ function formatLine(line, allowed, vehicles = false, { sentenceCase = false, sta
   const shownLabel = sentenceCase
     ? arrangeLabelName(normalized)
     : (/^(?:place|place of incident|place of occurrence|location|incident location)$/.test(normalized) ? placeShort : label);
-  const head = `<b>${escapeHtml(shownLabel + ':')}</b>`;
+  const headLabel = HEADING_CAPS.test(normalized) ? shownLabel.toUpperCase() : shownLabel;
+  const head = `<b>${escapeHtml(headLabel + ':')}</b>`;
   if (cased === '') return head;
   // The facts content follows its label on the next line, indented (owner
   // request) — in both modes, so Arrange and Enhance read the same page.
@@ -1368,16 +1537,33 @@ function formatLine(line, allowed, vehicles = false, { sentenceCase = false, sta
 // shorthand read as Time/Date. An unknown label keeps its own words.
 const FACT_LABELS = /^(?:facts|facts of the case|statement|statement of facts|narrative)$/;
 
+// The paper's SECTION HEADINGS print ALL CAPS whatever case the account (or the
+// model) wrote them in (owner request, 2026-11-18): "FACTS:", "NOTABLE
+// FINDINGS:", "ACTION TAKEN / STATUS:" — the station's own headings, as on the
+// scanned sheet. Field labels are untouched: only these blocks shout.
+const HEADING_CAPS =
+  /^(?:facts|facts of the case|statement|statement of facts|narrative|findings|notable findings|action taken|action taken\/status|status)$/;
+
 function arrangeLabelName(label) {
-  if (/^(?:t\/?d(?: of incident)?|time ?\/ ?date(?: of incident)?|time and date|time and date of incident|date and time|date and time of incident|date of incident|time of incident)$/.test(label)) {
+  if (/^(?:t\/?d(?: of incident)?|time ?\/ ?date(?: of incident)?|time and date|time and date of incident|date & time|date & time of incident|date and time|date and time of incident|date of incident|time of incident)$/.test(label)) {
     return 'Time/Date';
   }
   if (FACT_LABELS.test(label)) return 'Facts';
   if (/^remarks?$/.test(label)) return 'Remarks';
+  // The slash compound is a heading, and its slash keeps its spaces.
+  if (label === 'action taken/status' || label === 'action taken') return 'Action taken / status';
   // Owner request: the place label prints short — "Place:", never the long form.
   if (/^(?:place|place of incident|place of occurrence|location|incident location)$/.test(label)) {
     return 'Place';
   }
+  // The blotter's own caption rows keep their words as the sheet names them
+  // (owner request, 2026-11-18): "Date of Discovery", "Stolen Items", not
+  // "Date of discovery" / "Stolen items".
+  if (/^(?:date of discovery|date discovered|discovery date)$/.test(label)) {
+    return 'Date of Discovery';
+  }
+  if (label === 'stolen items') return 'Stolen Items';
+  if (label === 'items taken') return 'Items Taken';
   const words = label.split(' ').filter(Boolean);
   return words
     .map((word, i) => {
@@ -1405,7 +1591,7 @@ const MINOR_WORDS = new Set([
 // Acronyms, document codes and vehicle identifiers that keep their capitals.
 const KEEP_CAPS = new Set([
   'dob', 'cr', 'pnp', 'nbi', 'lto', 'bfp', 'afp', 'ctu', 'cctv',
-  'ra', 'pwd', 'ip', 'dpwh', 'deped', 'comelec', 'pdea', 'ioc', 'nmax', 'xrm',
+  'ra', 'pwd', 'ip', 'dpwh', 'deped', 'comelec', 'pdea', 'ioc', 'psms', 'nmax', 'xrm',
   'cbr', 'tct', 'ctc', 'jr', 'sr', 'ii', 'iii', 'iv',
 ]);
 
@@ -1717,10 +1903,20 @@ function properSpans(text, tokens, { placeValue = false, nameValue = false, vehi
   return spans;
 }
 
+// A dotted time marker (A.M., P.M., a.m.) or any dotted initialism (U.S.) is
+// read letter by letter. Sentence case has no business deciding its letters
+// are lower-case: that is what printed "Around 1:00 A.M." as "1:00 a.M."
+// (owner request, 2026-11-18). The dash-free single-dot form (P.M) is covered
+// too, while an initial like "J. Dela Cruz" — one letter, one dot — is not.
+const DOTTED_INITIALS = /(?:[A-Za-z]\.){2,}|\b[APap]\.M\.?(?![A-Za-z])/g;
+
 function caseText(text, { start = true, vehicleRow = false, placeValue = false, nameValue = false } = {}) {
   const tokens = wordTokens(text);
   if (tokens.length === 0) return text;
   const spans = properSpans(text, tokens, { vehicleRow, placeValue, nameValue });
+  const initials = [];
+  for (const m of text.matchAll(DOTTED_INITIALS)) initials.push([m.index, m.index + m[0].length]);
+  const inInitials = (pos) => initials.some(([from, to]) => pos >= from && pos < to);
   let out = '';
   let last = 0;
   let atStart = start;
@@ -1729,7 +1925,9 @@ function caseText(text, { start = true, vehicleRow = false, placeValue = false, 
     const gap = text.slice(last, token.start);
     if (i > 0 && /[.!?]/.test(gap)) atStart = true;
     out += gap;
-    out += caseWord(token, { start: atStart, span: spans.get(i), line: text, next: text.slice(token.end) });
+    out += inInitials(token.start)
+      ? token.text.toUpperCase()
+      : caseWord(token, { start: atStart, span: spans.get(i), line: text, next: text.slice(token.end) });
     atStart = false;
     last = token.end;
   }

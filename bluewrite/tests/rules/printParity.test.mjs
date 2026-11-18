@@ -81,12 +81,14 @@ test('the shared sheet renders one html for screen and print', () => {
   // and the issuance line's requestor name prints bold, ALL CAPS and
   // underlined (owner request).
   // ...then blanks an unnamed requestor (owner request, 2026-11-16: a role is
-  // not a person), and finally places the FACTS caption above the account.
+  // not a person). No FACTS caption is placed any more (owner request,
+  // 2026-11-19: the sheet adds no heading the source does not carry).
   assert.match(
     LEAF,
-    /const narrativeHtml = withFactsCaption\(emphasizeIssuanceRequestorHtml\(blankUnnamedIssuanceRequestor\(correctNagaPlaceLinesHtml\(sanitizeRichHtml\(/,
+    /const narrativeHtml = stripStrayBraceHtml\(emphasizeIssuanceRequestorHtml\(blankUnnamedIssuanceRequestor\(correctNagaPlaceLinesHtml\(sanitizeRichHtml\(/,
     'the rich narrative stopped rendering its stored html',
   );
+  assert.ok(!LEAF.includes('withFactsCaption'), 'the FACTS caption came back on the printed sheet');
   assert.match(
     LEAF,
     /stripRedundantSheetFooterHtml\(stripRedundantSheetHeaderHtml\(narrativeRaw, sheetTitle\), sheetTitle\)/,

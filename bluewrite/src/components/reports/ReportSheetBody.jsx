@@ -37,6 +37,7 @@
 
 import React, { useEffect, useRef, useState, useLayoutEffect } from 'react';
 import { resolveHeader, resolveLetterheadStyle, letterheadCss, resolveNotedBy } from '../../lib/stationSettings.js';
+import { stripStrayBracketLines, stripStrayBraceHtml } from '../../lib/reportFormat.js';
 import SealImg from './SealImg.jsx';
 import { languageLabel } from '../../lib/reportLanguages.js';
 import {
@@ -114,94 +115,14 @@ function fmtItemValue(v) {
   return N(v).replace(/^[₱P]\s*/, '');
 }
 
-// A line of the arranged letter that is a labeled header row ("Place: …",
-// "Time/Date: …", "Complainant: …"): a short label, a colon, then its value.
-const NARRATIVE_LABEL_LINE = /^[A-Za-z][A-Za-z0-9 /&'().,#-]{0,45}:\s*/;
-
-/**
- * Owner request (2026-11-16): the narrative is titled FACTS directly above the
- * ACCOUNT, not above the labeled rows an arranged letter carries. When the
- * letter opens with those rows (Place, Time/Date, Complainant, Suspect, …),
- * they stay exactly where they are and the caption is placed before the first
- * line of prose; a letter with no such rows is titled at its top. A letter
- * that already writes its own "Facts:" label is left alone, so the caption is
- * never printed twice.
- *
- * @param {string} html the finished narrative html (already sanitized)
- * @returns {string}
- */
-function withFactsCaption(html) {
-  const blocks = splitHtmlLines(html);
-  if (blocks.length === 0) return html;
-  let lead = 0;
-  let labels = 0;
-  let labelled = false;
-  for (let i = 0; i < blocks.length; i += 1) {
-    const text = blocks[i].text.trim();
-    if (text === '') continue;
-    if (!NARRATIVE_LABEL_LINE.test(text)) break;
-    if (/^facts\b/i.test(text)) labelled = true;
-    lead = i + 1;
-    labels += 1;
-  }
-  if (labelled) return html;
-  const at = labels > 0 && lead < blocks.length ? lead : 0;
-  // Inline, with its own breaks: it splits a <br> line flow and a <p> flow
-  // alike without nesting a block inside a paragraph. The second break is the
-  // one line of air between the caption and the account (owner request,
-  // 2026-11-16) — the heading never sits flush on the paragraph.
-  const caption = '<strong>FACTS:</strong><br><br>';
-  return [
-    ...blocks.slice(0, at).map((b) => b.html),
-    caption,
-    ...blocks.slice(at).map((b) => b.html),
-  ].join('');
-}
-
-/**
- * The plain-text half of the same rule (owner request, 2026-11-16): a plain
- * narrative may open with its own labeled rows too (a blotter's "PLACE OF
- * INCIDENT:", "T/D:", "COMPLAINANT:", …), so the caption is placed before
- * its first prose line there as well. Returns the text before the account
- * (`lead`, '' when there are no labeled rows), the account and what trails it
- * (`rest`), whether the caption belongs at the very top, and whether it should
- * print at all (a narrative that already says FACTS keeps its own label).
- *
- * @param {string} text the narrative as the sheet prints it
- * @returns {{ lead: string, rest: string, atTop: boolean, show: boolean }}
- */
-function placePlainFactsCaption(text) {
-  const value = String(text ?? '');
-  const lines = value.split('\n');
-  let lead = 0;
-  let labels = 0;
-  let labelled = false;
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i].trim();
-    if (line === '') {
-      // A blank line inside the labeled rows belongs with them.
-      if (labels > 0) lead = i + 1;
-      continue;
-    }
-    if (!NARRATIVE_LABEL_LINE.test(line)) break;
-    if (/^facts\b/i.test(line)) labelled = true;
-    labels += 1;
-    lead = i + 1;
-  }
-  // A narrative that already writes its own "Facts:" label is left alone, so
-  // the caption is never printed twice (the rich half does the same).
-  if (labelled) return { lead: '', rest: value, atTop: true, show: false };
-  // No labeled rows: the caption opens the narrative, exactly as before.
-  if (labels === 0 || lead >= lines.length) return { lead: '', rest: value, atTop: true, show: true };
-  return {
-    lead: lines.slice(0, lead).join('\n').replace(/\n+$/, ''),
-    rest: lines.slice(lead).join('\n'),
-    atTop: false,
-    show: true,
-  };
-}
-
-
+// NO INVENTED "FACTS" CAPTION (owner request, 2026-11-19: "why do you
+// randomly add 'FACTS' word when it is not in the source text in any report
+// generation — remove it, don't show it in other generation"). The sheet used
+// to title the account with a caption it placed itself, after the labelled rows
+// (Place, Time/Date, Vehicles involved …) — so every generated sheet carried a
+// heading the officer never wrote. Nothing is added to the narrative now: a
+// letter that says "Facts" in its own words keeps it, because then it is in the
+// source; every other sheet prints the account as it was written.
 
 /**
  * @param {object} props
@@ -661,7 +582,14 @@ export default function ReportSheetBody({
   // What the narrative slot prints: the proposal's text while it is being
   // reviewed, the committed narrative otherwise. The blotter-strip and casing
   // are applied to BOTH, so a proposal types already cleaned and formal-cased.
-  const narrativeRaw = pendingOn && pending.narrative != null ? pending.narrative : report.narrative;
+  // ONE CLEAN COPY OF THE ACCOUNT (owner report, 2026-11-19): a stray brace that
+  // an answer or a paste left on its own line is dropped HERE, at the single
+  // point the sheet reads the account from — so every surface built below (the
+  // typed reveal, the finished html, the EDIT box the officer types in, and the
+  // plain text) is free of it, whatever shape the stored html has.
+  const narrativeRaw = stripStrayBraceHtml(
+    pendingOn && pending.narrative != null ? pending.narrative : report.narrative,
+  );
   // Word-like ink (owner request): a narrative carrying the allowlisted subset
   // renders its html as-is — casing and the blotter-strip only ever read
   // PLAIN text, and walking them over tags would mangle the ink.
@@ -681,12 +609,14 @@ export default function ReportSheetBody({
   // The issuance line's requestor prints blank when nobody is named: a role
   // ("the complainant") or the formatter's placeholder never stands in for a
   // person (owner request, 2026-11-16).
-  const narrativeText = blankUnnamedIssuanceRequestor(caseValue(correctNagaPlaceLines(stripRedundantSheetFooter(stripRedundantSheetHeader(stripLeadingBlotterRestatement(richTextToPlain(String(narrativeRaw ?? ''))), sheetTitle), sheetTitle)))) || '—';
-  const plainFacts = placePlainFactsCaption(narrativeText);
+  // A lone brace is never part of the account (owner report, 2026-11-19: a "}"
+  // printed under the title). Dropped here as well, so a narrative stored
+  // before the formatter learned the rule still prints without it.
+  const narrativeText = stripStrayBracketLines(blankUnnamedIssuanceRequestor(caseValue(correctNagaPlaceLines(stripRedundantSheetFooter(stripRedundantSheetHeader(stripLeadingBlotterRestatement(richTextToPlain(String(narrativeRaw ?? ''))), sheetTitle), sheetTitle))))).trim() || '—';
   // The finished letter's own html (see the narrative block): the progressive
   // reveal below splits THIS, so the typing converges exactly on the final
   // format instead of swapping it in at the end.
-  const narrativeHtml = withFactsCaption(emphasizeIssuanceRequestorHtml(blankUnnamedIssuanceRequestor(correctNagaPlaceLinesHtml(sanitizeRichHtml(stripRedundantSheetFooterHtml(stripRedundantSheetHeaderHtml(narrativeRaw, sheetTitle), sheetTitle))))));
+  const narrativeHtml = stripStrayBraceHtml(emphasizeIssuanceRequestorHtml(blankUnnamedIssuanceRequestor(correctNagaPlaceLinesHtml(sanitizeRichHtml(stripRedundantSheetFooterHtml(stripRedundantSheetHeaderHtml(narrativeRaw, sheetTitle), sheetTitle))))));
 
   // NOTABLE FINDINGS / ACTION TAKEN: a generate proposal replaces them; a
   // tighten (or no proposal) leaves the committed values untouched.
@@ -1167,21 +1097,11 @@ export default function ReportSheetBody({
            blotter-entry restatement is dropped, because the certification
            line directly above already states it; this also cleans a legacy
            row stored before the server stopped adding one. Task 9 — the text
-           types itself in. Owner request (2026-11-16): the heading over the
-           narrative is back, worded FACTS only — never "FACTS OF THE CASE". ---- */}
+           types itself in. No caption is printed above it (owner request,
+           2026-11-19). ---- */}}
       <div className="pr-narrative">
-        {/* Owner request (2026-11-16): the narrative is titled FACTS directly
-            above the ACCOUNT. A rich (arranged) letter carries its labeled
-            header rows, so its caption rides inside `narrativeHtml` (see
-            withFactsCaption); a plain narrative is split the same way (see
-            placePlainFactsCaption) and draws the caption between its rows and
-            its account; the editing box has no rows of its own to skip, so it
-            titles the field. */}
         {editInner && onEditNarrative ? (
           <>
-            <strong className="pr-narrative-head">
-              {animate ? typeChrome(CL('facts head', "FACTS:")) : CL('facts head', "FACTS:")}
-            </strong>
             <RichTextArea
               value={narrativeRaw}
               onChange={onEditNarrative}
@@ -1245,26 +1165,8 @@ export default function ReportSheetBody({
               </>
             );
           })()}</div>
-        ) : !plainFacts.show ? (
-          <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(plainFacts.rest); })()}</span>
-        ) : plainFacts.atTop ? (
-          <>
-            <strong className="pr-narrative-head">
-              {(() => { typeOn = typeBody; return val(CL('facts head', "FACTS:")); })()}
-            </strong>
-            <br />
-            <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(plainFacts.rest); })()}</span>
-          </>
         ) : (
-          <>
-            <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(plainFacts.lead); })()}</span>
-            <br />
-            <strong className="pr-narrative-head">
-              {(() => { typeOn = typeBody; return val(CL('facts head', "FACTS:")); })()}
-            </strong>
-            <br />
-            <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(plainFacts.rest); })()}</span>
-          </>
+          <span className="pr-narrative-text">{(() => { typeOn = typeBody; return val(narrativeText); })()}</span>
         )}
       </div>
 
@@ -1440,7 +1342,11 @@ export default function ReportSheetBody({
     <>
       <div ref={seedRef} hidden>{midPart}</div>
       <RichTextArea
-        value={letterHtml || seed || ''}
+        // The free-edit canvas loads the stored ink directly, so the stray
+        // brace is dropped here too (owner report, 2026-11-19): this is the
+        // surface the officer types on, and a page saved before the rule
+        // existed must not carry a "}" on it either.
+        value={stripStrayBraceHtml(letterHtml || seed || '')}
         onChange={onEditLetterHtml}
         className="pr-freeedit"
         ariaLabel="Letter \u2014 free edit"
@@ -1455,7 +1361,7 @@ export default function ReportSheetBody({
   ) : (
     <div
       className="pr-letter-html"
-      dangerouslySetInnerHTML={{ __html: correctNagaPlaceLinesHtml(sanitizeLetterHtml(letterHtml)) }}
+      dangerouslySetInnerHTML={{ __html: stripStrayBraceHtml(correctNagaPlaceLinesHtml(sanitizeLetterHtml(letterHtml))) }}
     />
   );
 

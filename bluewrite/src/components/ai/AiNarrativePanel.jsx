@@ -85,6 +85,7 @@ import {
 } from '../../lib/reportFormat.js';
 
 import { guardEnhancedWording } from '../../lib/enhanceGuard.js';
+import { diffWording, WORDING_KIND_LABELS, WORDING_KIND_ORDER } from '../../lib/wordingDiff.js';
 import { useRotatingStatus, holdVerifyPhase, VERIFY_PHRASE, THINKING_PHRASES } from '../../lib/useRotatingStatus.js';
 // Phase 6 Stage 4/5 — the language vocabulary all comes from the registry
 // (never a list held here), and the one wording for a language whose AI
@@ -623,6 +624,15 @@ export default function AiNarrativePanel({
   // officer's own words, one tap each — never auto-applied, cleared whenever
   // the draft they describe goes away.
   const [completionFills, setCompletionFills] = useState([]);
+  // WHAT ENHANCE CHANGED (owner request, 2026-11-18): the card promises
+  // grammar, spelling, punctuation and formal police terms, so the run reports
+  // the corrections it made — a list under the result, grouped in the card's
+  // own words. Empty for every other run (Arrange, Generate, Tighten).
+  const [enhanceChanges, setEnhanceChanges] = useState([]);
+  // Which groups the officer opened with "+N more" (owner request, 2026-11-18:
+  // "when I click more it will all show"). Per kind, so opening one card does
+  // not unfold the others.
+  const [wdOpen, setWdOpen] = useState({});
   // Whether the draft body is SHOWING in the assistant's card. It is inline
   // chrome, not a window: hiding it keeps the draft (which lives in this tab,
   // keyed by report id) and "A draft is ready" is the way back in.
@@ -1418,6 +1428,8 @@ export default function AiNarrativePanel({
   };
   const enhanceReport = async ({ fromArranged = false } = {}) => {
     setLastPress({ kind: 'enhance' });
+    setEnhanceChanges([]);
+    setWdOpen({});
     let accountText = richTextToPlain(String(narrative || ''));
     // The paper IS the account when the officer edited it there (owner
     // request): saved canvas ink outranks the narrative field, so an edit on
@@ -1468,7 +1480,19 @@ export default function AiNarrativePanel({
       // Same rewind rule as Generate: the guard must compare against the
       // account the run actually uses, or a re-run after Arrange/Enhance
       // blocks its own arrival and the paper never changes.
-      if (!fromArranged) pressAccountRef.current = accountText;
+      //
+      // THE REWOUND PAPER IS THE BASELINE (owner fix, 2026-11-19: "you put in
+      // what I changed but not in the sheet"). beginFreshRun's rewind puts the
+      // snapshotted ink back on the paper without touching the letter_html this
+      // component still sees, so the arrival guard compared the RESTORED page
+      // against the pre-rewind one, decided the officer had edited mid-run, and
+      // held the draft as a proposal — the card listed the new wording while the
+      // sheet kept the old. The baseline is what the paper holds after the
+      // rewind, which is exactly what the guard will read.
+      if (!fromArranged) {
+        const rewoundPaper = letterHtmlToAccountText(String(restoredRun.letterHtml ?? ''));
+        pressAccountRef.current = rewoundPaper !== '' ? rewoundPaper : accountText;
+      }
       // THE SAME READ ARRANGE ONLY MAKES (owner request, 2026-11-02):
       // type/date/place and NOTHING ELSE. The read filled the type's own fields
       // here, which is where the sheet grew a `Vehicle 1:` row and a
@@ -1568,6 +1592,10 @@ export default function AiNarrativePanel({
       // 'idle' while the officer's pre-arrange words stay snapshotted for
       // Discard.
       if (fromArranged) setProvisionalState('idle');
+      // The corrections this run actually made, in the card's own vocabulary
+      // (spelling / grammar / punctuation / police terms) — read off the text
+      // that went in against the wording the gate let through.
+      setEnhanceChanges(diffWording(sourceText, guarded.text));
       setDraft(withSheetCompletion(buildEnhancedDraft({ enhancedText: guarded.text, sourceText })));
       setResidual([]);
       presentDraftResult();
@@ -1651,6 +1679,10 @@ export default function AiNarrativePanel({
       // Rewound paper is the run's account: re-point the guard so it does
       // not mistake our own rewind for a mid-run edit (paper would stay).
       pressAccountRef.current = accountText;
+      // The officer's own title, kept before the model's arrangement replaces
+      // the text: an assigned title is never rewritten to the incident type's
+      // folder name (owner request, 2026-11-19).
+      const officerAccount = accountText;
       const runFindings = String(restoredRun.findings ?? notableFindings ?? '');
       const runActionTaken = String(restoredRun.actionTaken ?? actionTaken ?? '');
       if (onReadAccount) {
@@ -1684,6 +1716,12 @@ export default function AiNarrativePanel({
       // Anything without ReadableStream, or any refused press, falls back to
       // the single-answer endpoint underneath.
       let streamed = false;
+      // Whether the words now in `accountText` are the MODEL's own arrangement.
+      // If they are, its capitalisation is kept: it was told to copy every
+      // word exactly as the source capitalised it, and re-casing the answer on
+      // this side is what turned "1:00 A.M." into "a.M." (owner request,
+      // 2026-11-18). A local fallback arrangement still reads sentence case.
+      let arrangedByModel = false;
       try {
         const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
         const giveUp = ctrl ? window.setTimeout(() => { try { ctrl.abort(); } catch {} }, 120000) : 0;
@@ -1771,8 +1809,12 @@ export default function AiNarrativePanel({
         } else {
           accountText = snapshot().join('\n\n');
         }
-        if (landed > 0 || finished) streamed = true;
-        else throw new Error('empty-stream');
+        if (landed > 0 || finished) {
+          streamed = true;
+          // A server reset hands back the RAW account for the local formatter;
+          // anything else is the model's own arranged page.
+          arrangedByModel = serverResetText == null;
+        } else throw new Error('empty-stream');
       } catch {
         streamActiveRef.current = false;
         // Falls through to the single-answer endpoint below.
@@ -1784,7 +1826,10 @@ export default function AiNarrativePanel({
           // The model arranges; it never invents. A name, plate, code or
           // vehicle marker from nowhere is guessing, so the answer is dropped
           // and the local formatter below arranges the officer's own words.
-          if (text !== '' && arrangeOutputIsFaithful(text, accountText)) accountText = text;
+          if (text !== '' && arrangeOutputIsFaithful(text, accountText)) {
+            accountText = text;
+            arrangedByModel = true;
+          }
         } catch {
           // Local formatter below carries the press on its own.
         }
@@ -1793,7 +1838,13 @@ export default function AiNarrativePanel({
       // the tail below drafts it and the paper types it in top to bottom —
       // streamed and single-answer presses end in the same typing pass.
       setLastSource({ kind: 'notes', text: accountText, language: 'en' });
-      setDraft(withSheetCompletion(buildArrangeDraft({ accountText, notableFindings: runFindings, actionTaken: runActionTaken })));
+      setDraft(withSheetCompletion(buildArrangeDraft({
+        accountText,
+        titleSource: officerAccount,
+        notableFindings: runFindings,
+        actionTaken: runActionTaken,
+        keepCasing: arrangedByModel,
+      })));
       setResidual([]);
       // The paper types the arranged result in (see letterProps) — the pill
       // follows it there. Off-sheet hosts keep the inline reveal instead.
@@ -3785,27 +3836,81 @@ export default function AiNarrativePanel({
                         a simple fade, no char reveal. The wait is `revealing`
                         above, the same condition every other review note on
                         this panel waits on. */}
-                    {/* SHEET THEFT COMPLETION — parts the record already states,
-                        one tap each. Nothing is written until the officer fills
-                        it in; what nothing states arrives below as Possible
-                        gaps instead. */}
-                    {!revealing && onApplyRecordFills && completionFills.length > 0 && (
-                      <div className="ai-advice ai-advice-fade">
-                        <h4>Complete from your record</h4>
-                        <p className="field-hint">Found in your own words but missing from the paper.</p>
-                        <ul>
-                          {completionFills.map((f) => (
-                            <li key={f.key}>
-                              {f.label}: <strong>{f.preview}</strong>{' '}
-                              <button type="button" onClick={() => applyOneFill(f)}>Fill in</button>
-                            </li>
-                          ))}
-                        </ul>
-                        {completionFills.length > 1 && (
-                          <button type="button" onClick={applyAllFills}>Fill all</button>
-                        )}
-                      </div>
-                    )}
+                    {/* WHAT ENHANCE CHANGED (owner request, 2026-11-18: the
+                        Enhance card promises grammar, spelling, punctuation and
+                        formal police terms — show them). Grouped in the card's
+                        own words, from / to, so the officer can check the
+                        corrections instead of taking them on trust. Read off
+                        the text that went in against the wording the gate let
+                        through, so nothing is claimed that is not on the paper. */}
+                    {!revealing && enhanceChanges.length > 0 && (() => {
+                      // One card per kind, one row per correction — the same
+                      // pair is listed once even when a word repeats.
+                      const rows = WORDING_KIND_ORDER.map((kind) => {
+                        const seen = new Set();
+                        const items = enhanceChanges.filter((c) => {
+                          if (c.kind !== kind) return false;
+                          const key = `${c.from}\u0000${c.to}`;
+                          if (seen.has(key)) return false;
+                          seen.add(key);
+                          return true;
+                        });
+                        return { kind, items };
+                      }).filter((g) => g.items.length > 0);
+                      const total = rows.reduce((n, g) => n + g.items.length, 0);
+                      return (
+                        <div className="ai-advice ai-advice-fade wd-panel">
+                          <h4>
+                            What Enhance changed
+                            <span className="wd-count" aria-label={`${total} corrections`}>{total}</span>
+                          </h4>
+                          <p className="field-hint">Labels, names, dates and figures kept — only the spelling, grammar, punctuation and police terms moved.</p>
+                          <div className="wd-groups">
+                            {rows.map(({ kind, items }) => (
+                              <div className="wd-group" key={kind}>
+                                <div className="wd-group-head">
+                                  <span className="wd-group-name">{WORDING_KIND_LABELS[kind]}</span>
+                                  <span className="wd-group-count">{items.length}</span>
+                                </div>
+                                <ul className="wd-list">
+                                  {items.slice(0, wdOpen[kind] ? items.length : 5).map((c, i) => (
+                                    <li className="wd-row" key={`${kind}-${i}`}>
+                                      {c.from !== '' && <span className="wd-from">{c.from}</span>}
+                                      {c.from !== '' && c.to !== '' && <span className="wd-arrow" aria-hidden="true">→</span>}
+                                      {c.to !== '' && <span className="wd-to">{c.to}</span>}
+                                      {c.from === '' && <span className="wd-tag">added</span>}
+                                      {c.to === '' && <span className="wd-tag">removed</span>}
+                                    </li>
+                                  ))}
+                                  {items.length > 5 && (
+                                    <li className="wd-more">
+                                      <button
+                                        type="button"
+                                        className="wd-more-btn"
+                                        aria-expanded={!!wdOpen[kind]}
+                                        onClick={() => setWdOpen((prev) => ({ ...prev, [kind]: !prev[kind] }))}
+                                      >
+                                        {wdOpen[kind] ? 'Show less' : `+${items.length - 5} more in this group`}
+                                      </button>
+                                    </li>
+                                  )}
+                                </ul>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {/* THE "COMPLETE FROM YOUR RECORD" LIST IS GONE (owner request,
+                        2026-11-18: "don't show anything like this anymore … fill
+                        all, hide this"). It listed parts the record already held
+                        (Victim age, Victim address, Suspect age, Suspect address,
+                        Suspect status, CCTV) with a Fill in / Fill all button each.
+                        The sheet the officer reads is the whole record of the
+                        report; a second checklist of the same words under the
+                        paper was noise, so nothing renders here now. The fill
+                        helpers stay on the panel's own state; only the closing
+                        lines keep a card of their own below. */}
                     {!revealing && (draft.suggestions.length > 0 || closingGaps.length > 0 || (draft.addedContentWarnings?.length ?? 0) > 0 || (draft.redundancy?.length ?? 0) > 0 || (draft.narrativeRepetition?.length ?? 0) > 0) && (
                       <div className="ai-advice ai-advice-fade">
                         {draft.suggestions.length > 0 && (

@@ -91,6 +91,12 @@ test('a typed size and spacing survive as two strict inline properties', () => {
   // with them (PROSE_SIZE / PROSE_SPACING here, mirrored in RichText.php).
   assert.equal(sanitizeRichHtml('<span style="font-size:13.5px">x</span>'), '<span style="font-size:13.5px">x</span>');
   assert.equal(sanitizeRichHtml('<p style="line-height:1.75">x</p>'), '<p style="line-height:1.75">x</p>');
+  // The strip's tighter presets (owner request, 2026-11-18): 0.3, 0.5 and 0.8
+  // are real spacing and must survive the save; anything under 0.3 does not.
+  for (const lh of ['0.3', '0.5', '0.8']) {
+    assert.equal(sanitizeRichHtml(`<p style="line-height:${lh}">x</p>`), `<p style="line-height:${lh}">x</p>`);
+  }
+  assert.equal(sanitizeRichHtml('<p style="line-height:0.2">x</p>'), '<p>x</p>');
   assert.equal(sanitizeRichHtml('<p style="FONT-SIZE: 14px">x</p>'), '<p style="font-size:14px">x</p>');
   // Only the two properties: a colour or a margin beside them is dropped.
   assert.equal(

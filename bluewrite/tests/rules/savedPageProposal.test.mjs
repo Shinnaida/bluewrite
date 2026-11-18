@@ -132,3 +132,22 @@ test('Save still keeps the original snapshot (§9: Discard-after-save restores t
   );
   assert.match(reports, /function restoreProvisionalSnapshot/, 'the Discard path is gone');
 });
+
+test('a second arrival clears the previous draft ink so the sheet shows the new words (2026-11-19)', () => {
+  // "what you said you enhance in the side should be shown in the sheet, when
+  // pressing Enhance again": the canvas prefers letter_html over the fields, so
+  // the ink the previous draft left behind kept drawing its own page while the
+  // new wording typed invisibly behind it — the changes card listed everything
+  // the model did and the sheet never changed. Both arrivals must clear the ink
+  // the draft is about to replace: the first after snapshotting the officer's
+  // own words for Discard, the second because that snapshot already holds them.
+  const at = REPORTS.indexOf('function provisionalApplyAiDraft');
+  assert.notEqual(at, -1, 'the provisional arrival is gone');
+  const body = REPORTS.slice(at, REPORTS.indexOf('function restoreProvisionalSnapshot', at));
+  assert.match(body, /if \(keptInk !== ''\) set\('letter_html', ''\);/, 'the first arrival no longer clears kept ink');
+  assert.match(
+    body,
+    /if \(String\(\(draftRef\.current \?\? \{\}\)\.letter_html \?\? ''\) !== ''\) set\('letter_html', ''\);/,
+    'a re-arrival no longer clears the previous draft ink, so the sheet keeps the old page',
+  );
+});

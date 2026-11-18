@@ -1,3 +1,5 @@
+import { scrubReportText } from './reportFormat.js';
+
 export const API = '/api/v1';
 
 // --- Which tab this is ----------------------------------------------------
@@ -270,7 +272,11 @@ export async function api(path, { method = 'GET', body, keepalive = false } = {}
       throw offlineError(err);
     }
     try {
-      return await readResponse(res);
+      // Every report the server answers with passes the brace scrubber before
+      // it reaches a component (owner report, 2026-11-19): a lone "}" that a
+      // stored narrative or letter carries is gone from EVERY surface, including
+      // the ones that build their own markup or type the raw value.
+      return scrubReportText(await readResponse(res));
     } catch (err) {
       const retryable = attempt === 0
         && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
@@ -318,7 +324,11 @@ export async function apiUpload(path, formData, { method = 'POST' } = {}) {
       throw offlineError(err);
     }
     try {
-      return await readResponse(res);
+      // Every report the server answers with passes the brace scrubber before
+      // it reaches a component (owner report, 2026-11-19): a lone "}" that a
+      // stored narrative or letter carries is gone from EVERY surface, including
+      // the ones that build their own markup or type the raw value.
+      return scrubReportText(await readResponse(res));
     } catch (err) {
       const retryable = attempt === 0 && isCsrfRefusal(err);
       if (!retryable) throw err;

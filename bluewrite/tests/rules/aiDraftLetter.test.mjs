@@ -182,7 +182,11 @@ test('the final formal letter types itself in once, behind the same gates', () =
   assert.match(LEAF, /if \(pendingOn \|\| finalOn\) onRevealComplete\?\.\(\);/, 'the final replay never releases its host');
   // A pending draft still wins: the data selection never reads the flag.
   assert.doesNotMatch(LEAF, /finalOn && pending/, 'the final replay can overlay a proposal');
-  assert.match(LEAF, /const narrativeRaw = pendingOn && pending\.narrative/, 'the narrative source stopped staying pending-only');
+  assert.match(
+    LEAF,
+    /const narrativeRaw = stripStrayBraceHtml\(\s*pendingOn && pending\.narrative/,
+    'the narrative source stopped staying pending-only',
+  );
 });
 
 test('the reveal types the final format, not a raw blob', () => {
@@ -202,15 +206,12 @@ test('the reveal types the final format, not a raw blob', () => {
   // Slot discipline: completed lines advance the shared cursor, the current
   // line slices through it, future lines advance after — one 6s pace.
   assert.match(LEAF, /slotAcc \+= b\.text\.length;/, 'a line stopped registering its text with the cursor');
-  // A plain narrative types the same way, and its caption is placed above the
-  // account: the labeled rows type first, then the caption, then the account —
-  // one cursor across all three, in document order.
-  assert.match(LEAF, /function placePlainFactsCaption\(text\)/, 'the plain narrative lost its caption placement');
-  assert.match(LEAF, /return val\(plainFacts\.lead\)/, 'the plain narrative\u2019s labeled rows do not type before the caption');
-  assert.match(LEAF, /return val\(plainFacts\.rest\)/, 'the plain narrative\u2019s account does not type after the caption');
-  assert.match(LEAF, /const plainFacts = placePlainFactsCaption\(narrativeText\);/, 'the plain narrative is no longer split for its caption');
-  // The row/caption boundary is the same test both halves use.
-  assert.match(LEAF, /const NARRATIVE_LABEL_LINE = /, 'the labeled-row test is gone');
+  // A plain narrative types the same way, with NO caption above it (owner
+  // request, 2026-11-19: an invented "FACTS" heading is gone from every
+  // generation). The narrative's own words are what types.
+  assert.match(LEAF, /return val\(narrativeText\);/, 'the plain narrative stopped typing its own words');
+  assert.ok(!LEAF.includes('placePlainFactsCaption'), 'the plain caption split came back');
+  assert.ok(!LEAF.includes('plainFacts'), 'the plain caption state came back');
   // Findings type the same way: the reveal splits the SAME sanitized html
   // the finished section draws, so bold/italic survive mid-sequence and the
   // typing converges on the final report instead of a plain blob.
@@ -721,16 +722,15 @@ test('the static lines type too — letterhead, labels, headings, signatures', (
   assert.match(LEAF, /CL\('head agency', head\.agency\)/, 'the agency line does not type');
   assert.match(LEAF, /CL\('title', "POLICE REPORT"\)/, 'the title does not type');
   assert.match(LEAF, /\{CL\(`label \$\{entry\.label\}`, labelCase\(entry\.label\)\)\}/, 'fact labels do not type');
-  // Owner request (2026-11-16): the heading over the narrative is back, worded
-  // FACTS only — never "FACTS OF THE CASE". A rich (arranged) letter carries
-  // labeled header rows of its own, so its caption is inserted directly above
-  // the account instead of at the top of the whole block.
-  assert.match(LEAF, /CL\('facts head', "FACTS:"\)/, 'the narrative has no FACTS heading');
+  // NO INVENTED CAPTION (owner request, 2026-11-19: "why do you randomly add
+  // 'FACTS' word when it is not in the source text in any report generation —
+  // remove it"). The sheet adds no heading of its own to the account; the
+  // helpers that placed one are gone, and the narrative html is the letter's
+  // own (sanitized) html, unwrapped.
+  assert.doesNotMatch(LEAF, /CL\('facts head', "FACTS:"\)/, 'a FACTS heading came back on the sheet');
   assert.doesNotMatch(LEAF, /FACTS OF THE CASE/, 'the long heading is back on the sheet');
-  assert.match(LEAF, /function withFactsCaption\(html\)/, 'the caption placement helper is gone');
-  assert.match(LEAF, /const at = labels > 0 && lead < blocks\.length \? lead : 0;/, 'the caption is no longer placed above the account');
-  assert.match(LEAF, /const narrativeHtml = withFactsCaption\(/, 'the narrative html no longer carries its caption');
-  assert.match(LEAF, /<strong>FACTS:<\/strong><br><br>/, 'the caption no longer prints on its own line with one line of spacing');
+  assert.ok(!LEAF.includes('withFactsCaption'), 'the caption placement helper came back');
+  assert.ok(!LEAF.includes('<strong>FACTS:</strong>'), 'the caption markup came back');
   // A requestor the record never names prints as a blank, not as a role
   // dressed up to look like a person who asked for the copy.
   assert.match(LEAF, /blankUnnamedIssuanceRequestor\(/, 'the issuance line no longer blanks an unnamed requestor');

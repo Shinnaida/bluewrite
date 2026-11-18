@@ -41,12 +41,14 @@ const PROSE_CLASS =
   /^lh-(?:s-(?:10|11|12|13|14|15|16|18|20|22)|lh-(?:100|115|150|200|250|300))$/;
 
 // The strip's two pickers are free-entry (owner request, 2026-11-17): an
-// officer may type any size from 8 to 72 px and any spacing from 1.0 to 3.0,
+// officer may type any size from 8 to 72 px and any spacing from 0.3 to 3.0,
 // not just the presets. Those travel as two STRICT inline properties — values
 // are validated against a fixed shape and a range here, so the record still
 // carries no arbitrary CSS (no colours, fonts, margins, urls, expressions).
+// The spacing floor is 0.3 (owner request, 2026-11-18: the strip now offers
+// 0.3, 0.5 and 0.8 beside Word's 1.0-and-up ladder).
 const PROSE_SIZE = /^(?:[89]|[1-6]\d|7[0-2])(?:\.\d)?px$/;
-const PROSE_SPACING = /^(?:[12](?:\.\d{1,2})?|3(?:\.0{1,2})?)$/;
+const PROSE_SPACING = /^(?:0\.[3-9]\d?|[12](?:\.\d{1,2})?|3(?:\.0{1,2})?)$/;
 
 function styleOf(token) {
   const m = /\bstyle\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(token);
@@ -227,7 +229,32 @@ export function sanitizeLetterHtml(html) {
     out += `<${name}${cls ? ` class="${cls}"` : ''}${align ? ` align="${align}"` : ''}>`;
   }
   out += escapeText(src.slice(last));
-  return out;
+  // A LONE BRACE IS NEVER INK (owner report, 2026-11-19: a "}" printed under
+  // the title of every generated sheet). The letter draws whatever the stored
+  // html holds, so the brace that a wrapper or a paste left behind on its own
+  // line is dropped HERE, at the one place every letter passes through — saved
+  // ink, the print portal and the freed review page alike. `x = {a}` keeps its
+  // braces: only a block or a break-separated line of nothing but a brace goes.
+  // A brace may arrive wrapped in its own inline mark (a bolded "}" from an
+  // answer), so the lone-brace test accepts that wrapper as well.
+  const LONE = '(?:<(?:strong|b|em|i|span)\\b[^>]*>\\s*[{}]\\s*<\\/(?:strong|b|em|i|span)>|[{}])';
+  out = out
+    .replace(new RegExp('<(p|div|li)\\b[^>]*>\\s*(?:<br\\s*\\/?>\\s*)*' + LONE + '\\s*(?:<br\\s*\\/?>)?\\s*<\\/\\1>', 'gi'), '')
+    // A brace alone on its line: between breaks, opening the page, or alone in
+    // a block followed by a newline/tag (the letter draws `pre-wrap`, so a
+    // stored "}\nPlace: …" paints the brace as its own line even with no <br>).
+    .replace(new RegExp('(<br\\s*\\/?>|^|\\n|<(?:p|div|li)\\b[^>]*>)\\s*' + LONE + '[ \\t]*(?:\\r?\\n)?(?![A-Za-z0-9])', 'gi'), (whole, lead) =>
+      (lead && lead !== whole ? lead : ''));
+  // NO BRACES IN A POLICE REPORT (owner report, 2026-11-19): the sheet kept a
+  // "}" that no shape rule could reach, so the character is dropped outright —
+  // a blotter line never uses braces. The tags themselves carry none, so this
+  // removes text only.
+  out = out.replace(/[{}]/g, '');
+  // Whitespace BETWEEN blocks is never ink, and the letter draws `pre-wrap` so
+  // an officer's typed indentation survives (see `.pr-letter-html`). A newline
+  // that sat between two block tags would paint as a blank line there, so it
+  // is dropped once, here — spaces INSIDE a block are the officer's and stay.
+  return out.replace(/(<\/(?:p|div|li|ul|ol|h[1-3])>|<br>)[ \t]*\r?\n[ \t\n]*(?=<)/gi, '$1');
 }
 
 /** The record's words without its ink: what rules, detection and AI read.
