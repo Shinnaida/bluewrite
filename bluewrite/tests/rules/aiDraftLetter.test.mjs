@@ -257,7 +257,17 @@ test('the slim bar portals the letter onto the paper, under the narrative', () =
   // only, so deck cards keep the read-only page they always had.
   assert.match(PANEL, /const viewFree = !!\(slim && !paperEdit && !runPaper/, 'the clean paper is not writable on its own');
   assert.match(PANEL, /provisionalState === 'idle' && sheet && sheet\.report && sheet\.report\.id != null/, 'a proposal or a run can be typed over on the clean paper');
-  assert.match(SRC, /letterProps\.editable = \(paperEdit \|\| viewFree\) &&/, 'a saved draft on View stays read-only');
+  // ...AND THE GATE ITSELF. `editable` also demanded `sheeted` — the PANEL's
+  // generated draft (`!!draft && !!sheet`), which is null for a report merely
+  // opened from My Reports — so the sentence above was true of the intent and
+  // false of the code: a saved draft's page rendered read-only, and
+  // ReportSheetBody's free canvas (`freeEdit = editable && onEditLetterHtml && …`)
+  // never took a keystroke. `viewFree` carries the saved-report case now.
+  assert.match(
+    SRC,
+    /letterProps\.editable = \(paperEdit \|\| viewFree\)\s*\n\s*&& \(!!onEditSheet && sheetCanEdit && \(sheeted \|\| viewFree\) && !tightenDraft/,
+    'a saved draft on View is read-only again',
+  );
   assert.equal((SRC.match(/<SheetLetterDock \{\.\.\.letterProps\} \/>/g) ?? []).length, 1, 'the deck card no longer shares the one props object');
   assert.equal((SRC.match(/<SheetLetterDock \{\.\.\.letterProps\} freeReview=\{slim && \(paperEdit \|\| viewFree\)\} \/>/g) ?? []).length, 1, 'the mount branch lost the shared props object or its Edit free flag');
   assert.doesNotMatch(SRC, /function sheetLetterPage/, 'the dock logic is back in the panel');

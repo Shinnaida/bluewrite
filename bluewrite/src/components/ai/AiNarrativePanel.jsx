@@ -2539,8 +2539,19 @@ export default function AiNarrativePanel({
   // them — one object shared by the portal and card branches alike.
   // A run in flight keeps the page editable exactly as it was at the press: the
   // freeze is the frame, not a lock.
-  letterProps.editable = (paperEdit || viewFree) && (!!onEditSheet && sheetCanEdit && sheeted && !tightenDraft
-    && sheetTyped && !revealing);
+  //
+  // AND A SAVED REPORT IS ITS OWN DRAFT (owner report, 2026-11-18: pressing Edit
+  // draft showed the record's boxes and the saved page refused a keystroke).
+  // `sheeted` is the PANEL's generated draft — `!!draft && !!sheet` — and that is
+  // null for a report merely opened from My Reports, so the letter rendered with
+  // `editable` false; ReportSheetBody's free canvas (`freeEdit = editable &&
+  // onEditLetterHtml && …`) then had nothing to type into, and `editInner` was
+  // off too, leaving the page fully read-only. `viewFree` is exactly the case
+  // this gate was meant to allow: a landed saved report, no run in flight, no
+  // proposal waiting. A generated draft still qualifies through `sheeted`.
+  letterProps.editable = (paperEdit || viewFree)
+    && (!!onEditSheet && sheetCanEdit && (sheeted || viewFree) && !tightenDraft
+      && sheetTyped && !revealing);
   // Each block fades up as its own turn arrives; the sequence itself is the
   // stage machine above, so there are no animation delays to keep in step.
   const arriveClass = (base) => (revealOn ? `${base} ai-draft-arrive` : base);

@@ -110,8 +110,10 @@ test('a phone filing banners the moment it lands, on any screen', () => {
   assert.match(SHELL, /setView\(\{ kind: 'report', id: reportId \}\)/);
   // No server change: the scoped register list names the drafts, and the
   // /print read each draft already carries says whether it holds captures.
-  assert.match(WATCHER, /\/reports\?per_page/);
-  assert.match(WATCHER, /\/reports\/\$\{id\}\/print/);
+  // The officer's own DRAFTS, newest edit first: a filing is unfinished work,
+  // and `updated_at` is the order the poll needs to see it at the head.
+  assert.match(WATCHER, /\/reports\?status=draft&sort=updated_at&dir=desc&per_page=/);
+  assert.match(WATCHER, /\/reports\/\$\{next\}\/print/);
   assert.match(WATCHER, /captures/);
   // Own filings only, and never the draft already on screen.
   assert.match(WATCHER, /created_by/);

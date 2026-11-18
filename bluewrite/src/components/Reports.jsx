@@ -6639,8 +6639,15 @@ export function ReportsTable({
               {/* DRAFTS ONLY (owner request, 2026-10-06): a submitted report
                   has gone to the station, so the sheet is the whole of it here.
                   Edit draft is the row's own Edit, confirm and all — one ask
-                  for one act, whichever surface the officer reached it from. */}
-              {!showArchived && statusBucket(sheetReport.status) === 'draft' && (
+                  for one act, whichever surface the officer reached it from.
+
+                  AND ONLY THE DRAFT'S OWN RECORDER (owner request, 2026-11-18):
+                  the row already withholds Edit from a colleague's draft
+                  (`rowMeta.canEdit`), and the bar must answer the same way — a
+                  report somebody else recorded is read-only here too. */}
+              {!showArchived &&
+                statusBucket(sheetReport.status) === 'draft' &&
+                Number(sheetReport.created_by) === Number(user.id) && (
                 <button type="button" className="primary" onClick={() => askEdit(sheetReport)}>
                   Edit draft
                 </button>

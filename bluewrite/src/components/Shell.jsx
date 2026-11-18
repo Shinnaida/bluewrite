@@ -616,6 +616,13 @@ export default function Shell({
             user={user}
             notify={notify}
             reportId={view.kind === 'report' ? view.id : null}
+            // Review now (the phone arrival banner) opens the draft TO BE
+            // REVIEWED: the phone files its words into the narrative as well as
+            // into the capture, so the editor's own "is this text already
+            // written?" test would skip the page the officer just asked for.
+            // The intent rides the view, so a report opened any other way is
+            // unchanged.
+            revealSource={view.kind === 'report' && view.revealSource === true}
             onMutated={onReportMutated}
             // Closing a report returns to the role's list: admins supervise
             // through All Reports, everyone else through My Reports.
@@ -752,7 +759,9 @@ export default function Shell({
       <PhoneArrivalWatcher
         user={user}
         openReportId={view.kind === 'report' ? view.id : null}
-        onOpenReport={(reportId) => setView({ kind: 'report', id: reportId })}
+        // Review now carries the intent with it, so the draft opens on the
+        // filing's source text (see ReportEditor's revealSource).
+        onOpenReport={(reportId) => setView({ kind: 'report', id: reportId, revealSource: true })}
       />
 
       {/* Logout confirmation — rendered for every role; the Profile menu is

@@ -33,6 +33,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const REPORTS = readFileSync(new URL('../../src/components/Reports.jsx', import.meta.url), 'utf8');
+// The LIVE page. `src/pages/` is what the app renders (Shell imports
+// ReportEditor from there); `src/components/Reports.jsx` is the older copy the
+// rest of this file reads. Where a rule ships in both, it is asserted in both.
+const PAGE = readFileSync(new URL('../../src/pages/Reports.jsx', import.meta.url), 'utf8');
 const LIST = readFileSync(new URL('../../src/components/ReportList.jsx', import.meta.url), 'utf8');
 const PRINT = readFileSync(new URL('../../src/components/ReportPrint.jsx', import.meta.url), 'utf8');
 const ACTIONS = readFileSync(new URL('../../src/components/ReportActions.jsx', import.meta.url), 'utf8');
@@ -83,11 +87,21 @@ test('the page draws the shared sheet, not a lookalike', () => {
 test('the bar offers Edit draft on a draft, and Print on everything', () => {
   // DRAFTS ONLY. A submitted report has gone to the station, so the sheet is the
   // whole of it here — the page's own rendering says so.
+  // AND ONLY THE DRAFT'S OWN RECORDER (owner report, 2026-11-18: a colleague's
+  // draft BW-0557 showed an Edit draft on the bar that the row beside it already
+  // withheld). One rule on both surfaces — the account that recorded it, nobody
+  // else — so the plate can never open a writer the server refuses to save.
   assert.match(
     SRC,
-    /\{!showArchived && statusBucket\(sheetReport\.status\) === 'draft' && \(\s*\n\s*<button type="button" className="primary" onClick=\{\(\) => askEdit\(sheetReport\)\}>\s*\n\s*Edit draft/,
+    /\{!showArchived &&\s*\n\s*statusBucket\(sheetReport\.status\) === 'draft' &&\s*\n\s*Number\(sheetReport\.created_by\) === Number\(user\.id\) && \(\s*\n\s*<button type="button" className="primary" onClick=\{\(\) => askEdit\(sheetReport\)\}>\s*\n\s*Edit draft/,
   );
   // ...and the ask is the register's one ask for a draft, confirmation included.
+  // THE LIVE PAGE CARRIES THE SAME RULE — ownership included, so an officer
+  // reading a colleague's draft gets no Edit draft at all.
+  assert.match(
+    PAGE,
+    /\{!showArchived &&\s*\n\s*statusBucket\(sheetReport\.status\) === 'draft' &&\s*\n\s*Number\(sheetReport\.created_by\) === Number\(user\.id\) && \(/,
+  );
   assert.match(SRC, /action: \(\) => setOpenId\(r\.id\)/);
 
   // PRINT GOES THROUGH THE DIALOG. Print CSS hides `.shell` while the overlay's
@@ -97,6 +111,29 @@ test('the bar offers Edit draft on a draft, and Print on everything', () => {
   assert.match(SRC, /\{actions\.dialogs\}/, 'the page does not draw the shared dialogs it opens');
   assert.match(ACTIONS, /function print\(r\) \{\s*\n\s*setPrintingId\(r\.id\);/);
   assert.match(ACTIONS, /return \{ items, ask, askArchive, askRestore, openHistory, print, dialogs \};/);
+});
+
+test('Edit draft opens the saved sheet, and the sheet is written on in View', () => {
+  // OWNER REPORT (2026-11-18): "when I edit draft the actual draft is showing,
+  // not the one that is being saved as draft". Edit must NOT be the landing
+  // state — in Edit the panel draws the form's boxes INSTEAD of the letter (see
+  // the portal gate below), so opening a saved draft there showed the raw record
+  // rather than the page the officer saved.
+  assert.match(PAGE, /const \[letterEdit, setLetterEdit\] = useState\(false\);/);
+  // ...and the saved page is WRITABLE in View: the panel gives the landed letter
+  // a free canvas that writes the narrative and the report through the editor's
+  // own setters, so correcting it needs no mode switch.
+  const PANEL = readFileSync(new URL('../../src/components/ai/AiNarrativePanel.jsx', import.meta.url), 'utf8');
+  assert.match(PANEL, /const viewFree = !!\(slim && !paperEdit && !runPaper && mode !== 'loading'/);
+  // THE GATE ITSELF, and the reason the page was read-only: `editable` required
+  // `sheeted`, the panel's own generated draft, which is null for a report
+  // opened from My Reports. A saved report now qualifies through `viewFree`, and
+  // ReportSheetBody's free canvas needs `editable` before it takes a keystroke.
+  assert.match(PANEL, /letterProps\.editable = \(paperEdit \|\| viewFree\)\s*\n\s*&& \(!!onEditSheet && sheetCanEdit && \(sheeted \|\| viewFree\) && !tightenDraft/);
+  const BODY = readFileSync(new URL('../../src/components/reports/ReportSheetBody.jsx', import.meta.url), 'utf8');
+  assert.match(BODY, /const freeEdit = !!\(editable && onEditLetterHtml && \(!pending \|\| freeReview\)\);/);
+  // ...while Edit keeps the form's boxes, which is why it is not the landing.
+  assert.match(PANEL, /\(!paperEdit && sheet\.report && sheet\.report\.id != null\)/);
 });
 
 test('Edit draft opens the writer over the sheet, carrying the draft', () => {

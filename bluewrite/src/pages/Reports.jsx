@@ -161,7 +161,7 @@ import RichTextArea from '../components/reports/RichTextArea.jsx';
 import SheetToolBox from '../components/reports/SheetToolBox.jsx';
 import BlotterCapture from '../components/reports/BlotterCapture.jsx';
 import Folder from '../components/reports/Folder.jsx';
-import { mergeBlotterText } from '../lib/blotterText.js';
+import { mergeBlotterText } from '../lib/blotterText.js';
 import { playGenieOpen } from '../lib/genie.js';
 import { COMPOSING_PING_MS } from '../lib/presence.js';
 // Every option list on this screen: the two typeable boxes (the incident type
@@ -2581,6 +2581,12 @@ export function ReportEditor({
   user,
   notify,
   reportId,
+  // Opened from the phone arrival banner's Review now. A phone filing carries
+  // its reviewed words BOTH in the narrative and in the capture, so
+  // firstWaitingCapture — which exists to avoid re-offering a page already
+  // written — would skip the very filing the officer pressed Review now for.
+  // This says the intent out loud and wins once, on load (see the load effect).
+  revealSource = false,
   onMutated,
   onClosed,
   onConnError,
@@ -2639,18 +2645,18 @@ export function ReportEditor({
   // first sentence was typed. The field fills itself from the text (see
   // setNarrative), which is the only thing that can answer the question.
   const [draft, setDraft] = useState(() => (reportId === null ? EMPTY : null));
-  // THE REPORT ARRIVES OUT OF ITS CARD (owner request). Picking a draft from the
-  // Phone-files folder replaces the folder's page with this one, and with no
-  // transition the report simply appears — the officer loses the thread of "this
-  // is the draft I clicked". The panel is measured here and handed to the genie
-  // together with the card's own box, so the sheet pours out of the card the way
-  // a window comes out of its Dock icon — see src/lib/genie.js for why the sheet
-  // pours and the form does not.
-  const caseRef = useRef(null);
-  useEffect(() => {
-    const el = caseRef.current;
-    if (!el || !genieFrom) return undefined;
-    return playGenieOpen(genieFrom, el.getBoundingClientRect(), el);
+  // THE REPORT ARRIVES OUT OF ITS CARD (owner request). Picking a draft from the
+  // Phone-files folder replaces the folder's page with this one, and with no
+  // transition the report simply appears — the officer loses the thread of "this
+  // is the draft I clicked". The panel is measured here and handed to the genie
+  // together with the card's own box, so the sheet pours out of the card the way
+  // a window comes out of its Dock icon — see src/lib/genie.js for why the sheet
+  // pours and the form does not.
+  const caseRef = useRef(null);
+  useEffect(() => {
+    const el = caseRef.current;
+    if (!el || !genieFrom) return undefined;
+    return playGenieOpen(genieFrom, el.getBoundingClientRect(), el);
   }, [genieFrom]);
   // The type_specific the AI panel's own bondpaper reads: normalized the same
   // way the print sheet normalizes it (legacy flat keys → groups), so the page
@@ -2908,9 +2914,19 @@ export function ReportEditor({
   // never re-lays-out a draft.
   const [sheetFields, setSheetFields] = useState(false);
   // PAPER MODE (owner request, 2026-10-26): View is the clean official paper,
-  // Edit restores type-on-the-letter. False is the opening state — the paper
-  // reads clean until the officer asks to mark it up. Passed to the AI panel,
-  // which is the only thing that renders the letter.
+  // Edit is the FORM. Passed to the AI panel, which is the only thing that
+  // renders the letter.
+  //
+  // A SAVED DRAFT OPENS ON VIEW, AND THE VIEW IS TYPABLE (owner report,
+  // 2026-11-18: "when I edit draft the actual draft is showing, not the one that
+  // is being saved as draft"). Edit is NOT the writing mode here — in Edit the
+  // sheet's panel draws the form's boxes INSTEAD of the letter (see the portal
+  // gate in AiNarrativePanel), so opening a saved draft in Edit showed the raw
+  // record rather than the page the officer saved. The page is written on in
+  // View: the panel hands the landed letter a free canvas (`viewFree`) that
+  // writes the narrative and the report through the editor's own setters, so a
+  // saved draft opens as ITSELF and can be corrected in place. "Edit report"
+  // in the bar remains for the field form.
   const [letterEdit, setLetterEdit] = useState(false);
   // Hidden by request (2026-10-24): the extracted-fields review toggle is off
   // screen for now. One flag restores it — the fields, the receipt and the
@@ -3092,7 +3108,14 @@ export function ReportEditor({
         // the review; Cancel stays closed until the draft is reopened).
         const loaded = Array.isArray(d.captures) ? d.captures : [];
         setCaptures(loaded);
-        const first = firstWaitingCapture(loaded, r.narrative, []);
+        // Review now on the arrival banner: the officer has already said which
+        // page they came for, so the source text of the newest unreviewed
+        // capture opens even when the phone filed those same words into this
+        // narrative. Every other way in keeps the narrative test — a page
+        // already written is not offered again.
+        const first =
+          (revealSource && (Array.isArray(loaded) ? loaded.find((c) => c && !c.reviewed_at) : null)) ||
+          firstWaitingCapture(loaded, r.narrative, []);
         if (first) {
           // Phone-source drafts land on the RAW form, not the composed paper
           // (owner request): unreviewed phone captures mean the record is
@@ -7652,8 +7675,18 @@ export function ReportsTable({
               {/* DRAFTS ONLY (owner request, 2026-10-06): a submitted report
                   has gone to the station, so the sheet is the whole of it here.
                   Edit draft is the row's own Edit, confirm and all — one ask
-                  for one act, whichever surface the officer reached it from. */}
-              {!showArchived && statusBucket(sheetReport.status) === 'draft' && (
+                  for one act, whichever surface the officer reached it from.
+
+                  AND ONLY THE DRAFT'S OWN RECORDER (owner request, 2026-11-18).
+                  The register already withholds Edit from a colleague's row
+                  (`rowMeta.canEdit`), but this bar offered it to anybody who
+                  opened the sheet — an officer reading another officer's draft
+                  was shown a pencil the server refuses on save. One rule now
+                  stands on both surfaces: a draft is editable by the account
+                  that recorded it, and by nobody else. */}
+              {!showArchived &&
+                statusBucket(sheetReport.status) === 'draft' &&
+                Number(sheetReport.created_by) === Number(user.id) && (
                 <button type="button" className="primary" onClick={() => askEdit(sheetReport)}>
                   Edit draft
                 </button>

@@ -4679,6 +4679,12 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
    of files (the register's own report rows — see ReportFiles). */
 .folder-shelf {
   min-width: 0;
+  /* THE PANEL IS ITS OWN MEASURE (owner request, 2026-11-18): the blank panel
+     below is sized from this panel's width, so this element has to be a query
+     container. Inline-size only — the panel is a block in the card, so its width
+     was never its content's to decide, and the folder grid inside it keeps its
+     own layout untouched. */
+  container-type: inline-size;
   /* THE TOP PADDING IS CLEARANCE, not taste: a folder's own tab overhangs its
      box by a tenth of its height (see .glass-folder__back::before), and the card
      the panel sits in clips what leaves it — so the room above the first row plus
@@ -4692,6 +4698,34 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
   margin: 0.9rem 0 0;
   font-size: 0.82rem;
   color: var(--ir-muted);
+}
+/* ---- The blank list keeps the shelf's own size (owner request, 2026-11-18) --
+   ALL REPORTS' panel holds report rows; on a register with nothing in it yet, that
+   panel is a single sentence — so the card collapsed to the height of the
+   sentence while the DRAFT tab beside it kept its full field of folders, and
+   switching tabs made the register jump. The blank now FILLS the room a row of
+   folders takes, with the sentence centred in it.
+
+   THE MEASUREMENT IS THE FOLDER ROW'S, not a fixed number: one column's 3:2 face
+   (the shelf's five columns, their four 2.5rem gaps and the row's own 0.25rem side
+   padding) plus the row's 2.85rem/0.4rem padding, minus the 2.25rem results line
+   the empty note sits under and a folder row does not. `100cqw` is this panel's
+   content width (see `container-type` above), so the match holds at every card
+   width instead of only at the one it was measured on. The rem floor above the
+   calc is the old collapse, for a browser that cannot read container units. */
+.folder-shelf > .ir-card-empty {
+  display: grid;
+  place-items: center;
+  min-height: 12rem;
+  min-height: calc((100cqw - 10.5rem) * 2 / 15 + 1rem);
+}
+/* The phone shelf is two across, so its folders are wider and its row is taller:
+   the same sum with one gap and two columns. */
+@media (max-width: 700px) {
+  .folder-shelf > .ir-card-empty {
+    min-height: 14rem;
+    min-height: calc((100cqw - 3rem) / 3 + 1rem);
+  }
 }
 /* The folders sit DIRECTLY on the page — no card, no grid wrapper — so the
    hover tilt has room to pop. THE SHELF IS A GRID (owner request,
