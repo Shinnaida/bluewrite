@@ -9,6 +9,7 @@ use App\Core\Database;
 use App\Core\DraftProgress;
 use App\Core\IncidentTypes;
 use App\Core\LanguageRegistry;
+use App\Core\ReportCaptures;
 use App\Core\ReportVerification;
 use App\Core\Response;
 use App\Core\RichText;
@@ -149,6 +150,16 @@ final class ReportsController
      * add a fifth; this is the copy that decides.
      */
     private const MAX_REPORT_TYPES = 4;
+
+    /**
+     * HOW LONG A PERMANENT DELETE WAITS (owner request, 2026-11-18).
+     *
+     * A scheduled delete is a promise with a date on it: seven days to notice the
+     * mistake, and Restore cancels it with no paperwork. The number lives here and
+     * nowhere else — the client prints the countdown the server computed, so no
+     * build can disagree with the window the row is actually on.
+     */
+    private const PURGE_GRACE_DAYS = 7;
 
     /**
      * Does this database have the column? (`incident_types`, migration 020.)
@@ -560,6 +571,10 @@ final class ReportsController
         // register instead of "Unknown column". The phone-filing count rides
         // the same guard for the report_captures table (migration 025).
         $hasTypes = $this->hasReportColumn($pdo, 'incident_types');
+        // Migration 031's pending-delete stamp. Guarded like every other new
+        // column, so a database a migration behind still answers the register.
+        $hasPurge = $this->hasReportColumn($pdo, 'purge_after');
+        $purgeSelect = $hasPurge ? 'r.purge_after, ' : '';
         $hasCaptures = $this->hasTable($pdo, 'report_captures');
         // Migration 029: a reviewed capture is filed, not waiting — the Phone
         // files folder counts only unreviewed captures, so a consumed phone
@@ -579,7 +594,7 @@ final class ReportsController
                     r.narrative, r.narrative_source_text,
                     r.reporter_name, r.reporter_contact, r.reporter_address,
                     r.action_taken, r.ioc_name, r.type_specific,
-                    {$captureSelect}r.id AS id_again
+                    {$captureSelect}{$purgeSelect}r.id AS id_again
              FROM reports r JOIN users u ON u.id = r.created_by
              WHERE {$whereSql}
              ORDER BY {$orderBy}, r.id DESC
@@ -766,6 +781,16 @@ final class ReportsController
      */
     private function listQueryFilters(array $user, bool $showArchived): array
     {
+        // A SCHEDULED DELETE WHOSE SEVEN DAYS ARE UP IS SETTLED HERE (migration
+        // 031). Every read of the archive — the list, its folder counts, its CSV —
+        // comes through this method, so the sweep needs no cron and no client can
+        // be shown a report that should already be gone. A station where nobody
+        // opens the archive keeps its expired rows a little longer, which costs
+        // disk and nothing else.
+        if ($showArchived) {
+            $this->purgeExpiredReports(Database::pdo());
+        }
+
         $params = [];
         $where = ['r.deleted_at ' . ($showArchived ? 'IS NOT NULL' : 'IS NULL')];
 
@@ -1697,11 +1722,32 @@ final class ReportsController
             Response::json(404, ['error' => 'Archived report not found.']);
         }
 
-        $stmt = $pdo->prepare('UPDATE reports SET deleted_at = NULL WHERE id = :id');
+        // A RESTORE ALSO CANCELS A PENDING DELETE (migration 031): the row is back
+        // in the working list, so the date it was to be removed on goes with it.
+        // Restore is the whole undo — one action, both halves — which is why the
+        // deleted list needs no separate "cancel" of its own.
+        //
+        // THE NOTE STAYS THE LITERAL 'Report restored from archive.' because the
+        // notification feed matches it exactly (see NotificationsController's
+        // whitelist); the cancellation rides the audit line instead of a second
+        // snapshot sentence that would vanish from that feed.
+        $hasPurge = $this->hasReportColumn($pdo, 'purge_after');
+        $wasScheduled = $hasPurge && ($report['purge_after'] ?? null) !== null;
+        $stmt = $pdo->prepare(
+            'UPDATE reports SET deleted_at = NULL'
+            . ($hasPurge ? ', purge_after = NULL, purge_requested_by = NULL' : '')
+            . ' WHERE id = :id'
+        );
         $stmt->execute([':id' => $reportId]);
 
         $this->snapshot($pdo, $reportId, (int) $user['id'], 'Report restored from archive.');
-        Audit::log((int) $user['id'], 'report.restore', 'report', (string) $reportId);
+        Audit::log(
+            (int) $user['id'],
+            'report.restore',
+            'report',
+            (string) $reportId,
+            $wasScheduled ? 'scheduled permanent delete cancelled' : ''
+        );
         Response::json(200, ['ok' => true]);
     }
 
@@ -1729,6 +1775,153 @@ final class ReportsController
         $this->snapshot($pdo, $reportId, (int) $user['id'], 'Report archived (soft delete).');
         Audit::log((int) $user['id'], 'report.archive', 'report', (string) $reportId);
         Response::json(200, ['ok' => true]);
+    }
+
+    /**
+     * Admin-only: put an ARCHIVED report on the seven-day delete list.
+     *
+     * NOTHING IS REMOVED HERE. The row keeps `deleted_at` (it is still out of the
+     * working list) and gains a date; until that date passes it is restorable like
+     * any other archived record, and Restore cancels the whole thing. The removal
+     * itself happens in purgeExpiredReports, and only on an expired row.
+     *
+     * DELETING IS A STEP PAST ARCHIVING, never a shortcut around it: a live report
+     * can still be edited, so its fate has to be decided deliberately — archived
+     * first, then deleted. That is also what makes the undo trustworthy: the only
+     * rows on the delete list are rows somebody already took out of service.
+     */
+    public function requestDeletion(string $id): void
+    {
+        $user = Auth::requireRole('Admin');
+        $reportId = (int) $id;
+        $pdo = Database::pdo();
+
+        if (!$this->hasReportColumn($pdo, 'purge_after')) {
+            Response::json(409, [
+                'error' => 'This database has not been migrated for scheduled deletion (migration 031).',
+            ]);
+        }
+
+        // The archived row specifically: a report that is still in the working
+        // list is not on the delete list and cannot be put on it by guessing an id.
+        $stmt = $pdo->prepare('SELECT * FROM reports WHERE id = :id AND deleted_at IS NOT NULL');
+        $stmt->execute([':id' => $reportId]);
+        $report = $stmt->fetch();
+        if ($report === false) {
+            Response::json(404, ['error' => 'Archived report not found.']);
+        }
+        if ($report['purge_after'] !== null) {
+            Response::json(409, ['error' => 'This report is already scheduled for deletion.']);
+        }
+
+        // The interval is this class's own constant, interpolated rather than
+        // bound: a client never supplies a duration, so no request can stretch or
+        // shorten the grace period.
+        $stmt = $pdo->prepare(
+            'UPDATE reports'
+            . ' SET purge_after = DATE_ADD(NOW(), INTERVAL ' . self::PURGE_GRACE_DAYS . ' DAY),'
+            . ' purge_requested_by = :uid'
+            . ' WHERE id = :id'
+        );
+        $stmt->execute([':uid' => (int) $user['id'], ':id' => $reportId]);
+
+        $this->snapshot(
+            $pdo,
+            $reportId,
+            (int) $user['id'],
+            'Permanent deletion scheduled (' . self::PURGE_GRACE_DAYS . '-day grace period).'
+        );
+        Audit::log(
+            (int) $user['id'],
+            'report.delete',
+            'report',
+            (string) $reportId,
+            'scheduled in ' . self::PURGE_GRACE_DAYS . ' days'
+        );
+
+        $when = $pdo->prepare('SELECT purge_after FROM reports WHERE id = :id');
+        $when->execute([':id' => $reportId]);
+        Response::json(200, ['ok' => true, 'purge_after' => (string) $when->fetchColumn()]);
+    }
+
+    /**
+     * Removes the reports whose grace window has run out — the only place in this
+     * system that deletes a report.
+     *
+     * WHY A SWEEP AND NOT A CRON. The archive is the one screen that can show a
+     * scheduled row, and every read of it comes through listQueryFilters, so the
+     * sweep runs on those reads: an expired row cannot be listed, because it is
+     * gone before the list is built. Nothing wakes up at midnight to do this, and
+     * nothing has to: a station with nobody in the archive simply keeps its
+     * expired rows a little longer.
+     *
+     * THE CHILDREN GO FIRST because the foreign keys are RESTRICT — captures, the
+     * composing latch, verifications and the history snapshots all point at the
+     * report — and one transaction means a failure leaves the report whole rather
+     * than half deleted. Capture PHOTOS are unlinked after the commit: the files
+     * live in storage/report_captures and nothing else would ever clean them up.
+     *
+     * ONLY A ROW THAT IS STILL EXPIRED AND STILL ARCHIVED is removed, so a restore
+     * that lands between the read and the delete keeps its report.
+     */
+    private function purgeExpiredReports(PDO $pdo): int
+    {
+        if (!$this->hasReportColumn($pdo, 'purge_after')) {
+            return 0;
+        }
+
+        $ids = $pdo->query(
+            'SELECT id FROM reports WHERE purge_after IS NOT NULL AND purge_after <= NOW()'
+        )->fetchAll(PDO::FETCH_COLUMN);
+        $ids = array_values(array_map('intval', is_array($ids) ? $ids : []));
+        if ($ids === []) {
+            return 0;
+        }
+
+        $place = implode(', ', array_fill(0, count($ids), '?'));
+
+        // The photo files are found BEFORE the rows that name them go away.
+        $photos = [];
+        if ($this->hasTable($pdo, 'report_captures')) {
+            $stmt = $pdo->prepare("SELECT file_path FROM report_captures WHERE report_id IN ({$place})");
+            $stmt->execute($ids);
+            $photos = array_filter(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)));
+        }
+
+        $pdo->beginTransaction();
+        try {
+            foreach (['report_captures', 'report_composing', 'report_verifications', 'report_history'] as $table) {
+                if (!$this->hasTable($pdo, $table)) {
+                    continue;
+                }
+                $stmt = $pdo->prepare("DELETE FROM {$table} WHERE report_id IN ({$place})");
+                $stmt->execute($ids);
+            }
+            $stmt = $pdo->prepare(
+                "DELETE FROM reports
+                  WHERE id IN ({$place})
+                    AND deleted_at IS NOT NULL
+                    AND purge_after IS NOT NULL
+                    AND purge_after <= NOW()"
+            );
+            $stmt->execute($ids);
+            $removed = $stmt->rowCount();
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+
+        foreach ($photos as $name) {
+            $path = ReportCaptures::path($name);
+            if ($path !== null) {
+                @unlink($path);
+            }
+        }
+
+        return (int) $removed;
     }
 
     /**

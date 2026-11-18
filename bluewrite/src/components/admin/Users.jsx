@@ -3,6 +3,9 @@ import React, { useEffect, useRef, useState } from 'react';
 // shape on this API that is not JSON, used by the two photo routes.
 import { api, apiUpload } from '../../lib/api.js';
 import { checkPassword, MIN_LENGTH, passwordHint } from '../../lib/passwordPolicy.js';
+// The accounts this station keeps off its roster screens — one list, shared with
+// the dashboard's Users card and the connected board (see the module).
+import { HIDDEN_USERNAMES } from '../../lib/hiddenUsers.js';
 // The face: how it is drawn (the same circle the roster and Profile draw), how a
 // chosen file becomes the 512px square that is sent, and the camera that can take
 // the photograph instead of a file being found for it.
@@ -44,13 +47,11 @@ import ConnectionHub from '../shared/ConnectionHub.jsx';
  */
 const ROLES = ['Admin', 'Officer'];
 /**
- * HIDDEN FROM THE DIRECTORY (owner request, 2026-11-14): usernames that never
+ * HIDDEN FROM THE DIRECTORY (owner request, 2026-11-14): the usernames that never
  * render on this screen — in neither view, under no filter, and out of the
- * counts. A deactivated account still shows (red, and still countable); these
- * do not show at all. Matched by username, which the server holds unique.
- * Delete the name here and the account is back.
+ * counts. The list itself lives in lib/hiddenUsers.js, because the dashboard's
+ * Users card and the connected board hide the same people.
  */
-const HIDDEN_USERNAMES = ['e.ramos'];
 /** The orders the directory offers, in menu order. Name first: a station
  *  directory reads alphabetically. Badge number is the station's own identifier
  *  order; recently signed in answers who was last at a desk. */

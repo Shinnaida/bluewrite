@@ -357,8 +357,10 @@ export default function ProfilePanel({
   // resetting the account (see Users ▸ Reset verification).
   const mfaState = user.mfa ?? null;
   // THE ADDRESS IN FULL, to its owner (Phase 1, S-04). /me returns `user.email`
-  // for the signed-in account; a mask (mfaState.email_hint) cannot be checked
-  // for a typo, and confirming what is on file is the point. It is still NOT
+  // for the signed-in account, and confirming what is on file is the point — a
+  // mistyped address is a lockout nobody notices until the next sign-in. The
+  // sign-in gate now shows the address in full too (owner request, 2026-11-18),
+  // so `mfaState.email_hint` is a fallback rather than a mask. It is still NOT
   // editable here — the address is an administrative fact.
   const mfaEmail = typeof user.email === 'string' && user.email !== '' ? user.email : null;
 

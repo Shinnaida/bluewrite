@@ -287,6 +287,15 @@
 .conn-hub__core .conn-hub__server-bay { fill: #274a73; }
 .conn-hub__core .conn-hub__server-led.is-on { fill: #22c55e; }
 .conn-hub__core .conn-hub__server-led.is-warn { fill: #f59e0b; }
+/* WHAT THE BOX IS (owner request, 2026-11-18): the label under the chassis, on
+   the desks' own label line and a shade heavier — it names the one thing every
+   other node reports to. */
+.conn-hub__core .conn-hub__core-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  fill: #43586f;
+}
 /* The office's name on a glass tag under the hub, the way the mock draws it. */
 .conn-hub__core-tag { fill: rgba(255, 255, 255, 0.92); stroke: #d7e3f8; stroke-width: 1; }
 .conn-hub__core text.conn-hub__core-tag-text { fill: #0f2447; font-size: 10px; font-weight: 700; font-family: var(--font-body); }

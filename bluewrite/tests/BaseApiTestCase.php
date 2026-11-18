@@ -152,6 +152,10 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // scratch DB must carry the table or those reads fail as unknown-table
         // 500s rather than as assertions.
         $this->runSqlFile(__DIR__ . '/../migrations/030_report_composing.sql');
+        // 031 is the archive's scheduled delete. The purge route WRITES these
+        // columns and the archive list READS them (and sweeps expired rows), so
+        // the scratch DB must carry them or every archived read 500s.
+        $this->runSqlFile(__DIR__ . '/../migrations/031_report_purge_grace.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         // Every account that OWES a second factor has an email address, because

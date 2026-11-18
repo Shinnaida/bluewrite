@@ -1075,10 +1075,11 @@ export default function Login({ onLogin, boot, notice = null }) {
                   </p>
 
                   {/* WHERE THE CODE WENT, in the mono face, because that is the
-                      fact the officer checks against the inbox in front of them.
-                      Masked by the SERVER (j***@gmail.com): the screen never holds
-                      the address, so it cannot print one on a shared station
-                      display. */}
+                      fact the officer checks against the inbox in front of them —
+                      in FULL (owner request, 2026-11-18): a masked local part made
+                      two addresses on the same domain read alike, and the officer
+                      opened the wrong inbox. The screen still never holds the
+                      address itself; the server, which does, is what prints it. */}
                   {!recoveryMode && mfa?.email_hint && (
                     <p className="la-verify-sent">
                       <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">

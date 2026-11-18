@@ -215,7 +215,7 @@ final class AccountRequestsTest extends BaseApiTestCase
         // In FULL, not the gate's mask: the owner cannot check a typo from `t***`.
         $this->assertSame('t.officer@example.test', $me['body']['email'] ?? null);
         // …and the sign-in GATE still masks it, because that screen is watched.
-        $this->assertSame('t***@example.test', $me['body']['mfa']['email_hint'] ?? null);
+        $this->assertSame('t.officer@example.test', $me['body']['mfa']['email_hint'] ?? null);
     }
 
     // ---- S-04's acceptance: the Admin's ACT is already audited ---------------

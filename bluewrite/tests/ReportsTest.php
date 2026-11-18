@@ -520,6 +520,97 @@ final class ReportsTest extends BaseApiTestCase
         $this->assertContains('Report restored from archive.', $notes);
     }
 
+    /**
+     * A permanent delete waits seven days (migration 031). Scheduling removes
+     * nothing, stamps the date from the server's clock, and the archive's own
+     * Restore is the undo — the row is never removed early, and never removed by
+     * anybody but an administrator.
+     */
+    public function testSchedulingADeleteWaitsSevenDaysAndRestoreCancelsIt(): void
+    {
+        [$officerCookie, $officerCsrf] = $this->login('t.officer');
+        $report = $this->createReport($officerCookie, $officerCsrf);
+        $id = (int) $report['id'];
+
+        [$adminCookie, $adminCsrf] = $this->login('t.admin');
+
+        // A LIVE report cannot be scheduled: deleting is a step past archiving,
+        // so a report somebody is still working on is not on the delete list.
+        $live = $this->request('DELETE', "/reports/{$id}/purge", null, $adminCookie, $adminCsrf);
+        $this->assertSame(404, $live['status']);
+
+        $this->request('DELETE', "/reports/{$id}", null, $adminCookie, $adminCsrf);
+
+        // …and an officer cannot schedule one at all (the archive is an
+        // administrator's, exactly as its list and its restore are).
+        $forbidden = $this->request('DELETE', "/reports/{$id}/purge", null, $officerCookie, $officerCsrf);
+        $this->assertSame(403, $forbidden['status']);
+
+        $scheduled = $this->request('DELETE', "/reports/{$id}/purge", null, $adminCookie, $adminCsrf);
+        $this->assertSame(200, $scheduled['status'], json_encode($scheduled['body']));
+
+        $row = self::db()->query(
+            "SELECT deleted_at, purge_after, purge_requested_by,
+                    DATEDIFF(purge_after, NOW()) AS days
+               FROM bluewrite_test.reports WHERE id = {$id}"
+        )->fetch(\PDO::FETCH_ASSOC);
+        $this->assertNotFalse($row, 'a scheduled report must still exist — nothing is deleted yet');
+        $this->assertNotNull($row['deleted_at'], 'a scheduled report stays archived until its date');
+        $this->assertSame(7, (int) $row['days'], 'the grace period is seven days');
+        $this->assertSame(1, (int) $row['purge_requested_by'], 'the administrator who asked is recorded');
+
+        // Scheduling twice is refused rather than silently re-dated, which would
+        // let a caller restart the clock for ever.
+        $again = $this->request('DELETE', "/reports/{$id}/purge", null, $adminCookie, $adminCsrf);
+        $this->assertSame(409, $again['status']);
+
+        // Restore is the whole undo: out of the archive AND off the delete list.
+        $restored = $this->request('PATCH', "/reports/{$id}/restore", null, $adminCookie, $adminCsrf);
+        $this->assertSame(200, $restored['status']);
+        $after = self::db()->query(
+            "SELECT deleted_at, purge_after FROM bluewrite_test.reports WHERE id = {$id}"
+        )->fetch(\PDO::FETCH_ASSOC);
+        $this->assertNull($after['deleted_at']);
+        $this->assertNull($after['purge_after'], 'restoring a scheduled report cancels the delete');
+    }
+
+    /**
+     * The window IS the safety net, so the row has to survive until it has
+     * genuinely run out — and then go, with its history, on the next read of the
+     * archive (the sweep needs no cron: see ReportsController::purgeExpiredReports).
+     */
+    public function testAScheduledReportIsSweptAwayWithItsHistoryOnlyAfterTheWindow(): void
+    {
+        [$officerCookie, $officerCsrf] = $this->login('t.officer');
+        $report = $this->createReport($officerCookie, $officerCsrf);
+        $id = (int) $report['id'];
+        [$adminCookie, $adminCsrf] = $this->login('t.admin');
+        $this->request('DELETE', "/reports/{$id}", null, $adminCookie, $adminCsrf);
+        $this->request('DELETE', "/reports/{$id}/purge", null, $adminCookie, $adminCsrf);
+
+        // A day inside the window: the archive still lists it, date and all.
+        self::db()->exec("UPDATE bluewrite_test.reports SET purge_after = DATE_ADD(NOW(), INTERVAL 6 DAY) WHERE id = {$id}");
+        $archived = $this->request('GET', '/reports?archived=1', null, $adminCookie);
+        $this->assertSame(200, $archived['status'], json_encode($archived['body']));
+        $listed = array_values(array_filter(
+            $archived['body']['reports'],
+            static fn (array $r): bool => (int) $r['id'] === $id
+        ));
+        $this->assertCount(1, $listed, 'a scheduled report is still listed until its date passes');
+        $this->assertNotNull($listed[0]['purge_after'], 'the list carries the countdown date');
+
+        // Past the window: the next read of the archive settles it.
+        self::db()->exec("UPDATE bluewrite_test.reports SET purge_after = DATE_SUB(NOW(), INTERVAL 1 MINUTE) WHERE id = {$id}");
+        $after = $this->request('GET', '/reports?archived=1', null, $adminCookie);
+        $this->assertSame(200, $after['status']);
+        $this->assertNotContains($id, array_column($after['body']['reports'], 'id'));
+
+        $still = self::db()->query("SELECT COUNT(*) FROM bluewrite_test.reports WHERE id = {$id}")->fetchColumn();
+        $this->assertSame(0, (int) $still, 'the report is gone once its seven days have passed');
+        $hist = self::db()->query("SELECT COUNT(*) FROM bluewrite_test.report_history WHERE report_id = {$id}")->fetchColumn();
+        $this->assertSame(0, (int) $hist, 'its history goes with it');
+    }
+
     public function testHistoryEndpointReturnsSnapshots(): void
     {
         [$cookie, $csrf] = $this->login('t.officer');

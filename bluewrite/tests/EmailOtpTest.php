@@ -78,7 +78,7 @@ final class EmailOtpTest extends BaseApiTestCase
     {
         [$cookie, , $mfa] = $this->pendingSignIn('t.admin');
         $this->assertSame('verify', $mfa['stage']);
-        $this->assertSame('t***@example.test', $mfa['email_hint'], 'the screen is told where the code went');
+        $this->assertSame('t.admin@example.test', $mfa['email_hint'], 'the screen is told the full address the code went to');
 
         // THE POINT OF THE WHOLE DESIGN: a correct password, and no access.
         $this->assertSame(401, $this->request('GET', '/me', null, $cookie)['status']);
@@ -144,7 +144,7 @@ final class EmailOtpTest extends BaseApiTestCase
         $this->assertSame(200, $me['status']);
         $this->assertSame('t.officer', $me['body']['username']);
         $this->assertTrue($me['body']['mfa']['has_email']);
-        $this->assertSame('t***@example.test', $me['body']['mfa']['email_hint']);
+        $this->assertSame('t.officer@example.test', $me['body']['mfa']['email_hint']);
     }
 
     public function testACodeCannotBeUsedTwice(): void
@@ -225,7 +225,7 @@ final class EmailOtpTest extends BaseApiTestCase
         // live sign-in will accept a code from — which is what lets the screen
         // correct itself instead of inviting four more tries at the wrong inbox.
         $this->assertNotSame('mfa_wrong_code', $stale['body']['code']);
-        $this->assertSame('t***@example.test', $stale['body']['mfa']['email_hint']);
+        $this->assertSame('t.officer@example.test', $stale['body']['mfa']['email_hint']);
         // AND NOTHING WAS CHARGED: all five tries are still there for the code
         // that is actually waiting.
         $this->assertSame(5, $stale['body']['mfa']['attempts']);

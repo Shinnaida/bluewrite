@@ -86,6 +86,8 @@ const loadRegisterFiles = () => loadFixture('tests/fixtures/registerFiles.jsx');
 const glyphKeys = [...component.matchAll(/\n  '?([a-z][a-z-]*)'?: \(/g)].map((m) => m[1]);
 
 const TYPES = [...INCIDENT_TYPES];
+/** The folder order the shelf promises: A–Z by type (owner request, 2026-11-18). */
+const alpha = (types) => [...types].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
 /** Every report the server's tally counted — the oracle the shelves are folded
  *  against. Summed here rather than read from the module: the module has no
@@ -272,7 +274,9 @@ test('the mode decides the shelves: three for the register, one for the archive'
   assert.equal(awaiting[0].all, true);
 });
 
-test('a tally becomes shelves of folders, in the station’s own type order', () => {
+test('a tally becomes shelves of folders, every type in A–Z order', () => {
+  // The grid is alphabetical (owner request, 2026-11-18): the station's type list
+  // says which folders exist, the names say where they sit.
   const tally = [
     { status: 'draft', incident_type: 'Theft', count: 2 },
     { status: 'draft', incident_type: 'Fire Incident', count: 1 },
@@ -292,28 +296,39 @@ test('a tally becomes shelves of folders, in the station’s own type order', ()
   assert.equal(shelves[0].label, ALL_LABEL);
   const [, draft, submitted] = shelves;
 
-  // Draft: Theft heads INCIDENT_TYPES, Fire Incident follows the others, and the
-  // unranked pair (the station's own type, then the blank one) come last.
-  assert.deepEqual(draft.folders.map((f) => f.type), [
-    'Theft',
-    'Fire Incident',
-    'Barangay Dispute',
-    UNCLASSIFIED_TYPE,
-  ]);
-  assert.deepEqual(draft.folders.map((f) => f.count), [2, 1, 4, 1]);
+  // Draft: the STATION'S WHOLE TYPE LIST, empty folders and all (owner request,
+  // 2026-11-18), plus the two types the talled rows carry that the list does not
+  // name — the station's own, and the blank one — all of it in A–Z order.
+  assert.deepEqual(
+    draft.folders.map((f) => f.type),
+    alpha([...TYPES, 'Barangay Dispute', UNCLASSIFIED_TYPE]),
+  );
+  const countOf = (folders, type) => folders.find((f) => f.type === type).count;
+  assert.equal(countOf(draft.folders, 'Theft'), 2);
+  assert.equal(countOf(draft.folders, 'Fire Incident'), 1);
+  assert.equal(countOf(draft.folders, 'Barangay Dispute'), 4);
+  assert.equal(countOf(draft.folders, UNCLASSIFIED_TYPE), 1);
+  // A TYPE WITH NO DRAFTS IS STILL A FOLDER, and it says nought.
+  assert.equal(countOf(draft.folders, 'Robbery'), 0);
   assert.equal(draft.total, 8);
 
   // Submitted: the two statuses of Theft folded into one folder. A finalized
-  // report is on this shelf, which is the whole point of the bucket.
-  assert.deepEqual(submitted.folders, [{ type: 'Theft', count: 4 }]);
+  // report is on this shelf, which is the whole point of the bucket — and the
+  // rest of the list is there, empty.
+  assert.equal(submitted.folders.length, TYPES.length);
+  assert.equal(countOf(submitted.folders, 'Theft'), 4);
+  assert.equal(submitted.folders.filter((f) => f.count > 0).length, 1);
   assert.equal(submitted.total, 4);
 
   // Every shelf is returned even when empty ("nothing in drafts" is a fact worth
-  // stating), and a type with no rows is absent rather than an empty folder.
+  // stating), and an empty shelf is its whole type list at zero — not a blank.
   const empty = buildShelves([], { shelves: shelvesFor({}), typeOrder: TYPES });
   assert.equal(empty.length, 3);
-  assert.deepEqual(empty.map((s) => s.folders), [[], [], []]);
   assert.deepEqual(empty.map((s) => s.total), [0, 0, 0]);
+  for (const shelf of empty) {
+    assert.deepEqual(shelf.folders.map((f) => f.type), alpha(TYPES));
+    assert.ok(shelf.folders.every((f) => f.count === 0), 'an empty shelf counts anything');
+  }
 
   // Nothing is lost, and nothing is counted twice: the two BUCKETS add up to the
   // whole, and ALL REPORTS is that same whole under one tab.
@@ -404,7 +419,11 @@ test('the archive shelf folds every status of a type into one folder', () => {
     { shelves: shelvesFor({ archived: true }), typeOrder: TYPES },
   );
   assert.equal(shelves.length, 1);
-  assert.deepEqual(shelves[0].folders, [{ type: 'Robbery', count: 4 }]);
+  // The whole type list, with Robbery carrying the four (owner request,
+  // 2026-11-18: an empty folder stays where the type lives).
+  assert.deepEqual(shelves[0].folders.map((f) => f.type), alpha(TYPES));
+  assert.equal(shelves[0].folders.find((f) => f.type === 'Robbery').count, 4);
+  assert.equal(shelves[0].folders.filter((f) => f.count > 0).length, 1);
   assert.equal(shelves[0].total, 4);
 });
 
@@ -639,7 +658,9 @@ test('the register draws a shelf, and a folder opens into its own list', () => {
   // aligned columns (owner request, 2026-10-06: the wrapped flex row left every
   // folder at its natural width and the columns unaligned between shelves).
   assert.match(styles, /\.folder-shelf__row \{[^}]*display:\s*grid/);
-  assert.match(styles, /\.folder-shelf__row \{[^}]*grid-template-columns:\s*repeat\(auto-fill/);
+  // FIVE TO A ROW (owner request, 2026-11-18): a fixed count, not `auto-fill`,
+  // so the shelf is the same shape on every screen.
+  assert.match(styles, /\.folder-shelf__row \{[^}]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
 
   // The drill-in: the contents list, the trail back, and a request scoped to
   // the open folder.
@@ -1094,18 +1115,23 @@ test('the tabs state their own surface, and the folders came down a size', () =>
   );
   assert.match(styles, /\.folder-tab:focus-visible \{[^}]*outline: 2px/);
 
-  // A SIZE DOWN (owner request, 2026-10-07): the folder's cap and the shelf's
-  // column are the SAME number, or a folder overhangs its column or leaves a gap
-  // beside it.
-  assert.match(styles, /\.glass-folder__stage \{[^}]*max-width: 12\.5rem/);
-  // ...and the clearance that overhang needs. A folder's own tab stands a tenth
-  // of its height above its box (see .glass-folder__back::before) and the card the
-  // panel sits in clips what leaves it, so the panel's top padding and the row's
-  // have to clear that — at zero, a shelf of folders draws with its tabs sliced
-  // off, which is exactly what the first pass of this strip did.
+  // THE FOLDER IS ITS COLUMN (owner request, 2026-11-18): no cap and no centring,
+  // or a five-column row leaves a stripe of empty card beside every folder.
+  assert.doesNotMatch(styles, /\.glass-folder__stage \{[^}]*max-width/);
+  assert.doesNotMatch(styles, /\.glass-folder__stage \{[^}]*margin-inline: auto/);
+  assert.match(styles, /\.glass-folder__stage \{[^}]*aspect-ratio: 3 \/ 2/);
+  // NOTHING CAPS THE ROW either: a max-width here (80rem, briefly) left a stripe of
+  // empty card beside the fifth folder once the card grew past it.
+  assert.doesNotMatch(styles, /\.folder-shelf__row \{[^}]*max-width/);
+  // THE FIRST ROW STANDS OFF THE SEARCH BAR (owner request, 2026-11-18): 0.4 inch,
+  // which is 2.85rem of row padding over the panel's own 0.5rem once the tab's
+  // overhang is taken out of it. That overhang — a folder's tab stands a tenth of
+  // its height above its box (see .glass-folder__back::before), and the card the
+  // panel sits in clips what leaves it — is the floor this padding must clear; at
+  // zero, a shelf of folders draws with its tabs sliced off.
   assert.match(styles, /\.folder-shelf \{[^}]*padding: 0\.[1-9]rem 1rem/);
-  assert.match(styles, /\.folder-shelf__row \{[^}]*padding: 0\.[1-9]rem 0\.25rem/);
-  assert.match(styles, /grid-template-columns: repeat\(auto-fill, minmax\(12\.5rem, 1fr\)\)/);
+  assert.match(styles, /\.folder-shelf__row \{[^}]*padding: 2\.85rem 0\.25rem 0\.4rem/);
+  assert.match(styles, /grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
   assert.doesNotMatch(styles, /minmax\(15rem/);
   assert.doesNotMatch(styles, /max-width: 15rem/);
 });

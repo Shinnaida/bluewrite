@@ -763,7 +763,7 @@ final class AuthController
         // password and the code, and the sentence has to name the mailbox the
         // code will really be sent to.
         $email = (string) (EmailOtp::emailFor($userId) ?? '');
-        $hint = EmailOtp::maskEmail($email);
+        $hint = EmailOtp::displayEmail($email);
         $where = $hint === '' ? '' : " The sign-in this tab is holding sends its code to {$hint}.";
 
         Audit::log(
@@ -972,12 +972,10 @@ final class AuthController
             'last_login_at' => $user['last_login_at'],
             'created_at' => $user['created_at'],
             // The account's OWN sign-in address, in FULL (Phase 1, S-04). The
-            // sign-in GATE masks it (EmailOtp::maskEmail) because that screen may
-            // be watched at a shared station PC and the account is not yet
-            // proven; here the session IS the account, and an officer cannot
-            // confirm the address their codes go to from a mask. It is returned
-            // to its owner and to nobody else — the address remains an Admin-set
-            // fact, never editable from here.
+            // sign-in GATE now prints it in full too (EmailOtp::displayEmail, owner
+            // request 2026-11-18), so the two screens agree; here the session IS the
+            // account, and it is returned to its owner and to nobody else — the
+            // address remains an Admin-set fact, never editable from here.
             'email' => $user['email'] === null || $user['email'] === '' ? null : (string) $user['email'],
             'languages' => self::languageRegistryPayload(),
             // The session's own face, as a URL to ask for (null when the account

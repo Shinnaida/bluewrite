@@ -5,6 +5,10 @@ import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef,
 // rendering (the rule-test harness renders this file in Node).
 import 'leaflet/dist/leaflet.css';
 import { api, apiBlobUrl, isUnreachable } from '../lib/api.js';
+// The accounts the station keeps off its roster screens. The Users card draws the
+// same directory User management does, so it must hide the same people — one
+// list, in lib/hiddenUsers.js, rather than a copy that drifts.
+import { HIDDEN_USERNAMES } from '../lib/hiddenUsers.js';
 import { ServerPhoto } from './Avatar.jsx';
 // The incident-category rank chart's rules — bucketing, per-bucket ranks, which types
 // earn a line, the sentence under it. Pure, and tested on its own because a rank chart
@@ -384,9 +388,16 @@ function dayGreeting(now = new Date()) {
   if (h < 18) return 'Good afternoon';
   return 'Good evening';
 }
-function firstName(user) {
+/**
+ * THE WHOLE NAME (owner request, 2026-11-18). The greeting used to print the
+ * first whitespace-separated word, which on this station's roster is the RANK —
+ * "Good morning, PCMS" named nobody. Rank, first name and surname all belong in
+ * the sentence, so the account's own `full_name` is what is said here; only an
+ * account with no name at all falls back to the role word.
+ */
+function greetingName(user) {
   const full = String(user?.full_name ?? '').trim();
-  return full ? full.split(/\s+/)[0] : 'Admin';
+  return full || 'Admin';
 }
 /** The station wall clock: Philippine time, read where the badge reads it. */
 const MANILA = 'Asia/Manila';
@@ -1882,6 +1893,9 @@ export default function Dashboard({
         const out = await api('/users');
         const rows = Array.isArray(out?.users) ? out.users : [];
         const actives = rows
+          // Hidden first: an account the directory never draws is not on this
+          // card either, in the lanyards or the list (owner request, 2026-11-18).
+          .filter((r) => !HIDDEN_USERNAMES.includes(r?.username))
           .filter((r) => (r?.status ?? 'active') === 'active')
           .sort((a, b) => String(a?.full_name ?? '').localeCompare(String(b?.full_name ?? '')));
         if (!cancelled && live.current) setRoster(actives);
@@ -2220,7 +2234,7 @@ export default function Dashboard({
           <span className="cmd-hero__wash" />
         </div>
         <div className="cmd-hero__text">
-          <h2 className="cmd-hello">{dayGreeting()}, <span>{firstName(user)}</span></h2>
+          <h2 className="cmd-hello">{dayGreeting()}, <span>{greetingName(user)}</span></h2>
           <p className="cmd-sub" role="status" aria-label={`Today is ${MANILA_DATE.format(now)}, ${MANILA_DAY.format(now)}, ${MANILA_TIME.format(now)}`}>
             <span className="cmd-sub__date">{MANILA_DATE.format(now)}</span>
             <span className="cmd-sub__day">{MANILA_DAY.format(now)}</span>

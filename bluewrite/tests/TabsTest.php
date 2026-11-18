@@ -125,7 +125,7 @@ final class TabsTest extends BaseApiTestCase
         $wrongTab = $this->request('POST', '/mfa/verify', ['code' => $codeA, 'sign_in_id' => $mfaA['sign_in_id']], $cookie, $csrfB, $this->tab(self::TAB_B));
         $this->assertSame(401, $wrongTab['status'], json_encode($wrongTab['body']));
         $this->assertSame('mfa_stale_sign_in', $wrongTab['body']['code']);
-        $this->assertSame('t***@example.test', $wrongTab['body']['mfa']['email_hint'], 'and it names the mailbox THIS tab is waiting on');
+        $this->assertSame('t.officer@example.test', $wrongTab['body']['mfa']['email_hint'], 'and it names the mailbox THIS tab is waiting on');
         $this->assertSame(5, $wrongTab['body']['mfa']['attempts'], 'a code from another tab costs nothing');
 
         // Tab B's own code still works...

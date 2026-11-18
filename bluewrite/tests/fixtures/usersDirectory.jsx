@@ -35,12 +35,15 @@ const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0
 const tally = (pairs) => Object.fromEntries(pairs.map(([n, m]) => [daysAgo(n), m]));
 export const ACCOUNTS = [
   // ADMIN, ENROLLED. The ordinary case: an address on file, so a code can be sent.
+  // (Not Maria Santos, the seeded admin: she is on the directory’s hidden list,
+  // see HIDDEN_USERNAMES in Users.jsx, so a fixture row of hers would be filtered
+  // out before it was ever drawn.)
   {
     id: 4,
-    full_name: 'Maria Santos',
-    badge_number: 'ADM-0001',
-    username: 'm.santos',
-    email: 'm.santos@nagacity.gov.ph',
+    full_name: 'Rosa Mendoza',
+    badge_number: 'ADM-0002',
+    username: 'r.mendoza',
+    email: 'r.mendoza@nagacity.gov.ph',
     role: 'Admin',
     status: 'active',
     last_login_at: '2026-09-22T18:19:16',

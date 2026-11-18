@@ -21,6 +21,10 @@ import FileCard from '../components/shared/FileCard.jsx';
 // The incident-type glyph, keyed by `typeIcon` — the same drawing an opened
 // folder's header wears.
 import ReportTypeIcon from '../components/reports/ReportTypeIcon.jsx';
+// How long a scheduled delete has left, read off the same helper the archive's
+// menu uses — one countdown, so the row's badge and the menu's sentence cannot
+// disagree about the day.
+import { daysUntilPurge } from '../components/reports/ReportActions.jsx';
 
 // ============================================================================
 // ReportList — what is INSIDE an opened folder: the reports themselves, one
@@ -152,6 +156,9 @@ function FileLogo({ className }) {
 
 function ReportRow({ report, meta, flash, onOpen, onEdit, onMenu, officer = false }) {
   const num = reportNumber(report.id);
+  // An archived report with a date on it is WAITING TO GO (migration 031); the
+  // badge below states how long, and Restore in the row's menu cancels it.
+  const purgeDays = daysUntilPurge(report.purge_after);
   const translation =
     report.verification_status && report.verification_status !== 'english_original'
       ? report.verification_status
@@ -237,11 +244,19 @@ function ReportRow({ report, meta, flash, onOpen, onEdit, onMenu, officer = fals
                 them, while the badge's own class stays the raw status, so the
                 colour that state has always worn does not move. The Admin — who
                 reviews the two apart — still reads the raw value. */}
-            {(report.status !== 'draft' || translation) && (
+            {(report.status !== 'draft' || translation || purgeDays !== null) && (
               <span className="report-row__badges">
                 {report.status !== 'draft' && (
                   <span className={`badge ${report.status}`}>
                     {statusText(report.status, { officer })}
+                  </span>
+                )}
+                {purgeDays !== null && (
+                  <span
+                    className="badge purge"
+                    title="Scheduled for permanent deletion — Restore in the row's menu cancels it."
+                  >
+                    Deletes in {purgeDays} day{purgeDays === 1 ? '' : 's'}
                   </span>
                 )}
                 {translation && (

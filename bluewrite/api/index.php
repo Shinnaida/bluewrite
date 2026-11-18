@@ -634,6 +634,13 @@ try {
             if ($parts[2] === 'restore' && $method === 'PATCH') {
                 $c->restore((string) $seg1);
             }
+            // A permanent delete WAITS (migration 031): DELETE schedules an
+            // archived report seven days out and removes nothing; the archive's
+            // own Restore cancels it. The sweep that finally removes it runs on
+            // reads of the archive (see ReportsController::purgeExpiredReports).
+            if ($parts[2] === 'purge' && $method === 'DELETE') {
+                $c->requestDeletion((string) $seg1);
+            }
         }
         // PATCH/DELETE apply to the record itself, never to a sub-resource:
         // /reports/:id/verifications must NOT fall through to report update or

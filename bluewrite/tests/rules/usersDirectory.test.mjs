@@ -99,12 +99,18 @@ test('the hidden account never renders, in either view', async () => {
   // Hidden means out of the funnel itself, so the rows, the counts and the
   // pages all agree she was never there.
   const src = flat(await readSrc());
-  assert.match(src, /HIDDEN_USERNAMES = \['e\.ramos'\]/);
+  // ONE HOME for the list. It began as a copy in each component, and the copy that
+  // was forgotten is the account that kept showing up on the dashboard's Users card
+  // (owner, 2026-11-18) — so the names live in lib/hiddenUsers.js and every roster
+  // screen imports them.
+  const hiddenSrc = flat(await readFile(path.join(root, 'src/lib/hiddenUsers.js'), 'utf8'));
+  assert.match(hiddenSrc, /HIDDEN_USERNAMES = \['e\.ramos', 'm\.santos', 'preview\.probe2', 'playtest\.probe3'\]/);
+  assert.match(src, /import \{ HIDDEN_USERNAMES \} from '\.\.\/lib\/hiddenUsers\.js'/);
   assert.match(src, /HIDDEN_USERNAMES\.includes\(u\.username\)/);
   assert.match(src, /listedCount/);
-  // THE MIRROR HIDES HER TOO: admin/Users.jsx carries the same list.
+  // THE MIRROR HIDES HER TOO: admin/Users.jsx reads the same list.
   const adminSrc = flat(await readFile(path.join(root, 'src/components/admin/Users.jsx'), 'utf8'));
-  assert.match(adminSrc, /HIDDEN_USERNAMES = \['e\.ramos'\]/);
+  assert.match(adminSrc, /import \{ HIDDEN_USERNAMES \} from '\.\.\/\.\.\/lib\/hiddenUsers\.js'/);
   assert.match(adminSrc, /HIDDEN_USERNAMES\.includes\(u\.username\)/);
 });
 
@@ -175,7 +181,7 @@ test('the table keeps its own semantics: a caption, and one scoped heading per c
   assert.match(css, /\.users-reports \{ display: block; font-weight: 800; \}/);
   // The address lives with the person now: the hero's fourth line, with its
   // full text on `title` — and "Not recorded" where there is nothing.
-  assert.match(html, /<span class="users-email" title="m\.santos@nagacity\.gov\.ph">m\.santos@nagacity\.gov\.ph<\/span>/);
+  assert.match(html, /<span class="users-email" title="r\.mendoza@nagacity\.gov\.ph">r\.mendoza@nagacity\.gov\.ph<\/span>/);
 });
 
 test('reports read on the right: how many each account has filed', async () => {
@@ -195,7 +201,7 @@ test('reports read on the right: how many each account has filed', async () => {
   // (The singular lives on the hidden account, so it is covered on a visible
   // stand-in below rather than on the fixture row.)
   assert.match(html, /<span class="users-reports">0 reports<\/span>/);
-  const singular = renderDirectory({ users: [{ ...ACCOUNTS[0], username: 'm.santos.2', report_count: 1, report_days: {} }] });
+  const singular = renderDirectory({ users: [{ ...ACCOUNTS[0], username: 'r.mendoza.2', report_count: 1, report_days: {} }] });
   assert.match(singular, /<span class="users-reports">1 report<\/span>/);
   assert.doesNotMatch(singular, />1 reports</);
   assert.doesNotMatch(html, />1 reports</);
@@ -217,7 +223,7 @@ test('reports read on the right: how many each account has filed', async () => {
   // and the label owns it.
   assert.match(html, /aria-label="Reports filed from \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}: no reports filed\."/);
   assert.equal((html.match(/class="sheet-cell sheet-cell--l/g) || []).length, 4 * 91);
-  // Maria's busiest day files 3 and Juan's, Elena's and Josefina's busiest file
+  // Rosa's busiest day files 3 and Juan's, Elena's and Josefina's busiest file
   // against a peak of their own — those burn at full depth — while every day
   // with no filing is an empty square.
   assert.equal((html.match(/sheet-cell--l4"/g) || []).length, 1 + 3 + 1);

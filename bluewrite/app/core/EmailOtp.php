@@ -106,24 +106,29 @@ final class EmailOtp
     }
 
     /**
-     * An address in a form safe to put on a sign-in screen: `j***@gmail.com`.
+     * The address as the sign-in gate prints it: IN FULL (owner request, 2026-11-18).
      *
-     * WHY MASK IT AT ALL. The screen has to confirm WHERE the code went — an
-     * officer with two addresses needs to know which inbox to open — and it has
-     * to do that on a page that may be seen by whoever is standing behind them at
-     * a shared station PC. The domain and the first character answer the first
-     * question without spelling out the account.
+     * WHAT THIS USED TO DO, AND WHY IT CHANGED. It returned `j***@gmail.com` — the
+     * domain and one character — on the argument that a shared station PC should not
+     * carry somebody's address. The station's own answer is that the officer at the
+     * gate is the one who needs to know WHICH inbox the six digits went to, and a
+     * masked local part makes two addresses on the same domain (two `j…@gmail.com`)
+     * indistinguishable: the wrong inbox, five wrong codes, a locked account. So the
+     * address is spelled out.
+     *
+     * WHAT IT IS NOT. It is never an address the caller did not already hold — this
+     * reads the account's own row, and it is shown only to somebody who has already
+     * given that account's password. An empty or malformed address answers '', so the
+     * gate says nothing about where the code went rather than printing a fragment.
      */
-    public static function maskEmail(?string $email): string
+    public static function displayEmail(?string $email): string
     {
         $email = trim((string) $email);
         $at = strrpos($email, '@');
         if ($at === false || $at < 1 || $at === strlen($email) - 1) {
             return '';
         }
-        $local = substr($email, 0, $at);
-        $domain = substr($email, $at + 1);
-        return substr($local, 0, 1) . '***@' . $domain;
+        return $email;
     }
 
     /**
@@ -160,7 +165,7 @@ final class EmailOtp
         return [
             'required' => self::isRequired($role),
             'has_email' => $email !== '',
-            'email_hint' => self::maskEmail($email),
+            'email_hint' => self::displayEmail($email),
             'locked_until' => $lockSeconds > 0 ? ($row['locked_until'] ?? null) : null,
             // The remaining lock, in seconds, as MySQL measured it. Callers
             // phrase the wait from this rather than from a wall-clock string.

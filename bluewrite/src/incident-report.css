@@ -4683,8 +4683,9 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
      box by a tenth of its height (see .glass-folder__back::before), and the card
      the panel sits in clips what leaves it — so the room above the first row plus
      the row's own padding has to clear that overhang, or a shelf of folders draws
-     with its tabs sliced off. 0.5rem here and 0.9rem on the row clears 10% of
-     12.5rem with air to spare. */
+     with its tabs sliced off. 0.5rem here plus 2.85rem on the row leaves 0.4
+     inch of clear air under the search bar once that overhang is taken out of it
+     (owner request, 2026-11-18). */
   padding: 0.5rem 1rem 1rem;
 }
 .folder-shelf__empty {
@@ -4696,37 +4697,53 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
    hover tilt has room to pop. THE SHELF IS A GRID (owner request,
    2026-10-06): a wrapped flex row left every folder at its natural width and
    let the tail of a shelf drift, so two rows of four and of three read as two
-   different layouts. `auto-fill` gives every folder the same width and lines
-   the columns up, and the columns reflow on their own as the card widens — no
-   breakpoint names a count. The item FILLS its column rather than sitting at
-   its natural width (a start-aligned item was wider than the column it was
-   given and overhung its neighbour), so every folder is the same size.
+   different layouts. The grid gives every folder the same width and lines the
+   columns up. The item FILLS its column rather than sitting at its natural
+   width (a start-aligned item was wider than the column it was given and
+   overhung its neighbour), so every folder is the same size.
    The padding at the top is room for the tabs, which stand above the stage. */
 .folder-shelf__row {
   display: grid;
-  /* 12.5rem is the FOLDER'S OWN SIZE, not a taste: a column narrower than a
-     folder lets the folder overhang the column beside it (the item can be
-     squeezed, the box inside it cannot). It was 15rem until the folders were
-     asked to come down a size (owner request, 2026-10-07) — the two numbers
-     move together, and .glass-folder__stage states the same one as its cap. */
-  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
-  /* THE ROW GAP IS THE OVERHANG'S CLEARANCE TOO, and it has to be bigger than the
-     column gap: a folder's tab stands a tenth of its height above its own box, so
-     when the row WRAPS (a narrow screen stacks them one per line) each folder's
-     tab rises into the row above it — at a 0.8rem row gap the two merged into one
-     silhouette. 1.6rem clears the 10% of 12.5rem with air between. */
-  gap: 1.6rem 0.9rem;
-  align-items: end;
-  padding: 0.9rem 0.25rem 0.4rem;
+  /* FIVE TO A ROW, FILLING THE ROW (owner request, 2026-11-18, back from six).
+     `auto-fill` used to pack as many folders as the card allowed — eight at
+     1366px — which made a shelf read as one long band with a ragged tail. Five
+     columns every time, each folder filling its own, and the row is the card's
+     full width: nothing caps the row or a folder, so a wider card means wider
+     folders and never a stripe of empty card beside the last one (the owner's own
+     screenshot, 2026-11-18). The one breakpoint below gives way only where five
+     columns would squeeze a folder past reading. */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* TWO FIFTHS OF AN INCH BETWEEN FOLDERS (owner request, 2026-11-18, stepping
+     up from a fifth): 2.5rem at this app's 15px root is 37.5px — 0.39in, within
+     a pixel of the 0.4 asked for. Both ways: the gap to the folder beside and the
+     gap to the one below. The row gap doubles as the OVERHANG'S CLEARANCE — a
+     folder's tab stands a tenth of its height above its own box, so when the row
+     wraps (two per line on a phone) the tab rises into the row above it, and the
+     merge that read as one silhouette at 0.8rem is cleared several times over
+     here. */
+  gap: 2.5rem;
+  /* THE FIRST ROW STANDS OFF THE SEARCH BAR (owner request, 2026-11-18): 0.9rem
+     -> 2.85rem, so there is 0.4 inch between the bar and the top of the folders
+     instead of them almost touching it. Measured at the station's card width:
+     0.5rem of panel padding + 2.85rem here = 50.25px above the folder's own box,
+     less the tab's ~11.7px overhang = 38.5px of air, which is the 0.4in asked
+     for. The overhang is a tenth of the folder's height, so a narrower card eats
+     a pixel or two of it. */
+  padding: 2.85rem 0.25rem 0.4rem;
+}
+/* Two across only where a phone makes five unreadable. There is no intermediate
+   rule: the columns are fractions of the card, so the folders shrink with it. */
+@media (max-width: 700px) {
+  .folder-shelf__row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ---- The folder itself --------------------------------------------------
    ONE button: a single click or tap opens it, Enter/Space opens it, and the
    focus ring is the affordance a table row never had. Everything that moves
    inside is decorative and hidden from assistive tech. */
-/* The wrapper exists so a folder can SHRINK on a narrow shelf: a flex item will
-   not go below its content's width without this, and the stage's own width would
-   then push the row wider than the card it sits in. */
+/* The item may be narrower than its own label: without `min-width: 0` a grid
+   item refuses to shrink below its content, and a long type name would widen the
+   column instead of ellipsing inside it. */
 .glass-folder {
   min-width: 0;
 }
@@ -4772,23 +4789,26 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
 .glass-folder__stage {
   position: relative;
   display: block;
-  /* The design’s own 15rem (the reference’s 240×160), as a CAP rather than a
-     fixed width: the folder fills its column up to that size and no further,
-     and any slack a wider column leaves is split evenly around it, so folders
-     stay one size and the gaps between them stay even.
-
-     A SIZE DOWN (owner request, 2026-10-07): 12.5rem, so a row of folders takes
-     a shorter shelf and more of them sit on one line. .folder-shelf__row's
-     `minmax()` states the same number — the cap and the column have to agree, or
-     a folder either overhangs its column or leaves a gap beside it. */
+  /* THE FOLDER IS ITS COLUMN (owner request, 2026-11-18). It used to be capped
+     at 12.5rem and centred, which on a 1366 laptop left a stripe of empty card
+     beside every folder in a five-column row. There is no cap now: the column's
+     width IS the folder's, so the five fill the shelf edge to edge and the only
+     space between them is the grid's own gap. */
   width: 100%;
-  max-width: 12.5rem;
-  margin-inline: auto;
-  /* The reference's own 3:2 (240x160). */
+  /* The reference's own 3:2 (240x160). The height follows the width, which is
+     what keeps the shape right at every column size. */
   aspect-ratio: 3 / 2;
   perspective: 1500px;
   transform-origin: bottom;
   user-select: none;
+  /* A SHADOW, NOT A LIGHTING PASS (owner request, 2026-11-18, replacing the
+     shading experiment of the same day). The folder should sit on the shelf
+     rather than be printed on it, and that is all: no gradients, no lit edges.
+     `drop-shadow` and not `box-shadow` — the silhouette is the two tabs as much
+     as the boards, and a box shadow lays a rectangle's shadow under a shape that
+     is not one. Warm brown rather than black, because an amber folder's shadow
+     is orange-brown. */
+  filter: drop-shadow(0 6px 8px rgba(69, 26, 3, 0.22));
 }
 
 /* The board, the sheets and the cover are the same MANILA; only the shade and
@@ -4926,7 +4946,12 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
 }
 .glass-folder__label {
   min-width: 0;
-  font-size: 0.78rem;
+  /* TWO SIZES UP (owner request, 2026-11-18, twice): at 0.78rem the type name was
+     the smallest thing on a shelf of large folders — an 11.7px line under a 111px
+     face. 0.95rem is 14.25px, a label an officer reads without leaning in, and it
+     still fits two lines inside the face: the longest name on the shelf ("Property
+     Damage / Malicious Mischief") breaks to two full words-per-line. */
+  font-size: 0.95rem;
   font-weight: 600;
   line-height: 1.2;
   color: var(--ir-folder-ink);
@@ -4943,7 +4968,9 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
   padding: 0.05rem 0.4rem;
   border-radius: 999px;
   font-family: var(--font-hud);
-  font-size: 0.68rem;
+  /* Up with the label it sits beside (owner request, 2026-11-18, twice), or the
+     pill reads as a footnote to type they now have to squint past. */
+  font-size: 0.82rem;
   font-weight: 700;
   color: var(--ir-folder-ink);
   /* A lit pill on the amber, where the glass wanted a white one: 45% of the
@@ -5394,6 +5421,15 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
   align-items: center;
   gap: 0.35rem;
   min-width: 0;
+}
+/* A SCHEDULED DELETE, COUNTED DOWN ON THE ROW (migration 031). An archived report
+   an administrator put on the delete list says how long it has left, in the red
+   the station uses for what cannot be undone — the number is what tells the desk
+   how quickly a Restore has to happen, so it is a badge and not a menu fact. */
+.report-row .badge.purge {
+  background: var(--red-bg);
+  color: var(--red-text);
+  border-color: var(--red-line);
 }
 .report-row__num {
   font-family: var(--font-hud);

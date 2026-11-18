@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import { SNAPSHOT_MS, applySnapshot } from '../lib/presence.js';
+// The same accounts the directory hides — the board must not put one of them
+// back on screen as a workstation (see lib/hiddenUsers.js).
+import { HIDDEN_USERNAMES } from '../lib/hiddenUsers.js';
 import { actionLabel } from './UserProfileView.jsx';
 import './ConnectionHub.css';
 
@@ -74,9 +77,35 @@ function positionFor(index, count, id) {
   };
 }
 
-/** A name to draw on a node: the first word, which is what fits under a circle. */
-function firstName(user) {
-  return String(user.full_name || user.username || '?').trim().split(/\s+/)[0] || '?';
+/**
+ * THE NAME ON A NODE (owner request, 2026-11-18). The label used to print the
+ * first whitespace-separated word, which on this roster is the RANK — the board
+ * read "PCMS" and "PMSg" and named nobody. The whole name is drawn instead,
+ * split into at most two lines: a full Philippine police name is far wider than
+ * the 40-unit circle it hangs under, and one line of it would run into the next
+ * desk's.
+ */
+function nameLines(user) {
+  const full = String(user.full_name || user.username || '?').trim();
+  const words = full.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return ['?'];
+  // Short enough to hang on one line, and a two-word name has no good place to
+  // break: "Juvi / Egdamin" is worse than the one line it already was.
+  if (full.length <= 18 || words.length <= 2) return [full];
+  // BALANCED BY CHARACTERS, not by word count: an even break is what keeps the
+  // second line from ending up as a single stub of a word.
+  let split = 1;
+  let bestGap = Infinity;
+  let left = 0;
+  for (let i = 1; i < words.length; i += 1) {
+    left += words[i - 1].length + 1;
+    const gap = Math.abs(full.length - 2 * left);
+    if (gap < bestGap) {
+      bestGap = gap;
+      split = i;
+    }
+  }
+  return [words.slice(0, split).join(' '), words.slice(split).join(' ')];
 }
 
 /** Initials for the list, the same one-or-two letters the rest of the app uses. */
@@ -203,6 +232,7 @@ export default function ConnectionHub({ users: usersProp }) {
   }, []);
 
   const active = users
+    .filter((u) => !HIDDEN_USERNAMES.includes(u.username))
     .filter((u) => u.status === 'active')
     .map((u) => ({ ...u, seen: parseStamp(u.last_seen_at) }))
     .filter((u) => u.seen !== null && now - u.seen <= ACTIVE_WINDOW_MS)
@@ -372,7 +402,9 @@ export default function ConnectionHub({ users: usersProp }) {
                 <text className="conn-hub__pc-user" y="-3" textAnchor="middle">{initials(u)}</text>
                 <rect className="conn-hub__pc-neck" x="-2.5" y="8" width="5" height="5" />
                 <rect className="conn-hub__pc-base" x="-10" y="13" width="20" height="3.5" rx="1.75" />
-                <text className="conn-hub__label" y="40" textAnchor="middle">{firstName(u)}</text>
+                {nameLines(u).map((line, i) => (
+                  <text key={`label-${i}`} className="conn-hub__label" y={40 + i * 12} textAnchor="middle">{line}</text>
+                ))}
               </g>
                 {/* THE WRITING BADGE: a navy pen bubble pinned to the monitor's
                     corner, ringed by an amber ping while the trail says this desk
@@ -404,6 +436,10 @@ export default function ConnectionHub({ users: usersProp }) {
           <circle className="conn-hub__server-led is-on" cx="6.5" cy="-12.5" r="1.7" />
           <circle className="conn-hub__server-led is-on is-alt" cx="6.5" cy="-4.5" r="1.7" />
           <circle className="conn-hub__server-led is-warn" cx="6.5" cy="3.5" r="1.7" />
+          {/* THE BOX NAMES ITSELF (owner request, 2026-11-18): the middle of the
+              drawing is the station server, and until now only its shape said so.
+              The label hangs under it on the same line as the desks' own labels. */}
+          <text className="conn-hub__core-label" y="40" textAnchor="middle">SERVER</text>
         </g>
       </svg>
       </div>

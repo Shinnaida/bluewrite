@@ -41,6 +41,26 @@ import ReportPrint from './ReportPrint.jsx';
  * register's history dialog draws the same rows: two readers of one API shape
  * must render it one way.
  */
+/**
+ * How many whole days are left in a scheduled delete's grace period.
+ *
+ * ROUNDED UP, so the last afternoon still reads "1 day" while the report is
+ * still there — a row that says "0 days" and has not gone yet would be a lie in
+ * the one direction that matters. `null` means "not scheduled": no stamp, or a
+ * stamp this build cannot read, and the row then offers no countdown at all
+ * rather than one it made up.
+ *
+ * The server sends `purge_after` as a MySQL datetime ("2026-11-25 12:00:00"),
+ * and MySQL has no `T` to hand Date — the same reading every other server
+ * timestamp in the app gets.
+ */
+export function daysUntilPurge(purgeAfter, now = Date.now()) {
+  if (!purgeAfter) return null;
+  const when = new Date(String(purgeAfter).replace(' ', 'T')).getTime();
+  if (Number.isNaN(when)) return null;
+  return Math.max(0, Math.ceil((when - now) / 86400000));
+}
+
 export function SnapshotDiff({ snapshot }) {
   const [open, setOpen] = useState(false);
   let pretty = snapshot;
@@ -169,6 +189,27 @@ export function useReportRowActions({
     });
   }
 
+  /**
+   * Delete an ARCHIVED report for good — in seven days.
+   *
+   * The wording carries the whole promise: the record and its history and photos
+   * are scheduled, not removed, and until the date passes Restore brings it back.
+   * The confirm's label says the same seven days the server will stamp, because
+   * this box is where an administrator decides, and "delete" on its own would
+   * read as instant.
+   */
+  function askDelete(r) {
+    setConfirm({
+      title: `Delete report #BW-${String(r.id).padStart(4, '0')} permanently?`,
+      message:
+        'The report is scheduled for deletion in 7 days, together with its history and any phone-file photos. Until then Restore cancels it. After those 7 days it cannot be brought back.',
+      confirmLabel: 'Delete in 7 Days',
+      doneMessage: 'Report scheduled for deletion in 7 days.',
+      flashId: r.id,
+      action: () => api(`/reports/${r.id}/purge`, { method: 'DELETE' }),
+    });
+  }
+
   async function openHistory(r) {
     setHistoryFor(r);
     setHistory(null);
@@ -196,11 +237,23 @@ export function useReportRowActions({
   /** The actions this row offers, in menu order. */
   function items(r) {
     if (showArchived) {
-      // Restore is the only action this list has ever offered on an archived
-      // report, and it is an administrator's (the Archived toggle is theirs too).
-      return user.role === 'Admin'
-        ? [{ label: 'Restore', onSelect: () => askRestore(r) }]
-        : [];
+      // An administrator's list (the Archived toggle is theirs too), and since
+      // 2026-11-18 it is a bin as well as a shelf: Delete schedules the record
+      // for removal in seven days, and RESTORE is what cancels that — the same
+      // action that undoes an archive, because the row is in the same place.
+      if (user.role !== 'Admin') return [];
+      const restore = { label: 'Restore', onSelect: () => askRestore(r) };
+      const days = daysUntilPurge(r.purge_after);
+      return [
+        restore,
+        days === null
+          ? { label: 'Delete permanently', danger: true, onSelect: () => askDelete(r) }
+          : {
+              label: `Deletes in ${days} day${days === 1 ? '' : 's'}`,
+              disabled: true,
+              hint: 'Already scheduled — Restore cancels it.',
+            },
+      ];
     }
     return [
       canOpen(r)

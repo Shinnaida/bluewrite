@@ -402,19 +402,32 @@ export function shelvesFor({ archived = false, awaiting = false, sort, dir, offi
  *   fold that dropped them would turn the All shelf back into an ordinary one.
  *
  * Three properties, each asserted in tests/rules/reportFolder.test.mjs:
- *   - a type the shelf holds no rows for is ABSENT — an empty folder is a
- *     promise the shelf cannot keep;
- *   - folders follow the STATION'S OWN type order (`typeOrder`, the same list
- *     the type filter offers), so the shelf reads like the form's own list; a
- *     type outside that list (a station's addition, a legacy value) sorts after
- *     every known one, alphabetically among its fellows;
+ *   - EVERY TYPE IN THE STATION'S LIST HAS A FOLDER ON EVERY SHELF, empty or not
+ *     (owner request, 2026-11-18). A folder used to be absent when its type held
+ *     no rows, on the argument that an empty folder promised what the shelf could
+ *     not deliver. The station's answer is the one that matters at a desk: a
+ *     folder is where its type's reports LIVE, the count on its face is the
+ *     answer, and a folder that vanishes at zero makes an officer hunt for a type
+ *     that was simply empty. Zero is drawn as zero;
+ *   - folders are in A–Z order by type (owner request, 2026-11-18), so the grid
+ *     can be read rather than scanned — the station's type list decides WHICH
+ *     folders exist, not where they sit; a type outside that list (a legacy
+ *     value, a custom one) has no entry in it, so it earns a folder only when it
+ *     HOLDS something, and sorts in among the rest by its name;
  *   - every shelf is returned, even an empty one — "nothing in drafts" is a
  *     fact worth stating, and a vanishing section reads as a bug.
  */
 export function buildShelves(tally, { shelves = STATUS_BUCKETS, typeOrder = [] } = {}) {
-  const rank = new Map(typeOrder.map((type, i) => [type, i]));
-  const place = (type) => (rank.has(type) ? rank.get(type) : Number.MAX_SAFE_INTEGER);
   const rows = Array.isArray(tally) ? tally : [];
+
+  // The station's whole type list, once: duplicates and blanks are dropped here
+  // so a duplicated entry in the settings cannot draw two folders with one name.
+  const listed = [];
+  for (const entry of Array.isArray(typeOrder) ? typeOrder : []) {
+    const type = typeof entry === 'string' ? entry.trim() : '';
+    if (type !== '' && !listed.includes(type)) listed.push(type);
+  }
+  const known = new Set(listed);
 
   return shelves.map((shelf) => {
     const mine = shelf.all ? rows : rows.filter((row) => statusBucket(row?.status) === shelf.key);
@@ -428,9 +441,21 @@ export function buildShelves(tally, { shelves = STATUS_BUCKETS, typeOrder = [] }
       byType.set(type, (byType.get(type) ?? 0) + (Number(row?.count) || 0));
     }
 
-    const folders = [...byType.entries()]
-      .sort(([a], [b]) => place(a) - place(b) || a.localeCompare(b))
-      .map(([type, count]) => ({ type, count }));
+    // THE WHOLE TYPE LIST, each count read off the tally (zero when the type
+    // holds nothing), plus the types the station did not list but which DO hold
+    // reports — a legacy value, a custom one.
+    const folders = listed
+      .map((type) => ({ type, count: byType.get(type) ?? 0 }))
+      .concat(
+        [...byType.entries()]
+          .filter(([type]) => !known.has(type))
+          .map(([type, count]) => ({ type, count })),
+      )
+      // A–Z (owner request, 2026-11-18). The grid used to follow the station's own
+      // type list, which is the form's order and not a reader's: hunting "Theft"
+      // meant reading every folder face. Case is ignored so a type a station typed
+      // in lower case sorts where a reader looks for it.
+      .sort((a, b) => a.type.localeCompare(b.type, undefined, { sensitivity: 'base' }));
 
     return {
       ...shelf,
