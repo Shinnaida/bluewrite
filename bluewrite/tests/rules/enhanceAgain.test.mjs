@@ -174,14 +174,12 @@ test('Enhance keeps its typing animation but replays prose over whole chrome+fac
   assert.match(src, /bodyOnly: draft\?\.enhanced === true,/, 'enhance no longer types prose-only');
 });
 
-test('Enhance again enhances this page in place, not a fresh run', () => {
+test('an enhanced page offers no second polish pass (owner request, 2026-11-19)', () => {
   const src = code(PANEL);
-  const at = src.indexOf('>Enhance again<');
-  assert.notEqual(at, -1, 'the Enhance again button is gone');
-  const before = src.slice(Math.max(0, at - 600), at);
-  assert.match(
-    before,
-    /onClick=\{\(\) => enhanceReport\(\{ fromArranged: true \}\)\}/,
-    'Enhance again no longer reuses the in-place enhance path',
-  );
+  assert.equal(src.indexOf('>Enhance again<'), -1, 'the enhanced page offers another polish run');
+  assert.equal(src.indexOf('>Enhance writing<'), -1, 'the arranged page offers a polish run');
+  // The in-place path itself stays: it still reaches enhanceReport from an
+  // arranged page rather than rewinding the paper for a fresh run.
+  assert.match(src, /const enhanceReport = async \(\{ fromArranged = false \} = \{\}\) =>/, 'enhanceReport lost its in-place entry');
+  assert.match(src, /fromArranged \? \{\} : beginFreshRun\(false\)/, 'the in-place path now rewinds the paper');
 });

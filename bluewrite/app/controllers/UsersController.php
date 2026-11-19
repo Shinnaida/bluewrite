@@ -76,15 +76,18 @@ final class UsersController
         // REPORTS FOR THE DIRECTORY'S RIGHT HAND: how many each account has filed,
         // plus the sparse per-day map the miniature zero-fills — two grouped queries
         // for the whole station rather than one read per row, which is what N calls
-        // to /reports?created_by= would be. Both cover the trailing 91 days, so the
-        // count and the grid can never disagree; deleted reports count in neither,
+        // to /reports?created_by= would be. Both cover the month in progress (the
+        // directory draws one square per day of it), so the count and the grid can
+        // never disagree; deleted reports count in neither,
         // because the register's own list hides `deleted_at` rows. UNKNOWN is NULL,
         // not zero: a zero is a claim the officer never filed anything, and the
         // directory must not print a claim it cannot back.
         $reportCounts = null;
         $reportDays = null;
         try {
-            $from = (new \DateTimeImmutable('today'))->modify('-90 days')->format('Y-m-d H:i:s');
+            // The first day of this month: its days, the same window the
+            // directory's day squares draw (see reportWindow in Users.jsx).
+            $from = (new \DateTimeImmutable('first day of this month'))->format('Y-m-d H:i:s');
             $rc = $pdo->prepare(
                 'SELECT created_by, COUNT(*) AS n FROM reports
                  WHERE deleted_at IS NULL AND created_at >= :from GROUP BY created_by'

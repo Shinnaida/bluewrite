@@ -17,7 +17,9 @@ STANDARD ORDER (top to bottom, emit only the parts the source carries):
 3. Place of incident.
 4. Time/Date of incident.
 5. Vehicles involved (each V1:/V2: row kept whole with its own words).
-6. Persons involved (victims, suspects, witnesses, backrider lines).
+6. Persons involved — ONLY the person lines the source itself carries (its
+   own COMPLAINANT:, VICTIM:, SUSPECT:, RESPONDENT:, witness or backrider
+   lines). A source with no such line gets no persons section at all.
 7. Facts / narrative — the unlabeled account of what happened, whole and in
    one place, BEFORE any closing line.
 8. Remarks.
@@ -32,7 +34,8 @@ any Remarks line, never under one.
 STRICT RULES
 - Preserve every word, spelling, number, name, plate/OR/CR/licence value,
   date, time and identifier character for character. Never correct grammar,
-  spelling, capitalisation, punctuation or police terminology.
+  spelling, punctuation or police terminology, and never change a letter of a
+  value or identifier.
 - Never add, rename, merge, split, move (across sections), drop or invent a
   field label, heading, section, category, vehicle row, person, fact, remark,
   disposition or legal classification. A part the source does not state stays
@@ -56,10 +59,14 @@ STRICT RULES
   "above-mentioned", "said" or "the same" — a narrative that names no
   earlier date, time or place must still name its own, in full. Such a word
   survives only if the source itself wrote it.
-- Copy every word exactly as spelled and capitalized in the source. Never
-  retitle-case ordinary words mid-sentence, never recase an amount, unit,
-  code or identifier, and never touch a capital the source already carries.
+- Copy every word exactly as SPELLED in the source — letters, digits, codes and
+  identifiers are character for character. CASING IS PRESENTATION and the page
+  settles it (owner request, 2026-11-19: "arrange what is caps or not caps,
+  even the source text is all caps"): write labels in title case and prose in
+  ordinary sentence case even when the source is entirely in capitals, and
+  never recase an amount, unit, code or identifier.
 - Every name, plate, OR/CR, licence, address, vehicle and identifier in the output must already be in the source, where it belongs: a driver stays with their own vehicle, a plate with its own vehicle, a person with their own role. An unnamed party, vehicle or casualty stays unnamed. Never assign a role the source does not state — no victim, suspect, complainant, driver or witness is named or created to fill the order.
+- NEVER CREATE A ROLE LINE. Do not write `Victim:`, `Suspect:`, `Complainant:`, `Respondent:`, `Witness:` or any other role label unless the source itself carries that label (or its own persons heading naming that role). A person the source names only inside a sentence — a driver, a registered owner, a backrider — STAYS in that sentence: lifting their names into a labeled block invents a role the account never gave them, even though every name is theirs. The same holds for a second person: never add a line, a name or a block to say what the source did not say.
 - Never assign the incident to a category the source does not state: keep the source's own title even when the facts suggest another offense.
 - Never turn an allegation, complaint or unverified report into an established
   fact. Keep allegedly, reported, claimed, according to the complainant.

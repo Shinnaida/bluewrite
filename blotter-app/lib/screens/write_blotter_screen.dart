@@ -256,17 +256,6 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
     if (mounted) setState(() {});
   }
 
-  void _applyCertification() {
-    setState(() {
-      _text.text = formatBlotterCertification(
-        _text.text,
-        recordedBy: _recordedBy.text,
-        recordedByPosition: _recordedPosition.text,
-        requestedBy: _requestedBy.text,
-      );
-    });
-  }
-
   Future<void> _send() async {
     var text = _text.text.trim();
     if (text.isEmpty) {
@@ -498,15 +487,6 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _gold,
-                side: BorderSide(color: _gold.withValues(alpha: 0.6)),
-              ),
-              onPressed: _text.text.trim().isEmpty ? null : _applyCertification,
-              child: const Text('Apply certification format'),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),

@@ -33,7 +33,7 @@ final class PasswordPolicyTest extends TestCase
         // fail if somebody quietly lowered the bar back.
         $this->assertSame(12, PasswordPolicy::MIN_LENGTH);
         $this->assertNotNull(PasswordPolicy::check('Abcdefghij'));
-        $this->assertNull(PasswordPolicy::check('Abcdefghijkl'));
+        $this->assertNull(PasswordPolicy::check('Abcdefghij1!'));
     }
 
     public function testAnEmptyPasswordIsRefused(): void
@@ -59,10 +59,10 @@ final class PasswordPolicyTest extends TestCase
         // Mixed characters on purpose: a run of ONE character is refused earlier
         // by its own rule, so a single-letter fixture would be testing the wrong
         // refusal (this is exactly what the first version of this test did).
-        $this->assertNull(PasswordPolicy::check(str_repeat('abc', 20)), '60 bytes');
+        $this->assertNull(PasswordPolicy::check(str_repeat('a1!b', 15)), '60 bytes');
         // Exactly at the ceiling, which is ALLOWED — 72 bytes is what bcrypt can
         // see in full, so refusing it would be refusing a password that works.
-        $atCeiling = str_repeat('abc', 24); // 24 x 3 = 72 bytes
+        $atCeiling = str_repeat('a1!b', 18); // 18 x 4 = 72 bytes
         $this->assertNull(PasswordPolicy::check($atCeiling), 'exactly 72 bytes');
         $this->assertSame(
             'Password must be at most 72 characters.',
@@ -122,7 +122,7 @@ final class PasswordPolicyTest extends TestCase
         $this->assertNotNull(PasswordPolicy::check(str_repeat('7', 20)));
         // Two different characters is not a repeated character, however weak; the
         // deny list and the length rule are what catch the rest.
-        $this->assertNull(PasswordPolicy::check('abababababab'));
+        $this->assertNull(PasswordPolicy::check('ababababab1!'));
     }
 
     public function testTheObviousTwelveCharactersAreRefused(): void
@@ -134,7 +134,7 @@ final class PasswordPolicyTest extends TestCase
         $this->assertNotNull(PasswordPolicy::check('policestation'));
         // A password that merely CONTAINS one is not refused: substring-matching
         // the word "password" would fail far more real passwords than it saves.
-        $this->assertNull(PasswordPolicy::check('passwordish-not-really'));
+        $this->assertNull(PasswordPolicy::check('passwordish-not-really1'));
     }
 
     // --- reusing the current password -----------------------------------------
@@ -169,12 +169,24 @@ final class PasswordPolicyTest extends TestCase
         );
     }
 
+    // --- the mix (owner request, 2026-11-19) ----------------------------------
+
+    public function testAMixOfLettersNumbersAndSymbolsIsRequired(): void
+    {
+        $this->assertSame('Password needs a letter.', PasswordPolicy::check('123456789012!'));
+        $this->assertSame('Password needs a number.', PasswordPolicy::check('harbour-quiet-words'));
+        // A space is a separator, not a symbol: "two words with a space" is not
+        // the mix this rule is asking for.
+        $this->assertSame('Password needs a symbol.', PasswordPolicy::check('harbour quiet 72'));
+        $this->assertNull(PasswordPolicy::check('harbour-quiet-72'));
+    }
+
     public function testAStrongPasswordIsAccepted(): void
     {
-        // The rule has to be satisfiable by a person under pressure, in one try,
-        // without a composition rule to reason about: a phrase works.
+        // The rule has to be satisfiable by a person under pressure, in one try:
+        // a phrase with a number and a symbol in it works.
         $this->assertNull(PasswordPolicy::check('quiet-harbour-72', 'jdelacruz', '4417'));
-        $this->assertNull(PasswordPolicy::check('noon shift, rainy', 'jdelacruz', '4417'));
+        $this->assertNull(PasswordPolicy::check('noon shift, rainy 72', 'jdelacruz', '4417'));
         $this->assertNull(PasswordPolicy::check('নিরাপদ-গোপন-৭৭৭', 'jdelacruz', '4417'), 'length is counted in characters, not bytes');
     }
 }

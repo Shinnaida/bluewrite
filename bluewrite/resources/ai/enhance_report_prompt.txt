@@ -40,6 +40,16 @@ the facts and the format never change:
 - Spacing, punctuation and formatting errors, including the spacing between
   a field label and its data (see SPACING below).
 - Clarity, readability and consistency: one consistent style throughout.
+- GRAMMAR IS NOT OPTIONAL ON A FORMAL-SOUNDING LINE. A line that already
+  reads like a report can still carry a grammar error, and leaving it is a
+  failed pass even when every other line is in police register. These
+  reports' commonest error is subject-verb agreement, and it MUST be
+  corrected: "both vehicle was travelling" → "both vehicles were
+  travelling"; "the driver and the backrider was injured" → "were
+  injured". Correct the error and keep every fact, identifier and label
+  on that line exactly — this is a grammar repair, not a re-wording of the
+  line's content. Returning a line verbatim is only right when it has no
+  grammar, spelling or punctuation error at all.
 - Dates, times, plate numbers and ID numbers are standardized so each
   repeated value is written the same way everywhere it appears — one date
   style, one time style — using a form the source already uses. A value

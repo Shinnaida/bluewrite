@@ -275,6 +275,45 @@ final class AiClassifyTest extends TestCase
     }
 
     /**
+     * The live BW-0602 read answered "Theft" for a blotter whose charge is
+     * RECKLESS IMPRUDENCE RESULTING IN DAMAGE TO PROPERTY AND PHYSICAL INJURY,
+     * because it read the crash's damage and injuries as a taking. The
+     * account's own charge outranks a consequence: the folder is Traffic
+     * Accident, and the answer's words still ride as the Category.
+     */
+    public function testAConsequenceAnswerForACollisionFilesAsTraffic(): void
+    {
+        $account = '10-20-26 10:00 AM RECKLESS IMPRUDENCE RESULTING IN DAMAGE TO PROPERTY AND PHYSICAL INJURY '
+            . 'PLACE OF INCIDENT : TAGJAGUIMIT, CITY OF NAGA T/D OF INCIDENT : MORE OR LESS 11:50 AM OF 11-02-26 '
+            . 'VEHICLES INVOLVED: V1 YAMAHA NMAX V2 HONDA XRM '
+            . 'FACTS: BOTH VEHICLES WERE TRAVELLING IN OPPOSITE DIRECTIONS AND COLLIDED, CAUSING DAMAGE TO PROPERTY AND PHYSICAL INJURY';
+        $out = GeminiNarrativeProvider::normaliseClassification(
+            ['incidentType' => 'Theft'],
+            self::TYPES,
+            $account,
+        );
+
+        $this->assertSame('Traffic Accident', $out['incident_type']);
+        $this->assertSame('', $out['incident_category']);
+    }
+
+    /**
+     * The consequence rule is scoped to collisions: a real taking still files
+     * as Theft even with a vehicle mentioned, because the account does not
+     * fold to a traffic accident.
+     */
+    public function testARealTakingStaysTheft(): void
+    {
+        $out = GeminiNarrativeProvider::normaliseClassification(
+            ['incidentType' => 'Theft'],
+            self::TYPES,
+            'A parked motorcycle was stolen overnight near the market.',
+        );
+
+        $this->assertSame('Theft', $out['incident_type']);
+    }
+
+    /**
      * A genuinely thin account keeps its honest Other: the safety net only
      * fires when the account folds to a concrete type.
      */
@@ -414,6 +453,53 @@ final class AiClassifyTest extends TestCase
         $this->assertSame([
             ['role' => 'victim', 'name' => 'A'],
             ['role' => 'other', 'name' => 'B'],
+        ], $out['parties']);
+    }
+
+    /**
+     * A ROLE THE ACCOUNT DOES NOT STATE IS NOT A ROLE (owner report,
+     * 2026-11-19: "don't add any information that is not in the source text —
+     * in here you add Victim: JOSEPH..."). The collision injured the drivers;
+     * it did not call them victims, and the sheet prints a victim block from
+     * this role, so the model's inference must not survive.
+     */
+    public function testInferredVictimRoleIsDroppedWhenTheAccountNeverSaysIt(): void
+    {
+        $account = 'V1: Yamaha NMAX owned and driven by Joseph Lontayo Posos. '
+            . 'V2: Honda XRM owned by Galeo Cabrere, driven by Hero Sanoria Canque. '
+            . 'V2 encroached on the lane of V1, causing damage and physical injuries to the driver and backrider of V2.';
+        $out = GeminiNarrativeProvider::normaliseClassification([
+            'parties' => [
+                ['role' => 'victim', 'name' => 'Joseph Lontayo Posos'],
+                ['role' => 'victim', 'name' => 'Galeo Cabrere'],
+                ['role' => 'victim', 'name' => 'Hero Sanoria Canque'],
+                ['role' => 'driver', 'name' => 'Joseph Lontayo Posos'],
+                ['role' => 'owner', 'name' => 'Galeo Cabrere'],
+            ],
+        ], self::TYPES, $account);
+
+        $this->assertSame([
+            ['role' => 'other', 'name' => 'Joseph Lontayo Posos'],
+            ['role' => 'other', 'name' => 'Galeo Cabrere'],
+            ['role' => 'other', 'name' => 'Hero Sanoria Canque'],
+            ['role' => 'driver', 'name' => 'Joseph Lontayo Posos'],
+            ['role' => 'owner', 'name' => 'Galeo Cabrere'],
+        ], $out['parties'], 'a victim block was invented from an injury');
+    }
+
+    /** A role the account DOES state survives, in English or Bisaya. */
+    public function testAStatedRoleSurvives(): void
+    {
+        $out = GeminiNarrativeProvider::normaliseClassification([
+            'parties' => [
+                ['role' => 'victim', 'name' => 'Maria Santos'],
+                ['role' => 'witness', 'name' => 'Ana Cruz'],
+            ],
+        ], self::TYPES, 'The victim Maria Santos was hurt. Nakasaksi si Ana Cruz.');
+
+        $this->assertSame([
+            ['role' => 'victim', 'name' => 'Maria Santos'],
+            ['role' => 'witness', 'name' => 'Ana Cruz'],
         ], $out['parties']);
     }
 

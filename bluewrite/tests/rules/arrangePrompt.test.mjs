@@ -31,15 +31,30 @@ test('arrange prompt: stated dates, times and places stay written out', () => {
   assert.match(prompt, /never collapse them into/i);
 });
 
-test('arrange prompt: words are copied exactly as spelled and capitalized', () => {
-  assert.match(prompt, /copy every word exactly as spelled and capitalized/i);
-  assert.match(prompt, /never\s+retitle-case ordinary words/i);
+test('arrange prompt: words are copied exactly as spelled; casing is the page\'s', () => {
+  // Owner request (2026-11-19: "arrange what is caps or not caps, even the
+  // source text is all caps"): the model may no longer copy the source's
+  // capitals onto the page — spelling, digits and identifiers stay exact.
+  assert.match(prompt, /copy every word exactly as SPELLED/i);
+  assert.match(prompt, /CASING IS PRESENTATION/);
+  assert.match(prompt, /write labels in title case and prose in\s+\n?\s*ordinary sentence case/i);
+  assert.match(prompt, /never recase an amount, unit, code or identifier/i);
+  assert.doesNotMatch(prompt, /exactly as spelled and capitalized/i, 'the old casing-copy rule is back');
 });
 
 test('arrange prompt: no invented names, plates or roles', () => {
   assert.match(prompt, /must already be in the source, where it belongs/i);
   assert.match(prompt, /an unnamed party, vehicle or casualty stays unnamed/i);
   assert.match(prompt, /never assign a role the source does not state/i);
+});
+
+test('arrange prompt: no role line the source never wrote', () => {
+  // Owner report, 2026-11-19: the BW-0602 page printed `Victim:` over two
+  // vehicle owners and a driver. Every name was in the account; the role was
+  // not, so the arrangement must not lift people into a labeled block.
+  assert.match(prompt, /NEVER CREATE A ROLE LINE/);
+  assert.match(prompt, /stays in that sentence/i);
+  assert.match(prompt, /A source with no such line gets no persons section/i);
 });
 
 test('arrange prompt: every break is read as a boundary or continuation data', () => {

@@ -4999,12 +4999,15 @@ body.register-officer .reports-register .folder-tab[aria-selected='true']:hover 
 .glass-folder__count {
   margin-left: auto;
   flex-shrink: 0;
-  padding: 0.05rem 0.4rem;
+  padding: 0.1rem 0.5rem;
   border-radius: 999px;
   font-family: var(--font-hud);
   /* Up with the label it sits beside (owner request, 2026-11-18, twice), or the
-     pill reads as a footnote to type they now have to squint past. */
-  font-size: 0.82rem;
+     pill reads as a footnote to type they now have to squint past. Then a size
+     ABOVE that label (owner request, 2026-11-19): the number of files inside is
+     the thing an officer scans the shelf for, so the pill leads rather than
+     follows the type name. */
+  font-size: 1rem;
   font-weight: 700;
   color: var(--ir-folder-ink);
   /* A lit pill on the amber, where the glass wanted a white one: 45% of the

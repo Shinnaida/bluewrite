@@ -164,4 +164,19 @@ final class StubNarrativeProvider implements AiNarrativeProvider
 
         return (string) ($this->extra['enhanced'] ?? $account);
     }
+
+    /**
+     * Arrange Only — the canned arrangement. The default returns the account
+     * unchanged: the same words in the same lines is a valid arrangement, and
+     * the one that never invents a section. (The interface grew this method
+     * after the stub was written; without it PHPUnit cannot even load the
+     * suite, which is how it stayed broken.)
+     */
+    public function arrangeReport(string $account): string
+    {
+        $this->calls++;
+        $this->received[] = ['masked' => ['account' => $account], 'options' => []];
+
+        return (string) ($this->extra['arranged'] ?? $account);
+    }
 }

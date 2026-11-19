@@ -43,9 +43,40 @@ const COMMON = [
   'policestation', 'pnp123456789', 'admin1234567',
 ];
 
+/**
+ * WHAT A PASSWORD MUST BE MADE OF, in the order the form's checklist reads it
+ * and the order a refusal is reported in.
+ *
+ * ADDED (owner request, 2026-11-19): letters, numbers and symbols are a
+ * requirement now, not a suggestion. The field hint has promised "a mix of
+ * letters, numbers and symbols" since the PHP module was written, and until now
+ * only the length was actually enforced — a twelve-character word of letters was
+ * accepted. A long phrase is still the best password this rule can ask for, and
+ * this is a FLOOR the same way the deny list is, not a guarantee.
+ *
+ * SCRIPT-NEUTRAL ON PURPOSE: `\p{L}` counts a Bengali letter the same way it
+ * counts an A, so a password written in another script is not made impossible by
+ * an ASCII uppercase rule. The SERVER checks these same three classes (see
+ * PasswordPolicy::check), and tests/rules/passwordPolicy.test.mjs holds the two
+ * sides together.
+ */
+export const PASSWORD_RULES = [
+  { key: 'length', label: `At least ${MIN_LENGTH} characters`, test: (v) => [...String(v ?? '')].length >= MIN_LENGTH },
+  { key: 'letter', label: 'A letter', test: (v) => /\p{L}/u.test(String(v ?? '')) },
+  { key: 'number', label: 'A number', test: (v) => /\p{N}/u.test(String(v ?? '')) },
+  { key: 'symbol', label: 'A symbol', test: (v) => /[\p{P}\p{S}]/u.test(String(v ?? '')) },
+];
+
+/** The refusal for each class, worded like the rest of the rule's messages. */
+const COMPOSITION_MESSAGES = {
+  letter: 'Password needs a letter.',
+  number: 'Password needs a number.',
+  symbol: 'Password needs a symbol.',
+};
+
 /** The rule as one line, for a field hint. Same sentence as PasswordPolicy::hint(). */
 export function passwordHint() {
-  return `At least ${MIN_LENGTH} characters.`;
+  return `At least ${MIN_LENGTH} characters, with letters, numbers and symbols.`;
 }
 
 /**
@@ -77,6 +108,13 @@ export function checkPassword(password, account = {}) {
   }
   if (current !== null && current !== '' && value === current) {
     return 'Choose a password different from your current one.';
+  }
+  // Composition LAST, so the more specific complaints above are the ones
+  // reported first ("that is your badge number" beats "add a symbol"). Length
+  // is skipped here: it is the first test, and it has its own hint.
+  for (const rule of PASSWORD_RULES) {
+    if (rule.key === 'length') continue;
+    if (!rule.test(value)) return COMPOSITION_MESSAGES[rule.key];
   }
   return null;
 }

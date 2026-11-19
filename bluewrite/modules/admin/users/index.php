@@ -157,7 +157,7 @@ bw_page_start([
       <div class="field field--wide">
         <label for="uf-password" id="uf-password-label">Password <span class="req">*</span></label>
         <input id="uf-password" name="password" type="password" autocomplete="new-password">
-        <p class="hint" id="uf-password-hint">At least 12 characters, and not the username or badge number.</p>
+        <p class="hint" id="uf-password-hint">At least 12 characters, with a mix of letters, numbers and symbols, and not the username or badge number.</p>
       </div>
     </div>
 

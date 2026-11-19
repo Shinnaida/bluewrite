@@ -1312,12 +1312,21 @@ final class ReportsController
         // deciding in PHP would race two pings; the latch holds one row per
         // writer and the newest touch wins, which is the only ordering a
         // "right now" signal needs.
+        // ONE PLACEHOLDER PER BIND (owner report, 2026-11-19: every "Generate
+        // Report" press answered 500 and the AI draft never reached the paper).
+        // Native prepares refuse a named parameter used twice in one statement
+        // — SQLSTATE[HY093] "Invalid parameter number" — so the update clause
+        // gets its own name instead of reusing :rid.
         $stmt = $pdo->prepare(
             'INSERT INTO report_composing (user_id, report_id, updated_at)
                   VALUES (:uid, :rid, NOW())
-             ON DUPLICATE KEY UPDATE report_id = :rid, updated_at = NOW()'
+             ON DUPLICATE KEY UPDATE report_id = :rid_update, updated_at = NOW()'
         );
-        $stmt->execute([':uid' => (int) $user['id'], ':rid' => $reportId]);
+        $stmt->execute([
+            ':uid' => (int) $user['id'],
+            ':rid' => $reportId,
+            ':rid_update' => $reportId,
+        ]);
 
         Response::json(200, ['ok' => true]);
     }

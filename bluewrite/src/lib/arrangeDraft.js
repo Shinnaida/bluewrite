@@ -63,14 +63,35 @@ const CODE_RUN_RE = /[A-Za-z]{2,}[\s-]*\d[\dA-Za-z-]*|\bV\d+\b|\b(?:OR|CR)\s*#?\
 // "October 24" is the model's harmless shortening, not a guessed code.
 const MONTH_WORD_RE = /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*$/i;
 
+// A ROLE LINE THE SOURCE NEVER WROTE IS INVENTION (owner report, 2026-11-19).
+// The BW-0602 arrangement listed three people under `Victim:` — the two
+// vehicles' owners and one driver — none of whom the account ever called a
+// victim. Every name was the account's own, so the name check below passed;
+// the LABEL was the invention. A role label is therefore allowed only when the
+// account uses that role word itself (its own `VICTIM:` line or `VICTIMS
+// INVOLVED:` heading); a person named inside a sentence stays in it.
+// The label may stand ALONE on its line, its people on the lines beneath it —
+// that is exactly how the BW-0604 answer printed `Victim:` over three names,
+// and a data-on-the-same-line-only check let it through.
+const ROLE_LINE_RE = /^\s*([A-Za-z][A-Za-z /]{0,24}?)\s*:/;
+const ROLE_LABEL_RE = /^(?:victims?|suspects?|complainants?|respondents?|witness(?:es)?|accused|missing person|owner|persons? involved)$/i;
+
 export function arrangeOutputIsFaithful(output, account) {
-  const src = String(account ?? '')
-    .replace(/₱/g, 'PHP ')
-    .toLowerCase()
-    .replace(/\s+/g, ' ');
+  const rawSrc = String(account ?? '').replace(/₱/g, 'PHP ');
+  const src = rawSrc.toLowerCase().replace(/\s+/g, ' ');
   if (src.trim() === '') return false;
   const out = String(output ?? '').replace(/₱/g, 'PHP ');
   if (out.trim() === '') return false;
+  for (const line of out.split(/\r?\n/)) {
+    const label = ROLE_LINE_RE.exec(line);
+    if (!label) continue;
+    const role = label[1].trim();
+    if (!ROLE_LABEL_RE.test(role)) continue;
+    const word = role.split(/[ /]+/)[0];
+    // The account's own heading may be plural (`VICTIMS INVOLVED:`), so the
+    // role word is matched with its plural endings rather than exactly.
+    if (!new RegExp(`\\b${word}(?:e?s)?\\b`, 'i').test(rawSrc)) return false;
+  }
   const seen = new Set();
   for (const m of out.matchAll(NAME_RUN_RE)) {
     const words = m[0].split(/\s+/);
@@ -141,7 +162,7 @@ export function letterHtmlToAccountText(html) {
 // through unchanged, no suggestions or gaps.
 // arranged:true marks the provenance; the panel renders it as a visible
 // receipt line (see ai-arranged-note), so the flag always has a reader.
-export function buildArrangeDraft({ accountText, titleSource = '', notableFindings = '', actionTaken = '', keepCasing = false }) {
+export function buildArrangeDraft({ accountText, titleSource = '', notableFindings = '', actionTaken = '' }) {
   const cleaned = cleanAccountText(accountText);
   const findingsText = String(notableFindings == null ? '' : notableFindings);
   const statusText = String(actionTaken == null ? '' : actionTaken);
@@ -158,8 +179,16 @@ export function buildArrangeDraft({ accountText, titleSource = '', notableFindin
     // when the arrangement rewrote the heading in the incident type's own
     // words (owner request, 2026-11-19). `titleSource` is the officer's account
     // before the model touched it.
+    // ARRANGE SETS THE PAGE'S CAPITALISATION (owner request, 2026-11-19:
+    // "can you also arrange what is caps or not caps, even the source text is
+    // all caps"). The model's own arrangement used to be printed with ITS
+    // casing, which was the source's — so an all-caps account stayed an
+    // all-caps page. Arrange is a presentation pass: labels print title case,
+    // prose sentence case, names and places keep their capitals, and the
+    // officer's spelling, numbers and identifiers are untouched. That is the
+    // formatter's sentence-case pass, applied to every arrangement.
     narrative: formatIncidentReportHtml(cleaned, {
-      sentenceCase: !keepCasing,
+      sentenceCase: true,
       titleOverride: detectIncidentTitle(String(titleSource ?? '') || accountText),
     }),
     suggestions: [],

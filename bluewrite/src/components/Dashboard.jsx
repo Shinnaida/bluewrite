@@ -1732,6 +1732,11 @@ export default function Dashboard({
   // the quick actions and the activity empty-state ask rather than reaching.
   onNewReport,
   onOpenUsers,
+  // The activity panel's "View All" — the whole trail, not the register. The
+  // panel is a FEED (records and the station's own happenings merged), so its
+  // way out is the Activity Logs screen that lists every entry in full; the
+  // register has its own route from the rail.
+  onOpenAudits,
 }) {
   // The page reads the WHOLE register (owner request, 2026-10-30): every
   // panel except the trend answers for All time, whatever the range control
@@ -2564,6 +2569,9 @@ export default function Dashboard({
               series={chartData?.seriesOverTime ?? []}
               bucket={chartBucket}
               byType={chartTypes}
+              // The same window cut by workflow state, so the columns can wear
+              // Draft / Finalized instead of the incident-type ramp.
+              statusSeries={chartData?.statusSeries ?? []}
               scope={scope}
               type={type}
               // The range is already one day when the two ends match, which is how
@@ -2586,7 +2594,7 @@ export default function Dashboard({
           events={data?.recentActivity}
           loading={loading}
           onOpen={onOpenReport}
-          onViewAll={() => onOpenReports?.({})}
+          onViewAll={() => onOpenAudits?.()}
           // The "widen the dates" hint belongs to a narrowed type only: the
           // activity reads the whole register now, so the chart's range never
           // narrows it — only the incident-type filter can.
@@ -2797,7 +2805,7 @@ function ChartKey({ byType, unit = 'day' }) {
     <PanelInfo
       label="What the incident type colours mean"
       title="What the column colours mean"
-      note={`Each column is one ${one}. Bands stack from the bottom up, most frequent at the axis, so the band sitting on the baseline is the station's commonest incident. The number is how many reports of that type were filed in this range. Bands tall enough to hold it carry the incident type, written inside the column.`}
+      note={`Each column is one ${one}, and its colour is the workflow state: the gold band is that ${one}'s drafts, the blue band is what has been submitted or finalized. Hover a column to read its incident types, most frequent at the axis — the list here is those rows' key. Bands tall enough to hold it carry their name inside the column.`}
       // Where a reader looks for how to read the chart, so it is where the chart
       // says it can be right-clicked. Hovering a column finds the breakdown;
       // nothing about hovering it suggests the actions behind the right button.
@@ -2873,6 +2881,12 @@ function segTag(type, x, midY, w, h, muted) {
 export function StackedColumns({
   series,
   byType,
+  // The same days, cut by workflow state (DashboardController's statusSeries).
+  // The plot paints the state — Draft gold, Finalized blue (owner request,
+  // 2026-11-19: "the bar for draft make it yellow") — while the magnified card
+  // and the right-click menu keep reading the TYPE bands below, which is what
+  // their counts and their "Show only …" entry are about.
+  statusSeries = [],
   // The chart's own filters, needed because a menu entry has to describe the state
   // it is in: "Show only Theft" is the wrong label once Theft is the only thing
   // charted, and the copied text has to say which slice of the register it covers.
@@ -3006,6 +3020,55 @@ export function StackedColumns({
   // eighty small objects per payload costs nothing next to that.
   const bands = useMemo(() => stackBands(series, byType), [series, byType]);
 
+  // THE COLUMN'S COLOURS ARE THE WORKFLOW STATE, not the incident type (owner
+  // request, 2026-11-19). A day still shows exactly as many reports as before —
+  // the stack is the same total, only cut by Draft / Finalized instead of by
+  // type — so nothing is added or lost, and the two pills above the plot (gold
+  // Draft, blue Finalized) are now the key to the bars themselves: a day that is
+  // entirely draft is a gold bar, a finalized day is blue, and a mixed day is a
+  // blue base with its drafts standing on top in gold.
+  //
+  // Null when the payload carries no status cut (an older response, or a length
+  // that does not line up with the plotted days): the plot then keeps the type
+  // ramp, so it degrades to the chart it used to be rather than to nothing.
+  const stateBands = useMemo(() => {
+    const days = Array.isArray(statusSeries) ? statusSeries : [];
+    if (!days.length || days.length !== series.length) return null;
+    const n = (v) => {
+      const x = Number(v);
+      return Number.isFinite(x) && x > 0 ? x : 0;
+    };
+    // The two halves must add up to the column they are drawn in. A payload whose
+    // split does not reconcile with the day's own count (an older response, a
+    // status this build does not know) is left to the type ramp: a gold bar that
+    // is shorter than the day it stands for would be a wrong reading, not a
+    // missing one.
+    const dayTotal = (i) => {
+      const c = Number(series[i]?.count);
+      return Number.isFinite(c) && c > 0 ? c : 0;
+    };
+    for (let i = 0; i < days.length; i += 1) {
+      const split = n(days[i]?.draft) + n(days[i]?.submitted) + n(days[i]?.finalized);
+      if (split !== dayTotal(i)) return null;
+    }
+    const out = [];
+    days.forEach((point, day) => {
+      const done = n(point?.submitted) + n(point?.finalized);
+      const draft = n(point?.draft);
+      if (done > 0) {
+        out.push({ day, type: 'Finalized', kind: 'finalized', rank: 0, value: done, from: 0, to: done });
+      }
+      if (draft > 0) {
+        out.push({ day, type: 'Draft', kind: 'draft', rank: 1, value: draft, from: done, to: done + draft });
+      }
+    });
+    return out.length ? out : null;
+  }, [statusSeries, series]);
+  // What the plot actually draws. `bands` stays the type stack: the card and the
+  // menu below are still a breakdown BY TYPE, so the two readings cannot disagree
+  // about anything but the colour of a box.
+  const drawn = stateBands ?? bands;
+
   // WHICH DAY THE PLOT IS TALKING ABOUT: the one under the pointer, or — while the
   // pointer is off the plot — the pinned one. Derived once, so the card, the
   // widened column, the dim and the paint order cannot disagree about which day is
@@ -3036,8 +3099,8 @@ export function StackedColumns({
   // under the day beside it would read as the chart having torn.
   const paintOrder =
     shown == null
-      ? bands
-      : [...bands.filter((b) => b.day !== shown), ...bands.filter((b) => b.day === shown)];
+      ? drawn
+      : [...drawn.filter((b) => b.day !== shown), ...drawn.filter((b) => b.day === shown)];
   // The card MIRRORS the column: the chart stacks rank 0 on the baseline, so the
   // rarest type is the highest band and belongs at the top of the card. Reversed,
   // a box in the chart and its row in the card sit at the same relative height,
@@ -3287,7 +3350,7 @@ export function StackedColumns({
           return (
             <g key={`${b.day}-${b.type}`}>
             <rect
-              className={`dash-seg dash-seg--${rampStep(b.rank)}${muted ? ' is-muted' : ''}`}
+              className={`dash-seg dash-seg--${b.kind ?? rampStep(b.rank)}${muted ? ' is-muted' : ''}`}
               x={cx(b.day) - w / 2}
               y={yTop}
               width={w}
@@ -3305,7 +3368,10 @@ export function StackedColumns({
               // highlights the row with the same rank. Rank is the type's standing
               // across the whole window, so the highlight follows the type, not its
               // position in this particular day.
-              onMouseEnter={() => setPicked(b.rank)}
+              // A state band names no type, so it highlights no row of the card:
+              // the card's rows are the day's incident types, and picking one off a
+              // Draft band would claim the state IS a type.
+              onMouseEnter={() => setPicked(b.kind ? null : b.rank)}
               />
               {segTag(b.type, cx(b.day), (yTop + yBase) / 2, w, bandH, muted)}
             </g>

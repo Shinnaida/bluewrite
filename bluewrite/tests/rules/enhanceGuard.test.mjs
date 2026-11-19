@@ -164,6 +164,28 @@ test('"aforementioned" and stray Title Case the officer never wrote keep the sou
   assert.ok(caps.text.includes('heated argument'));
 });
 
+test('a place name the source capitalises elsewhere is not added emphasis', () => {
+  // Owner report (2026-11-19: "nothing was enhanced"): BW-0611's sentence-case
+  // formatter lowercased the place inside FACTS while the Place line kept the
+  // proper spelling. The model's "Cantumundong, City of Naga" was read as
+  // invented Title Case, and the enhanced facts line — grammar fix and police
+  // register included — was thrown away, so the page came back unchanged.
+  const src = [
+    'Place: Cantumundong, City of Naga',
+    'Facts:',
+    'Investigation revealed that both vehicle was travelling on opposite direction particularly at cantumundong, city of Naga.',
+  ].join('\n');
+  const out = [
+    'Place: Cantumundong, City of Naga',
+    'Facts:',
+    'Investigation disclosed that both vehicles were travelling in opposite directions, particularly at Cantumundong, City of Naga.',
+  ].join('\n');
+  const g = guardEnhancedWording(out, src);
+  assert.equal(g.changedLines, 1, 'the enhanced facts line must survive the gate');
+  assert.ok(g.text.includes('both vehicles were travelling'));
+  assert.ok(g.text.includes('Cantumundong'));
+});
+
 // ---- register vocabulary (owner request, 2026-11-19) -----------------------
 // Enhance Wording now demands police terminology ("make the Gemini use police
 // terminologies to elevate the report"), and the guard carries an approved

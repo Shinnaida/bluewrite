@@ -211,28 +211,30 @@ test('reports read on the right: how many each account has filed', async () => {
   const unknown = renderDirectory({ users: [{ ...ACCOUNTS[0], report_count: null, report_days: null }] });
   assert.match(unknown, /<td class="reports" data-label="Reports"><span class="users-none">Not recorded<\/span><\/td>/);
 
-  // AND UNDER THE COUNT, THE MINIATURE: thirteen weeks of green squares — five
-  // minis, 91 squares each, every row's own scale (`levelOf` against that
+  // AND UNDER THE COUNT, THE MINIATURE: ONE GREEN SQUARE PER DAY of the month
+  // in progress (owner request, 2026-11-19: "the square should have 30, then
+  // if that day the officer have report green it") — four minis, one square
+  // for every day of this month, every row's own scale (`levelOf` against that
   // account's busiest day, exactly like the big grid). It is a labelled
-  // picture, not 91 more cells: one `role="img"` per mini, and the label
-  // carries the span, the total and the busiest day — with the same label as
+  // picture, not 30 more cells: one `role="img"` per mini, and the label
+  // carries the month, the total and the busiest day — with the same label as
   // the pointer's tooltip.
-  assert.equal((html.match(/class="users-mini sheet--reports" role="img"/g) || []).length, 4);
-  assert.match(html, /aria-label="Reports filed from \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}: 12 reports across 8 days, busiest day 3\." title="Reports filed from/);
+  const nowForDays = new Date();
+  const daysThisMonth = new Date(Date.UTC(nowForDays.getUTCFullYear(), nowForDays.getUTCMonth() + 1, 0)).getUTCDate();
+  const MONTHS = 'January|February|March|April|May|June|July|August|September|October|November|December';
+  assert.equal((html.match(/class="users-mini users-mini--month sheet--reports" role="img"/g) || []).length, 4);
+  assert.match(html, new RegExp(`aria-label="Reports filed in (?:${MONTHS}) \\d{4}: \\d+ reports across \\d+ days, busiest day \\d+\\." title="Reports filed in`));
   // A REAL ZERO draws an empty grid, not a missing one: every square says so,
   // and the label owns it.
-  assert.match(html, /aria-label="Reports filed from \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}: no reports filed\."/);
-  assert.equal((html.match(/class="sheet-cell sheet-cell--l/g) || []).length, 4 * 91);
-  // Rosa's busiest day files 3 and Juan's, Elena's and Josefina's busiest file
-  // against a peak of their own — those burn at full depth — while every day
-  // with no filing is an empty square.
-  assert.equal((html.match(/sheet-cell--l4"/g) || []).length, 1 + 3 + 1);
-  assert.equal((html.match(/— no reports filed"/g) || []).length, 4 * 91 - (8 + 3 + 2));
+  assert.match(html, new RegExp(`aria-label="Reports filed in (?:${MONTHS}) \\d{4}: no reports filed\\."`));
+  assert.equal((html.match(/class="sheet-cell sheet-cell--l/g) || []).length, 4 * daysThisMonth);
+  // Each account with a filing burns its busiest day at full depth — the
+  // zero-filled account has none — while every day with no filing is an empty
+  // square.
+  assert.equal((html.match(/sheet-cell--l4"/g) || []).length, 4);
   // Each lit square says the date first (`YYYY-MM-DD` reordered, never
   // localised), then how many were filed that day.
-  const [litDate] = Object.keys(ACCOUNTS[0].report_days);
-  const litWhen = litDate.split('-').reverse().join('/');
-  assert.match(html, new RegExp(`title="${litWhen} — 3 reports filed"`));
+  assert.match(html, /title="\d{2}\/\d{2}\/\d{4} — \d+ reports? filed"/);
 
   // The counts sit centred with their heading, the way the email column does:
   // a centred heading over a left-aligned column reads as a labelling mistake.
@@ -249,7 +251,7 @@ test('reports read on the right: how many each account has filed', async () => {
   assert.match(css, /\.sheet--reports \{ --sheet-1: var\(--sheet-rep-1\); --sheet-2: var\(--sheet-rep-2\); --sheet-3: var\(--sheet-rep-3\); --sheet-4: var\(--sheet-rep-4\); \}/);
 
   // AND THE SERVER SENDS IT: one grouped count plus one sparse per-day map of
-  // live reports for the whole station over the trailing 91 days — not one
+  // live reports for the whole station over the month in progress — not one
   // read per row, deleted reports excluded like the register's own list, and
   // NULL (not zero) where the table is unreadable.
   const ctrl = flat(await readFile(path.join(root, 'app/controllers/UsersController.php'), 'utf8'));
@@ -264,7 +266,7 @@ test('the Compact key folds the tall heroes into the dense register', async () =
   const full = renderDirectory();
   // The list loads tall: no folded class, and every row carries its miniature.
   assert.doesNotMatch(full, /users-table is-compact/, 'the list loads folded');
-  assert.equal((full.match(/class="users-mini sheet--reports" role="img"/g) || []).length, 4);
+  assert.equal((full.match(/class="users-mini users-mini--month sheet--reports" role="img"/g) || []).length, 4);
   const folded = renderDirectory({ compact: true });
   // Folded, the dense register takes the heroes' place: seven columns, one
   // short row per account, small faces, status chips — and no miniatures.
@@ -925,7 +927,9 @@ test('the form cannot be sent twice, and the password field cannot stretch', asy
   // station settings forms use.
   assert.match(src, /const \[saving, setSaving\] = useState\(false\);/);
   assert.match(src, /setSaving\(true\);/);
-  assert.match(src, /<button type="submit" className="primary" disabled=\{saving\}>/);
+  // (And a mismatched confirmation holds the same button shut — see the confirm
+  // test below.)
+  assert.match(src, /<button type="submit" className="primary" disabled=\{saving \|\| Boolean\(passwordConfirmProblem\)\}>/);
   assert.match(src, /\{saving \? 'Saving…' : editingId \? 'Save Changes' : 'Create Account'\}/);
   // THREE EXITS, NOT TWO, because the create path can now end in a third way: the
   // account was created and the PHOTOGRAPH that was chosen with it was not saved. That

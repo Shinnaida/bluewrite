@@ -47,8 +47,8 @@ export const ACCOUNTS = [
     role: 'Admin',
     status: 'active',
     last_login_at: '2026-09-22T18:19:16',
-    // How many live reports this account has filed in the trailing 91 days, and
-    // the sparse per-day map the miniature zero-fills — as GET /users sends
+    // How many live reports this account has filed this month, and the sparse
+    // per-day map the miniature zero-fills — as GET /users sends
     // them beside each row. The window is trailing, so worked days are built
     // from today rather than fixed: fixed dates would fall outside the window
     // and every miniature would draw empty. The map sums to the count.

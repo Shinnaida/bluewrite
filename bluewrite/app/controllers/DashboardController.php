@@ -402,14 +402,32 @@ final class DashboardController
         foreach ($ssStmt->fetchAll() as $r) {
             $byDayStatus[(string) $r['d']][(string) $r['s']] = (int) $r['cnt'];
         }
+        // Summed into the SAME columns as the totals, through the same map the
+        // per-type counts use — not read off each column's first day. A week or a
+        // month column is several days, and a split that only counted the column's
+        // start date would under-report it while the column's own height counted
+        // them all: the plot paints this split now (Draft gold, Finalized blue),
+        // so the two halves MUST add up to the height they are drawn at.
+        $statusByColumn = [];
+        foreach ($days as $i => $day) {
+            $col = (int) $bucketOfDay[$i];
+            if (!isset($statusByColumn[$col])) {
+                $statusByColumn[$col] = ['draft' => 0, 'submitted' => 0, 'finalized' => 0];
+            }
+            foreach ($byDayStatus[$day] ?? [] as $state => $n) {
+                if (array_key_exists((string) $state, $statusByColumn[$col])) {
+                    $statusByColumn[$col][(string) $state] += (int) $n;
+                }
+            }
+        }
         $statusSeries = [];
-        foreach ($series as $point) {
-            $day = $byDayStatus[$point['date']] ?? [];
+        foreach ($series as $idx => $point) {
+            $col = $statusByColumn[$idx] ?? ['draft' => 0, 'submitted' => 0, 'finalized' => 0];
             $statusSeries[] = [
                 'date' => $point['date'],
-                'draft' => $day['draft'] ?? 0,
-                'submitted' => $day['submitted'] ?? 0,
-                'finalized' => $day['finalized'] ?? 0,
+                'draft' => $col['draft'],
+                'submitted' => $col['submitted'],
+                'finalized' => $col['finalized'],
             ];
         }
 

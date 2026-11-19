@@ -59,6 +59,29 @@ test('the arrange gate keeps a faithful reorder and drops a guessing one', () =>
     false,
     'invented victim/suspect must fail',
   );
+  // A ROLE LABEL THE ACCOUNT NEVER WROTE (owner report, 2026-11-19: the BW-0602
+  // sheet printed `Victim:` over two vehicle owners and a driver). The names are
+  // the account's own, so only a label check can catch it.
+  const noVictim = [
+    'V1: Yamaha NMAX with plate 07185K, owned and driven by Christian Jade Perias, male, 21 years old.',
+    'V2: Honda XRM with plate 37113, owned by Vorbert Alfeche, driven by Kurt Andre Duga Duga.',
+  ].join(LF);
+  assert.equal(
+    arrangeOutputIsFaithful('Victim: Christian Jade Perias\nVorbert Alfeche\nKurt Andre Duga Duga\n' + noVictim, noVictim),
+    false,
+    'a role label the account never wrote must fail',
+  );
+  // The BW-0604 shape: the label alone on its line, the names beneath it.
+  assert.equal(
+    arrangeOutputIsFaithful('Victim:\nJOSEPH LONTAYO PUROL\nGALEO CABRERE\nHERO SENORIA CANQUE\n' + noVictim, noVictim),
+    false,
+    'a label-only role line must fail too',
+  );
+  assert.equal(
+    arrangeOutputIsFaithful('Victim: Ana Lopez\nFACTS: A wallet was lost.', 'VICTIMS INVOLVED:\nAna Lopez\nFACTS: A wallet was lost.'),
+    true,
+    'a role the account states itself must pass',
+  );
   // Retitle-casing the account's own words is arrangement, not invention.
   assert.equal(
     arrangeOutputIsFaithful('The Toyota Hilux Driven By Mark Anthony Reyes Collided.', account),
@@ -78,8 +101,15 @@ test('the arrange gate keeps a faithful reorder and drops a guessing one', () =>
   );
   assert.equal(arrangeOutputIsFaithful('', account), false, 'an empty answer must fail');
   assert.equal(arrangeOutputIsFaithful(faithful, ''), false, 'an empty account must fail');
-  // The press wires the gate: a guessing answer never reaches the paper.
+  // The press wires the gate: a guessing answer never reaches the paper — on
+  // BOTH doors. The streamed endpoint is the one the panel actually uses, and
+  // it used to skip this check entirely (the BW-0607 report arrived through it
+  // with a `Victim:` block the account never wrote).
   assert.ok(PANEL.includes('arrangeOutputIsFaithful(text, accountText)'), 'arrange does not gate the model answer');
+  assert.ok(
+    PANEL.includes('if (arrangedByModel && !arrangeOutputIsFaithful(accountText, officerAccount))'),
+    'the streamed arrangement skips the faithfulness gate',
+  );
 });
 test('a filled-then-unsaved read names the save, not missing basics', () => {
   // The screenshot defect: the read filled type/date/place and the save
@@ -115,7 +145,11 @@ test('one account reader serves both Generate paths, arrange builds via the lib'
   assert.ok(REPORTS.includes('arrangeOnly'), 'sheet read must know arrangeOnly');
   assert.ok(REPORTS.includes("if (afterFirst.incident_type && !arrangeOnly)"), 'arrange must skip type-details');
   assert.ok(PANEL.includes('setDraft(withSheetCompletion(buildArrangeDraft({'), 'arrange must build via the lib');
-  assert.ok(PANEL.includes('keepCasing: arrangedByModel,'), 'the model\'s own arrangement keeps its capitalisation');
+  // Owner request (2026-11-19): "can you also arrange what is caps or not
+  // caps, even the source text is all caps". Arrange prints the formatter's
+  // capitalisation, never the model's copy of the source's.
+  assert.ok(!PANEL.includes('keepCasing: arrangedByModel'), 'arrange still prints the model casing');
+  assert.ok(PANEL.includes('buildArrangeDraft({'), 'arrange must build via the lib');
   // Sheet theft completion (owner request): both sheet drafts run the audit —
   // fills from the officer's own words, gaps as advisories.
   assert.ok(PANEL.includes('withSheetCompletion(buildEnhancedDraft('), 'enhance skips the completion audit');
@@ -219,15 +253,12 @@ test('the enhance path strips added rows before it audits labels', () => {
   assert.ok(strip < audit, 'the audit runs before the cleanup');
 });
 
-test('an arranged page offers Enhance writing from the same panel', () => {
-  // Owner request, 2026-11-02: after arranging, the officer can settle with the
-  // page OR polish its wording right there. The enhanced page replaces the
-  // arranged one in the SAME panel — no second trip through the sidebar.
-  assert.ok(
-    PANEL.includes('onClick={() => enhanceReport({ fromArranged: true })}'),
-    'the arranged result no longer offers Enhance writing',
-  );
-  assert.ok(PANEL.includes('{draft?.arranged && ('), 'the control is not scoped to an arranged draft');
+test('an arranged page is settled in the panel, not run again', () => {
+  // Owner request, 2026-11-19: neither a polish pass nor a repeat arrange is
+  // offered from the arranged result — the officer settles the page instead.
+  assert.ok(!PANEL.includes('Enhance writing'), 'the arranged result still offers a polish pass');
+  assert.ok(!PANEL.includes('Arrange again'), 'the arranged result still offers another arrange');
+  assert.ok(!PANEL.includes('{draft?.arranged && ('), 'a button is still scoped to an arranged draft');
   // From an arranged result nothing is rewound and nothing is read or saved
   // again: the arranged page IS the text being enhanced.
   const at = PANEL.indexOf('const enhanceReport = async (');
@@ -322,7 +353,10 @@ test('sheet provisional arrival writes on landing; Discard restores, Keep confir
   assert.ok(PANEL.includes('onRestoreProvisional?.()'), 'runs do not restore first');
   // Keep confirms, Discard restores, both reset and close.
   assert.ok(PANEL.includes('Discard draft'), 'Discard button missing');
-  assert.ok(PANEL.includes('Keep on the paper'), 'Keep label missing');
+  // Owner request (2026-11-19): a settled page no longer shows its own keep
+  // button — the paper already holds the draft, so Save/Discard carry it.
+  assert.ok(!PANEL.includes("'Keep on the paper'"), 'the settled page shows a keep button again');
+  assert.ok(PANEL.includes("sheetProvisional ? 'Keep narrative'"), 'the tighten proposal lost its own keep button');
   // One home only: the slim bar portals onto the mount (or renders nothing
   // until it is up) — no second copy in the bar. Deck formats keep the card.
   // The mount condition also covers a saved draft on landing (owner request:
@@ -1209,6 +1243,13 @@ test('enhance is a copy-edit of the ALREADY-ARRANGED report, never a rearrangeme
   // official sentence openings are spelled out for the model.
   assert.match(prompt, /ELEVATE THE WORDING TO POLICE TERMINOLOGY/);
   assert.match(prompt, /has NOT done\s+this pass/);
+  // Owner report (2026-11-19: "I click Enhance… but nothing was enhanced"):
+  // the model treated a formal-sounding FACTS paragraph as needing no work and
+  // returned it verbatim, subject–verb errors included. The grammar repair is
+  // now named as mandatory, with the reports' own commonest error spelled out.
+  assert.match(prompt, /GRAMMAR IS NOT OPTIONAL ON A FORMAL-SOUNDING LINE/);
+  assert.match(prompt, /both vehicle was travelling/);
+  assert.match(prompt, /both vehicles were\s+travelling/);
   assert.match(prompt, /is the input to be raised, not the target to preserve/);
   assert.match(prompt, /Upon arrival at the scene/);
   assert.match(prompt, /Investigation disclosed/);
@@ -1350,4 +1391,32 @@ test('an assigned title is never changed to the folder the report falls under (2
   const shownArranged = letterHtmlToAccountText(arranged.narrative);
   assert.ok(shownArranged.includes('BURGLARY/THEFT'), 'arranging changed the assigned title');
   assert.equal(shownArranged.includes('Burglary / Theft'), false, 'the folder label reached the arranged sheet');
+});
+
+test('Arrange normalises an all-caps account into report case (owner request, 2026-11-19)', () => {
+  // "can you also arrange what is caps or not caps, even the source text is
+  // all caps" — BW-0611's account was typed in capitals, and the arranged page
+  // printed it back exactly that way because the model's own casing was kept.
+  const account = [
+    'RECKLESS IMPRUDENCE RESULTING TO DAMAGE TO PROPERTY AND PHYSICAL INJURY',
+    'PLACE: CANTIMUNDONG, CITY OF NAGA',
+    'VEHICLES INVOLVED:',
+    "V1: YAMAHA NMAX OWNED AND DRIVEN BY JOSEPH LONTAYO POSOS WITH DRIVER'S LICENSE NO. G04-16-000471.",
+    'FACTS:',
+    'INVESTIGATION REVEALED THAT BOTH VEHICLE WAS TRAVELLING ON OPPOSITE DIRECTION PARTICULARLY AT CANTIMUNDONG, CITY OF NAGA, CEBU.',
+    'REMARKS: BOTH PARTIES AMICABLY SETTLED THE INCIDENT.',
+  ].join(LF);
+  const plain = reportHtmlToPlain(buildArrangeDraft({ accountText: account }).narrative);
+  // The title stays the officer's own heading, in its capitals.
+  assert.ok(plain.startsWith('RECKLESS IMPRUDENCE'), 'the title was recased');
+  assert.ok(plain.includes('Place: Cantimundong, City of Naga'), 'the place label/value is not report case');
+  assert.ok(plain.includes('Vehicles involved:'), 'the section heading is not report case');
+  assert.ok(plain.includes('Remarks: Both parties amicably settled the incident.'), 'prose is not sentence case');
+  // Names, places and identifiers keep their capitals, and a possessive never
+  // takes one: "DRIVER'S" printed as "Driver'S" before this.
+  assert.ok(plain.includes('Joseph Lontayo Posos'), 'a name lost its capitals');
+  assert.ok(plain.includes("driver's license"), plain);
+  assert.ok(plain.includes('Cantimundong, City of Naga, Cebu'), 'the place inside FACTS was lowercased');
+  // Arrange never changes a word: the officer's own grammar stays as typed.
+  assert.ok(plain.includes('both vehicle was travelling'), 'arrange corrected grammar (that is Enhance\'s job)');
 });

@@ -40,3 +40,21 @@ test('a line with every person present only if ALL values are restated', () => {
   const facts = [{ label: 'Suspect', values: ['RONALD JAMES GARCIA', 'JOSE LIM'] }];
   assert.equal(omitPartiesRestatedInNarrative(facts, NARRATIVE).length, 1);
 });
+
+test('a Victim line naming the drivers of the vehicle rows is dropped (2026-11-19)', () => {
+  // The reported BW-0619 page: three names lifted from V1/V2 into a "Victim:"
+  // block the account never wrote. The vehicle rows are those people's place;
+  // the block was the read's inferred role, not the officer's words.
+  const facts = [
+    { label: 'Victim', values: ['JOSEPH LONTAYO POSOS', 'GALEO CABRERE', 'HERO SANORIA CANQUE'] },
+  ];
+  const narrative = [
+    'Place: Cantimundong, City of Naga',
+    'Vehicles involved:',
+    'V1: Yamaha NMAX owned and driven by Joseph Lontayo Posos, male, Filipino, 34 yrs old.',
+    'V2: Honda XRM owned by Galeo Cabrere, driven by Hero Sanoria Canque, male, Filipino, 19 years old.',
+    'Facts:',
+    'V2 encroached on the lane of V1, causing damage and physical injuries to the driver and backrider of V2.',
+  ].join('\n');
+  assert.equal(omitPartiesRestatedInNarrative(facts, narrative).length, 0, 'the invented victim block survived');
+});

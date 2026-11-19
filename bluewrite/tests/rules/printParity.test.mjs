@@ -130,21 +130,26 @@ test('a short report still fits the whole sheet, justified', () => {
   assert.match(css, /\.pr-narrative \{[^}]*text-align: justify;/, 'the narrative is no longer justified');
 });
 
-test('the printed leaf holds a full ordinary report on one sheet', () => {
-  // Owner request: 9 inches of paper (Letter minus the 1in @page margins),
-  // and a full report was landing ~130px past it — a second sheet for a
-  // Noted-by line. Print keeps the screen's type sizes but spends less air:
-  // smaller seals, tighter header rhythm and trimmed block spacing.
+test('the printed page wears the sheet itself, never a restyle', () => {
+  // Owner request, 2026-11-19: "what it look like in print should look like
+  // that in here". Print states no type size, margin or leading for the sheet:
+  // the account and the letterhead print with the rules the desk draws, and the
+  // page box holds the sheet's own 1in station margin, so the printed measure
+  // and the screen measure are the same and no line breaks differently.
   const css = readFileSync(new URL('../../src/styles.css', import.meta.url), 'utf8');
-  const print = css.slice(css.indexOf('@media print'));
-  for (const rule of [
-    /\.print-sheet \.pr-head > \.pr-seal,/,
-    /\.print-sheet \.pr-org \{ font-size: 9pt; line-height: 1\.25; \}/,
-    /\.print-sheet \.pr-title \{ margin: 0\.4rem 0 0\.3rem; \}/,
-    /\.print-sheet \.pr-incident-type \{ margin: 0\.4rem 0; \}/,
-    /\.print-sheet \.pr-narrative \{ margin: 0\.45rem 0; \}/,
-    /\.print-sheet \.pr-noted \{ margin-top: 0\.35rem; \}/,
-  ]) {
-    assert.match(print, rule, 'the one-leaf print compaction lost a rule');
-  }
+  // Just this media block: from its @page box to the screen rule that follows it.
+  const print = css.slice(css.indexOf('@page {'), css.indexOf('/* Screen: the portaled sheet'));
+  assert.ok(print.includes('.pr-footer-block'), 'the print block moved');
+  assert.doesNotMatch(print, /\.print-sheet[^{}]*\{[^}]*font-size:/, 'print restates a sheet type size');
+  assert.doesNotMatch(print, /\.print-sheet \.pr-org \{ font-size/, 'print restyles the letterhead');
+  assert.doesNotMatch(
+    print,
+    /\.print-sheet \.pr-(title|narrative|facts|section|entry|noted|footer-block) \{[^}]*margin/,
+    'print restates a block rhythm',
+  );
+  assert.match(
+    css,
+    /@page \{[\s\S]*?margin: 1in;/,
+    'the page box lost the sheet\'s own station margin',
+  );
 });

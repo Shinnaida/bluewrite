@@ -1814,6 +1814,16 @@ export default function AiNarrativePanel({
           // A server reset hands back the RAW account for the local formatter;
           // anything else is the model's own arranged page.
           arrangedByModel = serverResetText == null;
+          // THE SAME GATE THE SINGLE ANSWER PASSES (owner report, 2026-11-19):
+          // streaming must not be the door invention walks through. A streamed
+          // page that carries a role label the account never wrote (`Victim:`
+          // over the drivers, BW-0607) or any name from nowhere is dropped
+          // whole, and the officer's own text is arranged locally instead —
+          // exactly what the non-streaming path below does.
+          if (arrangedByModel && !arrangeOutputIsFaithful(accountText, officerAccount)) {
+            accountText = officerAccount;
+            arrangedByModel = false;
+          }
         } else throw new Error('empty-stream');
       } catch {
         streamActiveRef.current = false;
@@ -1843,7 +1853,6 @@ export default function AiNarrativePanel({
         titleSource: officerAccount,
         notableFindings: runFindings,
         actionTaken: runActionTaken,
-        keepCasing: arrangedByModel,
       })));
       setResidual([]);
       // The paper types the arranged result in (see letterProps) — the pill
@@ -2684,21 +2693,52 @@ export default function AiNarrativePanel({
     setArrangePhase('idle');
   };
 
-  // Discard guard: confirm first, and never discard a finalized report.
-  // Returns true when the caller may proceed with the discard.
-  const confirmDiscardDraft = () => {
+  // DISCARD ASKS IN THE APP, NOT IN THE BROWSER (owner request, 2026-11-19).
+  // `window.confirm` drew a "localhost:5180 says" box over the workspace — the
+  // development server talking over a police record, with the browser's own
+  // buttons. The question is the same and is still asked before anything is
+  // removed; it is now drawn by this app, in this app's styling (see `.ai-ask`
+  // in styles.css), and a finalized report is never discarded at all.
+  const [discardAsk, setDiscardAsk] = useState(false);
+  const discardAskCancelRef = useRef(null);
+  const discardProceedRef = useRef(null);
+  const askDiscard = (proceed) => {
     if (String(sheet?.report?.status ?? '') === 'finalized') {
       setMessage('This report is finalized and locked — a finalized report is never discarded.');
       setPanelOpen(true);
-      return false;
+      return;
     }
-    try {
-      if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
-        return window.confirm('Discard this AI draft and return to the original report? Your saved AI edits will be removed.');
-      }
-    } catch {}
-    return true;
+    discardProceedRef.current = proceed;
+    setDiscardAsk(true);
   };
+  // The dialog's answer: only Discard runs the waiting action, and the action
+  // is dropped either way so a stale question can never discard later.
+  const answerDiscardAsk = (proceeded) => {
+    const proceed = discardProceedRef.current;
+    setDiscardAsk(false);
+    discardProceedRef.current = null;
+    if (proceeded && typeof proceed === 'function') proceed();
+  };
+  // Escape answers the dialog with Cancel and goes no further: capture plus
+  // stopPropagation keeps it from closing the panel behind the question (and
+  // from reaching the shell's own key handling, see src/lib/shortcuts.js).
+  // Cancel takes the focus, because a question about removing a page should
+  // not open with Enter aimed at the button that removes it.
+  useEffect(() => {
+    if (!discardAsk) return undefined;
+    const focus = window.setTimeout(() => discardAskCancelRef.current?.focus(), 0);
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      answerDiscardAsk(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.clearTimeout(focus);
+      window.removeEventListener('keydown', onKey, true);
+    };
+  }, [discardAsk]);
 
   const closePanel = () => {
     setRevealOn(false); // unmounts NarrativeReveal — cancels its timer
@@ -2772,17 +2812,30 @@ export default function AiNarrativePanel({
     }
   };
   const satisfiedDiscard = () => {
-    if (!confirmDiscardDraft()) return;
-    // `keepEditable`: the restored words come back typable, not on the clean
-    // View (owner request, 2026-11-17).
-    onRestoreProvisional?.({ keepEditable: true });
-    setProvisionalState('idle');
-    setSatisfiedSaved(false);
-    setSatisfiedLeaving(false);
-    setCompletionFills([]);
-    setDraft(null);
-    setMode('ready');
-    closePanel();
+    askDiscard(() => {
+      // `keepEditable`: the restored words come back typable, not on the clean
+      // View (owner request, 2026-11-17).
+      onRestoreProvisional?.({ keepEditable: true });
+      setProvisionalState('idle');
+      setSatisfiedSaved(false);
+      setSatisfiedLeaving(false);
+      setCompletionFills([]);
+      setDraft(null);
+      setMode('ready');
+      closePanel();
+    });
+  };
+  // The review's own Discard, asked the same way (same body as the toolbar's,
+  // without the Saved receipt it has to take down).
+  const discardDraft = () => {
+    askDiscard(() => {
+      onRestoreProvisional?.({ keepEditable: true });
+      setProvisionalState('idle');
+      setDraft(null);
+      setMode('ready');
+      setCompletionFills([]);
+      closePanel();
+    });
   };
   // Gap-tap receipt clears itself after 6s, like the toolbar Saved receipt.
   useEffect(() => {
@@ -3713,6 +3766,14 @@ export default function AiNarrativePanel({
                         </>
                       ) : (
                         <>
+                          {/* No keep button on a settled page (owner request,
+                              2026-11-19): the paper already holds the draft by
+                              the time the review opens, so the confirm control
+                              the officer was reading sat there doing nothing.
+                              Discard, Close and the toolbar's Save carry the
+                              choice; only the tighten proposal keeps its own
+                              button, because that one does write. */}
+                          {!(sheetProvisional && !tightenDraft) && (
                           <button
                             type="button"
                             className="primary"
@@ -3748,50 +3809,33 @@ export default function AiNarrativePanel({
                                 have their own buttons above — so promising the
                                 report there would be the same over-claim this
                                 button used to make in the other direction. */}
-                            {sheetProvisional ? (tightenDraft ? 'Keep narrative' : 'Keep on the paper') : (tightenDraft ? 'Accept into narrative' : 'Accept into report')}
+                            {sheetProvisional ? 'Keep narrative' : (tightenDraft ? 'Accept into narrative' : 'Accept into report')}
                           </button>
-                          {/* ARRANGE, THEN ENHANCE (owner request, 2026-11-02): an
-                              arranged page can be settled with as it is, or its
-                              wording polished from HERE — the arranged result
-                              itself, not another button in the sidebar. The
-                              enhanced page replaces this one in the same panel
-                              and on the same paper, so the officer keeps
-                              reading one document. Grammar, spelling, clarity
-                              and police register only: same parts, same labels,
-                              no new fact (see enhance_report_prompt.txt). */}
-                          {draft?.arranged && (
-                            <button
-                              type="button"
-                              onClick={() => enhanceReport({ fromArranged: true })}
-                              title="Corrects grammar and sharpens the wording of this arranged page — same parts, same labels, no new facts."
-                            >
-                              Enhance writing
-                            </button>
                           )}
+                          {/* No polish pass offered from an arranged page
+                              (owner request, 2026-11-19): the officer settles
+                              the arranged page here instead of being sent into
+                              a second run from the same panel. The in-place
+                              path itself is untouched (see enhanceReport). */}
                           {/* Edit the draft removed by owner request: corrections happen
                               on the sheet itself, not in boxes under the letter. */}
-                          {/* Each result offers to repeat ITSELF: a generated draft
-                              regenerates from the report, an arranged draft is
-                              arranged again. Offering "Regenerate" on an arrange
-                              result would swap the officer's own prose for an
-                              AI-written one under a button they did not mean to
-                              press. */}
+                          {/* No repeat control on an arranged page either (owner
+                              request, 2026-11-19), for the same reason: a second
+                              run moves the officer off the page they just
+                              settled on. Only a generated draft keeps
+                              Regenerate. */}
                           {draft?.arranged ? (
-                            <button
-                              type="button"
-                              onClick={() => arrangeReport()}
-                              title="Re-arranges your current account text into the report format — your wording is kept exactly as written."
-                            >Arrange again</button>
+                            null
                           ) : draft?.enhanced ? (
-                            <button
-                              type="button"
-                              onClick={() => enhanceReport({ fromArranged: true })}
-                              title="Enhances this page again — its own wording, grammar and clarity only, with every fact and label preserved."
-                            >Enhance again</button>
+                            /* A second polish pass is no longer offered
+                               (owner request, 2026-11-19). Nothing replaces
+                               it: Regenerate would swap the officer's just-
+                               polished prose for a fresh model run. */
+                            null
                           ) : (
                             <button type="button" onClick={() => setShowFeedback((v) => !v)}>Regenerate…</button>
                           )}
-                          {sheetProvisional && (<button type="button" onClick={() => { if (!confirmDiscardDraft()) return; onRestoreProvisional?.({ keepEditable: true }); setProvisionalState('idle'); setDraft(null); setMode('ready'); setCompletionFills([]); closePanel(); }} title="Removes the draft from the paper and brings back your words.">Discard draft</button>)}
+                          {sheetProvisional && (<button type="button" onClick={discardDraft} title="Removes the draft from the paper and brings back your words.">Discard draft</button>)}
                           <button type="button" onClick={closePanel}>Close</button>
                         </>
                       )}
@@ -4159,6 +4203,39 @@ export default function AiNarrativePanel({
               <SheetGlyph paths={CLOSE_GLYPH} />
               Close preview
             </button>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* THE DISCARD QUESTION, drawn by the app (see askDiscard). A scrim and a
+          card rather than the browser's own box: the officer is answering the
+          record's system, and the words on the buttons are the ones this panel
+          uses everywhere else. A click on the scrim is Cancel; a click inside
+          the card is not, so reading it never answers it. */}
+      {discardAsk && createPortal(
+        <div className="ai-ask-scrim" onClick={() => answerDiscardAsk(false)}>
+          <div
+            className="ai-ask"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="ai-ask-title"
+            aria-describedby="ai-ask-body"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="ai-ask-title">Discard this AI draft?</h3>
+            <p id="ai-ask-body">
+              The report returns to your original words, and the AI edits saved to
+              it are removed. This cannot be undone.
+            </p>
+            <div className="ai-ask-actions">
+              <button ref={discardAskCancelRef} type="button" onClick={() => answerDiscardAsk(false)}>
+                Cancel
+              </button>
+              <button type="button" className="danger" onClick={() => answerDiscardAsk(true)}>
+                Discard draft
+              </button>
+            </div>
           </div>
         </div>,
         document.body,

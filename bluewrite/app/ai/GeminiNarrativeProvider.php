@@ -1220,6 +1220,35 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
      * @param array<string,mixed> $parsed @param string[] $types
      * @return array<string,mixed>
      */
+    /**
+     * The role the ACCOUNT states, in its own words — or 'other'.
+     *
+     * The model reads a collision and answers `victim` for the drivers because
+     * somebody was hurt; the account never calls them that, and a victim role
+     * is printed as a labeled block on the sheet. A role may only survive when
+     * the officer's text carries the role (or its everyday Filipino/Bisaya
+     * word). `driver`/`owner` are corroborated by the vehicle rows' own "driven
+     * by" / "owned by"; a person whose role the account does not state fills
+     * no group row ('other' maps to none in classifyFill), which is exactly
+     * what the owner asked for: no information that is not in the source.
+     */
+    private static function accountStatedRole(string $role, string $account): string
+    {
+        $vocabulary = [
+            'victim' => '/\b(?:victims?|biktima|nasaktan|pinasakitan)\b/iu',
+            'suspect' => '/\b(?:suspects?|suspek|pinaghihinalaan)\b/iu',
+            'respondent' => '/\b(?:respondents?|respondente)\b/iu',
+            'witness' => '/\b(?:witness(?:es)?|saksi|nakasaksi|nakakita)\b/iu',
+            'complainant' => '/\b(?:complainants?|nagreklamo|reklamo|nagreport|nagsumite)\b/iu',
+            'driver' => '/\b(?:drivers?|drayber|tsuper|driven\s+by|drove)\b/iu',
+            'owner' => '/\b(?:owners?|tag-?iya|may-?ari|owned\s+by)\b/iu',
+        ];
+        if (!isset($vocabulary[$role])) {
+            return $role;
+        }
+        return preg_match($vocabulary[$role], $account) === 1 ? $role : 'other';
+    }
+
     public static function normaliseClassification(array $parsed, array $types, string $account = ''): array
     {
         $str = static function (mixed $v, int $max = 500): string {
@@ -1259,6 +1288,23 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
                 $type = $better;
             }
         }
+        // A CONSEQUENCE IS NOT THE INCIDENT (owner report, 2026-11-19: the
+        // BW-0602 reckless-imprudence collision filed as Theft because the
+        // answer read its "damage to property" and injuries as a taking). The
+        // account's own charge outranks a consequence word: when the answer
+        // lands on Theft, Robbery, Property Damage or Assault but the account
+        // (its charge included) folds to Traffic Accident, the collision is
+        // the incident and the traffic folder wins. The answer's own words
+        // still ride as the Category, so nothing is renamed.
+        // Scoped to a blotter that CHARGES the collision: the account (or the
+        // answer's own words) says reckless imprudence/driving. A genuine
+        // taking that merely mentions a vehicle keeps its answer.
+        $consequence = ['Theft', 'Robbery', 'Property Damage / Malicious Mischief', 'Assault / Physical Injury'];
+        if (in_array($type, $consequence, true)
+            && preg_match('/reckless\s+(?:imprudence|driving)/i', $account . ' ' . $answerType) === 1
+            && IncidentTypes::closestType(trim($account . ' ' . $answerType), $types) === 'Traffic Accident') {
+            $type = 'Traffic Accident';
+        }
 
         $datetime = $str($parsed['incidentDatetime'] ?? '', 32);
         if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $datetime)) {
@@ -1288,6 +1334,17 @@ final class GeminiNarrativeProvider implements AiNarrativeProvider
             $role = mb_strtolower($str($p['role'] ?? '', 20));
             if (!in_array($role, self::PARTY_ROLES, true)) {
                 $role = 'other';
+            }
+            // A ROLE IS THE ACCOUNT'S, NOT THE MODEL'S INFERENCE (owner report,
+            // 2026-11-19: "don't add any information that is not in the source
+            // text — in here you add Victim: JOSEPH..."). A collision that
+            // injures a driver does not make that driver a victim; the sheet
+            // prints a victim/complainant block from this role, so a role the
+            // account never states would put a labeled block on the paper that
+            // the officer's own words do not carry. Uncorroborated roles fall
+            // back to 'other', which fills no group row.
+            if ($account !== '') {
+                $role = self::accountStatedRole($role, $account);
             }
             $parties[] = ['role' => $role, 'name' => $name];
         }

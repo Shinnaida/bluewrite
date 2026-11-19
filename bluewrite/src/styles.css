@@ -1311,11 +1311,10 @@ th.reports, td.reports { text-align: center; }
 /* The count reads in extra-bold, the row's second hero: at grid width the
    words are small, and a regular weight would wash out beside the squares. */
 .users-reports { display: block; font-weight: 800; }
-/* THE MINIATURE: thirteen weeks of the sheet's own squares, sized past the big
-   sheet's own 11px — seven 16px squares and their gaps stand ~135px tall, the
-   row growing a little past the 120px face to hold them. The weeks and squares
-   are the sheet's own classes — only the size is the miniature's, set through
-   the same two variables the big grid runs on. */
+/* THE MINIATURE: a year of the sheet's own squares, one per month, sized past
+   the big sheet's own 11px. The squares are the sheet's own classes — only the
+   size is the miniature's, set through the same two variables the big grid
+   runs on. */
 .users-mini {
   --sheet-cell: 16px;
   --sheet-gap: 4px;
@@ -1324,6 +1323,14 @@ th.reports, td.reports { text-align: center; }
   column-gap: var(--sheet-gap);
   margin-top: 0.35rem;
   vertical-align: middle;
+}
+/* DAYS OF THE MONTH (owner request, 2026-11-19): one square per day — 30 or 31,
+   seven to a row — so the cell reads as a small calendar, a day green when the
+   officer filed that day. column-gap comes from `.users-mini`. */
+.users-mini--month {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(7, var(--sheet-cell));
+  row-gap: var(--sheet-gap);
 }
 
 /* The register's one sortable heading (see ReportsTable's STATUS_SORTS). It has
@@ -1639,6 +1646,10 @@ td.num { text-align: left; letter-spacing: 0.02em; }
   display: grid;
   grid-template-columns: auto 1fr;
   column-gap: 0.5rem;
+  /* The hint is a row of its own under the pill (owner request, 2026-11-19:
+     "do the spacing"): with no row gap the paragraph sat against the pill's
+     edge, so the first line read as part of the title. */
+  row-gap: 0.35rem;
   align-items: start;
   padding: 0.55rem 0.65rem;
   border: 1px solid var(--ir-border);
@@ -1658,6 +1669,14 @@ td.num { text-align: left; letter-spacing: 0.02em; }
    two choices read as the assistant's own options. */
 .ai-generate-mode__title {
   display: inline-block;
+  /* ONE METRIC FOR BOTH TITLES (owner request, 2026-11-19: the Enhance card
+     should be spaced like the Arrange card). The pill used to take the body's
+     own leading, so the longer name — which wraps in the narrow bar and in the
+     two-column deck — grew a taller pill than the short one and pushed its
+     paragraph further down. Pinned here, a title is the same even pill whether
+     it fits on one line or takes two. */
+  max-width: 100%;
+  line-height: 1.25;
   font-weight: 700;
   font-size: 0.85rem;
   color: #fff;
@@ -1668,6 +1687,10 @@ td.num { text-align: left; letter-spacing: 0.02em; }
 .ai-generate-mode__hint {
   grid-column: 2;
   font-size: 0.78rem;
+  /* An even rhythm at this size: the hint used to inherit the panel's taller
+     body leading, which left the wrapped lines further apart than the pill
+     above them (owner request, 2026-11-19: spacing only). */
+  line-height: 1.45;
   color: var(--steel);
 }
 .ai-arranged-note {
@@ -4152,6 +4175,68 @@ body.profile-panel-open {
   max-width: 30rem;
 }
 
+/* THE WAY TO READ BACK WHAT YOU TYPED (owner request, 2026-11-19). The eye sits
+   inside the field's right edge, where every password input in the app puts one,
+   and the field gives up the room it needs so the last character is never typed
+   underneath the button. Written here rather than borrowed from the sign-in
+   gate's .la-eye: that one is positioned against the gate's navy card and this
+   form is the station's light one. */
+.acct-pass-wrap { position: relative; }
+.acct-pass-wrap input { padding-right: 2.6rem; }
+.acct-pass-eye {
+  position: absolute;
+  right: 0.3rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--steel);
+}
+.acct-pass-eye:hover {
+  border-color: transparent;
+  background: var(--panel-raised);
+  color: var(--paper);
+}
+.acct-pass-eye:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+/* THE RULE AS A LIST THAT MARKS ITSELF OFF. Quiet, small, and in the palette's
+   own "met" ink; the words are the server's requirement, not a slogan. */
+.acct-pass-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.9rem;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-hud);
+  font-size: 0.72rem;
+  color: var(--steel);
+}
+.acct-pass-rules li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.acct-pass-rules li::before {
+  content: '·';
+  font-weight: 700;
+  color: var(--steel);
+}
+.acct-pass-rules li.is-met { color: var(--green-ok); }
+.acct-pass-rules li.is-met::before {
+  content: '✓';
+  color: var(--green-ok);
+}
+
 /* THE ⓘ MARKER, SITTING INLINE AFTER A LABEL. The shared rule (`.info-mark`) is written
    for a flex row, where the row owns the gap; in a label the marker is inline, so the
    spacing and the baseline are this screen's business rather than the panel's.
@@ -4520,6 +4605,54 @@ body.profile-panel-open {
 }
 .ai-feedback input { flex: 1 1 12rem; min-width: 0; }
 .ai-feedback button { flex: 0 0 auto; }
+
+/* THE DISCARD QUESTION (owner request, 2026-11-19): `window.confirm` drew a
+   "localhost:5180 says" box — the development server's own chrome — over a
+   police record. The same question is now asked by the app: a scrim over the
+   workspace and a card in the workspace's own tokens, so it reads on the light
+   and the dark theme alike. The confirming plate is `.danger` (see
+   button.danger above), because the button that removes the page should be the
+   one that reads as removal. */
+.ai-ask-scrim {
+  position: fixed;
+  inset: 0;
+  /* Above the print portal (200) and the full-screen sheet (300): a question
+     about the page is asked ON TOP of whatever the page is drawn in. */
+  z-index: 320;
+  background: var(--overlay-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.ai-ask {
+  /* Narrower than the panel it belongs to, and never wider than the screen. */
+  width: min(28rem, 100%);
+  padding: 1.15rem 1.2rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--paper);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.35);
+}
+.ai-ask h3 {
+  margin: 0 0 0.45rem;
+  font-size: 1.02rem;
+  line-height: 1.3;
+}
+.ai-ask p {
+  margin: 0;
+  color: var(--steel);
+  line-height: 1.5;
+}
+.ai-ask-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.1rem;
+}
+.ai-ask-actions > button { flex: 0 0 auto; }
 
 
 @media (max-width: 700px) {
@@ -7199,9 +7332,10 @@ button.dash-kpi--link:focus-visible {
      letter below was 9px taller than the printable page — so an ordinary report
      came out as two sheets of paper with the signature block alone on the
      second. Every vertical length from here to `.pr-noted` is the tightened
-     set; the type reads at 11pt (owner request — the sheet's own size, like
-     the Word default it mirrors). `line-height` is the largest of those
-     lengths and it is still a document's leading, not a spreadsheet's. */
+     set; the type reads at 9.9pt above, and PRINT INHERITS THAT SIZE — the
+     printed page states no size of its own, so paper and desk are the same
+     document. `line-height` is the largest of those lengths and it is still a
+     document's leading, not a spreadsheet's. */
   line-height: 1.4;
 }
 
@@ -7413,29 +7547,18 @@ button.dash-kpi--link:focus-visible {
    sanitizer drops the whitespace that sits BETWEEN blocks, so no stray blank
    line rides in with it (see sanitizeLetterHtml). */
 .pr-letter-html { white-space: pre-wrap; }
-/* NO PARAGRAPH AIR, SINGLE SPACING (owner request, 2026-11-18: "in this part can
-   you remove the space after/before paragraph, and make the spacing only 1").
-   The letter's block of labelled lines — Place, Time/Date, Date of Discovery,
-   Victim, Suspect, Stolen Items with its rows and TOTAL — read as one stack:
-   the browser's default 1em above and below every <p> opened a gap between
-   each line, so the block spread down the page. Every paragraph, list and
-   wrapper in the letter now carries no margin and single line spacing, so the
-   stack keeps only its own line breaks. Print inherits both (it states no
-   margin of its own here). */
-.pr-letter-html {
-  line-height: 1;
-}
-.pr-letter-html p,
-.pr-letter-html div,
-.pr-letter-html ul,
-.pr-letter-html ol,
-.pr-letter-html li,
-.pr-letter-html h1,
-.pr-letter-html h2,
-.pr-letter-html h3 {
-  margin: 0;
-  line-height: 1;
-}
+/* THE READ VIEW SPACES THE LETTER LIKE THE ONE THE OFFICER WRITES ON (owner
+   request, 2026-11-19: "add spacing similar to this in the all report incident
+   report view"). While composing, the letter is drawn in the free-edit canvas
+   (RichTextArea ▸ `.rt-edit`), which carries the browser's own paragraph air and
+   the sheet's 1.4 leading. The read-only letter used to override both —
+   `line-height: 1` and no margin on every block — so the SAME letter read tight
+   and closed up on the register's sheet page and in print: its blank lines
+   collapsed to nothing and its lines sat on one another. Nothing is restated
+   here now: the drawn letter inherits the same paragraph margins and the same
+   leading the editor shows, so Write Report, All Reports and the printed page
+   space the letter identically. `pre-wrap` above still keeps the officer's own
+   indents and line breaks. */
 .pr-cert-issuance { text-indent: 0.4in; text-align: left; margin: 0.5rem 0; overflow-wrap: anywhere; }
 
 /* ---- Stolen/Damaged Items block (deep indent, regular-weight TOTAL,
@@ -7445,13 +7568,13 @@ button.dash-kpi--link:focus-visible {
 .pr-item-total { margin: 0.15rem 0 0.1rem 1.05in; font-weight: 400; overflow-wrap: anywhere; }
 
 /* ---- NOTABLE FINDINGS / ACTION TAKEN sections ---- */
-.pr-section { margin: 0.7rem 0; }
+.pr-section { margin: 1rem 0; }
 /* NOTABLE FINDINGS: dash-prefixed lines with a HANGING INDENT — a wrapped line
    aligns under the entry's TEXT, not under the dash (Task 7, the scanned
    sheet). The negative `text-indent` pulls the dash (and only the first line)
    into the margin; `padding-left` keeps the continuation lines aligned. */
 .pr-entry {
-  margin: 0.15rem 0 0.15rem 0.25in;
+  margin: 0.25rem 0 0.25rem 0.25in;
   padding-left: 0.6rem;
   text-indent: -0.6rem;
 }
@@ -8247,12 +8370,20 @@ button.dash-kpi--link:focus-visible {
    always-on hint, exactly as before. */
 .print-sheet .rt-edit:not(:hover):not(:focus):empty::before { content: ''; }
 /* Rendered ink on the read-only letter: the subset’s own blocks, kept inside
-   the sheet’s measure — no margins that would double the letter’s rhythm.
-   The findings and disposition blocks read the same ink as the narrative. */
+   the sheet’s measure. The findings and disposition blocks read the same ink
+   as the narrative.
+
+   SPACED FOR READING ON PAPER (owner request, 2026-11-19: "add spacing to the
+   result"). At 0.5rem a paragraph's gap was tighter than its own leading, so a
+   section heading (FACTS:, NOTABLE FINDINGS:, ACTION TAKEN / STATUS:) sat on
+   top of the paragraph before it and consecutive paragraphs read as one block.
+   0.75rem gives every block a clear break, headings included — the blank line
+   between sections is one of these paragraphs, so its gap grows by the same
+   amount and the heading no longer leans on the text above it. */
 .pr-narrative-html p, .pr-narrative-html ul, .pr-narrative-html ol,
 .pr-findings-html p, .pr-findings-html ul, .pr-findings-html ol,
 .pr-actions-html p, .pr-actions-html ul, .pr-actions-html ol {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.75rem;
 }
 .pr-narrative-html ul, .pr-narrative-html ol,
 .pr-findings-html ul, .pr-findings-html ol,
@@ -8574,21 +8705,22 @@ select.pr-edit--inline { padding-right: 0.1rem; }
      default happened to be. The margins are stated on @page — the sheet's own
      padding is removed in print (below), so the page reads its margins here.
 
-     UNEVEN ON PURPOSE (owner request, 2026-11-18: "0.5 inch top, 1 inch left,
-     0.5 inch right"): half an inch at the top and right, a full inch on the
-     left for the file's binding edge, and half an inch at the foot to match the
-     top. That leaves the letter 7in of measure — 8.5in of paper less the two
-     margins — and 10in of height. */
+     ONE INCH ON EVERY SIDE, because that is the sheet's own station margin
+     (owner request, 2026-11-19: the printout must look like the sheet on
+     screen). The measure is therefore the screen's measure — 6.5in of text on
+     a 8.5in leaf — and the page holds the same 9in of ink. */
   @page {
     size: letter;
-    /* THE MARGINS BELONG TO THE PAGE BOX (owner request, 2026-11-18: top 0.5in,
-       right 0.7in, bottom 0.5in, left 1in). They are stated HERE, on @page, not
-       as padding on the sheet: `@page` margins repeat on EVERY leaf of a
-       multi-page document, while an element's padding is only drawn on its first
-       and last fragments — so a report that ran past one page printed its second
-       sheet with the text running to the paper's edges, which is what "the margin
-       did not reach the paper" looked like. Measure: 8.5 − 1 − 0.7 = 6.8in. */
-    margin: 0.5in 0.7in 0.5in 1in;
+    /* THE PAGE BOX IS THE SHEET'S OWN STATION MARGIN (owner request, 2026-11-19:
+       "what it look like in print should look like that in here"). The sheet
+       draws a 1in margin on every side (`.print-sheet`'s padding, removed in
+       print below), so the page states the same 1in: the printed measure is then
+       the measure on screen — 6.5in wide, 9in tall — and no line breaks
+       differently on paper than it does on the desk. They are stated HERE, on
+       @page, not as padding on the sheet, because `@page` margins repeat on
+       EVERY leaf while an element's padding is drawn only on its first and last
+       fragments. Measure: 8.5 − 1 − 1 = 6.5in. */
+    margin: 1in;
   }
 
   /* The sheet is portaled to document.body (body.print-sheet-open is set
@@ -8644,26 +8776,16 @@ select.pr-edit--inline { padding-right: 0.1rem; }
      desk at the time. Ctrl+P with the preview up therefore prints the app
      exactly as it always did, instead of a draft posing as the filed report. */
   .sheet-fullscreen { display: none !important; }
-  /* ONE LEAF (owner request): the printed letter holds 9 inches of paper
-     (Letter minus the 1in @page margins), and a full ordinary report was
-     landing ~130px past it — a second sheet for a Noted-by line. Print keeps
-     the screen's type sizes but spends less air: a tighter header, smaller
-     seals, and block rhythm trimmed by a third, so the same ink fits the
-     leaf it was written for. Screen and desk are untouched. */
-  .print-sheet .pr-head > .pr-seal,
-  .print-sheet .pr-code-logo { height: 0.72in; width: 0.72in; }
-  .print-sheet .pr-code-date { margin-top: 0.2rem; }
-  .print-sheet .pr-title { margin: 0.4rem 0 0.3rem; }
-  .print-sheet .pr-salutation { margin-bottom: 0.3rem; }
-  .print-sheet .pr-certify { margin-bottom: 0.35rem; }
-  .print-sheet .pr-incident-type { margin: 0.4rem 0; }
-  .print-sheet .pr-facts { margin-bottom: 0.4rem; }
-  .print-sheet .pr-fact { margin-bottom: 0.12rem; }
-  .print-sheet .pr-items { margin: 0.1rem 0 0.15rem; }
-  .print-sheet .pr-item-total { margin: 0.1rem 0 0.05rem 1.05in; }
-  .print-sheet .pr-narrative { margin: 0.45rem 0; }
-  .print-sheet .pr-section { margin: 0.4rem 0; }
-  .print-sheet .pr-entry { margin-top: 0.1rem; margin-bottom: 0.1rem; }
+  /* THE PAPER IS THE SHEET (owner request, 2026-11-19: "what it look like in
+     print should look like that in here"). Print used to restyle the document
+     for paper — an 11pt body, a 9pt letterhead, smaller seals and every block
+     rhythm trimmed — so the same report came out of the printer looking like a
+     different document from the one the officer wrote on. Print now states NO
+     type size, margin or leading of its own: the account, the letterhead and
+     every block between them take the sheet's own rules, and the @page box above
+     holds the sheet's own 1in margin. What remains in this block is paper
+     geometry only — the hidden app chrome, the dropped screen floor, and the two
+     pagination guards below. The content itself is never touched. */
   /* THE SIGN-OFF IS ON THE PAPER (owner request, 2026-11-18: "add this in the
      footer of the first page in print" — the block reads "Noted by:" with the
      noting official's name under it). The desk hides this block
@@ -8681,55 +8803,10 @@ select.pr-edit--inline { padding-right: 0.1rem; }
      the page the account ends on. */
   .print-sheet .pr-fill { display: none; }
 
-  .print-sheet .pr-footer-block {
-    display: flex;
-    margin-top: 0.6rem;
-    break-inside: avoid;
-  }
-  .print-sheet .pr-noted { margin-top: 0.35rem; }
-  /* The long poles set tighter leading: body ink is single-spaced on the
-     official page, and the org block drops a step with it. */
-  .print-sheet .pr-org { font-size: 9pt; line-height: 1.25; }
-  .print-sheet .pr-contact { font-size: 8pt; }
-  /* THE LETTERHEAD IS THE TOP THREE INCHES (owner request, 2026-11-18: "put this
-     to the most top, only let this occupy 3 inch in the top"). The band — the
-     two seals and the office block, then the NCPS row and the date — is fixed at
-     3in from the very top of the paper: the header half takes 2.6in and the
-     code/date row the remaining 0.4in, so the account always begins exactly 3in
-     down, whatever the heading's own line count. The paper has no padding of
-     its own in print (@page states the margins), so nothing stands above it. */
-
-  .print-sheet .pr-facts,
-  .print-sheet .pr-narrative,
-  .print-sheet .pr-entry,
-  .print-sheet .pr-recorded,
-  .print-sheet .pr-noted { line-height: 1.3; }
-  /* THE ACCOUNT PRINTS AT 11pt (owner request, 2026-11-18: "make font 11" — the
-     salutation, the certification, the incident type, the labelled facts, the
-     stolen items, FACTS, NOTABLE FINDINGS, ACTION TAKEN / STATUS, and Recorded
-     by / IOC). The sheet's own 9.9pt is the desk's reading size; on paper every
-     word of the account is set at 11pt. Only the account is scaled: the
-     letterhead keeps its step and the title keeps its own size. */
-  .print-sheet,
-  .print-sheet .pr-letter-html,
-  .print-sheet .pr-facts,
-  .print-sheet .pr-narrative,
-  .print-sheet .pr-section,
-  .print-sheet .pr-entry,
-  .print-sheet .pr-recorded,
-  .print-sheet .pr-letter-html p,
-  .print-sheet .pr-letter-html div,
-  .print-sheet .pr-letter-html li,
-  .print-sheet .pr-letter-html ul,
-  .print-sheet .pr-letter-html ol,
-  .print-sheet .pr-letter-html span { font-size: 11pt; }
-  /* THE PAPER WEARS THE SHEET'S OWN TYPE (owner request, 2026-11-18: "what it
-     looks like here is what it should look like in the print"). The account was
-     pinned to 12pt in print, which made the printed page a size larger than the
-     sheet the officer typed on — same words, different-looking document. Print
-     now states no size of its own for the account: every size, margin and
-     leading comes from the same sheet rules the desk draws, so the page reads
-     exactly as it does on screen. */
+  /* THE SIGN-OFF NEVER SPLITS across a leaf. Its margin, size and position stay
+     the sheet's own (see `.pr-footer-block`), so the printed page puts the block
+     where the paper on screen puts it. */
+  .print-sheet .pr-footer-block { break-inside: avoid; }
 }
 
 /* Screen: the portaled sheet sits above everything, including the AI panel */
@@ -10517,6 +10594,15 @@ body.print-sheet-open .print-overlay { z-index: 200; }
 .dash-seg--12 { fill: var(--cat-12); }
 .dash-seg--13 { fill: var(--cat-13); }
 .dash-seg--14 { fill: var(--cat-14); }
+/* THE COLUMN WEARS THE WORKFLOW STATE (owner request, 2026-11-19: "the bar for
+   draft make it yellow"). The plot's stacks are cut by Draft / Finalized instead
+   of by incident type, and they wear the SAME two colours the pills above the
+   plot are drawn with — so the key beside the bars is the legend the reader is
+   already looking at, rather than a second palette saying a third thing. A day
+   that is all draft is a gold bar; a finalized day is blue; a mixed day is blue
+   with its drafts standing on it in gold. Total height per day is unchanged. */
+.dash-seg--draft { fill: var(--cmd-gold, var(--amber)); }
+.dash-seg--finalized { fill: var(--cmd-blue, var(--cyan)); }
 /* The hovered day's track. Painted behind the bands so it points at a column
    without covering the data it is pointing at. */
 .dash-hover-band { fill: var(--cyan-bg); }

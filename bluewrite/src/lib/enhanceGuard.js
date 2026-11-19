@@ -112,7 +112,7 @@ const AUTHORITY_LICENCE =
 // A capital the model added mid-sentence to an ordinary word the officer wrote
 // in lower case ("heated argument" -> "Heated Argument"). Names and codes are
 // already covered; this is the stray Title Case that reads as emphasis.
-function addsStrayCapitals(sourceLine, modelLine) {
+function addsStrayCapitals(sourceLine, modelLine, sourceFull = sourceLine) {
   if (sourceLine === sourceLine.toUpperCase()) return false;
   const tokens = modelLine.split(/\s+/);
   for (let i = 1; i < tokens.length; i += 1) {
@@ -120,6 +120,15 @@ function addsStrayCapitals(sourceLine, modelLine) {
     const word = tokens[i].replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, '');
     if (!/^[A-Z][a-z]{2,}$/.test(word)) continue;
     const lower = word.toLowerCase();
+    // A WORD THE SOURCE ALSO CAPITALISES SOMEWHERE is a name or a place, not
+    // added emphasis (owner report, 2026-11-19: "nothing was enhanced"). The
+    // officer typed CANTUMUNDONG and the sentence-case formatter lowercased it
+    // inside FACTS, so the model's proper "Cantumundong, City of Naga" looked
+    // like invented Title Case and the whole enhanced facts line — grammar fix
+    // and police register included — was thrown away. The check is about
+    // ordinary words; the source's own spelling anywhere in the report wins.
+    if (new RegExp(`\\b${word}\\b`).test(sourceFull)) continue;
+    if (new RegExp(`\\b${lower.toUpperCase()}\\b`).test(sourceFull)) continue;
     if (new RegExp(`\\b${lower}\\b`).test(sourceLine) && !new RegExp(`\\b${word}\\b`).test(sourceLine)) {
       return true;
     }
@@ -193,7 +202,7 @@ function verdict(sourceLine, modelLine, ctx) {
   if (inventsCode(modelLine, ctx.sourceFlat)) return 'code';
   if (inventsName(modelLine, ctx.sourceWords)) return 'name';
   if (PRO_FORM.test(modelLine) && !PRO_FORM.test(sourceLine)) return 'pro-form';
-  if (addsStrayCapitals(sourceLine, modelLine)) return 'casing';
+  if (addsStrayCapitals(sourceLine, modelLine, ctx.sourceRaw)) return 'casing';
   if (
     AUTHORITY_ACT.test(modelLine) &&
     !AUTHORITY_ACT.test(sourceLine) &&
@@ -327,6 +336,7 @@ export function guardEnhancedWording(enhancedText, sourceText) {
   const ctx = {
     sourceFlat: flat(sourceRaw.replace(/₱/g, 'PHP ')),
     sourceWords: new Set(wordsOf(sourceRaw)),
+    sourceRaw,
   };
   const sourceRows = srcIdx.map((lineNo) => srcLines[lineNo].trim());
   const pairs = new Map();

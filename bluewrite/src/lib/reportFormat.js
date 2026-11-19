@@ -1709,15 +1709,27 @@ function properToken(word, { place = false, first = false } = {}) {
   let out = '';
   let atStart = first;
   let afterPlaceHyphen = false;
+  let afterApostrophe = false;
   for (let i = 0; i < parts.length; i += 1) {
     const part = parts[i];
     if (i % 2 === 1) {
       out += part;
       afterPlaceHyphen = place && part === '-';
+      afterApostrophe = part === "'" || part === '’';
       continue;
     }
     if (part === '') continue;
     const low = part.toLowerCase();
+    // A CONTRACTION OR POSSESSIVE AFTER AN APOSTROPHE never takes a capital
+    // (owner report, 2026-11-19: all-caps "DRIVER'S LICENSE" printed as
+    // "Driver'S License"). The suffix belongs to the word it follows.
+    if (afterApostrophe && /^(?:s|t|re|ve|ll|d|m)$/.test(low)) {
+      out += low;
+      atStart = false;
+      afterApostrophe = false;
+      continue;
+    }
+    afterApostrophe = false;
     if (KEEP_CAPS.has(low)) {
       out += part.toUpperCase();
       atStart = false;
@@ -1741,6 +1753,11 @@ function properToken(word, { place = false, first = false } = {}) {
 function caseWord(token, { start, span, line, next }) {
   const word = token.text;
   if (isCodeToken(token, line)) return word;
+  // THE POSSESSIVE S IS NOT A WORD (owner report, 2026-11-19): the all-caps
+  // account's "DRIVER'S LICENSE" printed as "Driver'S License" because the
+  // lone capital after the apostrophe read as an identifier. It follows its
+  // noun, so it is lower case like any other suffix.
+  if ((word === 'S' || word === 's') && /['’]$/.test(line.slice(0, token.start))) return 's';
   const lower = word.toLowerCase();
   const lookup = lower.replace(/['’]s$/, '');
   const allCaps = word === word.toUpperCase() && /[A-Z]/.test(word);
@@ -1765,7 +1782,10 @@ function caseWord(token, { start, span, line, next }) {
   if (allCaps) {
     // A lone capital letter that is not an article is an identifier (V, S).
     if (word.length === 1 && !COMMON_WORDS.has(lookup)) return word;
-    const out = lookup;
+    // The whole word, apostrophe and all — `lookup` has the possessive
+    // stripped for dictionary tests, and printing it dropped "'s" entirely
+    // (all-caps "DRIVER'S LICENSE" came out "driver license").
+    const out = lower;
     return start ? capitalizeFirst(out) : out;
   }
 
@@ -1874,6 +1894,34 @@ function properSpans(text, tokens, { placeValue = false, nameValue = false, vehi
       return !COMMON_WORDS.has(low) || PROPER_WORDS.has(low);
     });
     if (hasProper) mark(idxs[0], t.i, 'name');
+  }
+
+  // A PLACE NAMED IN PROSE, written in capitals like the rest of an all-caps
+  // account (owner request, 2026-11-19: "arrange what is caps or not caps,
+  // even the source text is all caps"). "particularly at CANTUMUNDONG, CITY
+  // OF NAGA" would otherwise sentence-case the town away ("cantumundong,
+  // city of Naga"); after a place preposition an unknown all-caps word is a
+  // proper noun, and the run it opens ("CITY OF NAGA") is the same place.
+  const PLACE_CUE = new Set(['at', 'in', 'on', 'near', 'from', 'to', 'along', 'within', 'towards', 'toward', 'off']);
+  const PLACE_RUN = new Set(['city', 'brgy', 'barangay', 'purok', 'sitio', 'municipality', 'province', 'district', 'village']);
+  for (let i = 1; i < tokens.length; i += 1) {
+    const t = tokens[i];
+    if (!PLACE_CUE.has(tokens[i - 1].text.toLowerCase())) continue;
+    if (t.text !== t.text.toUpperCase() || !/[A-Z]/.test(t.text)) continue;
+    const low = t.text.toLowerCase();
+    if (low.length < 3 || COMMON_WORDS.has(low) || KEEP_CAPS.has(low) || spans.has(i)) continue;
+    let end = i;
+    for (let j = i + 1; j < tokens.length && j <= i + 6; j += 1) {
+      const w = tokens[j];
+      const gap = text.slice(tokens[j - 1].end, w.start);
+      if (!/^[\s,]*$/.test(gap)) break;
+      const wl = w.text.toLowerCase();
+      const caps = w.text === w.text.toUpperCase() && /[A-Z]/.test(w.text);
+      if (caps && !COMMON_WORDS.has(wl)) { end = j; continue; }
+      if (PLACE_RUN.has(wl) || PROPER_WORDS.has(wl) || PLACE_CANONICAL.has(wl)) { end = j; continue; }
+      break;
+    }
+    mark(i, end, 'place');
   }
 
   // Two or more consecutive unknown ALL-CAPS words are a name/place written in

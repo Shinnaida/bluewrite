@@ -6,7 +6,7 @@ import { SNAPSHOT_MS, applySnapshot } from '../lib/presence.js';
 // The accounts this station keeps off its roster screens — one list, shared with
 // the dashboard's Users card and the connected board (see the module).
 import { HIDDEN_USERNAMES } from '../lib/hiddenUsers.js';
-import { checkPassword, MIN_LENGTH, passwordHint } from '../lib/passwordPolicy.js';
+import { checkPassword, MIN_LENGTH, passwordHint, PASSWORD_RULES } from '../lib/passwordPolicy.js';
 // The face: how it is drawn (the same circle the roster and Profile draw), how a
 // chosen file becomes the 512px square that is sent, and the camera that can take
 // the photograph instead of a file being found for it.
@@ -26,9 +26,9 @@ import RowMenu from './RowMenu.jsx';
 import InfoHint from './InfoHint.jsx';
 // How the count reads: "12 reports", "1 report" — a bare number needs a noun
 // beside it, and the singular is worth getting right in a column of plurals.
-// The grid reuses the sheet's own week/square classes and its `levelOf`, so a
+// The grid reuses the sheet's own square classes and its `levelOf`, so a
 // square here shades exactly the way a square there does.
-import { toColumns, levelOf } from '../lib/activitySheet.js';
+import { levelOf } from '../lib/activitySheet.js';
 // WHO IS AT A DESK RIGHT NOW, opened from this screen's toolbar. It reads the
 // directory itself (see the component) and is mounted only while the toggle is on, so
 // a closed panel costs no polling — and it lives here rather than on the Dashboard
@@ -194,35 +194,43 @@ export function reportCountText(n) {
 }
 
 /**
- * THE WINDOW THE GRID COVERS, in days. Trailing ninety-one — thirteen weeks —
- * and the SAME window the count covers, so the two can never disagree. Built
- * from the day count rather than from a date the server sends; only the
- * picture's label reads the dates.
+ * THE WINDOW THE GRID COVERS: the month in progress, day by day. One square
+ * per calendar day — 30 or 31 of them, 28 in February — and the SAME window the
+ * count covers, so the number above the grid and the green squares can never
+ * disagree. A day's square is GREEN when the officer filed that day (owner
+ * request, 2026-11-19).
  */
-export const REPORT_DAYS = 91;
-
-export function reportWindow(days = REPORT_DAYS) {
-  const to = new Date();
-  const from = new Date(to.getTime() - (days - 1) * 86400000);
+export function reportWindow() {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const days = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const d = (t) => t.toISOString().slice(0, 10);
-  return { from: d(from), to: d(to) };
+  return {
+    from: d(new Date(Date.UTC(year, month, 1))),
+    to: d(new Date(Date.UTC(year, month, days))),
+    year,
+    month,
+    days,
+  };
 }
 
-/** The zero-filled day series the miniature draws, from the server's sparse
- *  per-day map: days with no filing are empty squares, not holes. */
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** The zero-filled DAY series the miniature draws, from the server's sparse
+ *  per-day map: a day with no filing is an empty square, not a hole. */
 export function reportSeries(u, window = reportWindow()) {
   const map = u && typeof u.report_days === 'object' && u.report_days !== null ? u.report_days : {};
-  const fromMs = Date.parse(`${window.from}T00:00:00Z`);
-  const toMs = Date.parse(`${window.to}T00:00:00Z`);
-  const total = Number.isFinite(fromMs) && Number.isFinite(toMs)
-    ? Math.max(0, Math.round((toMs - fromMs) / 86400000) + 1)
-    : 0;
-  const out = [];
-  for (let i = 0; i < total; i++) {
-    const date = new Date(fromMs + i * 86400000).toISOString().slice(0, 10);
-    out.push({ date, count: Math.max(0, Number(map[date]) || 0) });
+  const prefix = `${window.year}-${String(window.month + 1).padStart(2, '0')}`;
+  const rows = [];
+  for (let day = 1; day <= window.days; day++) {
+    const date = `${prefix}-${String(day).padStart(2, '0')}`;
+    rows.push({ date, count: Math.max(0, Number(map[date]) || 0) });
   }
-  return out;
+  return rows;
 }
 
 /** What one square says when a pointer rests on it: the date first (the
@@ -234,46 +242,43 @@ export function reportDayTitle(date, n) {
   return `${when} — ${c === 0 ? 'no reports filed' : `${c} report${c === 1 ? '' : 's'} filed`}`;
 }
 
-/** The picture's label: the span, the total, and the busiest day — what the
+/** The picture's label: the month, the total, and the busiest day — what the
  *  grid is FOR, since a screen reader walked square by square would be handed
  *  a spreadsheet instead of a picture. */
 export function reportMiniLabel(u, window = reportWindow()) {
-  const map = u && typeof u.report_days === 'object' && u.report_days !== null ? u.report_days : {};
-  const counts = Object.values(map).map((n) => Number(n) || 0);
-  const busiest = Math.max(0, ...counts);
-  const total = Math.max(0, Number(u?.report_count) || 0);
-  const range = `from ${window.from} to ${window.to}`;
-  if (total === 0) return `Reports filed ${range}: no reports filed.`;
-  const days = counts.filter((n) => n > 0).length;
+  const series = reportSeries(u, window);
+  const total = series.reduce((sum, day) => sum + day.count, 0);
+  const busiest = Math.max(0, ...series.map((day) => day.count));
+  const monthName = `${MONTH_NAMES[window.month]} ${window.year}`;
+  if (total === 0) return `Reports filed in ${monthName}: no reports filed.`;
+  const days = series.filter((day) => day.count > 0).length;
   const spread = days === 1 ? 'on a single day' : `across ${days} days`;
-  return `Reports filed ${range}: ${reportCountText(total)} ${spread}, busiest day ${busiest}.`;
+  return `Reports filed in ${monthName}: ${reportCountText(total)} ${spread}, busiest day ${busiest}.`;
 }
 
 /**
- * THE MINIATURE: thirteen weeks of GREEN squares — GitHub's own ladder, the one
- * colour the account sheet refuses (green there means a state). No weekday or
- * month labels: even at this size there is no room for them, and the picture's
- * label carries the meaning while each square keeps its own `title`. The
- * `sheet--reports` modifier is what scopes the ramp's variables; the `.sheet`
- * card itself stays off, because this lives inside a table cell, not on one.
+ * THE MINIATURE: the days of the month, one GREEN square each — GitHub's own
+ * ladder, the one colour the account sheet refuses (green there means a state).
+ * Seven to a row, so the month reads as a small calendar inside the table
+ * cell. No day numbers: even at this size there is no room for them, and the
+ * picture's label carries the meaning while each square keeps its own `title`.
+ * The `sheet--reports` modifier is what scopes the ramp's variables; the
+ * `.sheet` card itself stays off, because this lives inside a table cell, not
+ * on one.
  */
 function ReportMini({ user }) {
   const window = reportWindow();
-  const map = user && typeof user.report_days === 'object' && user.report_days !== null ? user.report_days : {};
-  const busiest = Math.max(0, ...Object.values(map).map((n) => Number(n) || 0));
+  const series = reportSeries(user, window);
+  const busiest = Math.max(0, ...series.map((day) => day.count));
   const label = reportMiniLabel(user, window);
   return (
-    <span className="users-mini sheet--reports" role="img" aria-label={label} title={label}>
-      {toColumns(reportSeries(user, window)).map((column, ci) => (
-        <span className="sheet-week" key={column[0]?.date ?? ci}>
-          {column.map((day) => (
-            <span
-              key={day.date}
-              className={`sheet-cell sheet-cell--l${levelOf(day.count, busiest)}`}
-              title={reportDayTitle(day.date, day.count)}
-            />
-          ))}
-        </span>
+    <span className="users-mini users-mini--month sheet--reports" role="img" aria-label={label} title={label}>
+      {series.map((day) => (
+        <span
+          key={day.date}
+          className={`sheet-cell sheet-cell--l${levelOf(day.count, busiest)}`}
+          title={reportDayTitle(day.date, day.count)}
+        />
       ))}
     </span>
   );
@@ -539,6 +544,17 @@ export default function Users({ notify, initialUserId = null }) {
   const [resetFor, setResetFor] = useState(null); // user row being reset
   const [resetPassword, setResetPassword] = useState('');
   const [resetError, setResetError] = useState('');
+  // Whether the typed password is SHOWN (owner request, 2026-11-19). A password
+  // field on an admin screen is typed twice by someone reading it back to an
+  // officer, and there was no way to check it short of typing it again and hoping.
+  // It lasts as long as the form does; neither field starts revealed.
+  const [showPassword, setShowPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  // THE SECOND TYPING (owner request, 2026-11-19). The password above is masked,
+  // and a masked field typed once is a password nobody can read back — a typo in
+  // it is a sign-in that cannot be completed. Held beside the form rather than
+  // inside it, so the confirmation is never sent to the server as a field.
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   // The directory's two filters, held here rather than in the toolbar: the table,
   // the meta block's count and the empty state all read them, and a second copy
   // inside the table would be a second answer to "what is on screen".
@@ -840,6 +856,8 @@ export default function Users({ notify, initialUserId = null }) {
     setResetFor(u);
     setResetPassword('');
     setResetError('');
+    // Every reset starts hidden, whatever the last one was left on.
+    setShowResetPassword(false);
   }
 
   /**
@@ -1071,6 +1089,8 @@ export default function Users({ notify, initialUserId = null }) {
       role: u.role,
       password: '',
     });
+    setPasswordConfirm('');
+    setShowPassword(false);
     setPhotoUrl(u.photo_url ?? null);
     discardPendingPhoto();
     setPhotoNote(null);
@@ -1082,6 +1102,8 @@ export default function Users({ notify, initialUserId = null }) {
     // directory and closes back to it.
     setProfileId(null);
     setForm({ ...EMPTY_FORM });
+    setPasswordConfirm('');
+    setShowPassword(false);
     setPhotoUrl(null);
     discardPendingPhoto();
     setPhotoNote(null);
@@ -1096,6 +1118,10 @@ export default function Users({ notify, initialUserId = null }) {
    */
   function closeForm() {
     setForm(null);
+    // The reveal does not outlive the form it was pressed on: the next account
+    // opens with its password hidden.
+    setShowPassword(false);
+    setPasswordConfirm('');
     discardPendingPhoto();
     setPhotoNote(null);
   }
@@ -1103,6 +1129,10 @@ export default function Users({ notify, initialUserId = null }) {
   async function saveForm(e) {
     e.preventDefault();
     setError(null);
+    // THE CONFIRMATION IS THE FORM'S OWN FACT, never the server's: the two boxes
+    // must agree before anything is sent, and the hint under the second one says
+    // so while the button is held shut.
+    if (form.password !== passwordConfirm) return;
     setSaving(true);
     const body = { ...form };
     if (editingId && !body.password) delete body.password;
@@ -1216,6 +1246,13 @@ export default function Users({ notify, initialUserId = null }) {
   // has already stopped the submit.
   const passwordProblem = form && form.password !== ''
     ? checkPassword(form.password, { username: form.username, badge: form.badge_number })
+    : null;
+
+  // The two boxes disagree — said in the form, under the second box, not in an
+  // alert after the round trip. On the edit form blank in both is legal (keep
+  // the current password), so only a real difference is a problem.
+  const passwordConfirmProblem = form && form.password !== passwordConfirm
+    ? 'The passwords do not match.'
     : null;
 
   if (users === null && !error) {
@@ -1546,16 +1583,57 @@ export default function Users({ notify, initialUserId = null }) {
                         {editingId && ' (leave blank to keep the current one)'}
                         <InfoHint text={`${passwordHint()} Not the account's username or badge number.`} />
                       </label>
-                      <input
-                        id="u-pass"
-                        type="password"
-                        autoComplete="new-password"
-                        value={form.password}
-                        onChange={(e) => setForm({ ...form, password: e.target.value })}
-                        required={!editingId}
-                        minLength={MIN_LENGTH}
-                        aria-describedby={passwordProblem ? 'u-pass-problem' : undefined}
-                      />
+                      <div className="acct-pass-wrap">
+                        <input
+                          id="u-pass"
+                          type={showPassword ? 'text' : 'password'}
+                          autoComplete="new-password"
+                          value={form.password}
+                          onChange={(e) => setForm({ ...form, password: e.target.value })}
+                          required={!editingId}
+                          minLength={MIN_LENGTH}
+                          aria-describedby={passwordProblem ? 'u-pass-problem' : undefined}
+                        />
+                        <button
+                          type="button"
+                          className="acct-pass-eye"
+                          onClick={() => setShowPassword((v) => !v)}
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          aria-pressed={showPassword}
+                          title={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? (
+                            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                              <path d="m1 1 22 22" />
+                            </svg>
+                          ) : (
+                            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                      {/* THE RULE, ITEM BY ITEM, WHILE IT IS BEING TYPED (owner request,
+                          2026-11-19). The form used to state only the length and then
+                          complain about one thing at a time; the four things the server
+                          actually asks for are now a list that marks itself off as the
+                          value meets each one. `aria-hidden` because the complaint below
+                          is the announced one and this is the same information read at a
+                          glance, not a second live region talking over the field. */}
+                      {form.password !== '' && (
+                        <ul className="acct-pass-rules" aria-hidden="true">
+                          {PASSWORD_RULES.map((rule) => (
+                            <li
+                              key={rule.key}
+                              className={rule.test(form.password) ? 'is-met' : undefined}
+                            >
+                              {rule.label}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                       {/* THE RULE IS BEHIND THE MARKER; THE COMPLAINT IS NOT. The rule is
                           something an administrator may want to know, which is what a
                           marker is for. A refusal is something they have to act on, and a
@@ -1575,11 +1653,34 @@ export default function Users({ notify, initialUserId = null }) {
                         </p>
                       )}
                     </div>
+                    {/* THE SECOND TYPING, under the first: same cap, its own
+                        complaint, and required only when there is a password to
+                        confirm — on the edit form with the field left blank there
+                        is nothing to type twice. */}
+                    <div className="field span-2 acct-pass">
+                      <label htmlFor="u-pass-confirm">
+                        Confirm password{(!editingId || form.password !== '') && <span className="req">*</span>}
+                      </label>
+                      <input
+                        id="u-pass-confirm"
+                        type="password"
+                        autoComplete="new-password"
+                        value={passwordConfirm}
+                        onChange={(e) => setPasswordConfirm(e.target.value)}
+                        required={!editingId || form.password !== ''}
+                        aria-describedby={passwordConfirmProblem ? 'u-pass-confirm-problem' : undefined}
+                      />
+                      {passwordConfirmProblem && (
+                        <p className="field-hint is-problem" id="u-pass-confirm-problem">
+                          {passwordConfirmProblem}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </section>
 
                 <div className="st-actions acct-actions">
-                  <button type="submit" className="primary" disabled={saving}>
+                  <button type="submit" className="primary" disabled={saving || Boolean(passwordConfirmProblem)}>
                     {saving ? 'Saving…' : editingId ? 'Save Changes' : 'Create Account'}
                   </button>
                   <button type="button" onClick={closeForm} disabled={saving}>
@@ -1858,16 +1959,40 @@ export default function Users({ notify, initialUserId = null }) {
             <form onSubmit={runResetPassword}>
               <div className="field">
                 <label htmlFor="reset-pass-input">New password</label>
-                <input
-                  id="reset-pass-input"
-                  type="password"
-                  autoComplete="new-password"
-                  value={resetPassword}
-                  onChange={(e) => setResetPassword(e.target.value)}
-                  minLength={MIN_LENGTH}
-                  required
-                  autoFocus
-                />
+                {/* The same reveal the account form wears: an admin reading a new
+                    password back to an officer is the whole of this dialog. */}
+                <div className="acct-pass-wrap">
+                  <input
+                    id="reset-pass-input"
+                    type={showResetPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={resetPassword}
+                    onChange={(e) => setResetPassword(e.target.value)}
+                    minLength={MIN_LENGTH}
+                    required
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    className="acct-pass-eye"
+                    onClick={() => setShowResetPassword((v) => !v)}
+                    aria-label={showResetPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showResetPassword}
+                    title={showResetPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showResetPassword ? (
+                      <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                        <path d="m1 1 22 22" />
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
                 {/* Reset sets the password the OFFICER will type at the gate, so
                     it is held to the same rule as account creation and as the
                     officer's own change form — no path to a weaker password,

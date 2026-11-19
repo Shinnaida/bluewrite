@@ -45,7 +45,7 @@ test('the byte ceiling matches the server constant, and counts bytes', () => {
   // 72 BYTES, so the client has to measure the same thing the hash does.
   // Mixed characters, because a run of ONE character is refused earlier by its
   // own rule — a single-letter fixture would be testing the wrong refusal.
-  const atCeiling = 'abc'.repeat(24); // 72 bytes
+  const atCeiling = 'a1!b'.repeat(18); // 72 bytes
   assert.equal(checkPassword(atCeiling), null);
   assert.equal(checkPassword(`${atCeiling}de`), 'Password must be at most 72 characters.');
   // 30 Thai characters is 90 bytes — refused here, and refused by the server for
@@ -93,8 +93,8 @@ test('the deny list is the same list as the server\'s', () => {
 test('twelve is the bar and ten is not enough any more', () => {
   assert.equal(MIN_LENGTH, 12);
   assert.ok(checkPassword('Abcdefghij'));
-  assert.equal(checkPassword('Abcdefghijkl'), null);
-  assert.equal(passwordHint(), 'At least 12 characters.');
+  assert.equal(checkPassword('Abcdefghij1!'), null);
+  assert.equal(passwordHint(), 'At least 12 characters, with letters, numbers and symbols.');
 });
 
 test('the length message is built from the constant', () => {
@@ -112,13 +112,13 @@ test('a password containing the account\'s identifiers is refused', () => {
 test('one character repeated is refused', () => {
   assert.ok(checkPassword('a'.repeat(12)));
   assert.ok(checkPassword('7'.repeat(20)));
-  assert.equal(checkPassword('abababababab'), null);
+  assert.equal(checkPassword('ababababab1!'), null);
 });
 
 test('the obvious twelve characters are refused', () => {
   assert.ok(checkPassword('password1234'));
   assert.ok(checkPassword('PASSWORD1234'), 'case-insensitive');
-  assert.equal(checkPassword('passwordish-not-really'), null, 'contains is not equals');
+  assert.equal(checkPassword('passwordish-not-really1'), null, 'contains is not equals');
 });
 
 test('the current password is only refused when the caller has it', () => {
@@ -141,7 +141,7 @@ test('the first problem is the one reported', () => {
 test('a phrase is accepted, and length is counted in characters', () => {
   const account = { username: 'jdelacruz', badge: '4417' };
   assert.equal(checkPassword('quiet-harbour-72', account), null);
-  assert.equal(checkPassword('noon shift, rainy', account), null);
+  assert.equal(checkPassword('noon shift, rainy 72', account), null);
   // Eight emoji are EIGHT characters, not the sixteen code units `.length`
   // reports — so this must be refused. Using `.value.length` would have called
   // it sixteen and let a password half the required length through, which is the
@@ -151,8 +151,23 @@ test('a phrase is accepted, and length is counted in characters', () => {
     passwordHint(),
     'eight characters is below the minimum however many code units it takes'
   );
-  // ...and twelve is twelve.
-  assert.equal(checkPassword('🌊🌀🌙⭐🌿🔥🎈🍀🌻🌵🍁🌟', account), null);
+  // ...and twelve is twelve. Four cased/digit characters stand in for the mix
+  // the rule now asks for, so this still tests COUNTING rather than composition.
+  assert.equal(checkPassword('ab1!🌊🌀🌙⭐🌿🔥🎈🍀', account), null);
+});
+
+// --- the mix (owner request, 2026-11-19) -----------------------------------------
+
+test('a mix of letters, numbers and symbols is required', () => {
+  // The classes are checked last, after length and the identity/deny rules, so a
+  // password that is weak in a more specific way still gets that complaint.
+  assert.equal(checkPassword('123456789012!'), 'Password needs a letter.');
+  assert.equal(checkPassword('harbour-quiet-words'), 'Password needs a number.');
+  assert.equal(checkPassword('harbour quiet 72'), 'Password needs a symbol.');
+  assert.equal(checkPassword('harbour-quiet-72'), null);
+  // The same three classes, in a script with no case to give an uppercase rule:
+  // this must stay possible rather than be failed for not being ASCII.
+  assert.equal(checkPassword('নিরাপদ-গোপন-৭৭৭'), null);
 });
 
 // --- confirmation ----------------------------------------------------------------

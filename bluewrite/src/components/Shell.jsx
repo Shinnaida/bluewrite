@@ -663,6 +663,9 @@ export default function Shell({
             // the keys are the list's own query keys (`status`, `date_from`,
             // `date_to`, `type`), so a new one needs no change in this file.
             onOpenReports={(filters) => setView({ kind: 'table', ...filters })}
+            // The activity panel's "View All" opens the whole trail —
+            // Activity Logs, the screen the panel is a five-row glance of.
+            onOpenAudits={() => setView({ kind: 'audits' })}
             // A dragged badge names the account it wants opened inside User
             // Management; a plain click on the plate carries no id and opens
             // the directory itself.

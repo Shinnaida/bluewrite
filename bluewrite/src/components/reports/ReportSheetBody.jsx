@@ -1098,7 +1098,7 @@ export default function ReportSheetBody({
            line directly above already states it; this also cleans a legacy
            row stored before the server stopped adding one. Task 9 — the text
            types itself in. No caption is printed above it (owner request,
-           2026-11-19). ---- */}}
+           2026-11-19). ---- */}
       <div className="pr-narrative">
         {editInner && onEditNarrative ? (
           <>

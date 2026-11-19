@@ -449,9 +449,10 @@ test('the station heading keeps its size when the paper takes over', () => {
     new RegExp(`\\.print-sheet \\\.pr-code-date \\{\\s*\\n\\s*font-size: ${bandMetaSize.replace('.', '\\.')}rem;`),
     'the paper\'s office-code/date row is not drawn at the band\'s size on the desk',
   );
-  // And it stays a DESK rule: the print sheet keeps its own type sizes.
-  assert.match(APP_CSS, /\.print-sheet \.pr-org \{ font-size: 9pt; line-height: 1\.25; \}/, 'the printed heading changed');
-  assert.match(APP_CSS, /\.pr-seal \{\s*\n\s*height: 0\.95in;/, 'the printed seals changed');
+  // And print never restates it (owner request, 2026-11-19: the printed page
+  // looks like the sheet): the heading prints at the sheet's own size.
+  assert.doesNotMatch(APP_CSS, /\.print-sheet \.pr-org \{ font-size/, 'print restates the letterhead size');
+  assert.match(APP_CSS, /\.pr-seal \{\s*\n\s*height: 0\.95in;/, 'the sheet seals changed');
 });
 
 test('the blank sheet carries no buttons of its own — the assistant is the one entry', () => {

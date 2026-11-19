@@ -68,8 +68,10 @@ final class UsersDirectoryTest extends BaseApiTestCase
         $first = $this->createReport($officerCookie, $officerCsrf);
         $second = $this->createReport($officerCookie, $officerCsrf);
         $third = $this->createReport($officerCookie, $officerCsrf);
-        $dayOne = $this->backdate((int) $first['id'], 5);
-        $dayTwo = $this->backdate((int) $second['id'], 40);
+        // Both today: the window is the month in progress, and a fixed offset
+        // could fall into the month before it on the first days of a month.
+        $dayOne = $this->backdate((int) $first['id'], 0);
+        $dayTwo = $this->backdate((int) $second['id'], 0);
         $this->db()->exec(
             "UPDATE bluewrite_test.reports SET deleted_at = NOW() WHERE id = {$third['id']}"
         );
@@ -78,7 +80,7 @@ final class UsersDirectoryTest extends BaseApiTestCase
         $officer = $this->rowFor($users, 't.officer');
         $this->assertSame(2, $officer['report_count']);
         // Loose on purpose: GROUP BY promises the groups, not their order.
-        $this->assertEquals([$dayOne => 1, $dayTwo => 1], (array) $officer['report_days']);
+        $this->assertEquals([$dayOne => 2], (array) $officer['report_days']);
     }
 
     public function testFilingsOutsideTheWindowCountNowhere(): void
@@ -86,7 +88,7 @@ final class UsersDirectoryTest extends BaseApiTestCase
         [$adminCookie] = $this->login('t.admin');
         [$officerCookie, $officerCsrf] = $this->login('t.officer');
 
-        // Older than the trailing 91 days: the count and the grid cover the
+        // Older than the month in progress: the count and the grid cover the
         // same ground, so it reads in neither.
         $old = $this->createReport($officerCookie, $officerCsrf);
         $this->backdate((int) $old['id'], 100);

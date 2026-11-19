@@ -104,7 +104,11 @@ THE INCIDENT TYPE
   imprudence (vehicles involved, a collision, travelling on a road) is a
   Traffic Accident — the recklessness is the incident and the harm that follows
   is its consequence — never "Other" merely because the charge is not a list
-  name. The blotter's own legal title is kept separately as the Category, so
+  name. For a COLLISION this is decisive: "damage to property" and "physical
+  injury" are what the crash did, so never answer Theft, Robbery, Property
+  Damage or Assault for a vehicular collision, no matter how much the account
+  talks about damage, injury or repair costs. Only answer one of those when the
+  account describes a taking or a hurt that is not the crash itself. The blotter's own legal title is kept separately as the Category, so
   answering the folder never loses its words. When two types both fit, choose
   the one the account's most concrete fact supports. When the account is too
   thin to tell, choose the station's own "Other" if it is listed; otherwise

@@ -672,6 +672,14 @@ const PARTY_FACT_LABELS = new Set([
 ]);
 const NARRATIVE_ROLE_LINE =
   /^\s*(?:complainants?|respondents?|victims?|suspects?|accused|subjects?|witness(?:es)?|reporting\s+person|persons?\s+involved)\b[^:\n]*:\s*(.+)$/i;
+// A VEHICLE ROW IS A PERSON'S PLACE TOO (owner report, 2026-11-19: "don't add
+// any information that is not in the source text — in here you add Victim:
+// JOSEPH..."). The read had answered `victim` for the drivers and owners a
+// collision injured, and the sheet printed a Victim block over names its own
+// V1:/V2: rows already present as driver and owner. Those rows are what the
+// account states; a party line naming the same people is the same person in a
+// second place, wearing a role the officer never wrote.
+const NARRATIVE_VEHICLE_ROW = /^\s*V\d+\s*[:.]/i;
 const nameKey = (s) =>
   String(s ?? '').toLowerCase().replace(/[^a-z0-9ñ\s]/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -684,7 +692,7 @@ export function omitPartiesRestatedInNarrative(facts, narrativePlain) {
   const partyText = String(narrativePlain ?? '')
     .replace(/\r\n?/g, '\n')
     .split('\n')
-    .filter((line) => NARRATIVE_ROLE_LINE.test(line))
+    .filter((line) => NARRATIVE_ROLE_LINE.test(line) || NARRATIVE_VEHICLE_ROW.test(line))
     .map(nameKey)
     .join(' | ');
   if (partyText === '') return facts;

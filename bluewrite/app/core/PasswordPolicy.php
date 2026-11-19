@@ -35,11 +35,18 @@ namespace App\Core;
  *     the top of every dump. It is a FLOOR, not a defence against a dictionary —
  *     say so plainly rather than implying the list is a guarantee.
  *
- * DELIBERATELY ABSENT: uppercase/digit/symbol composition rules. They do not add
- *   entropy, they push people to "Password123!", and they would make this the
- *   only rule in the app that has to be explained to an officer with an example.
- *   Length plus "not guessable about you" is the promise, and it is a promise the
- *   sign-in screen can state in one line (see hint()).
+ *   A MIX OF LETTERS, NUMBERS AND SYMBOLS (owner request, 2026-11-19). The first
+ *     version of this class deliberately left composition out — it does not add
+ *     much entropy, and it invites "Password123!". The station asked for it
+ *     anyway, and the field hint had been promising it since the module was
+ *     written, so it is now enforced rather than merely described. It is the
+ *     FLOOR beside length and the deny list, not a substitute for either: a long
+ *     phrase is still the better password, and the checks below are what stop a
+ *     twelve-character word of letters being enough.
+ *
+ *     Script-neutral: `\p{L}` counts a letter in any writing system, so this
+ *     does not demand an ASCII uppercase letter from a password written in a
+ *     script that has no case.
  *
  * NO DEPENDENCIES. No database, no Config, no Validator: a pure function of the
  * text and the account's identifiers, so it can be tested on its own and called
@@ -143,13 +150,25 @@ final class PasswordPolicy
         if ($currentPassword !== null && $currentPassword !== '' && $password === $currentPassword) {
             return 'Choose a password different from your current one.';
         }
+        // Composition LAST, so the more specific complaints above are the ones
+        // reported ("that is your badge number" beats "add a symbol"). Length is
+        // not repeated here: it is the first test and has its own hint.
+        if (!preg_match('/\p{L}/u', $password)) {
+            return 'Password needs a letter.';
+        }
+        if (!preg_match('/\p{N}/u', $password)) {
+            return 'Password needs a number.';
+        }
+        if (!preg_match('/[\p{P}\p{S}]/u', $password)) {
+            return 'Password needs a symbol.';
+        }
         return null;
     }
 
     /** The rule as one line, for a field hint under the field it applies to. */
     public static function hint(): string
     {
-        return 'At least ' . self::MIN_LENGTH . ' characters.';
+        return 'At least ' . self::MIN_LENGTH . ' characters, with letters, numbers and symbols.';
     }
 
     /**
