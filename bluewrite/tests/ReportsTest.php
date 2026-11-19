@@ -625,4 +625,49 @@ final class ReportsTest extends BaseApiTestCase
             $this->assertArrayHasKey($key, $first);
         }
     }
+
+    /**
+     * Owner request (2026-11-19): the phone's TYPED blotter — "Continue to
+     * Write Report" — must raise the same welcome card on the portal as a
+     * photographed filing. A typed filing carries no capture, so the draft
+     * names its client: filed_from = 'phone' (migration 032). The register
+     * list has to carry that mark for the watcher to read, and a draft made
+     * on the web must keep it NULL so it can never banner itself.
+     */
+    public function testAPhoneFiledDraftCarriesItsClientAndTheListShowsIt(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $phone = $this->createReport($cookie, $csrf, ['filed_from' => 'phone']);
+        $web = $this->createReport($cookie, $csrf, []);
+
+        $db = self::db();
+        $phoneMark = $db->query(
+            'SELECT filed_from FROM bluewrite_test.reports WHERE id = ' . (int) $phone['id']
+        )->fetchColumn();
+        $webMark = $db->query(
+            'SELECT filed_from FROM bluewrite_test.reports WHERE id = ' . (int) $web['id']
+        )->fetchColumn();
+        $this->assertSame('phone', $phoneMark, 'the phone draft stores the client that filed it');
+        $this->assertNull($webMark, 'a web draft is not a phone arrival');
+
+        $list = $this->request('GET', '/reports?status=draft&sort=updated_at&dir=desc&per_page=50', null, $cookie);
+        $this->assertSame(200, $list['status'], json_encode($list['body']));
+        $marks = [];
+        foreach ($list['body']['reports'] as $row) {
+            $marks[(int) $row['id']] = $row['filed_from'] ?? null;
+        }
+        $this->assertSame('phone', $marks[(int) $phone['id']], 'the register names the phone filing');
+        $this->assertNull($marks[(int) $web['id']], 'and leaves every other draft alone');
+    }
+
+    /** Only the phone may claim the mark — anything else files as web. */
+    public function testAnUnknownFiledFromIsNotStoredAsAPhoneFiling(): void
+    {
+        [$cookie, $csrf] = $this->login('t.officer');
+        $report = $this->createReport($cookie, $csrf, ['filed_from' => 'tablet']);
+        $mark = self::db()->query(
+            'SELECT filed_from FROM bluewrite_test.reports WHERE id = ' . (int) $report['id']
+        )->fetchColumn();
+        $this->assertNull($mark);
+    }
 }

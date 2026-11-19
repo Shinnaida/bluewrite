@@ -204,6 +204,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
         'incident_datetime': stamp,
         'location': location,
         'narrative': blotterTextToHtml(text),
+        // The draft names its own client (migration 032), so the portal's
+        // arrival card can offer it even before the photo attaches.
+        'filed_from': 'phone',
       };
       final filingTs =
           Map<String, dynamic>.from((filing['type_specific'] as Map?) ?? {});

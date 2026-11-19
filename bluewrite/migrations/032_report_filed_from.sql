@@ -1,0 +1,22 @@
+-- BlueWrite migration 032: how a draft reached the station.
+--
+-- WHAT THIS IS FOR. A phone filing used to be visible to the portal only
+-- through its photo: the arrival banner watched for a fresh draft carrying
+-- waiting captures. A TYPED blotter ("Continue to Write Report") files the
+-- same draft with no photo at all, so the station had to be told about it
+-- another way — by the client that created it (owner request, 2026-11-19:
+-- "when the notes in the app is continue to write report it would also show
+-- like the second image").
+--
+-- COLUMN
+--   filed_from — the client that created the draft: 'phone' for the blotter
+--                app's filings, NULL for anything the web made. It is a
+--                provenance mark, never content: nothing on the sheet reads
+--                it, no field is derived from it, and a web-created draft
+--                stays NULL so it can never banner itself as a phone arrival.
+--
+-- Rollback: migrations/032_report_filed_from.down.sql — drops the column.
+-- With it gone the list stops naming the mark and the banner falls back to
+-- waiting captures alone, exactly as before this migration.
+
+ALTER TABLE reports ADD COLUMN filed_from VARCHAR(16) NULL AFTER status;

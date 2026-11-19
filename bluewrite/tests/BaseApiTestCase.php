@@ -156,6 +156,10 @@ abstract class BaseApiTestCase extends \PHPUnit\Framework\TestCase
         // columns and the archive list READS them (and sweeps expired rows), so
         // the scratch DB must carry them or every archived read 500s.
         $this->runSqlFile(__DIR__ . '/../migrations/031_report_purge_grace.sql');
+        // 032 is the draft's provenance mark. The create route WRITES it and
+        // the register list READS it, so the scratch DB must carry it or the
+        // phone-arrival read answers an unknown-column 500.
+        $this->runSqlFile(__DIR__ . '/../migrations/032_report_filed_from.sql');
 
         // Fresh seed users (same shape as database/seed.php but test-scoped).
         // Every account that OWES a second factor has an email address, because

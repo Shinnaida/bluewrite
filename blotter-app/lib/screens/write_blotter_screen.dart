@@ -314,6 +314,10 @@ class _WriteBlotterScreenState extends State<WriteBlotterScreen> {
         'incident_datetime': stamp,
         'location': location,
         'narrative': blotterTextToHtml(text),
+        // There is no photo to wait for, so the station learns about this
+        // filing from who made it: the portal's arrival card offers this
+        // draft the moment Continue to Write Report returns (migration 032).
+        'filed_from': 'phone',
       };
       // The typed recorder rides as a real field — not only as the RECORDED
       // BY line in the text — so the portal signature prints who filed it

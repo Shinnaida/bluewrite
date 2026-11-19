@@ -46,6 +46,34 @@ test('only this officer\'s own untouched, still-waiting filing banners', () => {
   assert.match(watcher, /openRef\.current !== Number\(r\.id\)/);
 });
 
+test('a TYPED phone filing banners too, with no capture at all (2026-11-19)', () => {
+  // "when the notes in the app is continue to write report it would also show
+  // like the second image": the typed blotter files a draft with no photo, so
+  // the card has to read the draft's own client mark (migration 032).
+  assert.match(
+    watcher,
+    /Number\(r\.capture_count\) > 0 \|\| String\(r\.filed_from \|\| ''\) === 'phone'/, 
+  );
+  assert.match(watcher, /Phone blotter filed — draft #\{arrival\.id\} is waiting\./);
+  assert.match(watcher, /Open it to review its text, then insert\./);
+  // The browser never creates a filed_from draft; the web stays silent.
+  assert.match(controller, /\$filedFrom !== 'phone'/);
+  assert.match(controller, /\$params\[':filed_from'\] = \$filedFrom/);
+  // The register list carries the mark for the watcher to read.
+  assert.match(controller, /\$filedSelect = \$hasFiledFrom \? 'r\.filed_from, ' : ''/);
+  // ...and both phone filing paths name their client.
+  const textFiling = readFileSync(
+    new URL('../../../blotter-app/lib/screens/write_blotter_screen.dart', import.meta.url),
+    'utf8',
+  );
+  const photoFiling = readFileSync(
+    new URL('../../../blotter-app/lib/screens/review_screen.dart', import.meta.url),
+    'utf8',
+  );
+  assert.match(textFiling, /'filed_from': 'phone'/);
+  assert.match(photoFiling, /'filed_from': 'phone'/);
+});
+
 test('dismissing is remembered, so the same filing does not nag', () => {
   assert.match(watcher, /`bw\.arrivalDue\.\$\{uid\}`/);
   assert.match(watcher, /window\.localStorage\.setItem\(dueKey\(uid\), String\(id\)\)/);

@@ -585,6 +585,11 @@ final class ReportsController
             : ($hasReviewed
                 ? '(SELECT COUNT(*) FROM report_captures c WHERE c.report_id = r.id AND c.reviewed_at IS NULL) AS capture_count, '
                 : '(SELECT COUNT(*) FROM report_captures c WHERE c.report_id = r.id) AS capture_count, ');
+        // Migration 032 — the draft's provenance. The phone arrival banner reads
+        // it to offer a TYPED phone filing, which carries no capture at all.
+        // Guarded like the rest: an older database simply has no mark.
+        $hasFiledFrom = $this->hasReportColumn($pdo, 'filed_from');
+        $filedSelect = $hasFiledFrom ? 'r.filed_from, ' : '';
         $sql = "SELECT r.id, r.incident_type, " . ($hasTypes ? 'r.incident_types, ' : '') . "r.report_date, r.blotter_no, r.blotter_date,
                     r.incident_datetime, r.incident_date, r.incident_time,
                     r.incident_time_approximate, r.location, r.status,
@@ -594,7 +599,7 @@ final class ReportsController
                     r.narrative, r.narrative_source_text,
                     r.reporter_name, r.reporter_contact, r.reporter_address,
                     r.action_taken, r.ioc_name, r.type_specific,
-                    {$captureSelect}{$purgeSelect}r.id AS id_again
+                    {$captureSelect}{$purgeSelect}{$filedSelect}r.id AS id_again
              FROM reports r JOIN users u ON u.id = r.created_by
              WHERE {$whereSql}
              ORDER BY {$orderBy}, r.id DESC
@@ -1213,6 +1218,14 @@ final class ReportsController
         // Migration 023 — same guard as the list column above: a database a
         // migration behind still stores the report without the freed letter.
         $hasLetter = $this->hasReportColumn($pdo, 'letter_html');
+        // Migration 032 — the client that filed this draft. The phone's typed
+        // blotter has no capture row, so this is what the arrival banner reads
+        // to offer it; a web draft stores NULL and never badges itself.
+        $hasFiledFrom = $this->hasReportColumn($pdo, 'filed_from');
+        $filedFrom = mb_strtolower(trim((string) ($body['filed_from'] ?? '')));
+        if ($filedFrom !== 'phone') {
+            $filedFrom = null;
+        }
         $stmt = $pdo->prepare(
             'INSERT INTO reports (created_by, incident_type' . ($hasTypes ? ', incident_types' : '') . ($hasLetter ? ', letter_html' : '') . ', report_date, blotter_no, blotter_date,
                                   incident_datetime, incident_date, incident_time, incident_time_approximate,
@@ -1221,14 +1234,14 @@ final class ReportsController
                                   action_taken, ioc_name,
                                   reporter_name, reporter_contact,
                                   reporter_address,
-                                  type_specific, status)
+                                  type_specific, status' . ($hasFiledFrom ? ', filed_from' : '') . ')
              VALUES (:created_by, :type' . ($hasTypes ? ', :types' : '') . ($hasLetter ? ', :letter_html' : '') . ', :report_date, :blotter_no, :blotter_date,
                      :dt, :incident_date, :incident_time, :incident_time_approx,
                      :discovery_date, :discovery_time, :discovery_time_approx,
                      :loc, :comp, :resp, :narr, :narr_lang, :act, :ioc,
                      :reporter_name, :reporter_contact,
                      :reporter_address,
-                     :ts, :status)'
+                     :ts, :status' . ($hasFiledFrom ? ', :filed_from' : '') . ')'
         );
         $params = [
             ':created_by' => (int) $user['id'],
@@ -1265,6 +1278,9 @@ final class ReportsController
         }
         if ($hasLetter) {
             $params[':letter_html'] = RichText::sanitizeLetter($body['letter_html'] ?? '');
+        }
+        if ($hasFiledFrom) {
+            $params[':filed_from'] = $filedFrom;
         }
         $stmt->execute($params);
         $id = (int) $pdo->lastInsertId();

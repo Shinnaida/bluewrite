@@ -75,11 +75,11 @@ export default function PhoneArrivalWatcher({ user, openReportId = null, onOpenR
     dueRef.current = readDue(user.id);
     shownRef.current = 0;
 
-    const show = (id, thumb) => {
+    const show = (id, thumb, textOnly = false) => {
       if (thumbRef.current && thumbRef.current !== thumb) URL.revokeObjectURL(thumbRef.current);
       thumbRef.current = thumb;
       shownRef.current = id;
-      setArrival({ id, thumb });
+      setArrival({ id, thumb, textOnly });
     };
 
     // The officer is done with this filing — Later, Review now, or it stopped
@@ -110,7 +110,14 @@ export default function PhoneArrivalWatcher({ user, openReportId = null, onOpenR
       const rows = Array.isArray(list?.reports) ? list.reports : [];
       const waiting = rows
         .filter((r) => Number(r.created_by) === Number(user.id))
-        .filter((r) => Number(r.capture_count) > 0)
+        // A PHOTO filing carries waiting captures; a TYPED filing ("Continue to
+        // Write Report" on the phone) carries none at all and is named by the
+        // client that created it (migration 032). Owner request, 2026-11-19:
+        // the typed filing must raise the same card as the photographed one.
+        .filter(
+          (r) =>
+            Number(r.capture_count) > 0 || String(r.filed_from || '') === 'phone',
+        )
         // Rows from before the timestamp columns read on (no dates) keep the
         // old behaviour: the capture count alone is enough to offer them.
         .filter(
@@ -146,7 +153,8 @@ export default function PhoneArrivalWatcher({ user, openReportId = null, onOpenR
         if (thumb) URL.revokeObjectURL(thumb);
         return;
       }
-      show(next, thumb);
+      const nextRow = waiting.find((r) => Number(r.id) === next);
+      show(next, thumb, Number(nextRow?.capture_count ?? 0) === 0);
     };
 
     check();
@@ -172,8 +180,17 @@ export default function PhoneArrivalWatcher({ user, openReportId = null, onOpenR
         <img className="arrival-toast__thumb" src={arrival.thumb} alt="" aria-hidden="true" />
       )}
       <div className="arrival-toast__body">
-        <strong>Phone capture filed — draft #{arrival.id} is waiting.</strong>
-        <span>Open it to review the photo beside its text, then insert.</span>
+        {arrival.textOnly ? (
+          <>
+            <strong>Phone blotter filed — draft #{arrival.id} is waiting.</strong>
+            <span>Open it to review its text, then insert.</span>
+          </>
+        ) : (
+          <>
+            <strong>Phone capture filed — draft #{arrival.id} is waiting.</strong>
+            <span>Open it to review the photo beside its text, then insert.</span>
+          </>
+        )}
       </div>
       <div className="arrival-toast__actions">
         <button type="button" className="primary" onClick={open}>
